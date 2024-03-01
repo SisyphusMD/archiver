@@ -1,0 +1,15 @@
+# Project Name: Archiver
+# .gitignore
+# Description: This file lists all files and directories that Git should ignore.
+# Note: Update this file if new sensitive or non-source files are introduced.
+
+# Ignore specific secret script
+secrets.sh
+
+# Ignore directory for keys
+.keys/
+
+# Ignore logs directory
+.logs/
+
+# Add additional entries below
