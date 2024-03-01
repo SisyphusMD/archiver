@@ -71,3 +71,10 @@ git config --global user.email "cody+github@casabryant.com"
 cd "${HOME}"
 git clone git@github.com:casabryant/archiver.git # Make sure to add ssh rsa_id.pub key to GitHub authentication key first
 
+# If main.sh is not executable
+chmod 744 main.sh
+
+# To commit and push changes
+git add main.sh
+git commit -m "Make main.sh executable"
+git push
