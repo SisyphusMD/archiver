@@ -62,3 +62,12 @@ duplicacy list -a #this should give you the info for revision number, needed bel
 #next command needs sudo to be able to store the files owned by root
 sudo duplicacy restore -r 1 -key /home/cody/archiver/.keys/private.pem
 #Will be asked for storage password, then for key passphrase
+
+### GitHub setup
+sudo apt update
+sudo apt install git
+git config --global user.name "casabryant"
+git config --global user.email "cody+github@casabryant.com"
+cd "${HOME}"
+git clone git@github.com:casabryant/archiver.git # Make sure to add ssh rsa_id.pub key to GitHub authentication key first
+
