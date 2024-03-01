@@ -41,7 +41,7 @@ ALL_LOG_FILES=(
 )
 
 # Secrets
-SECRETS_FILE="${ARCHIVER_DIR}/secrets.sh" && source "${SECRETS_FILE}" # Import secrets from secrets file
+SECRETS_FILE="${ARCHIVER_DIR}/.keys/secrets.sh" && source "${SECRETS_FILE}" # Import secrets from secrets file
 ONSITE_STORAGE_PASSWORD="${ONSITE_PASSWORD}" # Password for Duplicacy storage
 ONSITE_STORAGE_URL="${ONSITE_URL}" # URL for onsite storage for Duplicacy
 
