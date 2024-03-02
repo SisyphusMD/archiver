@@ -105,10 +105,11 @@ echo    # Move to a new line
 read -p "You must provide a passphrase for the generated key or this command will error. Are you ready to provide a passphrase?" -n 1 -r
 echo    # Move to a new line
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  mkdir -p "${DUPLICACY_KEYS_DIR}" && chmod -R 700 "${DUPLICACY_KEYS_DIR}" && chown -R 1000:1000 "${DUPLICACY_KEYS_DIR}"
+  mkdir -p "${DUPLICACY_KEYS_DIR}" && chmod 700 "${DUPLICACY_KEYS_DIR}" && chown 1000:1000 "${DUPLICACY_KEYS_DIR}"
   openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
   openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
   ssh-keygen -f "${DUPLICACY_KEYS_DIR}/id_rsa" -N "" -C "archiver"
+  chmod -R 600 "${DUPLICACY_KEYS_DIR}/*" && chown -R 1000:1000 "${DUPLICACY_KEYS_DIR}/*"
 fi
 
 # To add script to cron schedule:
@@ -119,7 +120,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
   (crontab -l 2>/dev/null; echo "0 4 * * * ${ARCHIVER_DIR}/main.sh") | crontab -
   echo "Added"
 else
-  echo "Not added. You can always add it later with this command: (crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh")"
+  echo "Not added. You can always add it later with this command: (crontab -l 2>/dev/null; echo "0 4 \* \* \* ${ARCHIVER_DIR}/main.sh")"
 fi
 
 
