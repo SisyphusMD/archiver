@@ -78,3 +78,8 @@ chmod 744 main.sh
 git add main.sh
 git commit -m "Make main.sh executable"
 git push
+
+
+
+# To add script to cron schedule:
+(crontab -l 2>/dev/null; echo "0 4 * * * ${HOME}/archiver/main.sh") | crontab -
