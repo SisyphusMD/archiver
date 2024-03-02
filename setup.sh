@@ -35,7 +35,6 @@ ARCHIVER_DIR="$(dirname "$(readlink -f "$0")")" # Path to Archiver directory
 REQUIRED_PACKAGES=(
     "wget"
     "openssl"
-    "openssh-client"
 )
 
 # Configuration for Duplicacy binary
