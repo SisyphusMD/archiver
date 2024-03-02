@@ -10,6 +10,6 @@ secrets.sh
 .keys/
 
 # Ignore logs directory
-.logs/
+logs/
 
 # Add additional entries below

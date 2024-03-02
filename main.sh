@@ -42,17 +42,19 @@ ALL_LOG_FILES=(
 
 # Secrets
 SECRETS_FILE="${ARCHIVER_DIR}/.keys/secrets.sh" && source "${SECRETS_FILE}" # Import secrets from secrets file
-ONSITE_STORAGE_PASSWORD="${ONSITE_PASSWORD}" # Password for Duplicacy storage
-ONSITE_STORAGE_URL="${ONSITE_URL}" # URL for onsite storage for Duplicacy
 
 # OMV Duplicacy variables
 DUPLICACY_OMV_STORAGE_NAME="omv" # Name of onsite storage for Duplicacy omv storage
-DUPLICACY_OMV_STORAGE_URL="${ONSITE_STORAGE_URL}" # URL for onsite storage for Duplicacy omv storage
+DUPLICACY_OMV_STORAGE_URL="${OMV_URL}" # URL for onsite storage for Duplicacy omv storage
 DUPLICACY_OMV_SSH_KEY_FILE="${DUPLICACY_SSH_KEY_FILE}" # SSH key file for Duplicacy omv storage
-DUPLICACY_OMV_PASSWORD="${ONSITE_STORAGE_PASSWORD}" # Password for Duplicacy omv storage
+DUPLICACY_OMV_PASSWORD="${STORAGE_PASSWORD}" # Password for Duplicacy omv storage
 
 # B2 Duplicacy varibles
-
+DUPLICACY_BACKBLAZE_STORAGE_NAME="${backblaze}"
+DUPLICACY_BACKBLAZE_STORAGE_URL="${B2_URL}"
+DUPLICACY_BACKBLAZE_B2_ID="${B2_ID}"
+DUPLICACY_BACKBLAZE_B2_KEY="${B2_KEY}"
+DUPLICACY_BACKBLAZE_PASSWORD="${STORAGE_PASSWORD}"
 
 # Declare service specific variables (initially empty)
 SERVICE="" # Name of the service
@@ -429,6 +431,9 @@ initialize_duplicacy() {
   if [ ! -d "${DUPLICACY_REPO_DIR}" ]; then
     export DUPLICACY_OMV_SSH_KEY_FILE # Export SSH key file for omv storage so Duplicacy binary can see variable
     export DUPLICACY_OMV_PASSWORD # Export password for omv storage so Duplicacy binary can see variable
+    export DUPLICACY_BACKBLAZE_B2_ID # Export BackBlaze Account ID for backblaze storage so Duplicacy binary can see variable
+    export DUPLICACY_BACKBLAZE_B2_KEY # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
+    export DUPLICACY_BACKBLAZE_PASSWORD # Export password for backblaze storage so Duplicacy binary can see variable
 
     # Initialize Duplicacy repository
     log_message "INFO" "Initializing Duplicacy for ${SERVICE} service."
