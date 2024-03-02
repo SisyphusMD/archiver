@@ -77,6 +77,7 @@ DUPLICACY_FILTERS_PATTERNS=() # Include/exclude patterns for Duplicacy filter
 
 # Script variables
 ERROR_COUNT=0
+LAST_BACKUP_DIR="${ARCHIVER_DIR}"
 
 # Function Definitions
 # ---------------------
@@ -726,6 +727,9 @@ main() {
       # Run Duplicacy backup
       backup_duplicacy || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
+      # Set last successful backup dir
+      LAST_BACKUP_DIR="${BACKUP_DIR}"
+
       # Success message
       log_message "INFO" "Completed backup and duplication process successfully for ${SERVICE} service." || { handle_error "Failed to log the successful completion of backup and duplication for ${SERVICE}."; }
     else
@@ -745,6 +749,11 @@ main() {
   #   The design of Duplicacy however was based on the assumption that only one instance would run the prune command (using -all).
   #     This can greatly simplify the implementation.
   #
+  # Move to last successful backup directory
+  check_directory "${LAST_BACKUP_DIR}" || handle_error "Directory ${LAST_BACKUP_DIR} not found. Verify the directory exists."
+  cd "${LAST_BACKUP_DIR}" || handle_error "Failed to change to directory ${LAST_BACKUP_DIR}. Continuing to next operation."
+
+  # Prune duplicacy from last successful backup directory
   prune_duplicacy || { handle_error "Duplicacy prune failed. Review Duplicacy logs for details."; }
 
   # Send terminal and Pushover notification of script completion with error count
