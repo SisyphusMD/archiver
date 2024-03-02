@@ -585,6 +585,8 @@ backup_duplicacy() {
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Running the BackBlaze Duplicacy Storage backup for the ${SERVICE} service failed. Review the Duplicacy logs for details."
+  fi
+  log_message "INFO" "The BackBlaze Duplicacy Storage backup completed successfully for ${SERVICE} service."
 
   # Verify BackBlaze Duplicacy Storage backup completion
   "${DUPLICACY_BIN}" check -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
