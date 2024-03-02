@@ -123,7 +123,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
   (crontab -l 2>/dev/null; echo "0 4 * * * ${ARCHIVER_DIR}/main.sh") | crontab -
   echo "Added"
 else
-  echo "Not added. You can always add it later with this command: (crontab -l 2>/dev/null; echo "0 4 \* \* \* ${ARCHIVER_DIR}/main.sh")"
+  echo "Not added. You can always add it later with this command: (crontab -l 2>/dev/null; echo "0 4 \* \* \* "${ARCHIVER_DIR}"/main.sh")"
 fi
 
 
