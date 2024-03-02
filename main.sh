@@ -33,12 +33,14 @@ REQUIRED_VARS=( # List of required service-defined variables
 ARCHIVER_LOG_FILE="${ARCHIVER_LOG_DIR}/archiver.log" # Log file for Archiver logs
 DUPLICACY_LOG_FILE="${ARCHIVER_LOG_DIR}/duplicacy-output.log" # Log file for Duplicacy output
 DOCKER_LOG_FILE="${ARCHIVER_LOG_DIR}/docker-output.log" # Log file for Docker output
+CURL_LOG_FILE="${ARCHIVER_LOG_DIR}/curl-output.log" # Log file for Curl output
 
 # Array of log file variables, make sure to add more log file variables to this array if adding to the list above
 ALL_LOG_FILES=(
   "${ARCHIVER_LOG_FILE}"
   "${DUPLICACY_LOG_FILE}"
   "${DOCKER_LOG_FILE}"
+  "${CURL_LOG_FILE}"
 )
 
 # Secrets
@@ -653,6 +655,7 @@ prune_duplicacy() {
 send_pushover_notification() {
   local title
   local message
+  local exit_status
 
   title="${1}"
   message="${2}"
@@ -663,8 +666,12 @@ send_pushover_notification() {
     --form-string "user=${PUSHOVER_USER_KEY}" \
     --form-string "title=${title}" \
     --form-string "message=${message}" \
-    https://api.pushover.net/1/messages.json || \
-      handle_error "Failed to send pushover notification."
+    https://api.pushover.net/1/messages.json | log_output "${CURL_LOG_FILE}"
+  exit_status="${PIPESTATUS[0]}"
+  if [ "${exit_status}" -ne 0 ]; then
+    handle_error "Failed to send pushover notification. Check Pushover variables in the secrets file."
+  fi
+  log_message "INFO" "Pushover notification sent successfully."
 }
 
 # Main Function
@@ -742,9 +749,11 @@ main() {
 
   # Send terminal and Pushover notification of script completion with error count
   local message
+  local timestamp
+  timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
   message="[${timestamp}] [${HOSTNAME}] Archiver script completed with ${ERROR_COUNT} error(s)."
-  echo "[${timestamp}] [${HOSTNAME}] ${message}"
-  send_pushover_notification "Archiver Script Completed" "[${timestamp}] [${HOSTNAME}] ${message}"
+  echo "${message}"
+  send_pushover_notification "Archiver Script Completed" "${message}"
 }
 
 # Execution Flow
