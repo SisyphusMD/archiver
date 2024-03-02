@@ -25,8 +25,8 @@ DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')" # Current date and time for backup naming
 PARENT_DIR="/srv" # Parent directory where services reside
 REQUIRED_VARS=( # List of required service-defined variables
-  "ARCHIVE_FILES"
-  "EXCLUDE_FILES"
+  "${ARCHIVE_FILES}"
+  "${EXCLUDE_FILES}"
 )
 
 # Define log file paths. Add new log files to the following array to ensure they're included in rotation.
@@ -36,9 +36,9 @@ DOCKER_LOG_FILE="${ARCHIVER_LOG_DIR}/docker-output.log" # Log file for Docker ou
 
 # Array of log file variables, make sure to add more log file variables to this array if adding to the list above
 ALL_LOG_FILES=(
-  "ARCHIVER_LOG_FILE"
-  "DUPLICACY_LOG_FILE"
-  "DOCKER_LOG_FILE"
+  "${ARCHIVER_LOG_FILE}"
+  "${DUPLICACY_LOG_FILE}"
+  "${DOCKER_LOG_FILE}"
 )
 
 # Secrets
@@ -59,6 +59,10 @@ DUPLICACY_BACKBLAZE_B2_KEY="${B2_KEY}" # Application Key for offsite storage for
 DUPLICACY_BACKBLAZE_PASSWORD="${STORAGE_PASSWORD}" # Password for Duplicacy backblaze storage
 DUPLICACY_BACKBLAZE_RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for Duplicacy backblaze storage
 
+# Pushover variables
+PUSHOVER_API_TOKEN="${PO_API_TOKEN}" # Pushover application API token/key
+PUSHOVER_USER_KEY="${PO_USER_KEY}" # Pushover user key
+
 # Declare service specific variables (initially empty)
 SERVICE="" # Name of the service
 SERVICE_DIR="" # Full path to the service directory
@@ -68,6 +72,9 @@ DUPLICACY_FILTERS_FILE="" # Location for Duplicacy filters file
 DUPLICACY_SNAPSHOT_ID="" # Snapshot ID for Duplicacy
 SOURCE_FILES=() # List of potential source file paths
 DUPLICACY_FILTERS_PATTERNS=() # Include/exclude patterns for Duplicacy filter
+
+# Script variables
+ERROR_COUNT=0
 
 # Function Definitions
 # ---------------------
@@ -148,6 +155,11 @@ log_message() {
   # Print WARNING and ERROR messages to the terminal
   if [[ "${log_level}" == "WARNING" || "${log_level}" == "ERROR" ]]; then
     echo "[${timestamp}] [${log_level}] [Service: ${SERVICE}] ${message}"
+  fi
+
+  # Send ERROR messages as a Pushover notification
+  if [[ "${log_level}" == "ERROR" ]]; then
+    send_pushover_notification "Archiver Error" "[${timestamp}] [${log_level}] [Service: ${SERVICE}] ${message}"
   fi
 }
 
@@ -258,6 +270,9 @@ handle_error() {
 
   message="${1}" # Error message to display
   code="${2:-1}" # Exit status (default: 1)
+
+  # Increment ERROR_COUNT by 1
+  ((ERROR_COUNT++))
 
   if [[ -z "${RECURSIVE_CALL}" ]]; then
     export RECURSIVE_CALL=true
@@ -626,6 +641,32 @@ prune_duplicacy() {
   log_message "INFO" "BackBlaze Duplicacy Storage prune completed successfully."
 }
 
+# Notification Functions
+# ---------------------
+
+# Notifies user of any errors, as well as successful completion of the backup
+# Parameters:
+#   1. Title: The title of the notification.
+#   2. Message: The body of the notification.
+# Output:
+#   Call the notification API with the provided parameters.
+send_pushover_notification() {
+  local title
+  local message
+
+  title="${1}"
+  message="${2}"
+
+  # Sending the Pushover notification
+  curl -s \
+    --form-string "token=${PUSHOVER_API_TOKEN}" \
+    --form-string "user=${PUSHOVER_USER_KEY}" \
+    --form-string "title=${title}" \
+    --form-string "message=${message}" \
+    https://api.pushover.net/1/messages.json || \
+      handle_error "Failed to send pushover notification."
+}
+
 # Main Function
 # ---------------------
 
@@ -635,6 +676,12 @@ prune_duplicacy() {
 # Output:
 #   Coordinates the backup process for each service, logging progress and results. No direct output.
 main() {
+  # Rotate the logs if needed
+  # Iterate over the array and call rotate_logs for each log file
+  for log_file in "${ALL_LOG_FILES[@]}"; do
+      rotate_logs "${log_file}"
+  done
+
   # For loop to iterate over directories within parent directory and perform main function on each
   for dir in "${PARENT_DIR}"/*/ ; do
     # Set service-specific variables and functions
@@ -692,16 +739,16 @@ main() {
   #     This can greatly simplify the implementation.
   #
   prune_duplicacy || { handle_error "Duplicacy prune failed. Review Duplicacy logs for details."; }
+
+  # Send terminal and Pushover notification of script completion with error count
+  local message
+  message="[${timestamp}] [${HOSTNAME}] Archiver script completed with ${ERROR_COUNT} error(s)."
+  echo "[${timestamp}] [${HOSTNAME}] ${message}"
+  send_pushover_notification "Archiver Script Completed" "[${timestamp}] [${HOSTNAME}] ${message}"
 }
 
 # Execution Flow
 # ---------------------
-
-# Rotate the logs if needed
-# Iterate over the array and call rotate_logs for each log file
-for log_file in "${ALL_LOG_FILES[@]}"; do
-    rotate_logs "${log_file}"
-done
 
 # Execute main function
 main
