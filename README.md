@@ -28,26 +28,14 @@ git clone https://github.com/yourusername/archiver.git
 # Navigate to the project directory
 cd archiver
 
-# Make the main script executable
-chmod +x main.sh
-
 # Run the setup script (if applicable)
 ./setup.sh
 
-### Previously included instructions:
-Copy link of most recent duplicacy_linux_arm64_X.X.X binary from:
-https://github.com/gilbertchen/duplicacy/releases/latest
+Copy secrets.sh.example: In the .keys directory of the cloned repository, locate the secrets.sh.example file. This file contains example values for sensitive variables used in the project. Copy this file and rename the copy to secrets.sh:
 
-sudo wget -O /opt/duplicacy/duplicacy_linux_arm64_X.X.X https://github.com/gilbertchen/duplicacy/releases/download/vX.X.X/duplicacy_linux_arm64_X.X.X
+Edit secrets.sh: Open the secrets.sh file in a text editor of your choice. Replace the example values with your actual sensitive information. Be sure to fill in all required variables.
 
-sudo chmod 755 /opt/duplicacy/duplicacy_linux_arm64_X.X.X
 
-sudo ln -s /opt/duplicacy/duplicacy_linux_arm64_X.X.X /usr/local/bin/duplicacy
-
-#Key generation
-openssl genrsa -aes256 -out private.pem -traditional 2048
-openssl rsa -in private.pem --outform PEM -pubout -out public.pem
-ssh-keygen
 
 #To restore
 #First you need to init with the same repository id
@@ -70,16 +58,3 @@ git config --global user.name "casabryant"
 git config --global user.email "cody+github@casabryant.com"
 cd "${HOME}"
 git clone git@github.com:casabryant/archiver.git # Make sure to add ssh rsa_id.pub key to GitHub authentication key first
-
-# If main.sh is not executable
-chmod 744 main.sh
-
-# To commit and push changes
-git add main.sh
-git commit -m "Make main.sh executable"
-git push
-
-
-
-# To add script to cron schedule:
-(crontab -l 2>/dev/null; echo "0 4 * * * ${HOME}/archiver/main.sh") | crontab -
