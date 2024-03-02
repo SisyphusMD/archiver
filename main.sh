@@ -18,6 +18,7 @@ DUPLICACY_BIN="/usr/local/bin/duplicacy" # Path to Duplicacy binary
 DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/.keys" # Path to Duplicacy key directory
 DUPLICACY_SSH_KEY_FILE="${DUPLICACY_KEY_DIR}/id_rsa" # SSH key file
 DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
+DUPLICACY_RSA_PRIVATE_KEY_FILE="${DUPLICACY_KEY_DIR}/private.pem" # Path to RSA private key file for Duplicacy
 
 # Set service agnostic variables
 DATE="$(date +'%Y-%m-%d')"
@@ -48,6 +49,7 @@ DUPLICACY_OMV_STORAGE_NAME="omv" # Name of onsite storage for Duplicacy omv stor
 DUPLICACY_OMV_STORAGE_URL="${OMV_URL}" # URL for onsite storage for Duplicacy omv storage
 DUPLICACY_OMV_SSH_KEY_FILE="${DUPLICACY_SSH_KEY_FILE}" # SSH key file for Duplicacy omv storage
 DUPLICACY_OMV_PASSWORD="${STORAGE_PASSWORD}" # Password for Duplicacy omv storage
+DUPLICACY_OMV_RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for Duplicacy omv storage
 
 # B2 Duplicacy varibles
 DUPLICACY_BACKBLAZE_STORAGE_NAME="${backblaze}"
@@ -55,6 +57,7 @@ DUPLICACY_BACKBLAZE_STORAGE_URL="${B2_URL}"
 DUPLICACY_BACKBLAZE_B2_ID="${B2_ID}"
 DUPLICACY_BACKBLAZE_B2_KEY="${B2_KEY}"
 DUPLICACY_BACKBLAZE_PASSWORD="${STORAGE_PASSWORD}"
+DUPLICACY_BACKBLAZE_RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for Duplicacy omv storage
 
 # Declare service specific variables (initially empty)
 SERVICE="" # Name of the service
@@ -435,29 +438,95 @@ initialize_duplicacy() {
     export DUPLICACY_BACKBLAZE_B2_KEY # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
     export DUPLICACY_BACKBLAZE_PASSWORD # Export password for backblaze storage so Duplicacy binary can see variable
 
-    # Initialize Duplicacy repository
-    log_message "INFO" "Initializing Duplicacy for ${SERVICE} service."
+    # Initialize OMV Duplicacy Storage
+    log_message "INFO" "Initializing OMV Duplicacy Storage for ${SERVICE} service."
     "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
       -storage-name "${DUPLICACY_OMV_STORAGE_NAME}" \
       "${DUPLICACY_SNAPSHOT_ID}" "${DUPLICACY_OMV_STORAGE_URL}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Duplicacy initialization for the ${SERVICE} service failed. Ensure Duplicacy is installed and the repository path is correct."
+      handle_error "OMV Duplicacy Storage initialization for the ${SERVICE} service failed. Ensure Duplicacy is installed and the repository path is correct."
     fi
 
-    # Set SSH key file for Duplicacy
-    "${DUPLICACY_BIN}" set -key ssh_key_file -value "${DUPLICACY_OMV_SSH_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the Duplicacy SSH key file for the ${SERVICE} service failed. Verify the SSH key file path and permissions."
-    fi
-
-    # Set password for Duplicacy
+    # Set Password for OMV Duplicacy Storage
     "${DUPLICACY_BIN}" set -key password -value "${DUPLICACY_OMV_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the Duplicacy storage password for the ${SERVICE} service failed. Ensure the storage password is correctly specified in the service's backup settings or environment variables."
+      handle_error "Setting the OMV Duplicacy Storage password for the ${SERVICE} service failed. Ensure the storage password is correctly specified in the service's backup settings or environment variables."
     fi
+
+    # Set RSA Passphrase for OMV Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${DUPLICACY_OMV_STORAGE_NAME}" -key rsa_passphrase \
+      -value "${DUPLICACY_OMV_RSA_PASSPHRASE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the OMV Duplicacy Storage RSA Passphrase for the ${SERVICE} service failed. Ensure the storage RSA Passphrase is correctly specified in the service's backup settings or environment variables."
+    fi
+
+    # Set SSH key file for OMV Duplicacy Storage
+    "${DUPLICACY_BIN}" set -key ssh_key_file -value "${DUPLICACY_OMV_SSH_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the OMV Duplicacy Storage SSH key file for the ${SERVICE} service failed. Verify the SSH key file path and permissions."
+    fi
+
+    # Verify OMV Duplicacy Storage initiation
+    "${DUPLICACY_BIN}" check -storage "${DUPLICACY_OMV_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Verification of the OMV Duplicacy Storage initialization for the ${SERVICE} service failed. Ensure Duplicacy has been properly initialized."
+    fi
+    log_message "INFO" "OMV Duplicacy Storage initialization verified for ${SERVICE} service."
+
+    # Add BackBlaze Duplicacy Storage
+    log_message "INFO" "Adding BackBlaze Duplicacy Storage for ${SERVICE} service."
+    "${DUPLICACY_BIN}" add -e -copy "${DUPLICACY_OMV_STORAGE_NAME}" -bit-identical -key \
+      "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" \
+      "${DUPLICACY_SNAPSHOT_ID}" "${DUPLICACY_BACKBLAZE_STORAGE_URL}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Adding BackBlaze Duplicacy Storage for the ${SERVICE} service failed. Ensure the BackBlaze variables are correctly specified in the secrets file."
+    fi
+
+    # Set Password for BackBlaze Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" -key password \
+      -value "${DUPLICACY_BACKBLAZE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the BackBlaze Duplicacy Storage password for the ${SERVICE} service failed. Ensure the storage password is correctly specified in the service's backup settings or environment variables."
+    fi
+
+    # Set RSA Passphrase for BackBlaze Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" -key rsa_passphrase \
+      -value "${DUPLICACY_BACKBLAZE_RSA_PASSPHRASE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the BackBlaze Duplicacy Storage RSA Passphrase for the ${SERVICE} service failed. Ensure the storage RSA Passphrase is correctly specified in the service's backup settings or environment variables."
+    fi
+
+    # Set Key ID for BackBlaze Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" -key b2_id \
+      -value "${DUPLICACY_BACKBLAZE_B2_ID}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the BackBlaze Duplicacy Storage Key ID for the ${SERVICE} service failed. Ensure the Key ID is correctly specified in the service's backup settings or environment variables."
+    fi
+
+    # Set Application Key for BackBlaze Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" -key b2_key \
+      -value "${DUPLICACY_BACKBLAZE_B2_KEY}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the BackBlaze Duplicacy Storage Application Key for the ${SERVICE} service failed. Ensure the Application Key is correctly specified in the service's backup settings or environment variables."
+    fi
+
+    # Verify BackBlaze Duplicacy Storage initialization
+    "${DUPLICACY_BIN}" check -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Verification of the BackBlaze Duplicacy Storage initialization for the ${SERVICE} service failed. Ensure Duplicacy has been properly initialized."
+    fi
+    log_message "INFO" "BackBlaze Duplicacy Storage initialization verified for ${SERVICE} service."
 
     # Prepare Duplicacy filters file
     # Check if the filters file already exists
@@ -491,21 +560,39 @@ initialize_duplicacy() {
 backup_duplicacy() {
   local exit_status
 
-  log_message "INFO" "Running Duplicacy backup for ${SERVICE} service."
-  "${DUPLICACY_BIN}" backup 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  # Run the Duplicacy backup to the OMV Storage
+  log_message "INFO" "Running OMV Duplicacy Storage backup for ${SERVICE} service."
+  "${DUPLICACY_BIN}" backup -storage "${DUPLICACY_OMV_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Running the Duplicacy backup for the ${SERVICE} service failed. Review the Duplicacy logs for details."
+    handle_error "Running the OMV Duplicacy Storage backup for the ${SERVICE} service failed. Review the Duplicacy logs for details."
   fi
-  log_message "INFO" "Duplicacy backup completed successfully for ${SERVICE} service."
+  log_message "INFO" "The OMV Duplicacy Storage backup completed successfully for ${SERVICE} service."
 
-  # Verify Duplicacy backup completion
+  # Verify OMV Duplicacy Storage backup completion
   "${DUPLICACY_BIN}" check -storage "${DUPLICACY_OMV_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Verification of the Duplicacy backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
+    handle_error "Verification of the OMV Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
   fi
-  log_message "INFO" "Duplicacy backup verified for ${SERVICE} service."
+  log_message "INFO" "OMV Duplicacy Storage backup verified for ${SERVICE} service."
+
+  # Run the Duplicacy backup to the BackBlaze Storage
+  log_message "INFO" "Running BackBlaze Duplicacy Storage backup for ${SERVICE} service."
+  "${DUPLICACY_BIN}" copy -id "${DUPLICACY_SNAPSHOT_ID}" \
+    -from "${DUPLICACY_OMV_STORAGE_NAME}" -to "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" \
+    -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  exit_status="${PIPESTATUS[0]}"
+  if [ "${exit_status}" -ne 0 ]; then
+    handle_error "Running the BackBlaze Duplicacy Storage backup for the ${SERVICE} service failed. Review the Duplicacy logs for details."
+
+  # Verify BackBlaze Duplicacy Storage backup completion
+  "${DUPLICACY_BIN}" check -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  exit_status="${PIPESTATUS[0]}"
+  if [ "${exit_status}" -ne 0 ]; then
+    handle_error "Verification of the BackBlaze Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
+  fi
+  log_message "INFO" "BackBlaze Duplicacy Storage backup verified for ${SERVICE} service."
 }
 
 # Runs the Duplicacy prune operation for all repositories.
@@ -516,13 +603,25 @@ backup_duplicacy() {
 prune_duplicacy() {
   local exit_status
 
-  log_message "INFO" "Running Duplicacy prune for all repositories."
-  "${DUPLICACY_BIN}" prune -all -exhaustive -keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  # Prune the OMV Duplicacy Storage
+  log_message "INFO" "Running OMV Duplicacy Storage prune for all repositories."
+  "${DUPLICACY_BIN}" prune -all -storage "${DUPLICACY_OMV_STORAGE_NAME}" \
+    -keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Running Duplicacy prune failed. Review the Duplicacy logs for details."
+    handle_error "Running OMV Duplicacy Storage prune failed. Review the Duplicacy logs for details."
   fi
-  log_message "INFO" "Duplicacy prune completed successfully."
+  log_message "INFO" "OMV Duplicacy Storage prune completed successfully."
+
+  # Prune the BackBlaze Duplicacy Storage
+  log_message "INFO" "Running BackBlaze Duplicacy Storage prune for all repositories."
+  "${DUPLICACY_BIN}" prune -all -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" \
+    -keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  exit_status="${PIPESTATUS[0]}"
+  if [ "${exit_status}" -ne 0 ]; then
+    handle_error "Running BackBlaze Duplicacy Storage prune failed. Review the Duplicacy logs for details."
+  fi
+  log_message "INFO" "BackBlaze Duplicacy Storage prune completed successfully."
 }
 
 # Main Function
