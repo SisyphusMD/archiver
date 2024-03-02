@@ -52,12 +52,12 @@ DUPLICACY_OMV_PASSWORD="${STORAGE_PASSWORD}" # Password for Duplicacy omv storag
 DUPLICACY_OMV_RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for Duplicacy omv storage
 
 # B2 Duplicacy varibles
-DUPLICACY_BACKBLAZE_STORAGE_NAME="${backblaze}"
-DUPLICACY_BACKBLAZE_STORAGE_URL="${B2_URL}"
-DUPLICACY_BACKBLAZE_B2_ID="${B2_ID}"
-DUPLICACY_BACKBLAZE_B2_KEY="${B2_KEY}"
-DUPLICACY_BACKBLAZE_PASSWORD="${STORAGE_PASSWORD}"
-DUPLICACY_BACKBLAZE_RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for Duplicacy omv storage
+DUPLICACY_BACKBLAZE_STORAGE_NAME="backblaze" # Name of offsite storage for Duplicacy backblaze storage
+DUPLICACY_BACKBLAZE_STORAGE_URL="${B2_URL}" # URL for offsite storage for Duplicacy backblaze storage
+DUPLICACY_BACKBLAZE_B2_ID="${B2_ID}" # Key ID for offsite storage for Duplicacy backblaze storage
+DUPLICACY_BACKBLAZE_B2_KEY="${B2_KEY}" # Application Key for offsite storage for Duplicacy backblaze storage
+DUPLICACY_BACKBLAZE_PASSWORD="${STORAGE_PASSWORD}" # Password for Duplicacy backblaze storage
+DUPLICACY_BACKBLAZE_RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for Duplicacy backblaze storage
 
 # Declare service specific variables (initially empty)
 SERVICE="" # Name of the service
