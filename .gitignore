@@ -6,8 +6,12 @@
 # Ignore specific secret script
 secrets.sh
 
-# Ignore directory for keys
-.keys/
+# Ignore .keys files
+.keys/private.pem
+.keys/public.pem
+.keys/id_rsa
+.keys/id_rsa.pub
+.keys/secrets.sh
 
 # Ignore logs directory
 logs/
