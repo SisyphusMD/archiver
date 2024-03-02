@@ -25,8 +25,8 @@ DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')" # Current date and time for backup naming
 PARENT_DIR="/srv" # Parent directory where services reside
 REQUIRED_VARS=( # List of required service-defined variables
-  "${ARCHIVE_FILES}"
-  "${EXCLUDE_FILES}"
+  "ARCHIVE_FILES"
+  "EXCLUDE_FILES"
 )
 
 # Define log file paths. Add new log files to the following array to ensure they're included in rotation.
