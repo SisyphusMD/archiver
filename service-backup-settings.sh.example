@@ -17,16 +17,16 @@
 # ARCHIVE_FILES: Array of files/directories to include in the backup.
 # Example: ARCHIVE_FILES=("/path/to/service/directory" "/another/important/path")
 ARCHIVE_FILES=(
-    # Add paths to backup here. Each path as a new line inside the parentheses.
-    # Example: "${SERVICE}/"
+  # Add paths to backup here. Each path as a new line inside the parentheses.
+  # Example: "${SERVICE}/"
 )
 
 # EXCLUDE_FILES: Array of files/directories to exclude from the backup.
 # Example: EXCLUDE_FILES=("/path/to/service/tempfiles/*" "/path/to/service/logs/*")
 EXCLUDE_FILES=(
-    # Add paths to exclude from backup here. Each path as a new line inside the parentheses.
-    # Example: "${SERVICE}/backups/*.tar"
-    # "${SERVICE}/backups/.duplicacy"
+  # Add paths to exclude from backup here. Each path as a new line inside the parentheses.
+  # Example: "${SERVICE}/backups/*.tar"
+  # "${SERVICE}/backups/.duplicacy"
 )
 
 
@@ -38,18 +38,18 @@ EXCLUDE_FILES=(
 # This can include service shutdown, data dump, etc.
 # Leave empty if no pre-backup actions are required.
 service_specific_pre_backup_function() {
-    # Add pre-backup commands here.
-    # Example: docker compose stop
-    :; # No operation placeholder
+  # Add pre-backup commands here.
+  # Example: docker compose stop
+  :; # No operation placeholder
 }
 
 # service_specific_post_backup_function: Function to execute commands after backup.
 # This can include service startup, cleanup actions, etc.
 # Leave empty if no post-backup actions are required.
 service_specific_post_backup_function() {
-    # Add post-backup commands here.
-    # Example: docker compose start
-    :; # No operation placeholder
+  # Add post-backup commands here.
+  # Example: docker compose start
+  :; # No operation placeholder
 }
 
 # Note: The ':;' is used as a placeholder for an empty function body. It's a no-op command in Bash.
