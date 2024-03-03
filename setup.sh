@@ -33,8 +33,9 @@ ENVIRONMENT_OS="$(uname -s)"
 ENVIRONMENT_ARCHITECTURE="$(uname -m)"
 ARCHIVER_DIR="$(dirname "$(readlink -f "$0")")" # Path to Archiver directory
 REQUIRED_PACKAGES=(
-    "wget"
-    "openssl"
+  "wget"
+  "openssl"
+  "sqlite3"
 )
 
 # Configuration for Duplicacy binary
@@ -42,11 +43,11 @@ DUPLICACY_VERSION="3.2.3"
 DUPLICACY_OS="$(echo ${ENVIRONMENT_OS} | tr '[:upper:]' '[:lower:]')"
 DUPLICACY_ARCHITECTURE=$( \
   if [[ "${ENVIRONMENT_ARCHITECTURE}" == "aarch64" || \
-        "${ENVIRONMENT_ARCHITECTURE}" == "arm64" ]]; then \
-    echo "arm64"; \
+    "${ENVIRONMENT_ARCHITECTURE}" == "arm64" ]]; then \
+  echo "arm64"; \
   elif [[ "${ENVIRONMENT_ARCHITECTURE}" == "x86_64" || \
-          "${ENVIRONMENT_ARCHITECTURE}" == "amd64" ]]; then \
-    echo "x64"; \
+    "${ENVIRONMENT_ARCHITECTURE}" == "amd64" ]]; then \
+  echo "x64"; \
   else \
     echo "unknown"; \
   fi \
@@ -62,38 +63,38 @@ DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/.keys"
 
 # Exit if not run as root
 if [ "$(id -u)" -ne 0 ]; then
-   echo "This script must be run as root. Please use sudo or log in as the root user." 1>&2
-   exit 1
+ echo "This script must be run as root. Please use sudo or log in as the root user." 1>&2
+ exit 1
 fi
 
 # Exit if the operating system is not Linux
 if [ "${DUPLICACY_OS}" != "linux" ]; then
-    echo "This script only works in Linux environments. Please run this script on a Linux system." 1>&2
-    exit 1
+  echo "This script only works in Linux environments. Please run this script on a Linux system." 1>&2
+  exit 1
 fi
 
 # Exit if the architecture is not recognized as arm64 or x64
 if [ "${DUPLICACY_OS}" = "unknown" ]; then
-    echo "This script only works on arm64 and x64 architectures." 1>&2
-    exit 1
+  echo "This script only works on arm64 and x64 architectures." 1>&2
+  exit 1
 fi
 
 # [The rest of the script will go here]
 
 # Attempt to detect package manager and install necessary packages
 if command -v apt-get &> /dev/null; then
-    echo "Attempting to install necessary packages using apt-get..."
-    apt-get update
-    apt-get install -y "${REQUIRED_PACKAGES[@]}"
+  echo "Attempting to install necessary packages using apt-get..."
+  apt-get update
+  apt-get install -y "${REQUIRED_PACKAGES[@]}"
 elif command -v yum &> /dev/null; then
-    echo "Attempting to install necessary packages using yum..."
-    yum install -y "${REQUIRED_PACKAGES[@]}"
+  echo "Attempting to install necessary packages using yum..."
+  yum install -y "${REQUIRED_PACKAGES[@]}"
 elif command -v dnf &> /dev/null; then
-    echo "Attempting to install necessary packages using dnf..."
-    dnf install -y "${REQUIRED_PACKAGES[@]}"
+  echo "Attempting to install necessary packages using dnf..."
+  dnf install -y "${REQUIRED_PACKAGES[@]}"
 else
-    echo "Package manager not detected. Please manually install the necessary packages."
-    exit 1
+  echo "Package manager not detected. Please manually install the necessary packages."
+  exit 1
 fi
 
 mkdir -p "${DUPLICACY_BIN_FILE_DIR}"
