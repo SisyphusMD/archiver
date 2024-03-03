@@ -39,17 +39,17 @@ ALL_LOG_FILES=(
 # Set service agnostic variables
 DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')" # Current date and time for backup naming
-PARENT_DIR="/srv" # Parent directory where services reside
 REQUIRED_VARS=( # List of required service-defined variables
   "ARCHIVE_FILES"
   "EXCLUDE_FILES"
 )
 
-# Sourcing secrets required for the operation of this script.
-# This includes sensitive information such as API keys, passwords, and other credentials necessary for various integrations and operations.
-# The secrets are stored securely in secrets.sh within the .keys directory.
-# It's crucial that secrets.sh is properly secured and permissions are set to prevent unauthorized access.
-source "${ARCHIVER_DIR}/.keys/secrets.sh"
+# Sourcing user-configurable variables from config.sh.
+# This file contains customizable variables that allow users to tailor the script's behavior to their specific needs and environment.
+# Variables in config.sh may include paths, threshold settings, preferences, and other parameters that can be adjusted by the user.
+# It's designed to make the script flexible and adaptable, without requiring modifications to the core script code.
+# Please review and adjust the variables in config.sh as necessary to fit your setup.
+source "${ARCHIVER_DIR}/config.sh"
 
 # Configuration for Duplicacy is sourced from duplicacy-config.sh.
 # This includes setting paths and keys essential for Duplicacy operations:
