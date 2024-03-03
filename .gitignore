@@ -3,8 +3,8 @@
 # Description: This file lists all files and directories that Git should ignore.
 # Note: Update this file if new sensitive or non-source files are introduced.
 
-# Ignore specific secret script
-secrets.sh
+# Ignore config file
+config.sh
 
 # Ignore .keys files
 .keys/private.pem
