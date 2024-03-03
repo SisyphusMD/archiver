@@ -10,16 +10,32 @@
 # ---------------------
 
 # Define primary configuration variables for Archiver.
-ARCHIVER_DIR="$(dirname "$(readlink -f "$0")")" # Path to Archiver directory
+# Try to resolve the full path to this Archiver script with readlink
+ARCHIVER_SCRIPT_PATH=$(readlink -f "${0}" 2>/dev/null)
+# If readlink is not successful (e.g., command not found, or operating in an environment like macOS without greadlink), use BASH_SOURCE
+if [[ ! -e "${ARCHIVER_SCRIPT_PATH}" ]]; then
+    ARCHIVER_SCRIPT_PATH="${BASH_SOURCE[0]}"
+fi
+# Resolve to an absolute path if not already
+ARCHIVER_DIR="$(cd "$(dirname "${ARCHIVER_SCRIPT_PATH}")" && pwd)"
+# Check if we've got a valid directory, just in case
+if [[ ! -d "${ARCHIVER_DIR}" ]]; then
+    echo "Error determining the script's directory."
+    exit 1
+fi
 ARCHIVER_LOG_DIR="${ARCHIVER_DIR}/logs" # Path to Archiver logs directory
-
-# Define primary Duplicacy-related configuration variables.
-DUPLICACY_BIN="/usr/local/bin/duplicacy" # Path to Duplicacy binary
-DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/.keys" # Path to Duplicacy key directory
-DUPLICACY_SSH_KEY_FILE="${DUPLICACY_KEY_DIR}/id_rsa" # SSH key file
-DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
-DUPLICACY_RSA_PRIVATE_KEY_FILE="${DUPLICACY_KEY_DIR}/private.pem" # Path to RSA private key file for Duplicacy
-
+# Define log file paths. Add new log files to the following array to ensure they're included in rotation.
+ARCHIVER_LOG_FILE="${ARCHIVER_LOG_DIR}/archiver.log" # Log file for Archiver logs
+DUPLICACY_LOG_FILE="${ARCHIVER_LOG_DIR}/duplicacy-output.log" # Log file for Duplicacy output
+DOCKER_LOG_FILE="${ARCHIVER_LOG_DIR}/docker-output.log" # Log file for Docker output
+CURL_LOG_FILE="${ARCHIVER_LOG_DIR}/curl-output.log" # Log file for Curl output
+# Array of log file variables, make sure to add more log file variables to this array if adding to the list above
+ALL_LOG_FILES=(
+  "${ARCHIVER_LOG_FILE}"
+  "${DUPLICACY_LOG_FILE}"
+  "${DOCKER_LOG_FILE}"
+  "${CURL_LOG_FILE}"
+)
 # Set service agnostic variables
 DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')" # Current date and time for backup naming
@@ -29,41 +45,21 @@ REQUIRED_VARS=( # List of required service-defined variables
   "EXCLUDE_FILES"
 )
 
-# Define log file paths. Add new log files to the following array to ensure they're included in rotation.
-ARCHIVER_LOG_FILE="${ARCHIVER_LOG_DIR}/archiver.log" # Log file for Archiver logs
-DUPLICACY_LOG_FILE="${ARCHIVER_LOG_DIR}/duplicacy-output.log" # Log file for Duplicacy output
-DOCKER_LOG_FILE="${ARCHIVER_LOG_DIR}/docker-output.log" # Log file for Docker output
-CURL_LOG_FILE="${ARCHIVER_LOG_DIR}/curl-output.log" # Log file for Curl output
+# Sourcing secrets required for the operation of this script.
+# This includes sensitive information such as API keys, passwords, and other credentials necessary for various integrations and operations.
+# The secrets are stored securely in secrets.sh within the .keys directory.
+# It's crucial that secrets.sh is properly secured and permissions are set to prevent unauthorized access.
+source "${ARCHIVER_DIR}/.keys/secrets.sh"
 
-# Array of log file variables, make sure to add more log file variables to this array if adding to the list above
-ALL_LOG_FILES=(
-  "${ARCHIVER_LOG_FILE}"
-  "${DUPLICACY_LOG_FILE}"
-  "${DOCKER_LOG_FILE}"
-  "${CURL_LOG_FILE}"
-)
-
-# Secrets
-SECRETS_FILE="${ARCHIVER_DIR}/.keys/secrets.sh" && source "${SECRETS_FILE}" # Import secrets from secrets file
-
-# OMV Duplicacy variables
-DUPLICACY_OMV_STORAGE_NAME="omv" # Name of onsite storage for Duplicacy omv storage
-DUPLICACY_OMV_STORAGE_URL="${OMV_URL}" # URL for onsite storage for Duplicacy omv storage
-DUPLICACY_OMV_SSH_KEY_FILE="${DUPLICACY_SSH_KEY_FILE}" # SSH key file for Duplicacy omv storage
-DUPLICACY_OMV_PASSWORD="${STORAGE_PASSWORD}" # Password for Duplicacy omv storage
-DUPLICACY_OMV_RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for Duplicacy omv storage
-
-# B2 Duplicacy varibles
-DUPLICACY_BACKBLAZE_STORAGE_NAME="backblaze" # Name of offsite storage for Duplicacy backblaze storage
-DUPLICACY_BACKBLAZE_STORAGE_URL="${B2_URL}" # URL for offsite storage for Duplicacy backblaze storage
-DUPLICACY_BACKBLAZE_B2_ID="${B2_ID}" # Key ID for offsite storage for Duplicacy backblaze storage
-DUPLICACY_BACKBLAZE_B2_KEY="${B2_KEY}" # Application Key for offsite storage for Duplicacy backblaze storage
-DUPLICACY_BACKBLAZE_PASSWORD="${STORAGE_PASSWORD}" # Password for Duplicacy backblaze storage
-DUPLICACY_BACKBLAZE_RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for Duplicacy backblaze storage
-
-# Pushover variables
-PUSHOVER_API_TOKEN="${PO_API_TOKEN}" # Pushover application API token/key
-PUSHOVER_USER_KEY="${PO_USER_KEY}" # Pushover user key
+# Configuration for Duplicacy is sourced from duplicacy-config.sh.
+# This includes setting paths and keys essential for Duplicacy operations:
+# - DUPLICACY_BIN: Path to the Duplicacy binary.
+# - DUPLICACY_KEY_DIR: Directory containing Duplicacy keys.
+# - DUPLICACY_SSH_KEY_FILE: SSH key file for Duplicacy.
+# - DUPLICACY_RSA_PUBLIC_KEY_FILE: RSA public key file used by Duplicacy.
+# - DUPLICACY_RSA_PRIVATE_KEY_FILE: RSA private key file used by Duplicacy.
+# Ensure duplicacy_config.sh is present in the expected directory and is readable.
+source "${ARCHIVER_DIR}/config/duplicacy-config.sh"
 
 # Declare service specific variables (initially empty)
 SERVICE="" # Name of the service
