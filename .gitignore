@@ -4,7 +4,7 @@
 # Note: Update this file if new sensitive or non-source files are introduced.
 
 # Ignore config file
-config.sh
+user-config.sh
 
 # Ignore .keys files
 .keys/private.pem
