@@ -7,23 +7,24 @@ reset_service_settings() {
   DUPLICACY_FILTERS_FILE="" # Location for Duplicacy filters file
   DUPLICACY_SNAPSHOT_ID="" # Snapshot ID for Duplicacy
 
-  log_message "INFO" "Reset all service-specific variables."
+  log_message "INFO" "Successfully reset all service-specific variables."
 
   # Unset all vars from the REQUIRED_VARS array in case they had previously been set from another service
   # Iterate over each variable in the REQUIRED_VARS array
   for var in "${REQUIRED_VARS[@]}"; do
     # Unset the current variable
     unset "${var}" || handle_error "Unable to unset the variable '${var}'. Ensure the variable name is correct and retry."
-    # Log a message indicating that the variable has been unset
-    log_message "INFO" "Variable '${var}' successfully unset, ensuring a clean state for the next iteration."
   done
+
+  # Log a message indicating that the variables have been unset
+  log_message "INFO" "Required variables successfully unset, ensuring a clean state for the next iteration."
 
   # Defining service_specific_pre_backup_function as an empty function in case it was previously defined from another service
   service_specific_pre_backup_function() { :; }
   # Defining service_specific_post_backup_function as an empty function in case it was previously defined from another service
   service_specific_post_backup_function() { :; }
 
-  log_message "INFO" "Cleared pre/post backup functions to ensure fresh environment for next operation."
+  log_message "INFO" "Cleared pre/post service-specific backup functions to ensure fresh environment for next operation."
 }
 
 # Sets service-specific settings based on the service directory name provided.
