@@ -13,16 +13,16 @@ reset_service_settings() {
   # Iterate over each variable in the REQUIRED_VARS array
   for var in "${REQUIRED_VARS[@]}"; do
     # Unset the current variable
-    unset "${var}" || handle_error "Unable to unset the variable '${var}' for the ${SERVICE} service. Ensure the variable name is correct and retry."
+    unset "${var}" || handle_error "Unable to unset the variable '${var}'. Ensure the variable name is correct and retry."
     # Log a message indicating that the variable has been unset
-    log_message "INFO" "Variable '${var}' successfully unset for ${SERVICE} service, ensuring a clean state for the next iteration."
+    log_message "INFO" "Variable '${var}' successfully unset, ensuring a clean state for the next iteration."
   done
 
   # Defining service_specific_pre_backup_function as an empty function in case it was previously defined from another service
   service_specific_pre_backup_function() { :; }
   # Defining service_specific_post_backup_function as an empty function in case it was previously defined from another service
   service_specific_post_backup_function() { :; }
-  
+
   log_message "INFO" "Cleared pre/post backup functions to ensure fresh environment for next operation."
 }
 

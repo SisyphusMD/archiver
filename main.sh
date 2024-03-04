@@ -153,7 +153,7 @@ main() {
     # Move to user defined service directory or exit if failed
     check_directory "${dir}" || { handle_error "Service directory ${dir} not found. Verify the directory exists. Continuing to next operation."; continue; }
     cd "${dir}" || { handle_error "Failed to change to service directory ${dir}. Continuing to next operation."; continue; }
-    log_message "INFO" "Successfully changed to service directory ${dir}." || { handle_error "Failed to log the successful change to ${dir}. Continuing to next operation."; continue; }
+    log_message "INFO" "Successfully changed to the ${dir} directory." || { handle_error "Failed to log the successful change to the ${dir} directory. Continuing to next operation."; continue; }
 
     # Reset all service-specific variables and functions
     reset_service_settings
@@ -163,13 +163,13 @@ main() {
       # Source the service-backup-settings.sh file
       source "${dir}/service-backup-settings.sh" || { handle_error "Failed to import ${dir}/service-backup-settings.sh. Verify source files and paths. Continuing to next operation."; continue; }
 
-      log_message "INFO" "Starting backup process for ${SERVICE} service." || { handle_error "Failed to log the start of the backup process for ${SERVICE}. Continuing to next operation."; continue; }
+      log_message "INFO" "Starting backup process for ${dir} directory." || { handle_error "Failed to log the start of the backup process for the ${dir} directory. Continuing to next operation."; continue; }
 
       # Check if required service-specific variables are successfully sourced
-      check_variables || { handle_error "Required variables not set for ${SERVICE}. Ensure all required variables are defined. Continuing to next operation."; continue; }
+      check_variables || { handle_error "Required variables not set for the ${dir} directory. Ensure all required variables are defined. Continuing to next operation."; continue; }
 
       # Set service-specific variables and functions
-      set_service_settings "${dir}" || { handle_error "Failed to set service settings for ${SERVICE}. Continuing to next service."; continue; }
+      set_service_settings "${dir}" || { handle_error "Failed to set service settings for the ${dir} directory. Continuing to next service."; continue; }
 
       # Make sure backup directory exists
       check_directory "${BACKUP_DIR}" || { handle_error "Backup directory ${BACKUP_DIR} not found for ${SERVICE}. Verify the backup directory exists. Continuing to next operation."; continue; }
@@ -202,8 +202,11 @@ main() {
 
       # Success message
       log_message "INFO" "Completed backup and duplication process successfully for ${SERVICE} service." || { handle_error "Failed to log the successful completion of backup and duplication for ${SERVICE}."; }
+
+      # Reset all service-specific variables and functions
+      reset_service_settings
     else
-      log_message "WARNING" "Skipped backup for ${SERVICE} service due to missing service-backup-settings.sh file. Check service configuration." || { handle_error "Failed to log warning for missing service-backup-settings.sh file for ${SERVICE}."; }
+      log_message "WARNING" "Skipped backup for the ${dir} directory due to missing service-backup-settings.sh file. Check service configuration." || { handle_error "Failed to log warning for missing service-backup-settings.sh file for the ${dir} directory."; }
     fi
   done
 

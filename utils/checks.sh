@@ -15,7 +15,7 @@ check_variables() {
 
   # If there are any missing required service-specific variables, send an error message
   if [ "${#missing_vars[@]}" -gt 0 ]; then
-    handle_error "Required variables not set for the ${SERVICE} service: ${missing_vars[*]}. Ensure all required variables are defined in the service's backup settings."
+    handle_error "Required variables not set for the ${dir} directory: ${missing_vars[*]}. Ensure all required variables are defined in the service's backup settings."
   else
     log_message "INFO" "All required service-specific variables are set for the ${SERVICE} service."
   fi
