@@ -5,51 +5,63 @@
 # Usage: source service-backup-settings.sh
 #
 # Note: This script should not be executed directly but sourced by another script.
+# All variables and functions are required to be set. If specific configurations or 
+# pre/post backup tasks are not needed, variables can be set to empty strings (""), 
+# and functions can contain a no-operation placeholder (:;), except for the SERVICE 
+# variable, which must always be set to a valid service name.
 #
-# Author: NAME
+# Instructions:
+# - This configuration file must be named "service-backup-settings.sh" and placed in 
+#   every service directory that is listed in the BACKUP_REPOSITORIES variable in the 
+#   user-config.sh file. It allows for service-specific backup configurations and tasks 
+#   to be defined, ensuring that each service can be backed up according to its 
+#   specific needs and requirements.
+#
+# Author: Name
 # Date: YYYY-MM-DD
 
+# Service name (Required - must always be set to a valid service name)
+# Example: SERVICE="example_service" # Replace "example_service" with your actual service name
 
+# Set include/exclude patterns for Duplicacy filter (Required - set to empty if not used)
+DUPLICACY_FILTERS_PATTERNS=(
+  # Example: "+*.${SERVICE}-backup.tar"
+  # "-*"
+)
 
-# Variables for paths to include and exclude in the backup.
-# Modify these as needed for your backup configuration.
+# The SEPARATE_BACKUP_DIR variable specifies the name of the sub-directory to be used for backups. (Required - set to "" if a separate sub-directory is not used)
+# Example: SEPARATE_BACKUP_DIR="true"
 
+# The TAR_FIRST variable controls whether backup operations should perform tar operations first. (Required - set to "" to indicate FALSE or skip tar operations)
+# Example: TAR_FIRST="true"
+
+# Variables for paths to include and exclude in the backup. (Required - modify as needed or set to empty arrays if not used)
 # ARCHIVE_FILES: Array of files/directories to include in the backup.
-# Example: ARCHIVE_FILES=("/path/to/service/directory" "/another/important/path")
 ARCHIVE_FILES=(
   # Add paths to backup here. Each path as a new line inside the parentheses.
   # Example: "${SERVICE}/"
 )
 
 # EXCLUDE_FILES: Array of files/directories to exclude from the backup.
-# Example: EXCLUDE_FILES=("/path/to/service/tempfiles/*" "/path/to/service/logs/*")
 EXCLUDE_FILES=(
   # Add paths to exclude from backup here. Each path as a new line inside the parentheses.
   # Example: "${SERVICE}/backups/*.tar"
   # "${SERVICE}/backups/.duplicacy"
 )
 
-
-
-# Optional Functions for service-specific pre and post backup tasks.
-# Define any service-specific commands inside these functions if needed.
-
+# Optional Functions for service-specific pre and post backup tasks. (Required - use no-operation placeholder if no specific commands are needed)
 # service_specific_pre_backup_function: Function to execute commands before backup.
 # This can include service shutdown, data dump, etc.
-# Leave empty if no pre-backup actions are required.
 service_specific_pre_backup_function() {
-  # Add pre-backup commands here.
+  # Add pre-backup commands here or leave the no-operation placeholder if not needed.
   # Example: docker compose stop
   :; # No operation placeholder
 }
 
 # service_specific_post_backup_function: Function to execute commands after backup.
 # This can include service startup, cleanup actions, etc.
-# Leave empty if no post-backup actions are required.
 service_specific_post_backup_function() {
-  # Add post-backup commands here.
+  # Add post-backup commands here or leave the no-operation placeholder if not needed.
   # Example: docker compose start
   :; # No operation placeholder
 }
-
-# Note: The ':;' is used as a placeholder for an empty function body. It's a no-op command in Bash.
