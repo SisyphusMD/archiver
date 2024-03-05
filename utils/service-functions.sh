@@ -37,15 +37,16 @@ set_service_settings() {
 
   SERVICE_DIR="${1}" # Full path to the service directory
   PARENT_DIR="$(realpath "$(dirname "${SERVICE_DIR}")")"
-  DUPLICACY_REPO_DIR="${BACKUP_DIR}/.duplicacy" # Directory for various Duplicacy repos
-  DUPLICACY_FILTERS_FILE="${DUPLICACY_REPO_DIR}/filters" # Location for Duplicacy filters file
-  DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
 
   if [[ -n "${SEPARATE_BACKUP_DIR}" ]]; then
     BACKUP_DIR="${SERVICE_DIR}/${SEPARATE_BACKUP_DIR}"
   else
     BACKUP_DIR="${SERVICE_DIR}"
   fi
+  
+  DUPLICACY_REPO_DIR="${BACKUP_DIR}/.duplicacy" # Directory for various Duplicacy repos
+  DUPLICACY_FILTERS_FILE="${DUPLICACY_REPO_DIR}/filters" # Location for Duplicacy filters file
+  DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
 
   log_message "INFO" "Updated service-specific variables for ${SERVICE} service. Ready for backup operations."
 }
