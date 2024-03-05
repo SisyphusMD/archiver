@@ -8,10 +8,11 @@ check_variables() {
 
   # Check if each required service-specific variable is set
   for var in "${REQUIRED_VARS[@]}"; do
-    if [ -z "${!var}" ]; then
+    if [ "${!var+x}" = "" ]; then
       missing_vars+=("${var}")
     fi
   done
+
 
   # If there are any missing required service-specific variables, send an error message
   if [ "${#missing_vars[@]}" -gt 0 ]; then
