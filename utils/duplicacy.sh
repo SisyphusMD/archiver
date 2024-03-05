@@ -7,7 +7,7 @@ verify_duplicacy() {
   local exit_status
 
   # Verify Duplicacy Storage initiation
-  "${DUPLICACY_BIN}" check -storage "${1}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  "${DUPLICACY_BIN}" check -storage "${1}" -fossils -resurrect 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
   exit_status="${PIPESTATUS[0]}"
   return "${exit_status}"
 }
