@@ -121,6 +121,7 @@ source "${ARCHIVER_DIR}/utils/archiving.sh"
 # ---------------------
 source "${ARCHIVER_DIR}/utils/duplicacy.sh"
 # imports functions:
+#   - verify_duplicacy
 #   - initialize_duplicacy
 #   - backup_duplicacy
 #   - prune_duplicacy

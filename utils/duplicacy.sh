@@ -1,3 +1,17 @@
+# Function to verify if a given storage is already initialized
+# Parameters:
+#   1. Duplicacy Storage Name
+# Output:
+#   Returns exit code 0 if initialized, and non-0 if not initialized
+verify_duplicacy() {
+  local exit_status
+
+  # Verify Duplicacy Storage initiation
+  "${DUPLICACY_BIN}" check -storage "${1}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  exit_status="${PIPESTATUS[0]}"
+  return "${exit_status}"
+}
+
 # Initializes Duplicacy for the service's backup directory if not already done.
 # Parameters:
 #   None. Operates within the context of the current service's backup directory.
@@ -9,7 +23,7 @@ initialize_duplicacy() {
   # Move to backup directory or exit if failed
   cd "${BACKUP_DIR}" || handle_error "Failed to change to backup directory ${BACKUP_DIR} for backup operations of ${SERVICE}."
 
-  if ! "${DUPLICACY_BIN}" check --storage "${DUPLICACY_OMV_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"; then
+  if ! verify_duplicacy "${DUPLICACY_OMV_STORAGE_NAME}"; then
     export DUPLICACY_OMV_SSH_KEY_FILE # Export SSH key file for omv storage so Duplicacy binary can see variable
     export DUPLICACY_OMV_PASSWORD # Export password for omv storage so Duplicacy binary can see variable
 
@@ -46,9 +60,7 @@ initialize_duplicacy() {
     fi
 
     # Verify OMV Duplicacy Storage initiation
-    "${DUPLICACY_BIN}" check -storage "${DUPLICACY_OMV_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
+    if ! verify_duplicacy "${DUPLICACY_OMV_STORAGE_NAME}"; then
       handle_error "Verification of the OMV Duplicacy Storage initialization for the ${SERVICE} service failed. Ensure Duplicacy has been properly initialized."
     fi
     log_message "INFO" "OMV Duplicacy Storage initialization verified for ${SERVICE} service."
@@ -81,7 +93,7 @@ add_storage_duplicacy() {
   # Move to backup directory or exit if failed
   cd "${BACKUP_DIR}" || handle_error "Failed to change to backup directory ${BACKUP_DIR} for backup operations of ${SERVICE}."
 
-  if ! "${DUPLICACY_BIN}" check --storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"; then
+  if ! verify_duplicacy "${DUPLICACY_BACKBLAZE_STORAGE_NAME}"; then
     export DUPLICACY_BACKBLAZE_B2_ID # Export BackBlaze Account ID for backblaze storage so Duplicacy binary can see variable
     export DUPLICACY_BACKBLAZE_B2_KEY # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
     export DUPLICACY_BACKBLAZE_PASSWORD # Export password for backblaze storage so Duplicacy binary can see variable
@@ -129,9 +141,7 @@ add_storage_duplicacy() {
     fi
 
     # Verify BackBlaze Duplicacy Storage initialization
-    "${DUPLICACY_BIN}" check -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
+    if ! verify_duplicacy "${DUPLICACY_BACKBLAZE_STORAGE_NAME}"; then
       handle_error "Verification of the BackBlaze Duplicacy Storage addition for the ${SERVICE} service failed. Ensure Duplicacy BackBlaze storage has been properly added."
     fi
     log_message "INFO" "BackBlaze Duplicacy Storage addition verified for ${SERVICE} service."
@@ -159,9 +169,7 @@ backup_duplicacy() {
   log_message "INFO" "The OMV Duplicacy Storage backup completed successfully for ${SERVICE} service."
 
   # Verify OMV Duplicacy Storage backup completion
-  "${DUPLICACY_BIN}" check -storage "${DUPLICACY_OMV_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-  exit_status="${PIPESTATUS[0]}"
-  if [ "${exit_status}" -ne 0 ]; then
+  if ! verify_duplicacy "${DUPLICACY_OMV_STORAGE_NAME}"; then
     handle_error "Verification of the OMV Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
   fi
   log_message "INFO" "OMV Duplicacy Storage backup verified for ${SERVICE} service."
@@ -178,9 +186,7 @@ backup_duplicacy() {
   log_message "INFO" "The BackBlaze Duplicacy Storage backup completed successfully for ${SERVICE} service."
 
   # Verify BackBlaze Duplicacy Storage backup completion
-  "${DUPLICACY_BIN}" check -storage "${DUPLICACY_BACKBLAZE_STORAGE_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-  exit_status="${PIPESTATUS[0]}"
-  if [ "${exit_status}" -ne 0 ]; then
+  if ! verify_duplicacy "${DUPLICACY_BACKBLAZE_STORAGE_NAME}"; then
     handle_error "Verification of the BackBlaze Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
   fi
   log_message "INFO" "BackBlaze Duplicacy Storage backup verified for ${SERVICE} service."
