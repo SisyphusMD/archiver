@@ -9,23 +9,26 @@ log_message() {
   local message
   local timestamp
   local target_log_file
+  local service_name
 
   log_level="${1}"
   message="${2}"
   timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
   target_log_file="${3:-${ARCHIVER_LOG_FILE}}" # Use ARCHIVER_LOG_FILE by default if no log file is specified
+  # Use "Archiver" if SERVICE is unset or empty
+  local service_name="${SERVICE:-Archiver}"
 
-  echo "[${timestamp}] [${log_level}] [Service: ${SERVICE}] ${message}" >> "${target_log_file}" || \
-    handle_error "Failed to log message for ${SERVICE} service to ${target_log_file}. Check if the log file is writable and disk space is available."
+  echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}" >> "${target_log_file}" || \
+    handle_error "Failed to log message for ${service_name} service to ${target_log_file}. Check if the log file is writable and disk space is available."
 
   # Print WARNING and ERROR messages to the terminal
   if [[ "${log_level}" == "WARNING" || "${log_level}" == "ERROR" ]]; then
-    echo "[${timestamp}] [${log_level}] [Service: ${SERVICE}] ${message}"
+    echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
   fi
 
   # Send ERROR messages as a Pushover notification
   if [[ "${log_level}" == "ERROR" ]]; then
-    send_pushover_notification "Archiver Error" "[${timestamp}] [${log_level}] [Service: ${SERVICE}] ${message}"
+    send_pushover_notification "Archiver Error" "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
   fi
 }
 
