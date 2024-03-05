@@ -8,10 +8,15 @@ check_variables() {
 
   # Check if each required service-specific variable is set
   for var in "${REQUIRED_VARS[@]}"; do
-    if [ "${!var+x}" = "" ]; then
+    # Using declare -p to check if the variable is initialized.
+    # Redirecting stderr to /dev/null to suppress error messages for unset variables.
+    if ! declare -p "${var}" &> /dev/null; then
+      # If declare -p fails, the variable is not set at all.
       missing_vars+=("${var}")
     fi
+    # No need to check content; being initialized is sufficient.
   done
+
 
 
   # If there are any missing required service-specific variables, send an error message
