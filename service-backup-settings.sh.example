@@ -21,7 +21,7 @@
 # Date: YYYY-MM-DD
 
 # Service name (Required - must always be set to a valid service name)
-# Example: SERVICE="example_service" # Replace "example_service" with your actual service name
+# Example: SERVICE="example-service" # Replace "example-service" with your actual service name
 
 # Set include/exclude patterns for Duplicacy filter (Required - set to empty if not used)
 DUPLICACY_FILTERS_PATTERNS=(
