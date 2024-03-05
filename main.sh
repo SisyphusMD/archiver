@@ -36,6 +36,7 @@ ALL_LOG_FILES=(
   "${DOCKER_LOG_FILE}"
   "${CURL_LOG_FILE}"
 )
+ARCHIVER_TAR="${ARCHIVER_DIR}/utils/safe-tar.sh"
 # Set service agnostic variables
 DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')" # Current date and time for backup naming
@@ -48,7 +49,7 @@ REQUIRED_VARS=( # List of required service-defined variables
   "EXCLUDE_FILES"
 )
 
-# Sourcing user-configurable variables from config.sh.
+# Sourcing user-configurable variables from user-config.sh.
 # This file contains customizable variables that allow users to tailor the script's behavior to their specific needs and environment.
 # Variables in config.sh may include paths, threshold settings, preferences, and other parameters that can be adjusted by the user.
 # It's designed to make the script flexible and adaptable, without requiring modifications to the core script code.

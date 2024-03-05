@@ -25,7 +25,7 @@ create_backup_archive() {
     backup_file="${BACKUP_DIR}/${DATETIME}.${SERVICE}-backup.tar"
 
     # Create the backup archive
-    sudo tar -cf "${backup_file}" \
+    sudo "${ARCHIVER_TAR}" "${backup_file}" \
       "${EXCLUDE_OPTIONS[@]}" \
       -C "${PARENT_DIR}" \
       "${ARCHIVE_FILES[@]}"  2>&1 | log_output "${ARCHIVER_LOG_FILE}" "WARNING"
