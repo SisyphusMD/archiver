@@ -187,9 +187,6 @@ main() {
         clean_old_backups || { handle_error "Failed to clean old backups for ${SERVICE}. Check permissions and existing backups. Continuing to next operation."; continue; }
       fi
 
-      # Run any specific post backup commands defined in the source file
-      service_specific_post_backup_function
-
       # Initialize OMV Duplicacy Storage if not already initialized
       initialize_duplicacy || { handle_error "Duplicacy initialization failed for ${SERVICE}. Ensure Duplicacy is installed and configured correctly. Continuing to next operation."; continue; }
 
@@ -198,6 +195,9 @@ main() {
 
       # Run Duplicacy backup
       backup_duplicacy || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+
+      # Run any specific post backup commands defined in the source file
+      service_specific_post_backup_function
 
       # Set last successful backup dir
       LAST_BACKUP_DIR="${BACKUP_DIR}"
