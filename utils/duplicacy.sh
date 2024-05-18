@@ -12,6 +12,24 @@ verify_duplicacy() {
   return "${exit_status}"
 }
 
+filters_duplicacy() {
+
+  # Prepare Duplicacy filters file
+  # Remove the filters file if it already exists
+  rm -f "${DUPLICACY_FILTERS_FILE}" || handle_error "Error removing filters file."
+  touch "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to create the Duplicacy filters file for the ${SERVICE} service."
+
+  # Add Duplicacy filters patterns to the filters file
+  for line in "${DUPLICACY_FILTERS_PATTERNS[@]}"; do
+    echo "${line}" >> "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to modify the Duplicacy filters file for the ${SERVICE} service."
+  done
+
+  # Log success message
+  log_message "INFO" "Preparation for Duplicacy filter for ${SERVICE} service completed successfully."
+
+}
+
+
 # Initializes Duplicacy for the service's backup directory if not already done.
 # Parameters:
 #   None. Operates within the context of the current service's backup directory.
@@ -66,20 +84,7 @@ initialize_duplicacy() {
     log_message "INFO" "OMV Duplicacy Storage initialization verified for ${SERVICE} service."
 
     # Prepare Duplicacy filters file
-    # Check if the filters file already exists
-    if [ ! -e "${DUPLICACY_FILTERS_FILE}" ]; then
-      touch "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to create the Duplicacy filters file for the ${SERVICE} service. Check file permissions and ensure the directory structure is correct."
-    else
-      log_message "WARNING" "Duplicacy filters file already exists for ${SERVICE} service. Appending to existing file."
-    fi
-
-    # Add Duplicacy filters patterns to the filters file
-    for line in "${DUPLICACY_FILTERS_PATTERNS[@]}"; do
-      echo "${line}" >> "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to modify the Duplicacy filters file for the ${SERVICE} service. Check file permissions and ensure the directory structure is correct."
-    done
-
-    # Log success message
-    log_message "INFO" "Preparation for Duplicacy filter for ${SERVICE} service completed successfully."
+    filters_duplicacy || handle_error "Preparing Duplicacy filters file for the ${SERVICE} service failed."
 
   else
     log_message "INFO" "Duplicacy OMV storage already initialized for ${SERVICE} service."
@@ -145,7 +150,10 @@ add_storage_duplicacy() {
       handle_error "Verification of the BackBlaze Duplicacy Storage addition for the ${SERVICE} service failed. Ensure Duplicacy BackBlaze storage has been properly added."
     fi
     log_message "INFO" "BackBlaze Duplicacy Storage addition verified for ${SERVICE} service."
-    
+
+    # Prepare Duplicacy filters file
+    filters_duplicacy || handle_error "Preparing Duplicacy filters file for the ${SERVICE} service failed."
+
   else
     log_message "INFO" "Duplicacy BackBlaze storage already initialized for ${SERVICE} service."
   fi
@@ -158,6 +166,9 @@ add_storage_duplicacy() {
 #   Performs a Duplicacy backup. Output is logged to the Duplicacy log file.
 backup_duplicacy() {
   local exit_status
+
+  # Prepare Duplicacy filters file
+  filters_duplicacy || handle_error "Preparing Duplicacy filters file for the ${SERVICE} service failed."
 
   # Run the Duplicacy backup to the OMV Storage
   log_message "INFO" "Running OMV Duplicacy Storage backup for ${SERVICE} service."

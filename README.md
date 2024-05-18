@@ -38,16 +38,39 @@ Edit secrets.sh: Open the secrets.sh file in a text editor of your choice. Repla
 
 
 #To restore
+export DUPLICACY_SERVICE='paperless' && export STORAGE_NAME='omv'
+
+mkdir "${DUPLICACY_SERVICE}" && cd "${DUPLICACY_SERVICE}"
+
+
+export DUPLICACY_OMV_PASSWORD=''
+export DUPLICACY_OMV_SSH_KEY_FILE='/home/cody/archiver/.keys/id_rsa'
+export DUPLICACY_OMV_SSH_PASSPHRASE='' 	
+
+sudo duplicacy init -e -key /home/cody/archiver/.keys/public.pem -storage-name omv ubuntu-server-"${DUPLICACY_SERVICE}" sftp://server@synology.internal/duplicacy
+"${DUPLICACY_OMV_SSH_KEY_FILE}"
+"${DUPLICACY_OMV_PASSWORD}"
+
+sudo duplicacy set -key password -value "${DUPLICACY_OMV_PASSWORD}"
+
+sudo duplicacy set -storage "${STORAGE_NAME}" -key rsa_passphrase -value "${DUPLICACY_OMV_SSH_PASSPHRASE}"
+
+sudo duplicacy set -key ssh_key_file -value "${DUPLICACY_OMV_SSH_KEY_FILE}"
+
+sudo duplicacy list #this should give you the info for revision number, needed below
+
+export REVISION='1'
+
+sudo duplicacy restore -r "${REVISION}" -key /home/cody/archiver/.keys/private.pem
+
 #First you need to init with the same repository id
-cd path/to/restore/dir
-duplicacy init -e RPi4b8G-adguard sftp://archiver@192.168.2.6/srv/dev-disk-by-uuid-980406B804069980/duplicacy
+sudo duplicacy init -e ubuntu-server-paperless sftp://server@synology.internal/duplicacy
 #it will ask for "Enter the path of the private key file:"
-#/home/cody/archiver/.keys/id_rsa
-#it will then ask for "Enter storage password for sftp://archiver@192.168.2.6/srv/dev-disk-by-uuid-980406B804069980/duplicacy:"
+/home/cody/archiver/.keys/id_rsa
+#it will then ask for "Enter storage password for sftp://server@synology.internal/duplicacy:"
 #enter the storage password
-duplicacy list -a #this should give you the info for revision number, needed below
+sudo duplicacy list #this should give you the info for revision number, needed below
 #will ask for the same 2 as above
-#next command needs sudo to be able to store the files owned by root
 sudo duplicacy restore -r 1 -key /home/cody/archiver/.keys/private.pem
 #Will be asked for storage password, then for key passphrase
 
