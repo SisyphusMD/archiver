@@ -123,3 +123,20 @@ rotate_logs() {
     fi
   fi
 }
+
+
+# Function to convert seconds to human-readable format
+function elapsed_time {
+  local T=$1
+  local D=$((T/60/60/24))
+  local H=$((T/60/60%24))
+  local M=$((T/60%60))
+  local S=$((T%60))
+  local result=""
+  (( $D > 0 )) && result+="$D days "
+  (( $H > 0 )) && result+="$H hours "
+  (( $M > 0 )) && result+="$M minutes "
+  (( $D > 0 || $H > 0 || $M > 0 )) && result+="and "
+  result+="$S seconds"
+  echo "$result"
+}

@@ -9,6 +9,9 @@
 # Configuration Section
 # ---------------------
 
+# Capture the start time
+START_TIME=$(date +%s)
+
 # Define primary configuration variables for Archiver.
 # Try to resolve the full path to this Archiver script with readlink
 ARCHIVER_SCRIPT_PATH=$(readlink -f "${0}" 2>/dev/null)
@@ -96,6 +99,7 @@ source "${ARCHIVER_DIR}/utils/logging.sh"
 #   - log_message
 #   - log_output
 #   - rotate_logs
+#   - elapsed_time
 
 # Error Handling
 # ---------------------
@@ -187,12 +191,6 @@ main() {
         clean_old_backups || { handle_error "Failed to clean old backups for ${SERVICE}. Check permissions and existing backups. Continuing to next operation."; continue; }
       fi
 
-      # Initialize OMV Duplicacy Storage if not already initialized
-      initialize_duplicacy || { handle_error "Duplicacy initialization failed for ${SERVICE}. Ensure Duplicacy is installed and configured correctly. Continuing to next operation."; continue; }
-
-      # Add BackBlaze Duplicacy Storage if not already added
-      add_storage_duplicacy || { handle_error "Duplicacy initialization failed for ${SERVICE}. Ensure Duplicacy is installed and configured correctly. Continuing to next operation."; continue; }
-
       # Run Duplicacy backup
       backup_duplicacy || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
@@ -234,11 +232,20 @@ main() {
   # Prune duplicacy from last successful backup directory
   prune_duplicacy || { handle_error "Duplicacy prune failed. Review Duplicacy logs for details."; }
 
+  # Capture the end time
+  END_TIME=$(date +%s)
+
+  # Calculate the total runtime
+  ELAPSED_TIME=$(($END_TIME - $START_TIME))
+
+  # Get the total runtime in human-readable format
+  TOTAL_TIME_TAKEN=$(display_time $ELAPSED_TIME)
+
   # Send terminal and Pushover notification of script completion with error count
   local message
   local timestamp
   timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
-  message="[${timestamp}] [${HOSTNAME}] Archiver script completed with ${ERROR_COUNT} error(s)."
+  message="[${timestamp}] [${HOSTNAME}] Archiver script completed in ${TOTAL_TIME_TAKEN} with ${ERROR_COUNT} error(s)."
   echo "${message}"
   send_pushover_notification "Archiver Script Completed" "${message}"
 }

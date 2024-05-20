@@ -6,14 +6,13 @@
 verify_duplicacy() {
   local exit_status
 
-  # Verify Duplicacy Storage initiation
-  "${DUPLICACY_BIN}" check -storage "${1}" -fossils -resurrect 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  # Verify Duplicacy Storage existance
+  "${DUPLICACY_BIN}" list -storage "${1}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
   exit_status="${PIPESTATUS[0]}"
   return "${exit_status}"
 }
 
 filters_duplicacy() {
-
   # Prepare Duplicacy filters file
   # Remove the filters file if it already exists
   rm -f "${DUPLICACY_FILTERS_FILE}" || handle_error "Error removing filters file."
@@ -26,9 +25,7 @@ filters_duplicacy() {
 
   # Log success message
   log_message "INFO" "Preparation for Duplicacy filter for ${SERVICE} service completed successfully."
-
 }
-
 
 # Initializes Duplicacy for the service's backup directory if not already done.
 # Parameters:
@@ -167,6 +164,9 @@ add_storage_duplicacy() {
 backup_duplicacy() {
   local exit_status
 
+  # Initialize OMV Duplicacy Storage if not already initialized
+  initialize_duplicacy || handle_error "Duplicacy initialization failed for ${SERVICE}."
+
   # Prepare Duplicacy filters file
   filters_duplicacy || handle_error "Preparing Duplicacy filters file for the ${SERVICE} service failed."
 
@@ -179,11 +179,11 @@ backup_duplicacy() {
   fi
   log_message "INFO" "The OMV Duplicacy Storage backup completed successfully for ${SERVICE} service."
 
-  # Verify OMV Duplicacy Storage backup completion
-  if ! verify_duplicacy "${DUPLICACY_OMV_STORAGE_NAME}"; then
-    handle_error "Verification of the OMV Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
-  fi
-  log_message "INFO" "OMV Duplicacy Storage backup verified for ${SERVICE} service."
+#  # Verify OMV Duplicacy Storage backup completion
+#  if ! verify_duplicacy "${DUPLICACY_OMV_STORAGE_NAME}"; then
+#    handle_error "Verification of the OMV Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
+#  fi
+#  log_message "INFO" "OMV Duplicacy Storage backup verified for ${SERVICE} service."
 }
 
 # Runs the Duplicacy copy backup operation for the current service's data.
@@ -193,6 +193,9 @@ backup_duplicacy() {
 #   Performs a Duplicacy copy backup. Output is logged to the Duplicacy log file.
 copy_backup_duplicacy() {
   local exit_status
+
+  # Add BackBlaze Duplicacy Storage if not already added
+  add_storage_duplicacy || handle_error "Duplicacy initialization failed for ${SERVICE}."
 
   # Run the Duplicacy backup to the BackBlaze Storage
   log_message "INFO" "Running BackBlaze Duplicacy Storage backup for ${SERVICE} service."
@@ -205,11 +208,18 @@ copy_backup_duplicacy() {
   fi
   log_message "INFO" "The BackBlaze Duplicacy Storage backup completed successfully for ${SERVICE} service."
 
-  # Verify BackBlaze Duplicacy Storage backup completion
-  if ! verify_duplicacy "${DUPLICACY_BACKBLAZE_STORAGE_NAME}"; then
-    handle_error "Verification of the BackBlaze Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
-  fi
-  log_message "INFO" "BackBlaze Duplicacy Storage backup verified for ${SERVICE} service."
+#  # Verify BackBlaze Duplicacy Storage backup completion
+#  if ! verify_duplicacy "${DUPLICACY_BACKBLAZE_STORAGE_NAME}"; then
+#    handle_error "Verification of the BackBlaze Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
+#  fi
+#  log_message "INFO" "BackBlaze Duplicacy Storage backup verified for ${SERVICE} service."
+}
+
+full_check_duplicacy() {
+  # Full Check Duplicacy
+  "${DUPLICACY_BIN}" check -all -storage "${1}" -fossils -resurrect 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  exit_status="${PIPESTATUS[0]}"
+  return "${exit_status}"
 }
 
 # Runs the Duplicacy prune operation for all repositories.
@@ -220,6 +230,9 @@ copy_backup_duplicacy() {
 prune_duplicacy() {
   local exit_status
 
+  # First Duplicacy Check the OMV storage
+  full_check_duplicacy "${DUPLICACY_OMV_STORAGE_NAME}"
+
   # Prune the OMV Duplicacy Storage
   log_message "INFO" "Running OMV Duplicacy Storage prune for all repositories."
   "${DUPLICACY_BIN}" prune -all -storage "${DUPLICACY_OMV_STORAGE_NAME}" \
@@ -229,6 +242,9 @@ prune_duplicacy() {
     handle_error "Running OMV Duplicacy Storage prune failed. Review the Duplicacy logs for details."
   fi
   log_message "INFO" "OMV Duplicacy Storage prune completed successfully."
+
+  # First Duplicacy Check the Backblaze storage
+  full_check_duplicacy "${DUPLICACY_BACKBLAZE_STORAGE_NAME}"
 
   # Prune the BackBlaze Duplicacy Storage
   log_message "INFO" "Running BackBlaze Duplicacy Storage prune for all repositories."
