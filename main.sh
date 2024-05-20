@@ -239,7 +239,7 @@ main() {
   ELAPSED_TIME=$(($END_TIME - $START_TIME))
 
   # Get the total runtime in human-readable format
-  TOTAL_TIME_TAKEN=$(display_time $ELAPSED_TIME)
+  TOTAL_TIME_TAKEN=$(elapsed_time $ELAPSED_TIME)
 
   # Send terminal and Pushover notification of script completion with error count
   local message
