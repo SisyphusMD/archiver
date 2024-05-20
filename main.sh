@@ -199,6 +199,9 @@ main() {
       # Run any specific post backup commands defined in the source file
       service_specific_post_backup_function
 
+      # Run Duplicacy copy backup
+      copy_backup_duplicacy || { handle_error "Duplicacy copy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+
       # Set last successful backup dir
       LAST_BACKUP_DIR="${BACKUP_DIR}"
 

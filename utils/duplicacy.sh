@@ -184,6 +184,15 @@ backup_duplicacy() {
     handle_error "Verification of the OMV Duplicacy Storage backup for the ${SERVICE} service failed. Check the backup integrity and storage accessibility."
   fi
   log_message "INFO" "OMV Duplicacy Storage backup verified for ${SERVICE} service."
+}
+
+# Runs the Duplicacy copy backup operation for the current service's data.
+# Parameters:
+#   None. Uses configured Duplicacy settings and operates within the service's backup context.
+# Output:
+#   Performs a Duplicacy copy backup. Output is logged to the Duplicacy log file.
+copy_backup_duplicacy() {
+  local exit_status
 
   # Run the Duplicacy backup to the BackBlaze Storage
   log_message "INFO" "Running BackBlaze Duplicacy Storage backup for ${SERVICE} service."

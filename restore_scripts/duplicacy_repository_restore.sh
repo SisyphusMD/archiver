@@ -18,7 +18,7 @@ read -r -p 'Parent directory (default: /srv): ' PARENT
 PARENT=${PARENT:-/srv}
 echo "Parent directory: $PARENT"
 
-if [[ "${SERVICE}" =~ ^(audiobookshelf|frigate|immich|nextcloud|paperless)$ ]]; then
+if [[ "${SERVICE}" =~ ^(audiobookshelf|frigate|immich|media-server|nextcloud|paperless)$ ]]; then
 
   read -r -p 'Credentials File Location (default: /home/cody/.smbcredentials): ' CREDENTIALS_FILE
   CREDENTIALS_FILE=${CREDENTIALS_FILE:-/home/cody/.smbcredentials}
@@ -163,8 +163,9 @@ echo "Chosen revision: $REVISION"
 # Pulling down chosen revision
 sudo duplicacy restore -r "${REVISION}" -key "${RSA_PRIV}"
 
-echo "Repository restored. Now running restore.sh..."
+echo "Repository restored."
 
-if [ ! -f restore.sh ]; then
+if [ -f restore.sh ]; then
+  echo "Now running restore.sh..."
   bash restore.sh
 fi
