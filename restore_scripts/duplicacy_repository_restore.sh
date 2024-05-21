@@ -60,7 +60,7 @@ if [[ "${SERVICE}" =~ ^(audiobookshelf|frigate|immich|media-server|nextcloud|pap
 
   mkdir -p "${MOUNT_POINT}" || handle_error "Failed to create mnt directory."
 
-  FSTAB_LINE="//${NAS_URL}/${SERVICE}-assets ${MOUNT_POINT} cifs credentials=${CREDENTIALS_FILE},_netdev,file_mode=0666,dir_mode=0777,uid=1000,gid=1000 0 0"
+  FSTAB_LINE="//${NAS_URL}/${SERVICE}-assets ${MOUNT_POINT} cifs credentials=${CREDENTIALS_FILE},_netdev,file_mode=0644,dir_mode=0755,uid=1000,gid=1000 0 0"
 
   # Check if the mount point is already mounted
   if ! mountpoint -q "$MOUNT_POINT"; then
