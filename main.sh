@@ -11,6 +11,12 @@
 # Capture the start time
 START_TIME=$(date +%s)
 
+# Exit if not run as root
+if [ "$(id -u)" -ne 0 ]; then
+ echo "This script must be run as root. Please use sudo or log in as the root user." 1>&2
+ exit 1
+fi
+
 # Define primary configuration variables for Archiver.
 # Try to resolve the full path to this Archiver script with readlink
 ARCHIVER_SCRIPT_PATH=$(readlink -f "${0}" 2>/dev/null)
@@ -48,12 +54,19 @@ REQUIRED_VARS=( # List of required service-defined variables
   "DUPLICACY_FILTERS_PATTERNS"
 )
 
-# Sourcing user-configurable variables from user-config.sh.
+# Sourcing configurable variables from config.sh.
 # This file contains customizable variables that allow users to tailor the script's behavior to their specific needs and environment.
 # Variables in config.sh may include paths, threshold settings, preferences, and other parameters that can be adjusted by the user.
 # It's designed to make the script flexible and adaptable, without requiring modifications to the core script code.
 # Please review and adjust the variables in config.sh as necessary to fit your setup.
-source "${ARCHIVER_DIR}/user-config.sh"
+# Configuration for Duplicacy is sourced from config.sh.
+# This includes setting paths and keys essential for Duplicacy operations:
+# - DUPLICACY_BIN: Path to the Duplicacy binary.
+# - DUPLICACY_KEY_DIR: Directory containing Duplicacy keys.
+# - DUPLICACY_SSH_KEY_FILE: SSH key file for Duplicacy.
+# - DUPLICACY_RSA_PUBLIC_KEY_FILE: RSA public key file used by Duplicacy.
+# - DUPLICACY_RSA_PRIVATE_KEY_FILE: RSA private key file used by Duplicacy.
+source "${ARCHIVER_DIR}/config.sh"
 # Initialize an empty array to hold the directory paths
 EXPANDED_DIRECTORIES=()
 # Populate user defined backup directories into the EXPANDED_DIRECTORIES array
@@ -66,16 +79,6 @@ for pattern in "${BACKUP_REPOSITORIES[@]}"; do
     fi
   done
 done
-
-# Configuration for Duplicacy is sourced from duplicacy-config.sh.
-# This includes setting paths and keys essential for Duplicacy operations:
-# - DUPLICACY_BIN: Path to the Duplicacy binary.
-# - DUPLICACY_KEY_DIR: Directory containing Duplicacy keys.
-# - DUPLICACY_SSH_KEY_FILE: SSH key file for Duplicacy.
-# - DUPLICACY_RSA_PUBLIC_KEY_FILE: RSA public key file used by Duplicacy.
-# - DUPLICACY_RSA_PRIVATE_KEY_FILE: RSA private key file used by Duplicacy.
-# Ensure duplicacy_config.sh is present in the expected directory and is readable.
-source "${ARCHIVER_DIR}/config/duplicacy-config.sh"
 
 # Script variables
 ERROR_COUNT=0

@@ -74,7 +74,7 @@ if [ "${DUPLICACY_OS}" != "linux" ]; then
 fi
 
 # Exit if the architecture is not recognized as arm64 or x64
-if [ "${DUPLICACY_OS}" = "unknown" ]; then
+if [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
   echo "This script only works on arm64 and x64 architectures." 1>&2
   exit 1
 fi
