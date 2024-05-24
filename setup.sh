@@ -121,10 +121,10 @@ echo    # Move to a new line
 read -p "Would you like to schedule the script with cron?" -n 1 -r
 echo    # Move to a new line
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  (crontab -l 2>/dev/null; echo "0 4 * * * ${ARCHIVER_DIR}/main.sh") | crontab -
+  (crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | crontab -
   echo "Added"
 else
-  echo "Not added. You can always add it later with this command: (crontab -l 2>/dev/null; echo \"0 4 * * * ${ARCHIVER_DIR}/main.sh\") | crontab -"
+  echo "Not added. You can always add it later with this command: (crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | crontab -"
 fi
 
 

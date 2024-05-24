@@ -1,10 +1,9 @@
 #!/bin/bash
 #
 # Archiver Main Script
-# Performs backup operations on services located in a specified directory, creating archives,
-# cleaning old backups, and managing Duplicacy backups.
+# Performs Duplicacy backup operations on services located in a specified directory
 #
-# Usage instructions: Execute the script without arguments (./main.sh).
+# Usage instructions: Execute the script as sudo without arguments (sudo ./main.sh).
 
 # Configuration Section
 # ---------------------
@@ -15,7 +14,7 @@ START_TIME=$(date +%s)
 # Define primary configuration variables for Archiver.
 # Try to resolve the full path to this Archiver script with readlink
 ARCHIVER_SCRIPT_PATH=$(readlink -f "${0}" 2>/dev/null)
-# If readlink is not successful (e.g., command not found, or operating in an environment like macOS without greadlink), use BASH_SOURCE
+# If readlink is not successful (e.g., command not found, or operating in an environment like macOS without readlink), use BASH_SOURCE
 if [[ ! -e "${ARCHIVER_SCRIPT_PATH}" ]]; then
     ARCHIVER_SCRIPT_PATH="${BASH_SOURCE[0]}"
 fi
@@ -26,6 +25,7 @@ if [[ ! -d "${ARCHIVER_DIR}" ]]; then
     echo "Error determining the script's directory."
     exit 1
 fi
+
 ARCHIVER_LOG_DIR="${ARCHIVER_DIR}/logs" # Path to Archiver logs directory
 # Define log file paths. Add new log files to the following array to ensure they're included in rotation.
 ARCHIVER_LOG_FILE="${ARCHIVER_LOG_DIR}/archiver.log" # Log file for Archiver logs
@@ -39,17 +39,13 @@ ALL_LOG_FILES=(
   "${DOCKER_LOG_FILE}"
   "${CURL_LOG_FILE}"
 )
-ARCHIVER_TAR="${ARCHIVER_DIR}/utils/safe-tar.sh"
+
 # Set service agnostic variables
 DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')" # Current date and time for backup naming
 REQUIRED_VARS=( # List of required service-defined variables
   "SERVICE"
   "DUPLICACY_FILTERS_PATTERNS"
-  "SEPARATE_BACKUP_DIR"
-  "TAR_FIRST"
-  "ARCHIVE_FILES"
-  "EXCLUDE_FILES"
 )
 
 # Sourcing user-configurable variables from user-config.sh.
@@ -114,13 +110,6 @@ source "${ARCHIVER_DIR}/utils/checks.sh"
 #   - check_variables
 #   - check_directory
 
-# Archiving Functions
-# ---------------------
-source "${ARCHIVER_DIR}/utils/archiving.sh"
-# imports functions:
-#   - create_backup_archive
-#   - clean_old_backups
-
 # Duplicacy Functions
 # ---------------------
 source "${ARCHIVER_DIR}/utils/duplicacy.sh"
@@ -182,14 +171,6 @@ main() {
 
       # Run any specific pre backup commands defined in the service-backup-settings.sh file
       service_specific_pre_backup_function
-
-      if [[ -n "${TAR_FIRST}" ]]; then
-        # Create backup archive
-        create_backup_archive || { handle_error "Failed to create backup archive for ${SERVICE}. Check permissions and disk space. Continuing to next operation."; continue; }
-
-        # Remove old backups (keep latest 7)
-        clean_old_backups || { handle_error "Failed to clean old backups for ${SERVICE}. Check permissions and existing backups. Continuing to next operation."; continue; }
-      fi
 
       # Run Duplicacy backup
       backup_duplicacy || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }

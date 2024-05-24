@@ -25,28 +25,8 @@
 
 # Set include/exclude patterns for Duplicacy filter (Required - set to empty if not used)
 DUPLICACY_FILTERS_PATTERNS=(
-  # Example: "+*.${SERVICE}-backup.tar"
+  # Example: "+compose.yaml"
   # "-*"
-)
-
-# The SEPARATE_BACKUP_DIR variable specifies the name of the sub-directory to be used for backups. (Required - set to "" if a separate sub-directory is not used)
-# Example: SEPARATE_BACKUP_DIR="true"
-
-# The TAR_FIRST variable controls whether backup operations should perform tar operations first. (Required - set to "" to indicate FALSE or skip tar operations)
-# Example: TAR_FIRST="true"
-
-# Variables for paths to include and exclude in the backup. (Required - modify as needed or set to empty arrays if not used)
-# ARCHIVE_FILES: Array of files/directories to include in the backup.
-ARCHIVE_FILES=(
-  # Add paths to backup here. Each path as a new line inside the parentheses.
-  # Example: "${SERVICE}/"
-)
-
-# EXCLUDE_FILES: Array of files/directories to exclude from the backup.
-EXCLUDE_FILES=(
-  # Add paths to exclude from backup here. Each path as a new line inside the parentheses.
-  # Example: "${SERVICE}/backups/*.tar"
-  # "${SERVICE}/backups/.duplicacy"
 )
 
 # Optional Functions for service-specific pre and post backup tasks. (Required - use no-operation placeholder if no specific commands are needed)
