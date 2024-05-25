@@ -3,6 +3,12 @@
 #   1. Duplicacy Storage Name
 # Output:
 #   Returns exit code 0 if initialized, and non-0 if not initialized
+set_duplicacy_variables() {
+  DUPLICACY_REPO_DIR="${SERVICE_DIR}/.duplicacy" # Directory for various Duplicacy repos
+  DUPLICACY_FILTERS_FILE="${DUPLICACY_REPO_DIR}/filters" # Location for Duplicacy filters file
+  DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
+}
+
 verify_duplicacy() {
   local exit_status
 
@@ -36,7 +42,7 @@ initialize_duplicacy() {
   local exit_status
 
   # Move to backup directory or exit if failed
-  cd "${BACKUP_DIR}" || handle_error "Failed to change to backup directory ${BACKUP_DIR} for backup operations of ${SERVICE}."
+  cd "${SERVICE_DIR}" || handle_error "Failed to change to backup directory ${SERVICE_DIR} for backup operations of ${SERVICE}."
 
   if ! verify_duplicacy "${DUPLICACY_OMV_STORAGE_NAME}"; then
     export DUPLICACY_OMV_SSH_KEY_FILE # Export SSH key file for omv storage so Duplicacy binary can see variable
@@ -93,7 +99,7 @@ add_storage_duplicacy() {
   local exit_status
 
   # Move to backup directory or exit if failed
-  cd "${BACKUP_DIR}" || handle_error "Failed to change to backup directory ${BACKUP_DIR} for backup operations of ${SERVICE}."
+  cd "${SERVICE_DIR}" || handle_error "Failed to change to backup directory ${SERVICE_DIR} for backup operations of ${SERVICE}."
 
   if ! verify_duplicacy "${DUPLICACY_BACKBLAZE_STORAGE_NAME}"; then
     export DUPLICACY_BACKBLAZE_B2_ID # Export BackBlaze Account ID for backblaze storage so Duplicacy binary can see variable

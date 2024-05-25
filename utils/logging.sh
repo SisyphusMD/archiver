@@ -4,6 +4,21 @@
 #   2. Message: The log message to be recorded.
 # Output:
 #   Writes the log message to the archiver's log file. No console output except for WARNING or ERROR.
+
+# Define log file paths. Add new log files to the below array to ensure they're included in rotation.
+LOG_DIR="${ARCHIVER_DIR}/logs" # Path to Archiver logs directory
+ARCHIVER_LOG_FILE="${LOG_DIR}/archiver.log" # Log file for Archiver logs
+DUPLICACY_LOG_FILE="${LOG_DIR}/duplicacy-output.log" # Log file for Duplicacy output
+DOCKER_LOG_FILE="${LOG_DIR}/docker-output.log" # Log file for Docker output
+CURL_LOG_FILE="${LOG_DIR}/curl-output.log" # Log file for Curl output
+# Array of log file variables, make sure to add more log file variables to this array if adding to the list above
+ALL_LOG_FILES=(
+  "${ARCHIVER_LOG_FILE}"
+  "${DUPLICACY_LOG_FILE}"
+  "${DOCKER_LOG_FILE}"
+  "${CURL_LOG_FILE}"
+)
+
 log_message() {
   local log_level
   local message

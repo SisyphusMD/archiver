@@ -4,6 +4,10 @@
 #   2. Exit Code (optional): The exit code to terminate the script with. If not provided, the script does not exit.
 # Output:
 #   Logs the error message to the standard error stream and exits the script if an exit code is provided.
+
+# Initialize starting error count.
+ERROR_COUNT=0
+
 handle_error() {
   local message
   local code

@@ -1,15 +1,9 @@
 #!/bin/bash
 #
 # Archiver Main Script
-# Performs Duplicacy backup operations on services located in a specified directory
+# Performs Duplicacy backup operations on services located in specified directories
 #
 # Usage instructions: Execute the script as sudo without arguments (sudo ./main.sh).
-
-# Configuration Section
-# ---------------------
-
-# Capture the start time
-START_TIME=$(date +%s)
 
 # Exit if not run as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -17,51 +11,20 @@ if [ "$(id -u)" -ne 0 ]; then
  exit 1
 fi
 
-# Define primary configuration variables for Archiver.
-# Try to resolve the full path to this Archiver script with readlink
-ARCHIVER_SCRIPT_PATH=$(readlink -f "${0}" 2>/dev/null)
-# If readlink is not successful (e.g., command not found, or operating in an environment like macOS without readlink), use BASH_SOURCE
-if [[ ! -e "${ARCHIVER_SCRIPT_PATH}" ]]; then
-    ARCHIVER_SCRIPT_PATH="${BASH_SOURCE[0]}"
-fi
-# Resolve to an absolute path if not already
-ARCHIVER_DIR="$(cd "$(dirname "${ARCHIVER_SCRIPT_PATH}")" && pwd)"
-# Check if we've got a valid directory, just in case
-if [[ ! -d "${ARCHIVER_DIR}" ]]; then
-    echo "Error determining the script's directory."
-    exit 1
-fi
-
-ARCHIVER_LOG_DIR="${ARCHIVER_DIR}/logs" # Path to Archiver logs directory
-# Define log file paths. Add new log files to the following array to ensure they're included in rotation.
-ARCHIVER_LOG_FILE="${ARCHIVER_LOG_DIR}/archiver.log" # Log file for Archiver logs
-DUPLICACY_LOG_FILE="${ARCHIVER_LOG_DIR}/duplicacy-output.log" # Log file for Duplicacy output
-DOCKER_LOG_FILE="${ARCHIVER_LOG_DIR}/docker-output.log" # Log file for Docker output
-CURL_LOG_FILE="${ARCHIVER_LOG_DIR}/curl-output.log" # Log file for Curl output
-# Array of log file variables, make sure to add more log file variables to this array if adding to the list above
-ALL_LOG_FILES=(
-  "${ARCHIVER_LOG_FILE}"
-  "${DUPLICACY_LOG_FILE}"
-  "${DOCKER_LOG_FILE}"
-  "${CURL_LOG_FILE}"
-)
-
-# Set service agnostic variables
+# Configuration Section
+# ---------------------
+# Set time variables
+START_TIME="$(date +%s)"
 DATE="$(date +'%Y-%m-%d')"
-DATETIME="$(date +'%Y-%m-%d_%H%M%S')" # Current date and time for backup naming
+DATETIME="$(date +'%Y-%m-%d_%H%M%S')"
+
+# Determine the full path of the script
+ARCHIVER_SCRIPT_PATH="$(readlink -f "${0}" 2>/dev/null)"
+# Determine the full path of the containing dir of the script
+ARCHIVER_DIR="$(cd "$(dirname "${ARCHIVER_SCRIPT_PATH}")" && pwd)"
 
 # Sourcing configurable variables from config.sh.
-# This file contains customizable variables that allow users to tailor the script's behavior to their specific needs and environment.
-# Variables in config.sh may include paths, threshold settings, preferences, and other parameters that can be adjusted by the user.
-# It's designed to make the script flexible and adaptable, without requiring modifications to the core script code.
 # Please review and adjust the variables in config.sh as necessary to fit your setup.
-# Configuration for Duplicacy is sourced from config.sh.
-# This includes setting paths and keys essential for Duplicacy operations:
-# - DUPLICACY_BIN: Path to the Duplicacy binary.
-# - DUPLICACY_KEY_DIR: Directory containing Duplicacy keys.
-# - DUPLICACY_SSH_KEY_FILE: SSH key file for Duplicacy.
-# - DUPLICACY_RSA_PUBLIC_KEY_FILE: RSA public key file used by Duplicacy.
-# - DUPLICACY_RSA_PRIVATE_KEY_FILE: RSA private key file used by Duplicacy.
 source "${ARCHIVER_DIR}/config.sh"
 # Initialize an empty array to hold the directory paths
 EXPANDED_DIRECTORIES=()
@@ -76,13 +39,16 @@ for pattern in "${BACKUP_REPOSITORIES[@]}"; do
   done
 done
 
-# Script variables
-ERROR_COUNT=0
-LAST_BACKUP_DIR=""
-
 # Logging
 # ---------------------
 source "${ARCHIVER_DIR}/utils/logging.sh"
+# imports variables:
+#   - LOG_DIR
+#   - ARCHIVER_LOG_FILE
+#   - DUPLICACY_LOG_FILE
+#   - DOCKER_LOG_FILE
+#   - CURL_LOG_FILE
+#   - ALL_LOG_FILES
 # imports functions:
 #   - log_message
 #   - log_output
@@ -92,6 +58,8 @@ source "${ARCHIVER_DIR}/utils/logging.sh"
 # Error Handling
 # ---------------------
 source "${ARCHIVER_DIR}/utils/error-handling.sh"
+# imports variables:
+#   - ERROR_COUNT
 # imports functions:
 #   - handle_error
 
@@ -129,45 +97,49 @@ main() {
   for SERVICE_DIR in "${EXPANDED_DIRECTORIES[@]}" ; do
     # Move to user defined service directory or exit if failed
     cd "${SERVICE_DIR}" || { handle_error "Failed to change to service directory ${SERVICE_DIR}. Continuing to next operation."; continue; }
+
+    # Define service name from directory
     SERVICE="$(basename "${PWD}")"
-    log_message "INFO" "Successfully changed to the ${SERVICE} service directory." || { handle_error "Failed to log the successful change to the ${SERVICE} service directory. Continuing to next operation."; continue; }
 
-    # Check if the service-backup-settings.sh file exists, and only execute the main function in that directory if it does
+    log_message "INFO" "Successfully changed to the ${SERVICE} service directory."
+
+    set_duplicacy_variables
+
+    # Define default service variables before attempting to source file
+    DUPLICACY_FILTERS_PATTERNS=("+*")
+    service_specific_pre_backup_function() { :; }
+    service_specific_post_backup_function() { :; }
+
+    # Check if the service-backup-settings.sh file exists
     if [ -f "${SERVICE_DIR}/service-backup-settings.sh" ]; then
-      PARENT_DIR="$(realpath "$(dirname "${SERVICE_DIR}")")"
-      DUPLICACY_REPO_DIR="${BACKUP_DIR}/.duplicacy" # Directory for various Duplicacy repos
-      DUPLICACY_FILTERS_FILE="${DUPLICACY_REPO_DIR}/filters" # Location for Duplicacy filters file
-      DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
-      DUPLICACY_FILTERS_PATTERNS=()
-
-      # Source the service-backup-settings.sh file
-      source "${SERVICE_DIR}/service-backup-settings.sh" || { handle_error "Failed to import ${SERVICE_DIR}/service-backup-settings.sh. Verify source files and paths. Continuing to next operation."; continue; }
-
-      log_message "INFO" "Starting backup process for ${SERVICE} service." || { handle_error "Failed to log the start of the backup process for the ${SERVICE} service. Continuing to next operation."; continue; }
-
-      # Run any specific pre backup commands defined in the service-backup-settings.sh file
-      service_specific_pre_backup_function
-
-      # Run Duplicacy backup
-      backup_duplicacy || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
-
-      # Run any specific post backup commands defined in the source file
-      service_specific_post_backup_function
-
-      # Run Duplicacy copy backup
-      copy_backup_duplicacy || { handle_error "Duplicacy copy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
-
-      # Success message
-      log_message "INFO" "Completed backup and duplication process successfully for ${SERVICE} service." || { handle_error "Failed to log the successful completion of backup and duplication for ${SERVICE}."; }
-
-      # Reset all service-specific variables and functions
-      # Defining service_specific_pre_backup_function as an empty function in case it was previously defined from another service
-      service_specific_pre_backup_function() { :; }
-      # Defining service_specific_post_backup_function as an empty function in case it was previously defined from another service
-      service_specific_post_backup_function() { :; }
+      # Attempt to source the file
+      log_message "INFO" "Found service-backup-settings.sh file for ${SERVICE} service. Attempting to source..."
+      source "${SERVICE_DIR}/service-backup-settings.sh" || \
+        log_message "WARNING" "Failed to import service-backup-settings.sh file for ${SERVICE} service. Using default values."
     else
-      log_message "WARNING" "Skipped backup for the ${SERVICE_DIR} directory due to missing service-backup-settings.sh file. Check service configuration." || { handle_error "Failed to log warning for missing service-backup-settings.sh file for the ${SERVICE_DIR} directory."; }
+      # Log an informational message if the file does not exist
+      log_message "INFO" "No service-backup-settings.sh file for ${SERVICE} service. Using default values."
     fi
+
+    log_message "INFO" "Starting backup process for ${SERVICE} service." 
+
+    # Run any specific pre backup commands defined in the service-backup-settings.sh file
+    service_specific_pre_backup_function
+
+    # Run Duplicacy backup
+    backup_duplicacy || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+
+    # Run any specific post backup commands defined in the source file
+    service_specific_post_backup_function
+
+    # Run Duplicacy copy backup
+    copy_backup_duplicacy || { handle_error "Duplicacy copy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+
+    # Success message
+    log_message "INFO" "Completed backup and duplication process successfully for ${SERVICE} service." || { handle_error "Failed to log the successful completion of backup and duplication for ${SERVICE}."; }
+
+    # Unset SERVICE variable
+    unset SERVICE
   done
 
   # Run Duplicacy prune function from the final service backup folder
