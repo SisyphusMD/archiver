@@ -49,10 +49,6 @@ ALL_LOG_FILES=(
 # Set service agnostic variables
 DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')" # Current date and time for backup naming
-REQUIRED_VARS=( # List of required service-defined variables
-  "SERVICE"
-  "DUPLICACY_FILTERS_PATTERNS"
-)
 
 # Sourcing configurable variables from config.sh.
 # This file contains customizable variables that allow users to tailor the script's behavior to their specific needs and environment.
@@ -84,13 +80,6 @@ done
 ERROR_COUNT=0
 LAST_BACKUP_DIR=""
 
-# Service Functions
-# ---------------------
-source "${ARCHIVER_DIR}/utils/service-functions.sh"
-# imports functions:
-#   - reset_service_settings
-#   - set_service_settings
-
 # Logging
 # ---------------------
 source "${ARCHIVER_DIR}/utils/logging.sh"
@@ -105,13 +94,6 @@ source "${ARCHIVER_DIR}/utils/logging.sh"
 source "${ARCHIVER_DIR}/utils/error-handling.sh"
 # imports functions:
 #   - handle_error
-
-# Checks
-# ---------------------
-source "${ARCHIVER_DIR}/utils/checks.sh"
-# imports functions:
-#   - check_variables
-#   - check_directory
 
 # Duplicacy Functions
 # ---------------------
@@ -143,34 +125,25 @@ main() {
       rotate_logs "${log_file}"
   done
 
-  # Initialize all service-specific variables and functions
-  reset_service_settings
-
   # Loop to iterate over user-defined service directories and perform main function on each
-  for dir in "${EXPANDED_DIRECTORIES[@]}" ; do
+  for SERVICE_DIR in "${EXPANDED_DIRECTORIES[@]}" ; do
     # Move to user defined service directory or exit if failed
-    check_directory "${dir}" || { handle_error "Service directory ${dir} not found. Verify the directory exists. Continuing to next operation."; continue; }
-    cd "${dir}" || { handle_error "Failed to change to service directory ${dir}. Continuing to next operation."; continue; }
-    log_message "INFO" "Successfully changed to the ${dir} directory." || { handle_error "Failed to log the successful change to the ${dir} directory. Continuing to next operation."; continue; }
-
-    # Reset all service-specific variables and functions
-    reset_service_settings
+    cd "${SERVICE_DIR}" || { handle_error "Failed to change to service directory ${SERVICE_DIR}. Continuing to next operation."; continue; }
+    SERVICE="$(basename "${PWD}")"
+    log_message "INFO" "Successfully changed to the ${SERVICE} service directory." || { handle_error "Failed to log the successful change to the ${SERVICE} service directory. Continuing to next operation."; continue; }
 
     # Check if the service-backup-settings.sh file exists, and only execute the main function in that directory if it does
-    if [ -f "${dir}/service-backup-settings.sh" ]; then
+    if [ -f "${SERVICE_DIR}/service-backup-settings.sh" ]; then
+      PARENT_DIR="$(realpath "$(dirname "${SERVICE_DIR}")")"
+      DUPLICACY_REPO_DIR="${BACKUP_DIR}/.duplicacy" # Directory for various Duplicacy repos
+      DUPLICACY_FILTERS_FILE="${DUPLICACY_REPO_DIR}/filters" # Location for Duplicacy filters file
+      DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
+      DUPLICACY_FILTERS_PATTERNS=()
+
       # Source the service-backup-settings.sh file
-      source "${dir}/service-backup-settings.sh" || { handle_error "Failed to import ${dir}/service-backup-settings.sh. Verify source files and paths. Continuing to next operation."; continue; }
+      source "${SERVICE_DIR}/service-backup-settings.sh" || { handle_error "Failed to import ${SERVICE_DIR}/service-backup-settings.sh. Verify source files and paths. Continuing to next operation."; continue; }
 
-      log_message "INFO" "Starting backup process for ${dir} directory." || { handle_error "Failed to log the start of the backup process for the ${dir} directory. Continuing to next operation."; continue; }
-
-      # Check if required service-specific variables are successfully sourced
-      check_variables || { handle_error "Required variables not set for the ${dir} directory. Ensure all required variables are defined. Continuing to next operation."; continue; }
-
-      # Set service-specific variables and functions
-      set_service_settings "${dir}" || { handle_error "Failed to set service settings for the ${dir} directory. Continuing to next service."; continue; }
-
-      # Make sure backup directory exists
-      check_directory "${BACKUP_DIR}" || { handle_error "Backup directory ${BACKUP_DIR} not found for ${SERVICE}. Verify the backup directory exists. Continuing to next operation."; continue; }
+      log_message "INFO" "Starting backup process for ${SERVICE} service." || { handle_error "Failed to log the start of the backup process for the ${SERVICE} service. Continuing to next operation."; continue; }
 
       # Run any specific pre backup commands defined in the service-backup-settings.sh file
       service_specific_pre_backup_function
@@ -184,16 +157,16 @@ main() {
       # Run Duplicacy copy backup
       copy_backup_duplicacy || { handle_error "Duplicacy copy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
-      # Set last successful backup dir
-      LAST_BACKUP_DIR="${BACKUP_DIR}"
-
       # Success message
       log_message "INFO" "Completed backup and duplication process successfully for ${SERVICE} service." || { handle_error "Failed to log the successful completion of backup and duplication for ${SERVICE}."; }
 
       # Reset all service-specific variables and functions
-      reset_service_settings
+      # Defining service_specific_pre_backup_function as an empty function in case it was previously defined from another service
+      service_specific_pre_backup_function() { :; }
+      # Defining service_specific_post_backup_function as an empty function in case it was previously defined from another service
+      service_specific_post_backup_function() { :; }
     else
-      log_message "WARNING" "Skipped backup for the ${dir} directory due to missing service-backup-settings.sh file. Check service configuration." || { handle_error "Failed to log warning for missing service-backup-settings.sh file for the ${dir} directory."; }
+      log_message "WARNING" "Skipped backup for the ${SERVICE_DIR} directory due to missing service-backup-settings.sh file. Check service configuration." || { handle_error "Failed to log warning for missing service-backup-settings.sh file for the ${SERVICE_DIR} directory."; }
     fi
   done
 
@@ -209,9 +182,8 @@ main() {
   #   The design of Duplicacy however was based on the assumption that only one instance would run the prune command (using -all).
   #     This can greatly simplify the implementation.
   #
-  # Move to last successful backup directory
-  check_directory "${LAST_BACKUP_DIR}" || handle_error "Directory ${LAST_BACKUP_DIR} not found. Verify the directory exists."
-  cd "${LAST_BACKUP_DIR}" || handle_error "Failed to change to directory ${LAST_BACKUP_DIR}. Continuing to next operation."
+  # Move to last service directory
+  cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}. Continuing to next operation."
 
   # Prune duplicacy from last successful backup directory
   prune_duplicacy || { handle_error "Duplicacy prune failed. Review Duplicacy logs for details."; }
