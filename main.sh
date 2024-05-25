@@ -102,19 +102,14 @@ main() {
     SERVICE="$(basename "${PWD}")"
 
     log_message "INFO" "Successfully changed to the ${SERVICE} service directory."
-    echo "${SERVICE_DIR}"
-    echo "${DUPLICACY_FILTERS_FILE}"
+
     set_duplicacy_variables
-    echo "${SERVICE_DIR}"
-    echo "${DUPLICACY_FILTERS_FILE}"
-    cat "${DUPLICACY_FILTERS_FILE}"
 
     # Define default service variables before attempting to source file
     DUPLICACY_FILTERS_PATTERNS=("+*")
     service_specific_pre_backup_function() { :; }
     service_specific_post_backup_function() { :; }
 
-    echo "${DUPLICACY_FILTERS_PATTERNS[@]}"
     # Check if the service-backup-settings.sh file exists
     if [ -f "${SERVICE_DIR}/service-backup-settings.sh" ]; then
       # Attempt to source the file
@@ -125,7 +120,6 @@ main() {
       # Log an informational message if the file does not exist
       log_message "INFO" "No service-backup-settings.sh file for ${SERVICE} service. Using default values."
     fi
-    echo "${DUPLICACY_FILTERS_PATTERNS[@]}"
 
     log_message "INFO" "Starting backup process for ${SERVICE} service." 
 

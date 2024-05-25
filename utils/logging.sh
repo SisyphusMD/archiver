@@ -87,7 +87,7 @@ rotate_logs() {
     max_versions="${2}"
 
     # Find all log files matching the prefix and sort them in reverse order
-    mapfile -t log_files < <(find "${ARCHIVER_LOG_DIR}" -name "${log_prefix}*.log" -type f -print0 | sort -rz)
+    mapfile -t log_files < <(find "${LOG_DIR}" -name "${log_prefix}*.log" -type f -print0 | sort -rz)
     num_files="${#log_files[@]}"
 
     # Check if the number of log files exceeds the maximum allowed
@@ -112,7 +112,7 @@ rotate_logs() {
   max_versions=7
 
   # Check if the log directory exists, and create it if it doesn't
-  [ -d "${ARCHIVER_LOG_DIR}" ] || mkdir -p "${ARCHIVER_LOG_DIR}"
+  [ -d "${LOG_DIR}" ] || mkdir -p "${LOG_DIR}"
 
   # Rotate the log file if needed
   if [ -f "${log_file}" ]; then
@@ -126,7 +126,7 @@ rotate_logs() {
       local new_log_file
 
       # Generate a new log file name based on the log type and current date
-      new_log_file="${ARCHIVER_LOG_DIR}/${log_type}-${creation_date}.log"
+      new_log_file="${LOG_DIR}/${log_type}-${creation_date}.log"
 
       # Rename the existing log file to the new name
       mv "${log_file}" "${new_log_file}" || \
