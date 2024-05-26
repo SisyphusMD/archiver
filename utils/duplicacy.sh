@@ -71,8 +71,16 @@ filters_duplicacy() {
 #   Initializes the Duplicacy repository in the backup directory. No direct output.
 initialize_duplicacy() {
   local exit_status
-  storage_name="${1}"
-  storage_name_upper=$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')
+  local storage_id
+  local storage_name_var
+  local storage_name
+  local duplicacy_ssh_key_file_var
+  local duplicacy_storage_password_var
+
+  storage_id="${1}"
+  storage_name_var="BACKUP_TARGET_${storage_id}_NAME"
+  storage_name="${!storage_name_var}"
+  storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
   duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
   duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
 
