@@ -230,10 +230,10 @@ full_check_duplicacy() {
 prune_duplicacy() {
   local exit_status
 
-  # First Duplicacy Check the OMV storage
+  # First Duplicacy Check the Primary storage
   full_check_duplicacy "${BACKUP_TARGET_1_NAME}"
 
-  # Prune the OMV Duplicacy Storage
+  # Prune the Primary Duplicacy Storage
   log_message "INFO" "Running Primary Duplicacy Storage prune for all repositories."
   "${DUPLICACY_BIN}" prune -all -storage "${BACKUP_TARGET_1_NAME}" \
     -keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
