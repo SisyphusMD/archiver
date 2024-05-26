@@ -10,24 +10,33 @@ DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/.keys" # Path to Duplicacy key directory
 DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
 DUPLICACY_RSA_PRIVATE_KEY_FILE="${DUPLICACY_KEY_DIR}/private.pem" # Path to RSA private key file for Duplicacy
 
+BACKUP_TARGET_COUNT=0
+
 set_duplicacy_variables() {
   DUPLICACY_REPO_DIR="${SERVICE_DIR}/.duplicacy" # Directory for various Duplicacy repos
   DUPLICACY_FILTERS_FILE="${DUPLICACY_REPO_DIR}/filters" # Location for Duplicacy filters file
   DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
 }
 
+# Function to check the number of backup targets
 count_backup_targets() {
-    local count=0
-    while true; do
-        count=$((count + 1))
-        var_name="BACKUP_TARGET_${count}_NAME"
-        if [[ -z "${!var_name}" ]]; then
-            count=$((count - 1))
-            break
-        fi
-    done
-    echo $count
-    exit
+  local count=0
+  while true; do
+    count=$((count + 1))
+    var_name="BACKUP_TARGET_${count}_NAME"
+    if [[ -z "${!var_name}" ]]; then
+      count=$((count - 1))
+      break
+    fi
+  done
+
+  if [[ $count -eq 0 ]]; then
+    handle_error "No Backup Targets specified. Please edit config.sh and specify at least one backup target."
+    exit 1
+  else
+    log_message "INFO" "$count backup targets configured." 
+    BACKUP_TARGET_COUNT=$count
+  fi
 }
 
 verify_duplicacy() {
@@ -122,10 +131,26 @@ initialize_duplicacy() {
 }
 
 # Adds BackBlaze Duplicacy storage if not already added
-add_storage_duplicacy() {
+add_b2_storage_duplicacy() {
   local exit_status
-  storage_name="${1}"
-  storage_name_upper=$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')
+  local storage_id
+  local storage_name_var
+  local storage_name
+  local storage_name_upper
+  local config_b2_bucketname_var
+  local config_b2_id_var
+  local config_b2_key_var
+  local duplicacy_b2_id_var
+  local duplicacy_b2_key_var
+  local duplicacy_storage_password_var
+
+  storage_id="${1}"
+  storage_name_var="BACKUP_TARGET_${storage_id}_NAME"
+  storage_name="${!storage_name_var}"
+  storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
+  config_b2_bucketname_var="BACKUP_TARGET_${storage_id}_B2_BUCKETNAME"
+  config_b2_id_var="BACKUP_TARGET_${storage_id}_B2_ID"
+  config_b2_key_var="BACKUP_TARGET_${storage_id}_B2_KEY"
   duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
   duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
   duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
@@ -134,15 +159,15 @@ add_storage_duplicacy() {
   cd "${SERVICE_DIR}" || handle_error "Failed to change to backup directory ${SERVICE_DIR} for backup operations of ${SERVICE}."
 
   if ! verify_duplicacy "${storage_name}"; then
-    export "${duplicacy_b2_id_var}"="${BACKUP_TARGET_2_B2_ID}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
-    export "${duplicacy_b2_key_var}"="${BACKUP_TARGET_2_B2_KEY}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
+    export "${duplicacy_b2_id_var}"="${!config_b2_id_var}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
+    export "${duplicacy_b2_key_var}"="${!config_b2_key_var}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
     export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}" # Export password for duplicacy storage so Duplicacy binary can see variable
 
     # Add BackBlaze Duplicacy Storage
     log_message "INFO" "Adding BackBlaze Duplicacy Storage for ${SERVICE} service."
     "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
       "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-      "${BACKUP_TARGET_2_TYPE}://${BACKUP_TARGET_2_B2_BUCKETNAME}" 2>&1 | \
+      "b2://${!config_b2_bucketname_var}" 2>&1 | \
       log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
@@ -167,7 +192,7 @@ add_storage_duplicacy() {
 
     # Set Key ID for BackBlaze Duplicacy Storage
     "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
-      -value "${BACKUP_TARGET_2_B2_ID}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+      -value "${!config_b2_id_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
       handle_error "Setting the BackBlaze Duplicacy Storage Key ID for the ${SERVICE} service failed. Ensure the Key ID is correctly specified in the service's backup settings or environment variables."
@@ -175,7 +200,7 @@ add_storage_duplicacy() {
 
     # Set Application Key for BackBlaze Duplicacy Storage
     "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
-      -value "${BACKUP_TARGET_2_B2_KEY}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+      -value "${!config_b2_key_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
       handle_error "Setting the BackBlaze Duplicacy Storage Application Key for the ${SERVICE} service failed. Ensure the Application Key is correctly specified in the service's backup settings or environment variables."
@@ -195,7 +220,7 @@ add_storage_duplicacy() {
   fi
 }
 
-# Runs the Duplicacy backup operation for the current service's data.
+# Runs the Duplicacy primary storage backup for the current service.
 # Parameters:
 #   None. Uses configured Duplicacy settings and operates within the service's backup context.
 # Output:
@@ -203,20 +228,20 @@ add_storage_duplicacy() {
 backup_duplicacy() {
   local exit_status
 
-  # Initialize Primary Duplicacy Storage if not already initialized
-  initialize_duplicacy "${BACKUP_TARGET_1_NAME}" || handle_error "Duplicacy initialization failed for ${SERVICE}."
+  # Initialize Duplicacy primary storage if not already initialized
+  initialize_duplicacy 1 || handle_error "Duplicacy initialization failed for the /'${SERVICE}/' service."
 
   # Prepare Duplicacy filters file
-  filters_duplicacy || handle_error "Preparing Duplicacy filters file for the ${SERVICE} service failed."
+  filters_duplicacy || handle_error "Preparing Duplicacy filters file for the /'${SERVICE}/' service failed."
 
   # Run the Duplicacy backup to the Primary Storage
-  log_message "INFO" "Running Primary Duplicacy Storage backup for ${SERVICE} service."
+  log_message "INFO" "Running Duplicacy primary storage backup to /'${BACKUP_TARGET_1_NAME}/' storage for the /'${SERVICE}/' service."
   "${DUPLICACY_BIN}" backup -storage "${BACKUP_TARGET_1_NAME}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Running the Primary Duplicacy Storage backup for the ${SERVICE} service failed. Review the Duplicacy logs for details."
+    handle_error "Duplicacy primary storage backup to /'${BACKUP_TARGET_1_NAME}/' storage for the /'${SERVICE}/' service failed."
   fi
-  log_message "INFO" "The Primary Duplicacy Storage backup completed successfully for ${SERVICE} service."
+  log_message "INFO" "Duplicacy primary storage backup to /'${BACKUP_TARGET_1_NAME}/' storage for the /'${SERVICE}/' service completed successfully ."
 }
 
 # Runs the Duplicacy copy backup operation for the current service's data.
@@ -225,21 +250,47 @@ backup_duplicacy() {
 # Output:
 #   Performs a Duplicacy copy backup. Output is logged to the Duplicacy log file.
 copy_backup_duplicacy() {
-  local exit_status
 
-  # Add BackBlaze Duplicacy Storage if not already added
-  add_storage_duplicacy "${BACKUP_TARGET_2_NAME}" || handle_error "Duplicacy initialization failed for ${SERVICE}."
+  if [[ BACKUP_TARGET_COUNT -gt 1 ]]; then
 
-  # Run the Duplicacy backup to the BackBlaze Storage
-  log_message "INFO" "Running BackBlaze Duplicacy Storage backup for ${SERVICE} service."
-  "${DUPLICACY_BIN}" copy -id "${DUPLICACY_SNAPSHOT_ID}" \
-    -from "${BACKUP_TARGET_1_NAME}" -to "${BACKUP_TARGET_2_NAME}" \
-    -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-  exit_status="${PIPESTATUS[0]}"
-  if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Running the BackBlaze Duplicacy Storage backup for the ${SERVICE} service failed. Review the Duplicacy logs for details."
+    for i in $(seq 2 "${BACKUP_TARGET_COUNT}"); do
+
+      local exit_status
+      local storage_id
+      local backup_type_var
+      local backup_type
+      local storage_name_var
+      local storage_name
+
+      storage_id="${i}"
+      backup_type_var="BACKUP_TARGET_${storage_id}_TYPE"
+      backup_type="${!backup_type_var}"
+      storage_name_var="BACKUP_TARGET_${storage_id}_NAME"
+      storage_name="${!storage_name_var}"
+
+      if [[ "${backup_type}" == "b2" ]]; then
+        # Add BackBlaze Duplicacy Storage if not already added
+        add_b2_storage_duplicacy "${storage_id}" || handle_error "Duplicacy initialization failed for ${SERVICE}."
+      else
+        handle_error "/'${backup_type}/' is not a supported backup type. Please edit config.sh to only reference supported backup types."
+      fi
+
+      # Run the Duplicacy copy backup
+      log_message "INFO" "Running Duplicacy copy backup to /'${storage_name}/' storage for the /'${SERVICE}/' service."
+
+      "${DUPLICACY_BIN}" copy -id "${DUPLICACY_SNAPSHOT_ID}" \
+        -from "${BACKUP_TARGET_1_NAME}" -to "${storage_name}" \
+        -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+      exit_status="${PIPESTATUS[0]}"
+
+      if [ "${exit_status}" -ne 0 ]; then
+        handle_error "Running the Duplicacy copy backup to /'${storage_name}/' storage for the /'${SERVICE}/' service failed."
+      fi
+
+      log_message "INFO" "The Duplicacy copy backup to /'${storage_name}/' storage completed successfully for the /'${SERVICE}/' service."
+
+    done
   fi
-  log_message "INFO" "The BackBlaze Duplicacy Storage backup completed successfully for ${SERVICE} service."
 }
 
 full_check_duplicacy() {

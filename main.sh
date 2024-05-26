@@ -92,6 +92,7 @@ main() {
       rotate_logs "${log_file}"
   done
 
+  # Count backup target variables from config file, require at least one
   count_backup_targets
 
   # Loop to iterate over user-defined service directories and perform backup function on each
