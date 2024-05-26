@@ -1,7 +1,15 @@
-BACKUP_REPOSITORIES=(
+BACKUP_DIRECTORIES=(
   "/srv/*/"
   "/mnt/*/"
 )
+
+BACKUP_TARGET_1_NAME="testname"
+BACKUP_TARGET_1_TYPE="testtype"
+BACKUP_TARGET_1_URL="testurl"
+
+BACKUP_TARGET_2_NAME="testname"
+BACKUP_TARGET_2_TYPE="testtype"
+BACKUP_TARGET_2_URL="testurl"
 
 # All Duplicacy
 RSA_PASSPHRASE="XXXXX" # Passphrase for RSA private key

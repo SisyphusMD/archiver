@@ -29,7 +29,7 @@ source "${ARCHIVER_DIR}/config.sh"
 # Initialize an empty array to hold the directory paths
 EXPANDED_DIRECTORIES=()
 # Populate user defined backup directories into the EXPANDED_DIRECTORIES array
-for pattern in "${BACKUP_REPOSITORIES[@]}"; do
+for pattern in "${BACKUP_DIRECTORIES[@]}"; do
   # Directly list directories for specific paths or wildcard patterns
   for dir in ${pattern}; do  # Important: Don't quote ${pattern} to allow glob expansion
     if [ -d "${dir}" ]; then
