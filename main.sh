@@ -92,6 +92,8 @@ main() {
       rotate_logs "${log_file}"
   done
 
+  count_backup_targets
+
   # Loop to iterate over user-defined service directories and perform backup function on each
   for SERVICE_DIR in "${EXPANDED_DIRECTORIES[@]}" ; do
     # Move to user defined service directory or exit if failed

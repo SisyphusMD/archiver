@@ -16,6 +16,20 @@ set_duplicacy_variables() {
   DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
 }
 
+count_backup_targets() {
+    local count=0
+    while true; do
+        count=$((count + 1))
+        var_name="BACKUP_TARGET_${count}_NAME"
+        if [[ -z "${!var_name}" ]]; then
+            count=$((count - 1))
+            break
+        fi
+    done
+    echo $count
+    exit
+}
+
 verify_duplicacy() {
   local exit_status
   storage_name="${1}"
