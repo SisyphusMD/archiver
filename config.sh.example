@@ -1,5 +1,26 @@
+BACKUP_REPOSITORIES=(
+  "/srv/*/"
+  "/mnt/*/"
+)
+
+# All Duplicacy
+RSA_PASSPHRASE="XXXXX" # Passphrase for RSA private key
+STORAGE_PASSWORD="XXXXX" # Password for Duplicacy storage
+
+# Duplicacy OMV Storage
+OMV_URL="sftp://user@<ip or fqdn>//path" # URL for OMV Duplicacy Storage
+
+# Duplicacy BackBlaze Storage
+B2_ID="XXXXX" # Account ID for BackBlaze Duplicacy Storage
+B2_KEY="XXXXX" # Application key for BackBlaze Duplicacy Storage
+B2_URL="b2://XXXXX" # URL for BackBlaze Duplicacy Storage
+
+# Pushover Notifications
+PUSHOVER_API_TOKEN="XXXXX" # Pushover application API token/key
+PUSHOVER_USER_KEY="XXXXX" # Pushover user key (not email address), viewable when logged into Pushover dashboard
+
 # Define primary Duplicacy-related configuration variables.
-DUPLICACY_BIN="/usr/local/bin/duplicacy" # Path to Duplicacy binary
+DUPLICACY_BIN="/path/to/duplicacy/bin" # Path to Duplicacy binary
 DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/.keys" # Path to Duplicacy key directory
 DUPLICACY_SSH_KEY_FILE="${DUPLICACY_KEY_DIR}/id_rsa" # SSH key file
 DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
