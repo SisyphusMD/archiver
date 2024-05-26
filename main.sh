@@ -87,16 +87,15 @@ source "${ARCHIVER_DIR}/utils/notification.sh"
 # Output:
 #   Coordinates the backup process for each service, logging progress and results. No direct output.
 main() {
-  # Rotate the logs if needed
   # Iterate over the array and call rotate_logs for each log file
   for log_file in "${ALL_LOG_FILES[@]}"; do
       rotate_logs "${log_file}"
   done
 
-  # Loop to iterate over user-defined service directories and perform main function on each
+  # Loop to iterate over user-defined service directories and perform backup function on each
   for SERVICE_DIR in "${EXPANDED_DIRECTORIES[@]}" ; do
     # Move to user defined service directory or exit if failed
-    cd "${SERVICE_DIR}" || { handle_error "Failed to change to service directory ${SERVICE_DIR}. Continuing to next operation."; continue; }
+    cd "${SERVICE_DIR}" || { handle_error "Failed to change to service directory: ${SERVICE_DIR}. Continuing to next service."; continue; }
 
     # Define service name from directory
     SERVICE="$(basename "${PWD}")"
@@ -112,12 +111,13 @@ main() {
 
     # Check if the service-backup-settings.sh file exists
     if [ -f "${SERVICE_DIR}/service-backup-settings.sh" ]; then
-      # Attempt to source the file
-      log_message "INFO" "Found service-backup-settings.sh file for ${SERVICE} service. Attempting to source..."
-      source "${SERVICE_DIR}/service-backup-settings.sh" || \
+      log_message "INFO" "Found service-backup-settings.sh file for ${SERVICE} service. Attempting to import..."
+      if source "${SERVICE_DIR}/service-backup-settings.sh"; then
+        log_message "INFO" "Successfully imported service-backup-settings.sh file for ${SERVICE} service."
+      else
         log_message "WARNING" "Failed to import service-backup-settings.sh file for ${SERVICE} service. Using default values."
+      fi
     else
-      # Log an informational message if the file does not exist
       log_message "INFO" "No service-backup-settings.sh file for ${SERVICE} service. Using default values."
     fi
 
