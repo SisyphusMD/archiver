@@ -368,9 +368,9 @@ duplicacy_prune() {
     "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Running the Duplicacy full '${storage_name}' storage check for the '${SERVICE}' service failed."
+      handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
     fi
-    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully for the '${SERVICE}' service."
+    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully"
 
     # Prune the Duplicacy storage
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
