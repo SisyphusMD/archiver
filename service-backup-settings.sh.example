@@ -1,47 +1,56 @@
-# Backup Variables
-# This file is intended to be sourced by a backup script to set environment variables
-# and define optional functions for pre and post backup tasks specific to a service.
-#
-# Usage: source service-backup-settings.sh
-#
-# Note: This script should not be executed directly but sourced by another script.
-# All variables and functions are required to be set. If specific configurations or 
-# pre/post backup tasks are not needed, variables can be set to empty strings (""), 
-# and functions can contain a no-operation placeholder (:;), except for the SERVICE 
-# variable, which must always be set to a valid service name.
-#
-# Instructions:
-# - This configuration file must be named "service-backup-settings.sh" and placed in 
-#   every service directory that is listed in the BACKUP_REPOSITORIES variable in the 
-#   user-config.sh file. It allows for service-specific backup configurations and tasks 
-#   to be defined, ensuring that each service can be backed up according to its 
-#   specific needs and requirements.
-#
-# Author: Name
-# Date: YYYY-MM-DD
+#########################################################################################
+# service-backup-settings.sh                                                            #
+#   This file is intended to be sourced by the Archiver script to define optional       #
+#   duplicacy filters and backup functions for pre- and post-backup tasks specific to   #
+#   the service.                                                                        #
+#                                                                                       #
+# Usage:                                                                                #
+#   Copy this file as "service-backup-settings.sh" into the backup directory, and add   #
+#   any needed filter patterns and pre- and post-backup functions.                      #
+#                                                                                       #
+# Note:                                                                                 #
+#   This script should not be executed directly. Instead, it will be sourced by the     #
+#   Archiver script.                                                                    #
+#                                                                                       #
+# Instructions:                                                                         #
+# - This configuration file is optional. Default values will be used by the Archiver    #
+#   script if this file can not be found.                                               #
+# - To use this file, it must be named "service-backup-settings.sh" and placed in the   #
+#   backup directory listed in the BACKUP_REPOSITORIES variable in the config.sh file.  #
+# - It allows for service-specific backup configurations and tasks to be defined,       #
+#   ensuring that each service can be backed up according to its specific requirements. #
+#########################################################################################
 
-# Service name (Required - must always be set to a valid service name)
-# Example: SERVICE="example-service" # Replace "example-service" with your actual service name
+# Set include/exclude patterns for Duplicacy filter.
+# By default, Archiver will include all files: "+*"
+# See https://forum.duplicacy.com/t/filters-include-exclude-patterns/1089 for details.
+# Uncomment the below to use.
+#
+# DUPLICACY_FILTERS_PATTERNS=(
+#   # For example: listing +compose.yaml, then -*, will include the compose.yaml file
+#   # in the backup, and will exclude all other files and directories.
+#   "+compose.yaml"
+#   "-*"
+# )
 
-# Set include/exclude patterns for Duplicacy filter (Required - set to empty if not used)
-DUPLICACY_FILTERS_PATTERNS=(
-  # Example: "+compose.yaml"
-  # "-*"
-)
+# Define service-specific pre-backup functions.
+# This can include service shutdown, database dump, etc.
+# By default, Archiver will not run any service-specific functions before backup.
+# Uncomment the below to use.
+# 
+# service_specific_pre_backup_function() {
+#   # Add pre-backup commands here.
+#   # Example: docker compose stop
+#   :; # No operation placeholder
+# }
 
-# Optional Functions for service-specific pre and post backup tasks. (Required - use no-operation placeholder if no specific commands are needed)
-# service_specific_pre_backup_function: Function to execute commands before backup.
-# This can include service shutdown, data dump, etc.
-service_specific_pre_backup_function() {
-  # Add pre-backup commands here or leave the no-operation placeholder if not needed.
-  # Example: docker compose stop
-  :; # No operation placeholder
-}
-
-# service_specific_post_backup_function: Function to execute commands after backup.
+# Define service-specific pre-backup functions.
 # This can include service startup, cleanup actions, etc.
-service_specific_post_backup_function() {
-  # Add post-backup commands here or leave the no-operation placeholder if not needed.
-  # Example: docker compose start
-  :; # No operation placeholder
-}
+# By default, Archiver will not run any service-specific functions after backup.
+# Uncomment the below to use.
+# 
+# service_specific_post_backup_function() {
+#   # Add post-backup commands here.
+#   # Example: docker compose start
+#   :; # No operation placeholder
+# }
