@@ -114,6 +114,15 @@ duplicacy_primary_backup() {
         handle_error "Setting the Primary Duplicacy Storage SSH key file for the ${SERVICE} service failed. Verify the SSH key file path and permissions."
       fi
     elif [[ "${backup_type}" == "b2" ]]; then
+      local duplicacy_b2_id_var
+      local duplicacy_b2_key_var
+
+      duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
+      duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
+
+      export "${duplicacy_b2_id_var}"="${BACKUP_TARGET_1_B2_ID}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
+      export "${duplicacy_b2_key_var}"="${BACKUP_TARGET_1_B2_KEY}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
+
       # Initialize B2 storage
       log_message "INFO" "Initializing Primary Duplicacy Storage for ${SERVICE} service."
 
@@ -268,7 +277,7 @@ duplicacy_copy_backup() {
           export "${duplicacy_b2_key_var}"="${!config_b2_key_var}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
 
           # Add BackBlaze Duplicacy Storage
-          log_message "INFO" "Adding BackBlaze Duplicacy Storage '${storage_name} for the '${SERVICE}' service."
+          log_message "INFO" "Adding BackBlaze Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
           "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
             "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
             "b2://${!config_b2_bucketname_var}" 2>&1 | \
