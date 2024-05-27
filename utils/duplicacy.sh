@@ -49,7 +49,7 @@ duplicacy_verify() {
   return "${exit_status}"
 }
 
-filters_duplicacy() {
+duplicacy_filters() {
   # Prepare Duplicacy filters file
   # Remove the filters file if it already exists
   rm -f "${DUPLICACY_FILTERS_FILE}" || handle_error "Error removing filters file."
@@ -108,7 +108,7 @@ duplicacy_primary_backup() {
       fi
 
       # Set SSH key file for Primary Duplicacy Storage
-      "${DUPLICACY_BIN}" set -key ssh_key_file -value "${BACKUP_TARGET_1_SFTP_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${BACKUP_TARGET_1_SFTP_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
       exit_status="${PIPESTATUS[0]}"
       if [ "${exit_status}" -ne 0 ]; then
         handle_error "Setting the Primary Duplicacy Storage SSH key file for the ${SERVICE} service failed. Verify the SSH key file path and permissions."
@@ -146,7 +146,7 @@ duplicacy_primary_backup() {
     fi
 
     # Set Password for Primary Duplicacy Storage
-    "${DUPLICACY_BIN}" set -key password -value "${STORAGE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
       handle_error "Setting the Primary Duplicacy Storage password for the '${SERVICE}' service failed."
@@ -170,7 +170,7 @@ duplicacy_primary_backup() {
   fi
 
   # Prepare Duplicacy filters file
-  filters_duplicacy || handle_error "Preparing Duplicacy filters file for the '${SERVICE}' service failed."
+  duplicacy_filters || handle_error "Preparing Duplicacy filters file for the '${SERVICE}' service failed."
   
   # Run the Duplicacy backup to the Primary Storage
   log_message "INFO" "Running Duplicacy primary storage backup to '${BACKUP_TARGET_1_NAME}' storage for the '${SERVICE}' service."
@@ -184,128 +184,147 @@ duplicacy_primary_backup() {
   log_message "INFO" "Duplicacy primary storage backup to '${BACKUP_TARGET_1_NAME}' storage for the '${SERVICE}' service completed successfully."
 }
 
-# Adds BackBlaze Duplicacy storage if not already added
-add_b2_storage_duplicacy() {
-  local exit_status
-  local storage_id
-  local storage_name_var
-  local storage_name
-  local storage_name_upper
-  local config_b2_bucketname_var
-  local config_b2_id_var
-  local config_b2_key_var
-  local duplicacy_b2_id_var
-  local duplicacy_b2_key_var
-  local duplicacy_storage_password_var
-
-  storage_id="${1}"
-  storage_name_var="BACKUP_TARGET_${storage_id}_NAME"
-  storage_name="${!storage_name_var}"
-  storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
-  config_b2_bucketname_var="BACKUP_TARGET_${storage_id}_B2_BUCKETNAME"
-  config_b2_id_var="BACKUP_TARGET_${storage_id}_B2_ID"
-  config_b2_key_var="BACKUP_TARGET_${storage_id}_B2_KEY"
-  duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
-  duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
-  duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
-
-  # Move to backup directory or exit if failed
-  cd "${SERVICE_DIR}" || handle_error "Failed to change to backup directory '${SERVICE_DIR}' for backup operations of '${SERVICE}'."
-
-  if ! duplicacy_verify "${storage_name}"; then
-    export "${duplicacy_b2_id_var}"="${!config_b2_id_var}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
-    export "${duplicacy_b2_key_var}"="${!config_b2_key_var}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
-    export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}" # Export password for duplicacy storage so Duplicacy binary can see variable
-
-    # Add BackBlaze Duplicacy Storage
-    log_message "INFO" "Adding BackBlaze Duplicacy Storage for ${SERVICE} service."
-    "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
-      "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-      "b2://${!config_b2_bucketname_var}" 2>&1 | \
-      log_output "${DUPLICACY_LOG_FILE}"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Adding BackBlaze Duplicacy Storage for the '${SERVICE}' service failed."
-    fi
-
-    # Set Password for BackBlaze Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password \
-      -value "${STORAGE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the BackBlaze Duplicacy Storage password for the '${SERVICE}' service failed."
-    fi
-
-    # Set RSA Passphrase for BackBlaze Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
-      -value "${RSA_PASSPHRASE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the BackBlaze Duplicacy Storage RSA Passphrase for the '${SERVICE}' service failed."
-    fi
-
-    # Set Key ID for BackBlaze Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
-      -value "${!config_b2_id_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the BackBlaze Duplicacy Storage Key ID for the '${SERVICE}' service failed."
-    fi
-
-    # Set Application Key for BackBlaze Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
-      -value "${!config_b2_key_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the BackBlaze Duplicacy Storage Application Key for the '${SERVICE}' service failed."
-    fi
-
-    # Verify BackBlaze Duplicacy Storage initialization
-    if ! duplicacy_verify "${storage_name}"; then
-      handle_error "Verification of the BackBlaze Duplicacy Storage addition for the '${SERVICE}' service failed."
-    fi
-    log_message "INFO" "BackBlaze Duplicacy Storage addition verified for '${SERVICE}' service."
-
-    # Prepare Duplicacy filters file
-    filters_duplicacy || handle_error "Preparing Duplicacy filters file for the '${SERVICE}' service failed."
-  else
-    log_message "INFO" "Duplicacy BackBlaze storage already initialized for '${SERVICE}' service."
-  fi
-}
-
 # Runs the Duplicacy copy backup operation for the current service's data.
 # Parameters:
 #   None. Uses configured Duplicacy settings and operates within the service's backup context.
 # Output:
 #   Performs a Duplicacy copy backup. Output is logged to the Duplicacy log file.
-copy_backup_duplicacy() {
-
+duplicacy_copy_backup() {
   if [[ BACKUP_TARGET_COUNT -gt 1 ]]; then
-
     for i in $(seq 2 "${BACKUP_TARGET_COUNT}"); do
-
       local exit_status
       local storage_id
       local backup_type_var
       local backup_type
       local storage_name_var
       local storage_name
+      local storage_name_upper
+      local duplicacy_storage_password_var
 
       storage_id="${i}"
       backup_type_var="BACKUP_TARGET_${storage_id}_TYPE"
       backup_type="${!backup_type_var}"
       storage_name_var="BACKUP_TARGET_${storage_id}_NAME"
       storage_name="${!storage_name_var}"
+      storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
+      duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
 
-      if [[ "${backup_type}" == "b2" ]]; then
-        # Add BackBlaze Duplicacy Storage if not already added
-        add_b2_storage_duplicacy "${storage_id}" || handle_error "Duplicacy initialization failed for ${SERVICE}."
+      export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}" # Export password for duplicacy storage so Duplicacy binary can see variable
+
+      # Move to backup directory or exit if failed
+      cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}."
+
+      # Initialize Duplicacy primary storage if not already initialized
+      if ! duplicacy_verify "${storage_name}"; then
+        if [[ "${backup_type}" == "sftp" ]]; then
+          # Add SFTP Duplicacy Storage if not already added
+          local config_sftp_url_var
+          local config_sftp_user_var
+          local config_sftp_path_var
+          local config_sftp_key_file_var
+          local duplicacy_ssh_key_file_var
+
+          config_sftp_url_var="BACKUP_TARGET_${storage_id}_SFTP_URL"
+          config_sftp_user_var="BACKUP_TARGET_${storage_id}_SFTP_USER"
+          config_sftp_path_var="BACKUP_TARGET_${storage_id}_SFTP_PATH"
+          config_sftp_key_file_var="BACKUP_TARGET_${storage_id}_SFTP_KEY_FILE"
+          duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
+
+          export "${duplicacy_ssh_key_file_var}"="${!config_sftp_key_file_var}" # Export SSH key file for sftp duplicacy storage so Duplicacy binary can see variable
+
+          # Add SFTP Duplicacy Storage
+          log_message "INFO" "Adding SFTP Duplicacy Storage '${storage_name} for the '${SERVICE}' service."
+          "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
+            "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+            "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}//${!config_sftp_path_var}" 2>&1 | \
+            log_output "${DUPLICACY_LOG_FILE}"
+          exit_status="${PIPESTATUS[0]}"
+          if [ "${exit_status}" -ne 0 ]; then
+            handle_error "Adding SFTP Duplicacy Storage '${storage_name}' for the '${SERVICE}' service failed."
+          fi
+
+          # Set SSH key file for SFTP Duplicacy Storage
+          "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+          exit_status="${PIPESTATUS[0]}"
+          if [ "${exit_status}" -ne 0 ]; then
+            handle_error "Setting the SFTP Duplicacy storage '${storage_name}' SSH key file for the '${SERVICE}'service failed. Verify the SSH key file path and permissions."
+          fi
+
+        elif [[ "${backup_type}" == "b2" ]]; then
+          # Add BackBlaze Duplicacy Storage if not already added
+          local config_b2_bucketname_var
+          local config_b2_id_var
+          local config_b2_key_var
+          local duplicacy_b2_id_var
+          local duplicacy_b2_key_var
+
+          config_b2_bucketname_var="BACKUP_TARGET_${storage_id}_B2_BUCKETNAME"
+          config_b2_id_var="BACKUP_TARGET_${storage_id}_B2_ID"
+          config_b2_key_var="BACKUP_TARGET_${storage_id}_B2_KEY"
+          duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
+          duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
+
+          export "${duplicacy_b2_id_var}"="${!config_b2_id_var}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
+          export "${duplicacy_b2_key_var}"="${!config_b2_key_var}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
+
+          # Add BackBlaze Duplicacy Storage
+          log_message "INFO" "Adding BackBlaze Duplicacy Storage '${storage_name} for the '${SERVICE}' service."
+          "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
+            "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+            "b2://${!config_b2_bucketname_var}" 2>&1 | \
+            log_output "${DUPLICACY_LOG_FILE}"
+          exit_status="${PIPESTATUS[0]}"
+          if [ "${exit_status}" -ne 0 ]; then
+            handle_error "Adding BackBlaze Duplicacy Storage '${storage_name}' for the '${SERVICE}' service failed."
+          fi
+
+          # Set Key ID for BackBlaze Duplicacy Storage
+          "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
+            -value "${!config_b2_id_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+          exit_status="${PIPESTATUS[0]}"
+          if [ "${exit_status}" -ne 0 ]; then
+            handle_error "Setting the BackBlaze Duplicacy Storage '${storage_name}' Key ID for the '${SERVICE}' service failed."
+          fi
+
+          # Set Application Key for BackBlaze Duplicacy Storage
+          "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
+            -value "${!config_b2_key_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+          exit_status="${PIPESTATUS[0]}"
+          if [ "${exit_status}" -ne 0 ]; then
+            handle_error "Setting the BackBlaze Duplicacy Storage '${storage_name}' Application Key for the '${SERVICE}' service failed."
+          fi
+
+        else
+          handle_error "'${backup_type}' is not a supported backup type. Please edit config.sh to only reference supported backup types."
+        fi
+
+        # Set Password for the additional storage
+        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password \
+          -value "${STORAGE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+        exit_status="${PIPESTATUS[0]}"
+        if [ "${exit_status}" -ne 0 ]; then
+          handle_error "Setting the Duplicacy storage password for the '${SERVICE}' service failed."
+        fi
+
+        # Set RSA Passphrase for the additional storage
+        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
+          -value "${RSA_PASSPHRASE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+        exit_status="${PIPESTATUS[0]}"
+        if [ "${exit_status}" -ne 0 ]; then
+          handle_error "Setting the Duplicacy storage RSA Passphrase for the '${SERVICE}' service failed."
+        fi
+
+        # Verify additional storage initialization
+        if ! duplicacy_verify "${storage_name}"; then
+          handle_error "Verification of the Duplicacy Storage '${storage_name}' addition for the '${SERVICE}' service failed."
+        fi
+        log_message "INFO" "Duplicacy Storage '${storage_name}' addition verified for '${SERVICE}' service."
       else
-        handle_error "/'${backup_type}/' is not a supported backup type. Please edit config.sh to only reference supported backup types."
+        log_message "INFO" "Duplicacy BackBlaze storage already initialized for '${SERVICE}' service."
       fi
 
       # Run the Duplicacy copy backup
-      log_message "INFO" "Running Duplicacy copy backup to /'${storage_name}/' storage for the /'${SERVICE}/' service."
+      log_message "INFO" "Running Duplicacy copy backup to '${storage_name}' storage for the '${SERVICE}' service."
 
       "${DUPLICACY_BIN}" copy -id "${DUPLICACY_SNAPSHOT_ID}" \
         -from "${BACKUP_TARGET_1_NAME}" -to "${storage_name}" \
@@ -313,53 +332,42 @@ copy_backup_duplicacy() {
       exit_status="${PIPESTATUS[0]}"
 
       if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Running the Duplicacy copy backup to /'${storage_name}/' storage for the /'${SERVICE}/' service failed."
+        handle_error "Running the Duplicacy copy backup to '${storage_name}' storage for the '${SERVICE}' service failed."
       fi
-
-      log_message "INFO" "The Duplicacy copy backup to /'${storage_name}/' storage completed successfully for the /'${SERVICE}/' service."
-
+      log_message "INFO" "The Duplicacy copy backup to '${storage_name}' storage completed successfully for the '${SERVICE}' service."
     done
   fi
 }
 
-full_check_duplicacy() {
-  # Full Check Duplicacy
-  "${DUPLICACY_BIN}" check -all -storage "${1}" -fossils -resurrect 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-  exit_status="${PIPESTATUS[0]}"
-  return "${exit_status}"
-}
-
-# Runs the Duplicacy prune operation for all repositories.
+# Runs the Duplicacy check and prune operation for all repositories.
 # Parameters:
 #   None. Uses configured Duplicacy settings and operates within the final service's backup context.
 # Output:
 #   Performs a Duplicacy prune. Output is logged to the Duplicacy log file.
-prune_duplicacy() {
+duplicacy_prune() {
   local exit_status
+  local storage_id
+  local storage_name_var
+  local storage_name
 
-  # First Duplicacy Check the Primary storage
-  full_check_duplicacy "${BACKUP_TARGET_1_NAME}"
+  for i in $(seq 1 "${BACKUP_TARGET_COUNT}"); do
+    storage_id="${i}"
+    storage_name_var="BACKUP_TARGET_${storage_id}_NAME"
+    storage_name="${!storage_name_var}"
 
-  # Prune the Primary Duplicacy Storage
-  log_message "INFO" "Running Primary Duplicacy Storage prune for all repositories."
-  "${DUPLICACY_BIN}" prune -all -storage "${BACKUP_TARGET_1_NAME}" \
-    -keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-  exit_status="${PIPESTATUS[0]}"
-  if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Running Primary Duplicacy Storage prune failed. Review the Duplicacy logs for details."
-  fi
-  log_message "INFO" "Primary Duplicacy Storage prune completed successfully."
+    # Full Check the Duplicacy storage
+    "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    return "${exit_status}"
 
-  # First Duplicacy Check the Backblaze storage
-  full_check_duplicacy "${BACKUP_TARGET_2_NAME}"
-
-  # Prune the BackBlaze Duplicacy Storage
-  log_message "INFO" "Running BackBlaze Duplicacy Storage prune for all repositories."
-  "${DUPLICACY_BIN}" prune -all -storage "${BACKUP_TARGET_2_NAME}" \
-    -keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-  exit_status="${PIPESTATUS[0]}"
-  if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Running BackBlaze Duplicacy Storage prune failed. Review the Duplicacy logs for details."
-  fi
-  log_message "INFO" "BackBlaze Duplicacy Storage prune completed successfully."
+    # Prune the Duplicacy storage
+    log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
+    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" \
+      -keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+    fi
+    log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
+  done
 }

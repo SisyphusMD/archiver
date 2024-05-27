@@ -11,8 +11,6 @@ if [ "$(id -u)" -ne 0 ]; then
  exit 1
 fi
 
-# Configuration Section
-# ---------------------
 # Set time variables
 START_TIME="$(date +%s)"
 DATE="$(date +'%Y-%m-%d')"
@@ -23,6 +21,8 @@ ARCHIVER_SCRIPT_PATH="$(readlink -f "${0}" 2>/dev/null)"
 # Determine the full path of the containing dir of the script
 ARCHIVER_DIR="$(cd "$(dirname "${ARCHIVER_SCRIPT_PATH}")" && pwd)"
 
+# Configuration Section
+# ---------------------
 # Sourcing configurable variables from config.sh.
 # Please review and adjust the variables in config.sh as necessary to fit your setup.
 source "${ARCHIVER_DIR}/config.sh"
@@ -67,10 +67,13 @@ source "${ARCHIVER_DIR}/utils/error-handling.sh"
 # ---------------------
 source "${ARCHIVER_DIR}/utils/duplicacy.sh"
 # imports functions:
-#   - verify_duplicacy
-#   - initialize_duplicacy
-#   - backup_duplicacy
-#   - prune_duplicacy
+#   - set_duplicacy_variables
+#   - count_backup_targets
+#   - duplicacy_verify
+#   - duplicacy_filters
+#   - duplicacy_primary_backup
+#   - duplicacy_copy_backup
+#   - duplicacy_prune
 
 # Notification Functions
 # ---------------------
@@ -136,7 +139,7 @@ main() {
     service_specific_post_backup_function
 
     # Run Duplicacy copy backup
-    copy_backup_duplicacy || { handle_error "Duplicacy copy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+    duplicacy_copy_backup || { handle_error "Duplicacy copy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
     # Success message
     log_message "INFO" "Completed backup and duplication process successfully for ${SERVICE} service." || { handle_error "Failed to log the successful completion of backup and duplication for ${SERVICE}."; }
@@ -158,10 +161,10 @@ main() {
   #     This can greatly simplify the implementation.
   #
   # Move to last service directory
-  cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}. Continuing to next operation."
+  cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}."
 
   # Prune duplicacy from last successful backup directory
-  prune_duplicacy || { handle_error "Duplicacy prune failed. Review Duplicacy logs for details."; }
+  duplicacy_prune || handle_error "Duplicacy prune failed. Review Duplicacy logs for details."
 
   # Capture the end time
   END_TIME=$(date +%s)
