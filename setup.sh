@@ -35,7 +35,6 @@ ARCHIVER_DIR="$(dirname "$(readlink -f "$0")")" # Path to Archiver directory
 REQUIRED_PACKAGES=(
   "wget"
   "openssl"
-  "sqlite3"
 )
 
 # Configuration for Duplicacy binary
@@ -79,55 +78,108 @@ if [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
   exit 1
 fi
 
-# [The rest of the script will go here]
+mkdir -p "${DUPLICACY_KEYS_DIR}"
 
-# Attempt to detect package manager and install necessary packages
-if command -v apt-get &> /dev/null; then
-  echo "Attempting to install necessary packages using apt-get..."
-  apt-get update
-  apt-get install -y "${REQUIRED_PACKAGES[@]}"
-elif command -v yum &> /dev/null; then
-  echo "Attempting to install necessary packages using yum..."
-  yum install -y "${REQUIRED_PACKAGES[@]}"
-elif command -v dnf &> /dev/null; then
-  echo "Attempting to install necessary packages using dnf..."
-  dnf install -y "${REQUIRED_PACKAGES[@]}"
-else
-  echo "Package manager not detected. Please manually install the necessary packages."
-  exit 1
-fi
-
-mkdir -p "${DUPLICACY_BIN_FILE_DIR}"
-wget -O "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_URL}"
-chmod 755 "${DUPLICACY_BIN_FILE_PATH}"
-mkdir -p "${DUPLICACY_BIN_LINK_DIR}"
-ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
 echo    # Move to a new line
-read -p "You must provide a passphrase for the generated key or this command will error. Are you ready to provide a passphrase?" -n 1 -r
+read -p "Would you like to install the Duplicacy binary for use with Archiver (y|N)?" -n 1 -r
 echo    # Move to a new line
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  mkdir -p "${DUPLICACY_KEYS_DIR}"
-  openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
-  openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
-  ssh-keygen -f "${DUPLICACY_KEYS_DIR}/id_rsa" -N "" -C "archiver"
-  chown -R 1000:1000 "${DUPLICACY_KEYS_DIR}"
-  chmod 700 "${DUPLICACY_KEYS_DIR}"
-  chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem" "${DUPLICACY_KEYS_DIR}/id_rsa"
-  chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem" "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
+  # Attempt to detect package manager and install necessary packages
+  if command -v apt &> /dev/null; then
+    echo "Attempting to install necessary packages using apt..."
+    apt update
+    apt install -y "${REQUIRED_PACKAGES[@]}"
+  elif command -v yum &> /dev/null; then
+    echo "Attempting to install necessary packages using yum..."
+    yum install -y "${REQUIRED_PACKAGES[@]}"
+  elif command -v dnf &> /dev/null; then
+    echo "Attempting to install necessary packages using dnf..."
+    dnf install -y "${REQUIRED_PACKAGES[@]}"
+  else
+    echo "Package manager not detected. Please manually install the necessary packages: ${REQUIRED_PACKAGES[*]}"
+    exit 1
+  fi
+  mkdir -p "${DUPLICACY_BIN_FILE_DIR}"
+  wget -O "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_URL}"
+  chmod 755 "${DUPLICACY_BIN_FILE_PATH}"
+  mkdir -p "${DUPLICACY_BIN_LINK_DIR}"
+  ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
+else
+  echo "Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run Archiver script."
+fi
+
+# Check if the RSA key files exist
+if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
+  echo    # Move to a new line
+  read -p "Would you like to generate a new RSA key pair for Duplicacy encryption (y|N)?" -n 1 -r
+  echo    # Move to a new line
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    read -p "You must provide a passphrase for this generated key pair or this command will error. Are you ready to provide a passphrase (y|N)?" -n 1 -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ]; then
+        mv "${DUPLICACY_KEYS_DIR}/private.pem" "${DUPLICACY_KEYS_DIR}/private.pem.backup"
+      fi
+      if [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
+        mv "${DUPLICACY_KEYS_DIR}/public.pem" "${DUPLICACY_KEYS_DIR}/public.pem.backup"
+      fi
+      openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
+      openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
+      chmod 700 "${DUPLICACY_KEYS_DIR}"
+      chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
+      chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
+    else
+      echo "RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
+    fi
+  else
+    echo "RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
+  fi
+else
+  echo "Skipping RSA key pair generation: RSA key files already present in .keys directory."
+fi
+
+# Check if the SSH key files exist
+if [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa.pub" ]; then
+  echo    # Move to a new line
+  read -p "Would you like to generate a new SSH key pair for Duplicacy SFTP storage (y|N)?" -n 1 -r
+  echo    # Move to a new line
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    read -p "This must be a no-passphrase SSH key. Please press <return> key when prompted to provide a passphrase. Are you ready (y|N)?" -n 1 -r
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      if [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa" ]; then
+        mv "${DUPLICACY_KEYS_DIR}/id_rsa" "${DUPLICACY_KEYS_DIR}/id_rsa.backup"
+      fi
+      if [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa.pub" ]; then
+        mv "${DUPLICACY_KEYS_DIR}/id_rsa.pub" "${DUPLICACY_KEYS_DIR}/id_rsa.pub.backup"
+      fi
+      ssh-keygen -f "${DUPLICACY_KEYS_DIR}/id_rsa" -N "" -C "archiver"
+      chmod 700 "${DUPLICACY_KEYS_DIR}"
+      chmod 600 "${DUPLICACY_KEYS_DIR}/id_rsa"
+      chmod 644 "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
+    else
+      echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_rsa and archiver/.keys/id_rsa.pub"
+    fi
+  else
+    echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_rsa and archiver/.keys/id_rsa.pub"
+  fi
+else
+  echo "Skipping SSH key pair generation: SSH key files already present in .keys directory."
 fi
 
 # To add script to cron schedule:
 echo    # Move to a new line
-read -p "Would you like to schedule the script with cron?" -n 1 -r
+read -p "Would you like to schedule the script with cron (y|N)?" -n 1 -r
 echo    # Move to a new line
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  (crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | crontab -
-  echo "Added"
+  (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | sudo crontab -
+  echo "Added to crontab."
 else
-  echo "Not added. You can always add it later with this command: (crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | crontab -"
+  echo "Not added. You can always add it later with this command:"
+  echo "--------------------------------------------"
+  echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | sudo crontab -"
+  echo "--------------------------------------------"
 fi
 
-
 echo "Installation and setup completed successfully."
-echo "If restoring, you must replace the contents of the generated key files in the .keys directory as needed."
-echo "To manually run the script, use ./main.sh from the archiver directory."
+echo "If restoring, you must replace the RSA and SSH key files in the .keys directory."
+echo "Please keep a separate backup of your config.sh file and your .keys directory."
+echo "To manually run the script, use 'sudo ./main.sh' from the archiver directory."

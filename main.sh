@@ -28,8 +28,8 @@ ARCHIVER_DIR="$(cd "$(dirname "${ARCHIVER_SCRIPT_PATH}")" && pwd)"
 source "${ARCHIVER_DIR}/config.sh"
 # Initialize an empty array to hold the directory paths
 EXPANDED_DIRECTORIES=()
-# Populate user defined backup directories into the EXPANDED_DIRECTORIES array
-for pattern in "${BACKUP_DIRECTORIES[@]}"; do
+# Populate user defined service directories into the EXPANDED_DIRECTORIES array
+for pattern in "${SERVICE_DIRECTORIES[@]}"; do
   # Directly list directories for specific paths or wildcard patterns
   for dir in ${pattern}; do  # Important: Don't quote ${pattern} to allow glob expansion
     if [ -d "${dir}" ]; then
@@ -68,7 +68,7 @@ source "${ARCHIVER_DIR}/utils/error-handling.sh"
 source "${ARCHIVER_DIR}/utils/duplicacy.sh"
 # imports functions:
 #   - set_duplicacy_variables
-#   - count_backup_targets
+#   - count_storage_targets
 #   - duplicacy_verify
 #   - duplicacy_filters
 #   - duplicacy_primary_backup
@@ -95,8 +95,8 @@ main() {
       rotate_logs "${log_file}"
   done
 
-  # Count backup target variables from config file, require at least one
-  count_backup_targets
+  # Count storage target variables from config file, require at least one
+  count_storage_targets
 
   # Loop to iterate over user-defined service directories and perform backup function on each
   for SERVICE_DIR in "${EXPANDED_DIRECTORIES[@]}" ; do

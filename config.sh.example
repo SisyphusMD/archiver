@@ -1,25 +1,26 @@
-BACKUP_DIRECTORIES=(
+SERVICE_DIRECTORIES=(
   "/srv/*/"
   "/mnt/*/"
 )
 
-BACKUP_TARGET_1_NAME="name"
-BACKUP_TARGET_1_TYPE="type"
-BACKUP_TARGET_1_SFTP_URL="url.tld"
-BACKUP_TARGET_1_SFTP_USER="user"
-BACKUP_TARGET_1_SFTP_PATH="remote/path"
-BACKUP_TARGET_1_SFTP_KEY_FILE="/path/to/id_rsa"
+STORAGE_TARGET_1_NAME="name"
+STORAGE_TARGET_1_TYPE="type"
+STORAGE_TARGET_1_SFTP_URL="url.tld"
+STORAGE_TARGET_1_SFTP_USER="user"
+STORAGE_TARGET_1_SFTP_PATH="remote/path"
+STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_rsa"
 
-BACKUP_TARGET_2_NAME="name"
-BACKUP_TARGET_2_TYPE="type"
-BACKUP_TARGET_2_B2_BUCKETNAME="bucketName"
-BACKUP_TARGET_2_B2_ID="keyID"
-BACKUP_TARGET_2_B2_KEY="applicationKey"
+STORAGE_TARGET_2_NAME="name"
+STORAGE_TARGET_2_TYPE="type"
+STORAGE_TARGET_2_B2_BUCKETNAME="bucketName"
+STORAGE_TARGET_2_B2_ID="keyID"
+STORAGE_TARGET_2_B2_KEY="applicationKey"
 
 # All Duplicacy
 RSA_PASSPHRASE="XXXXX" # Passphrase for RSA private key
 STORAGE_PASSWORD="XXXXX" # Password for Duplicacy storage
 
 # Pushover Notifications
+NOTIFICATION_SERVICE="Pushover" # Currently support 'None' or "Pushover'
 PUSHOVER_API_TOKEN="XXXXX" # Pushover application API token/key
 PUSHOVER_USER_KEY="XXXXX" # Pushover user key (not email address), viewable when logged into Pushover dashboard
