@@ -230,114 +230,110 @@ duplicacy_copy_backup() {
       # Move to backup directory or exit if failed
       cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}."
 
-      # Initialize Duplicacy primary storage if not already initialized
-      if ! duplicacy_verify "${storage_name}"; then
-        if [[ "${backup_type}" == "sftp" ]]; then
-          # Add SFTP Duplicacy Storage if not already added
-          local config_sftp_url_var
-          local config_sftp_user_var
-          local config_sftp_path_var
-          local config_sftp_key_file_var
-          local duplicacy_ssh_key_file_var
+      # Initialize Duplicacy secondary storage
+      if [[ "${backup_type}" == "sftp" ]]; then
+        # Add SFTP Duplicacy Storage if not already added
+        local config_sftp_url_var
+        local config_sftp_user_var
+        local config_sftp_path_var
+        local config_sftp_key_file_var
+        local duplicacy_ssh_key_file_var
 
-          config_sftp_url_var="BACKUP_TARGET_${storage_id}_SFTP_URL"
-          config_sftp_user_var="BACKUP_TARGET_${storage_id}_SFTP_USER"
-          config_sftp_path_var="BACKUP_TARGET_${storage_id}_SFTP_PATH"
-          config_sftp_key_file_var="BACKUP_TARGET_${storage_id}_SFTP_KEY_FILE"
-          duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
+        config_sftp_url_var="BACKUP_TARGET_${storage_id}_SFTP_URL"
+        config_sftp_user_var="BACKUP_TARGET_${storage_id}_SFTP_USER"
+        config_sftp_path_var="BACKUP_TARGET_${storage_id}_SFTP_PATH"
+        config_sftp_key_file_var="BACKUP_TARGET_${storage_id}_SFTP_KEY_FILE"
+        duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
 
-          export "${duplicacy_ssh_key_file_var}"="${!config_sftp_key_file_var}" # Export SSH key file for sftp duplicacy storage so Duplicacy binary can see variable
+        export "${duplicacy_ssh_key_file_var}"="${!config_sftp_key_file_var}" # Export SSH key file for sftp duplicacy storage so Duplicacy binary can see variable
 
-          # Add SFTP Duplicacy Storage
-          log_message "INFO" "Adding SFTP Duplicacy Storage '${storage_name} for the '${SERVICE}' service."
-          "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
-            "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-            "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}//${!config_sftp_path_var}" 2>&1 | \
-            log_output "${DUPLICACY_LOG_FILE}"
-          exit_status="${PIPESTATUS[0]}"
-          if [ "${exit_status}" -ne 0 ]; then
-            handle_error "Adding SFTP Duplicacy Storage '${storage_name}' for the '${SERVICE}' service failed."
-          fi
-
-          # Set SSH key file for SFTP Duplicacy Storage
-          "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-          exit_status="${PIPESTATUS[0]}"
-          if [ "${exit_status}" -ne 0 ]; then
-            handle_error "Setting the SFTP Duplicacy storage '${storage_name}' SSH key file for the '${SERVICE}'service failed. Verify the SSH key file path and permissions."
-          fi
-
-        elif [[ "${backup_type}" == "b2" ]]; then
-          # Add BackBlaze Duplicacy Storage if not already added
-          local config_b2_bucketname_var
-          local config_b2_id_var
-          local config_b2_key_var
-          local duplicacy_b2_id_var
-          local duplicacy_b2_key_var
-
-          config_b2_bucketname_var="BACKUP_TARGET_${storage_id}_B2_BUCKETNAME"
-          config_b2_id_var="BACKUP_TARGET_${storage_id}_B2_ID"
-          config_b2_key_var="BACKUP_TARGET_${storage_id}_B2_KEY"
-          duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
-          duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
-
-          export "${duplicacy_b2_id_var}"="${!config_b2_id_var}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
-          export "${duplicacy_b2_key_var}"="${!config_b2_key_var}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
-
-          # Add BackBlaze Duplicacy Storage
-          log_message "INFO" "Adding BackBlaze Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
-          "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
-            "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-            "b2://${!config_b2_bucketname_var}" 2>&1 | \
-            log_output "${DUPLICACY_LOG_FILE}"
-          exit_status="${PIPESTATUS[0]}"
-          if [ "${exit_status}" -ne 0 ]; then
-            handle_error "Adding BackBlaze Duplicacy Storage '${storage_name}' for the '${SERVICE}' service failed."
-          fi
-
-          # Set Key ID for BackBlaze Duplicacy Storage
-          "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
-            -value "${!config_b2_id_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-          exit_status="${PIPESTATUS[0]}"
-          if [ "${exit_status}" -ne 0 ]; then
-            handle_error "Setting the BackBlaze Duplicacy Storage '${storage_name}' Key ID for the '${SERVICE}' service failed."
-          fi
-
-          # Set Application Key for BackBlaze Duplicacy Storage
-          "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
-            -value "${!config_b2_key_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-          exit_status="${PIPESTATUS[0]}"
-          if [ "${exit_status}" -ne 0 ]; then
-            handle_error "Setting the BackBlaze Duplicacy Storage '${storage_name}' Application Key for the '${SERVICE}' service failed."
-          fi
-
-        else
-          handle_error "'${backup_type}' is not a supported backup type. Please edit config.sh to only reference supported backup types."
-        fi
-
-        # Set Password for the additional storage
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password \
-          -value "${STORAGE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+        # Add SFTP Duplicacy Storage
+        log_message "INFO" "Adding SFTP Duplicacy Storage '${storage_name} for the '${SERVICE}' service."
+        "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
+          "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+          "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}//${!config_sftp_path_var}" 2>&1 | \
+          log_output "${DUPLICACY_LOG_FILE}"
         exit_status="${PIPESTATUS[0]}"
         if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Setting the Duplicacy storage password for the '${SERVICE}' service failed."
+          handle_error "Adding SFTP Duplicacy Storage '${storage_name}' for the '${SERVICE}' service failed."
         fi
 
-        # Set RSA Passphrase for the additional storage
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
-          -value "${RSA_PASSPHRASE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+        # Set SSH key file for SFTP Duplicacy Storage
+        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
         exit_status="${PIPESTATUS[0]}"
         if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Setting the Duplicacy storage RSA Passphrase for the '${SERVICE}' service failed."
+          handle_error "Setting the SFTP Duplicacy storage '${storage_name}' SSH key file for the '${SERVICE}'service failed. Verify the SSH key file path and permissions."
         fi
 
-        # Verify additional storage initialization
-        if ! duplicacy_verify "${storage_name}"; then
-          handle_error "Verification of the Duplicacy Storage '${storage_name}' addition for the '${SERVICE}' service failed."
+      elif [[ "${backup_type}" == "b2" ]]; then
+        # Add BackBlaze Duplicacy Storage if not already added
+        local config_b2_bucketname_var
+        local config_b2_id_var
+        local config_b2_key_var
+        local duplicacy_b2_id_var
+        local duplicacy_b2_key_var
+
+        config_b2_bucketname_var="BACKUP_TARGET_${storage_id}_B2_BUCKETNAME"
+        config_b2_id_var="BACKUP_TARGET_${storage_id}_B2_ID"
+        config_b2_key_var="BACKUP_TARGET_${storage_id}_B2_KEY"
+        duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
+        duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
+
+        export "${duplicacy_b2_id_var}"="${!config_b2_id_var}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
+        export "${duplicacy_b2_key_var}"="${!config_b2_key_var}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
+
+        # Add BackBlaze Duplicacy Storage
+        log_message "INFO" "Adding BackBlaze Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
+        "${DUPLICACY_BIN}" add -e -copy "${BACKUP_TARGET_1_NAME}" -bit-identical -key \
+          "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+          "b2://${!config_b2_bucketname_var}" 2>&1 | \
+          log_output "${DUPLICACY_LOG_FILE}"
+        exit_status="${PIPESTATUS[0]}"
+        if [ "${exit_status}" -ne 0 ]; then
+          handle_error "Adding BackBlaze Duplicacy Storage '${storage_name}' for the '${SERVICE}' service failed."
         fi
-        log_message "INFO" "Duplicacy Storage '${storage_name}' addition verified for '${SERVICE}' service."
+
+        # Set Key ID for BackBlaze Duplicacy Storage
+        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
+          -value "${!config_b2_id_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+        exit_status="${PIPESTATUS[0]}"
+        if [ "${exit_status}" -ne 0 ]; then
+          handle_error "Setting the BackBlaze Duplicacy Storage '${storage_name}' Key ID for the '${SERVICE}' service failed."
+        fi
+
+        # Set Application Key for BackBlaze Duplicacy Storage
+        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
+          -value "${!config_b2_key_var}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+        exit_status="${PIPESTATUS[0]}"
+        if [ "${exit_status}" -ne 0 ]; then
+          handle_error "Setting the BackBlaze Duplicacy Storage '${storage_name}' Application Key for the '${SERVICE}' service failed."
+        fi
+
       else
-        log_message "INFO" "Duplicacy BackBlaze storage already initialized for '${SERVICE}' service."
+        handle_error "'${backup_type}' is not a supported backup type. Please edit config.sh to only reference supported backup types."
       fi
+
+      # Set Password for the additional storage
+      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password \
+        -value "${STORAGE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+      exit_status="${PIPESTATUS[0]}"
+      if [ "${exit_status}" -ne 0 ]; then
+        handle_error "Setting the Duplicacy storage password for the '${SERVICE}' service failed."
+      fi
+
+      # Set RSA Passphrase for the additional storage
+      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
+        -value "${RSA_PASSPHRASE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+      exit_status="${PIPESTATUS[0]}"
+      if [ "${exit_status}" -ne 0 ]; then
+        handle_error "Setting the Duplicacy storage RSA Passphrase for the '${SERVICE}' service failed."
+      fi
+
+      # Verify additional storage initialization
+      if ! duplicacy_verify "${storage_name}"; then
+        handle_error "Verification of the Duplicacy Storage '${storage_name}' addition for the '${SERVICE}' service failed."
+      fi
+      log_message "INFO" "Duplicacy Storage '${storage_name}' addition verified for '${SERVICE}' service."
 
       # Run the Duplicacy copy backup
       log_message "INFO" "Running Duplicacy copy backup to '${storage_name}' storage for the '${SERVICE}' service."
