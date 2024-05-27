@@ -129,8 +129,8 @@ main() {
     # Run any specific pre backup commands defined in the service-backup-settings.sh file
     service_specific_pre_backup_function
 
-    # Run Duplicacy backup
-    backup_duplicacy || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+    # Run Duplicacy primary backup
+    duplicacy_primary_backup || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
     # Run any specific post backup commands defined in the source file
     service_specific_post_backup_function
