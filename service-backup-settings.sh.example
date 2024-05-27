@@ -37,7 +37,7 @@
 # This can include service shutdown, database dump, etc.
 # By default, Archiver will not run any service-specific functions before backup.
 # Uncomment the below to use.
-# 
+#
 # service_specific_pre_backup_function() {
 #   # Add pre-backup commands here.
 #   # Example: docker compose stop
@@ -48,7 +48,7 @@
 # This can include service startup, cleanup actions, etc.
 # By default, Archiver will not run any service-specific functions after backup.
 # Uncomment the below to use.
-# 
+#
 # service_specific_post_backup_function() {
 #   # Add post-backup commands here.
 #   # Example: docker compose start
