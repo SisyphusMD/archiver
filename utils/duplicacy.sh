@@ -15,6 +15,7 @@ BACKUP_TARGET_COUNT=0
 set_duplicacy_variables() {
   DUPLICACY_REPO_DIR="${SERVICE_DIR}/.duplicacy" # Directory for various Duplicacy repos
   DUPLICACY_FILTERS_FILE="${DUPLICACY_REPO_DIR}/filters" # Location for Duplicacy filters file
+  DUPLICACY_PREFERENCES_FILE="${DUPLICACY_REPO_DIR}/preferences" # Location for Duplicacy preferences file
   DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
 }
 
@@ -43,7 +44,7 @@ duplicacy_verify() {
   local exit_status
   storage_name="${1}"
 
-  # Verify Duplicacy Storage existance with a `duplicacy list` command
+  # Verify Duplicacy Storage existance with a duplicacy list command
   "${DUPLICACY_BIN}" list -storage "${storage_name}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
   exit_status="${PIPESTATUS[0]}"
   return "${exit_status}"
@@ -52,16 +53,16 @@ duplicacy_verify() {
 duplicacy_filters() {
   # Prepare Duplicacy filters file
   # Remove the filters file if it already exists
-  rm -f "${DUPLICACY_FILTERS_FILE}" || handle_error "Error removing filters file."
-  touch "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to create the Duplicacy filters file for the ${SERVICE} service."
+  rm -f "${DUPLICACY_FILTERS_FILE}" || handle_error "Error removing filters file for the '${SERVICE}' service."
+  touch "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to create the Duplicacy filters file for the '${SERVICE}' service."
 
   # Add Duplicacy filters patterns to the filters file
   for line in "${DUPLICACY_FILTERS_PATTERNS[@]}"; do
-    echo "${line}" >> "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to modify the Duplicacy filters file for the ${SERVICE} service."
+    echo "${line}" >> "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to modify the Duplicacy filters file for the '${SERVICE}' service."
   done
 
   # Log success message
-  log_message "INFO" "Preparation for Duplicacy filter for ${SERVICE} service completed successfully."
+  log_message "INFO" "Preparation for Duplicacy filter for '${SERVICE}' service completed successfully."
 }
 
 # Initializes and runs the Duplicacy primary storage backup for the current service.
@@ -84,103 +85,109 @@ duplicacy_primary_backup() {
   export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}" # Export password for primary duplicacy storage so Duplicacy binary can see variable
 
   # Move to backup directory or exit if failed
-  cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}."
+  cd "${SERVICE_DIR}" || handle_error "Failed to change to directory '${SERVICE_DIR}'."
 
-  # Initialize Duplicacy primary storage if not already initialized
-  if ! duplicacy_verify "${storage_name}"; then
-    if [[ "${backup_type}" == "sftp" ]]; then
-      local duplicacy_ssh_key_file_var
+  # Remove the duplicacy preferences file if it already exists to start from scratch every time
+  rm -f "${DUPLICACY_PREFERENCES_FILE}" || handle_error "Error removing preferences file for the '${SERVICE}' service."
 
-      duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
+  # Initialize Duplicacy primary storage
+  if [[ "${backup_type}" == "sftp" ]]; then
+    local duplicacy_ssh_key_file_var
 
-      export "${duplicacy_ssh_key_file_var}"="${BACKUP_TARGET_1_SFTP_KEY_FILE}" # Export SSH key file for primary duplicacy storage so Duplicacy binary can see variable
+    duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
 
-      # Initialize SFTP storage
-      log_message "INFO" "Initializing Primary Duplicacy Storage for ${SERVICE} service."
+    export "${duplicacy_ssh_key_file_var}"="${BACKUP_TARGET_1_SFTP_KEY_FILE}" # Export SSH key file for primary duplicacy storage so Duplicacy binary can see variable
 
-      "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-        -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-        "sftp://${BACKUP_TARGET_1_SFTP_USER}@${BACKUP_TARGET_1_SFTP_URL}//${BACKUP_TARGET_1_SFTP_PATH}" 2>&1 | \
-        log_output "${DUPLICACY_LOG_FILE}"
-      exit_status="${PIPESTATUS[0]}"
-      if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Primary Duplicacy Storage initialization for the ${SERVICE} service failed."
-      fi
+    # Initialize SFTP storage
+    log_message "INFO" "Initializing Primary Duplicacy Storage for ${SERVICE} service."
 
-      # Set SSH key file for Primary Duplicacy Storage
-      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${BACKUP_TARGET_1_SFTP_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-      exit_status="${PIPESTATUS[0]}"
-      if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Setting the Primary Duplicacy Storage SSH key file for the ${SERVICE} service failed. Verify the SSH key file path and permissions."
-      fi
-    elif [[ "${backup_type}" == "b2" ]]; then
-      local duplicacy_b2_id_var
-      local duplicacy_b2_key_var
-
-      duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
-      duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
-
-      export "${duplicacy_b2_id_var}"="${BACKUP_TARGET_1_B2_ID}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
-      export "${duplicacy_b2_key_var}"="${BACKUP_TARGET_1_B2_KEY}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
-
-      # Initialize B2 storage
-      log_message "INFO" "Initializing Primary Duplicacy Storage for ${SERVICE} service."
-
-      "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-        -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-        "b2://${BACKUP_TARGET_1_B2_BUCKETNAME}" 2>&1 | \
-        log_output "${DUPLICACY_LOG_FILE}"
-      exit_status="${PIPESTATUS[0]}"
-      if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Primary Duplicacy Storage initialization for the ${SERVICE} service failed."
-      fi
-
-      # Set Key ID for BackBlaze Duplicacy Storage
-      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
-        -value "${BACKUP_TARGET_1_B2_ID}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-      exit_status="${PIPESTATUS[0]}"
-      if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Setting the BackBlaze Duplicacy Storage Key ID for the ${SERVICE} service failed."
-      fi
-
-      # Set Application Key for BackBlaze Duplicacy Storage
-      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
-        -value "${BACKUP_TARGET_1_B2_KEY}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
-      exit_status="${PIPESTATUS[0]}"
-      if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Setting the BackBlaze Duplicacy Storage Application Key for the '${SERVICE}' service failed."
-      fi
-    else
-      handle_error "'${backup_type}' is not a supported backup type. Please edit config.sh to fix."
-    fi
-
-    # Set Password for Primary Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+      -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+      "sftp://${BACKUP_TARGET_1_SFTP_USER}@${BACKUP_TARGET_1_SFTP_URL}//${BACKUP_TARGET_1_SFTP_PATH}" 2>&1 | \
+      log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the Primary Duplicacy Storage password for the '${SERVICE}' service failed."
+      handle_error "Primary Duplicacy Storage initialization for the ${SERVICE} service failed."
     fi
 
-    # Set RSA Passphrase for Primary Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
-      -value "${RSA_PASSPHRASE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    # Set SSH key file for Primary Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${BACKUP_TARGET_1_SFTP_KEY_FILE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the Primary Duplicacy Storage RSA Passphrase for the '${SERVICE}' service failed."
+      handle_error "Setting the Primary Duplicacy Storage SSH key file for the ${SERVICE} service failed. Verify the SSH key file path and permissions."
+    fi
+  elif [[ "${backup_type}" == "b2" ]]; then
+    local duplicacy_b2_id_var
+    local duplicacy_b2_key_var
+
+    duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
+    duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
+
+    export "${duplicacy_b2_id_var}"="${BACKUP_TARGET_1_B2_ID}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
+    export "${duplicacy_b2_key_var}"="${BACKUP_TARGET_1_B2_KEY}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
+
+    # Initialize B2 storage
+    log_message "INFO" "Initializing Primary Duplicacy Storage for '${SERVICE}' service."
+
+    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+      -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+      "b2://${BACKUP_TARGET_1_B2_BUCKETNAME}" 2>&1 | \
+      log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Primary Duplicacy Storage initialization for the '${SERVICE}' service failed."
     fi
 
-    # Verify Primary Duplicacy Storage initiation
-    if ! duplicacy_verify "${storage_name}"; then
-      handle_error "Verification of the Primary Duplicacy Storage initialization for the '${SERVICE}' service failed."
+    # Set Key ID for BackBlaze Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
+      -value "${BACKUP_TARGET_1_B2_ID}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the BackBlaze Duplicacy Storage Key ID for the ${SERVICE} service failed."
     fi
-    log_message "INFO" "Primary Duplicacy Storage initialization verified for the '${SERVICE}' service."
+
+    # Set Application Key for BackBlaze Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
+      -value "${BACKUP_TARGET_1_B2_KEY}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the BackBlaze Duplicacy Storage Application Key for the '${SERVICE}' service failed."
+    fi
   else
-    log_message "INFO" "Duplicacy Primary storage already initialized for the '${SERVICE}' service."
+    handle_error "'${backup_type}' is not a supported backup type. Please edit config.sh to fix."
   fi
 
+  # Set Password for Primary Duplicacy Storage
+  "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  exit_status="${PIPESTATUS[0]}"
+  if [ "${exit_status}" -ne 0 ]; then
+    handle_error "Setting the Primary Duplicacy Storage password for the '${SERVICE}' service failed."
+  fi
+
+  # Set RSA Passphrase for Primary Duplicacy Storage
+  "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
+    -value "${RSA_PASSPHRASE}" 2>&1 | log_output "${DUPLICACY_LOG_FILE}"
+  exit_status="${PIPESTATUS[0]}"
+  if [ "${exit_status}" -ne 0 ]; then
+    handle_error "Setting the Primary Duplicacy Storage RSA Passphrase for the '${SERVICE}' service failed."
+  fi
+
+  # Verify Primary Duplicacy Storage initiation
+  if ! duplicacy_verify "${storage_name}"; then
+    handle_error "Verification of the Primary Duplicacy Storage initialization for the '${SERVICE}' service failed."
+  fi
+  log_message "INFO" "Primary Duplicacy Storage initialization verified for the '${SERVICE}' service."
+
   # Prepare Duplicacy filters file
-  duplicacy_filters || handle_error "Preparing Duplicacy filters file for the '${SERVICE}' service failed."
-  
+  log_message "INFO" "Preparing the Duplicacy filters file for the '${SERVICE}' service."
+  # Remove the filters file if it already exists
+  rm -f "${DUPLICACY_FILTERS_FILE}" || handle_error "Error removing filters file for the '${SERVICE}' service."
+  # Build the Duplicacy filters file
+  touch "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to create the Duplicacy filters file for the '${SERVICE}' service."
+  for line in "${DUPLICACY_FILTERS_PATTERNS[@]}"; do
+    echo "${line}" >> "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to modify the Duplicacy filters file for the '${SERVICE}' service."
+  done
+
   # Run the Duplicacy backup to the Primary Storage
   log_message "INFO" "Running Duplicacy primary storage backup to '${BACKUP_TARGET_1_NAME}' storage for the '${SERVICE}' service."
   
