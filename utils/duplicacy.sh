@@ -161,7 +161,7 @@ duplicacy_primary_backup() {
     fi
 
     # Verify Primary Duplicacy Storage initiation
-    if ! verify_duplicacy "${storage_name}"; then
+    if ! duplicacy_verify "${storage_name}"; then
       handle_error "Verification of the Primary Duplicacy Storage initialization for the '${SERVICE}' service failed."
     fi
     log_message "INFO" "Primary Duplicacy Storage initialization verified for the '${SERVICE}' service."
@@ -261,7 +261,7 @@ add_b2_storage_duplicacy() {
     fi
 
     # Verify BackBlaze Duplicacy Storage initialization
-    if ! verify_duplicacy "${storage_name}"; then
+    if ! duplicacy_verify "${storage_name}"; then
       handle_error "Verification of the BackBlaze Duplicacy Storage addition for the '${SERVICE}' service failed."
     fi
     log_message "INFO" "BackBlaze Duplicacy Storage addition verified for '${SERVICE}' service."
