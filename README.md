@@ -1,6 +1,6 @@
 # Archiver
 
-Archiver is a powerful, highly configurable backup tool, designed to remove barriers to following the [3-2-1 Backup Strategy](https://www.backblaze.com/blog/the-3-2-1-backup-strategy/). It leverages the robust capabilities of [Duplicacy](https://github.com/gilbertchen/duplicacy) to create encrypted and de-duplicated backups, and automates the process of intiating, copying, pruning, and restoring Duplicacy repositories for any directory or service to any number of storage backends. It provides an easy way to run custom pre- and post-backup scripts for each directory or service, while offering scheduling via Cron and notifications vs [Pushover](https://pushover.net).
+Archiver is a powerful, highly-configurable backup tool, designed to remove barriers to following the [3-2-1 Backup Strategy](https://www.backblaze.com/blog/the-3-2-1-backup-strategy/). It leverages the robust capabilities of [Duplicacy](https://github.com/gilbertchen/duplicacy) to create encrypted and de-duplicated backups, and automates the process of intiating, copying, pruning, and restoring Duplicacy repositories for any directory or service to any number of storage backends. It provides an easy way to run custom pre- and post-backup scripts for each directory or service, while offering scheduling via Cron and notifications vs [Pushover](https://pushover.net).
 
 ## Features
 
@@ -69,14 +69,14 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
 - **Provide SSH Public Key File**:
   - If you already have an SSH key, you can complete this section now. Otherwise, the **Setup Script** below can create an SSH key for you, and you can come back to complete this section after the SSH key file is created.
   - From **Control Panel**, select **User & Group** under **File Sharing**.
-  - Click **Advanced** in the top.
+  - Click **Advanced** at the top.
   - At the bottom, under **User Home**, select the checkbox to **Enable user home service**.
   - Click **Apply**.
   - From the DSM home screen, open **File Station**.
   - In the list of **Shared Folders** on the left, select **homes**.
     - ***Important***: If you select **home** instead of **homes**, you will only see the home directory of the logged in user. To add an SSH key for another user, you will need to open **homes** instead.
   - Open the folder for the user that will be used to access the share.
-  - If there is already a folder named **.ssh**, double click that folder to open it. Otherwise, click **Create** in the top, then click **Create folder** in the drop down, and name the new folder **.ssh** (the leading period is required), and finally double click the newly created **.ssh** folder to open it.
+  - If there is already a folder named **.ssh**, double click that folder to open it. Otherwise, click **Create** at the top, then click **Create folder** in the drop down, and name the new folder **.ssh** (the leading period is required), and finally double click the newly created **.ssh** folder to open it.
     - ***Important***: Must click **Create folder** and not **Create shared folder**. The former does what we need, creating a directory within the currently open directory. The latter is to create a new higher-level shared network folder.
   - Name the new folder **.ssh**. The leading period is required.
   - Double click the newly created **.ssh** directory to open it.
@@ -89,7 +89,8 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
     - Ensure the file uploads correctly and is named **authorized_keys**.
   - If there is not already a file named **authorized_keys**, do the following:
     - Using a text editor, create a new file, and copy the contents of your public SSH key file, usually named id_rsa.pub, to this new file. The line should start with **ssh-rsa AAAA...**.  Save the new file as **authorized_keys**.
-    - Back in **File Station**, click **Upload** in the top, then click **Upload - Skip**, and browse to and select the newly created **authorized_keys** file, and click **Open**.
+    - Back in **File Station**, click **Upload** at the top, then click **Upload - Skip**, and browse to and select the newly created **authorized_keys** file, and click **Open**.
+    - Ensure the file uploads correctly and is named **authorized_keys**.
 
 #### B2 - [BackBlaze](https://www.backblaze.com/)
 - **Account**:
@@ -131,13 +132,18 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
 
 ### Installation
 
+- Navigate to the desired parent directory for the project.
+  - For example, if installing in home dir:
 ```bash
-# Navigate to the desired parent directory for the project.
-# For example, if installing in home dir:
 cd ~
+```
 
-# Clone the repository
+- Clone the repository
+```bash
 git clone https://github.com/SisyphusMD/archiver.git
+```
 
-# Run the setup script
+- Run the setup script
+```bash
 sudo ./archiver/setup.sh
+```
