@@ -67,11 +67,7 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
   - Select a user to give **Read/Write** access.
   - Click **Apply**.
 - **Provide SSH Public Key File**:
-  - If you already have an SSH key, you can complete this section now. Otherwise, the **Setup Script** below can create an SSH key for you, and you can come back to complete this section after once key file is created.
-  - From **Control Panel**, select **Terminal & SNMP** under **Connectivity**.
-  - Under **Terminal** check the box to **Enable SSH service**.
-  - Leave the **Port** at the default **22**.
-  - Click **Apply**.
+  - If you already have an SSH key, you can complete this section now. Otherwise, the **Setup Script** below can create an SSH key for you, and you can come back to complete this section after the SSH key file is created.
   - From **Control Panel**, select **User & Group** under **File Sharing**.
   - Click **Advanced** in the top.
   - At the bottom, under **User Home**, select the checkbox to **Enable user home service**.
@@ -119,7 +115,19 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
   - Check the box to **Allow List All Bucket Names**.
   - Leave **File name prefix** and **Duration (seconds)** blank.
   - Select **Create New Key** at the bottom when ready.
-  - Make note of your **keyID** and **applicationKey** for use later. The Application Key will only be displayed once.
+  - Make note of your **keyID** and **applicationKey**. The Application Key will only be displayed once.
+
+### Notification Set Up
+
+#### [Pushover](https://pushover.net)
+- **Account**:
+  - [Create an account](https://pushover.net/signup) or [Sign In](https://pushover.net/login) to **[Pushover](https://pushover.net)**.
+  - Make note of **Your User Key**, located at the top-right corner of the Pushover Dashboard after logging in.
+  - In order to receive notifications, you will need to **[Add a Phone, Tablet, or Desktop](https://pushover.net/clients)** to your account.
+  - From the Pushover Dashboard, scroll to the bottom and select **[Create an Application/API Token](https://pushover.net/apps/build)**.
+  - Give your application a **Name**, and optionally a **Description**, **URL**, and/or **Icon**.
+  - Check the box to agree to the **Terms and Conditions**, and click **Create Application**.
+  - Make note of the **API Token/Key**, located at the top of the page after creating the Application.
 
 ### Installation
 
