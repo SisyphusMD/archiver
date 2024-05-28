@@ -54,6 +54,12 @@ if [[ "${ENVIRONMENT_ARCHITECTURE}" == "aarch64" || "${ENVIRONMENT_ARCHITECTURE}
 elif [[ "${ENVIRONMENT_ARCHITECTURE}" == "x86_64" || "${ENVIRONMENT_ARCHITECTURE}" == "amd64" ]]; then
   DUPLICACY_ARCHITECTURE="x64"
 fi
+# Get the UID and GID of the user who invoked the script
+CALLER_UID=$(id -u "${SUDO_USER}")
+CALLER_GID=$(id -g "${SUDO_USER}")
+echo "${CALLER_UID}"
+echo "${CALLER_GID}"
+exit
 
 # Exit if the operating system is not Linux or architecture is not recognized
 if [ "${DUPLICACY_OS}" != "linux" ] || [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
