@@ -22,15 +22,15 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
 - **Notifications**: Pushover account required to receive notifications.
 - **SFTP-Supporting Storage (i.e. Synology NAS) or BackBlaze B2 Required**: You should have available storage configured before installing.
 
+### Storage Backend Preparation
+
+#### BackBlaze
+- **1**:
+
+#### SFTP
+- **1**:
+
 ### Installation
-
-# Storage Backend Preparation:
-
-# BackBlaze
-- **1**:
-
-# SFTP
-- **1**:
 
 ```bash
 # Navigate to the desired parent directory for the project.
