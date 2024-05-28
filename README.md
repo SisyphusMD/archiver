@@ -1,6 +1,6 @@
 # Archiver
 
-Archiver is a powerful, highly configurable backup tool, designed to remove barriers to following the 3-2-1 backup rule. It leverages the robust capabilities of [Duplicacy](https://github.com/gilbertchen/duplicacy) to create encrypted and de-duplicated backups, and automates the process of intiating, copying, pruning, and restoring Duplicacy repositories for any directory or service. It provides an easy way to run custom pre- and post-backup scripts for each directory or service, while offering scheduling via cron and notifications vs Pushover.
+Archiver is a powerful, highly configurable backup tool, designed to remove barriers to following the [3-2-1 Backup Strategy](https://www.backblaze.com/blog/the-3-2-1-backup-strategy/). It leverages the robust capabilities of [Duplicacy](https://github.com/gilbertchen/duplicacy) to create encrypted and de-duplicated backups, and automates the process of intiating, copying, pruning, and restoring Duplicacy repositories for any directory or service to any number of storage backends. It provides an easy way to run custom pre- and post-backup scripts for each directory or service, while offering scheduling via Cron and notifications vs [Pushover](https://pushover.net).
 
 ## Features
 
@@ -8,7 +8,8 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
 - **Secure Backups**: Ensures data integrity and confidentiality with encryption.
 - **Flexible Configuration**: Offers easy setup and customization through a simple configuration file.
 - **Automated Rotation**: Implements smart backup rotation policies to manage storage effectively.
-- **Notifications**: Receive notifications via Pushover for successful backup completions, as well as any errors the script runs into. No more silent failures. Plan to support further notifcation services in the future.
+- **Easy Restoration**: Restore script provided to get up and running again quickly after data loss.
+- **Notifications**: Receive notifications via Pushover for successful backup completions, as well as any errors the script encounters. No more silent failures. Plan to support further notifcation services in the future.
 - **Multiple Storage Backends Supported**: Currently support SFTP and B2 storage backends via duplicacy. Plan to add further backend support in the future.
 
 ## Getting Started
@@ -79,7 +80,20 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
   - In the list of **Shared Folders** on the left, select **homes**.
     - ***Important***: If you select **home** instead of **homes**, you will only see the home directory of the logged in user. To add an SSH key for another user, you will need to open **homes** instead.
   - Open the folder for the user that will be used to access the share.
-  - If there is a folder named **.ssh**, open that folder. Otherwise, click **Create** in the top, 
+  - If there is already a folder named **.ssh**, double click that folder to open it. Otherwise, click **Create** in the top, then click **Create folder** in the drop down, and name the new folder **.ssh** (the leading period is required), and finally double click the newly created **.ssh** folder to open it.
+    - ***Important***: Must click **Create folder** and not **Create shared folder**. The former does what we need, creating a directory within the currently open directory. The latter is to create a new higher-level shared network folder.
+  - Name the new folder **.ssh**. The leading period is required.
+  - Double click the newly created **.ssh** directory to open it.
+  - If there is already a file named **authorized_keys**, do the following:
+    - Double-click the **authorized_keys** file to download it.
+    - Using a text editor, add a new line to the bottom of the document containing the contents of your public SSH key file, usually named id_rsa.pub. The line should start with **ssh-rsa AAAA...**.
+    - Save the document with the line added.
+    - Back in **File Station**, right click **authorized_keys**, click **rename**, and rename the file to **authorized_keys.backup**.
+    - Click **Upload** in the top, then click **Upload - Skip**, and browse to and select the edited **authorized_keys** file, and click **Open**.
+    - Ensure the file uploads correctly and is named **authorized_keys**.
+  - If there is not already a file named **authorized_keys**, do the following:
+    - Using a text editor, create a new file, and copy the contents of your public SSH key file, usually named id_rsa.pub, to this new file. The line should start with **ssh-rsa AAAA...**.  Save the new file as **authorized_keys**.
+    - Back in **File Station**, click **Upload** in the top, then click **Upload - Skip**, and browse to and select the newly created **authorized_keys** file, and click **Open**.
 
 #### B2 - [BackBlaze](https://www.backblaze.com/)
 - **Account**:
