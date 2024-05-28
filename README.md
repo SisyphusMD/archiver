@@ -25,7 +25,30 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
 ### Storage Backend Preparation
 
 #### BackBlaze
-- **1**:
+- **Account**:
+  - [Create an account] (https://www.backblaze.com/sign-up/cloud-storage) or [Sign In] (https://secure.backblaze.com/user_signin.htm) to **[BackBlaze]** (https://www.backblaze.com/).
+  - Select **My Settings** under **Account** in the left-hand menu.
+  - Check the box for **B2 Cloud Storage** under **Enabled Products:**.
+  - Click **OK**.
+- **Bucket**:
+  - Select **Buckets** under **B2 Cloud Storage** in the left-hand menu.
+  - Select **Create a Bucket**.
+  - Give your bucket a **Bucket Unique Name**.
+  - Files in Bucket are: **Private**.
+  - Default Encryption: **Enable**.
+  - Object Lock: **Disable**.
+  - Select **Create a Bucket** at the bottom when ready.
+  - Lifecycle Settings should be default: **Keep all versions of the file (default)**
+- **Application Key**:
+  - Select **Application Keys** under **Account** in the left-hand menu.
+  - Select **Add a New Application Key**.
+  - Give your key a **Name of Key**.
+  - For **Allow access to Bucket(s)**, select the bucket you created above.
+  - For **Type of Access**, select **Read and Write**.
+  - Check the box to **Allow List All Bucket Names**.
+  - Leave **File name prefix** and **Duration (seconds)** blank.
+  - Select **Create New Key** at the bottom when ready.
+  - Make note of your **keyID** and **applicationKey** for use later. The Application Key will only be displayed once.
 
 #### SFTP
 - **1**:
