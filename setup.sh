@@ -4,8 +4,7 @@
 # ==============================================================================
 # This script automates the installation and initial setup required for running
 # the Archiver service. It ensures that all necessary dependencies are
-# installed, configurations are applied, and the system is prepared for the
-# service to run efficiently.
+# installed and configurations are applied.
 #
 # Usage:
 #   sudo ./setup.sh
@@ -13,7 +12,7 @@
 # Pre-requisites:
 # - The script must be run as root or with sudo privileges.
 # - Internet connection for downloading necessary packages.
-# - Compatible with Debian-based systems.
+# - Compatible with linux-based systems.
 #
 # The script will:
 # - Update the system package list.
@@ -25,161 +24,313 @@
 # before proceeding with the installation.
 # ==============================================================================
 
+set -e # Exit immediately if a command exits with a non-zero status
+
+# Ensure the script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+  echo "This script must be run as root. Please use sudo or log in as the root user." 1>&2
+  exit 1
+fi
+
 # Configuration Section
 # ---------------------
+
+ARCHIVER_DIR="$(dirname "$(readlink -f "$0")")" # Path to Archiver directory
+DUPLICACY_VERSION="3.2.3"
+DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/.keys"
+REQUIRED_PACKAGES=("wget" "openssl" "openssh-client")
 
 # Determine environment
 ENVIRONMENT_OS="$(uname -s)"
 ENVIRONMENT_ARCHITECTURE="$(uname -m)"
-ARCHIVER_DIR="$(dirname "$(readlink -f "$0")")" # Path to Archiver directory
-REQUIRED_PACKAGES=(
-  "wget"
-  "openssl"
-)
-
-# Configuration for Duplicacy binary
-DUPLICACY_VERSION="3.2.3"
 DUPLICACY_OS="$(echo ${ENVIRONMENT_OS} | tr '[:upper:]' '[:lower:]')"
-DUPLICACY_ARCHITECTURE=$( \
-  if [[ "${ENVIRONMENT_ARCHITECTURE}" == "aarch64" || \
-    "${ENVIRONMENT_ARCHITECTURE}" == "arm64" ]]; then \
-  echo "arm64"; \
-  elif [[ "${ENVIRONMENT_ARCHITECTURE}" == "x86_64" || \
-    "${ENVIRONMENT_ARCHITECTURE}" == "amd64" ]]; then \
-  echo "x64"; \
-  else \
-    echo "unknown"; \
-  fi \
-)
-DUPLICACY_BIN_FILE_DIR="/opt/duplicacy" # Path to Duplicacy binary file directory
-DUPLICACY_BIN_FILE_NAME="duplicacy_${DUPLICACY_OS}_${DUPLICACY_ARCHITECTURE}_${DUPLICACY_VERSION}" # Duplicacy binary file name
-DUPLICACY_BIN_FILE_PATH="${DUPLICACY_BIN_FILE_DIR}/${DUPLICACY_BIN_FILE_NAME}" # Path to duplicacy binary file
-DUPLICACY_BIN_LINK_DIR="/usr/local/bin" # Path to Duplicacy binary link directory
-DUPLICACY_BIN_LINK_NAME="duplicacy" # Duplicacy binary link name
-DUPLICACY_BIN_LINK_PATH="${DUPLICACY_BIN_LINK_DIR}/${DUPLICACY_BIN_LINK_NAME}" # Path to duplicacy binary link
-DUPLICACY_BIN_URL="https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/${DUPLICACY_BIN_FILE_NAME}" # Download URL for appropriate Duplicacy binary
-DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/.keys"
-
-# Exit if not run as root
-if [ "$(id -u)" -ne 0 ]; then
- echo "This script must be run as root. Please use sudo or log in as the root user." 1>&2
- exit 1
+DUPLICACY_ARCHITECTURE="unknown"
+if [[ "${ENVIRONMENT_ARCHITECTURE}" == "aarch64" || "${ENVIRONMENT_ARCHITECTURE}" == "arm64" ]]; then
+  DUPLICACY_ARCHITECTURE="arm64"
+elif [[ "${ENVIRONMENT_ARCHITECTURE}" == "x86_64" || "${ENVIRONMENT_ARCHITECTURE}" == "amd64" ]]; then
+  DUPLICACY_ARCHITECTURE="x64"
 fi
 
-# Exit if the operating system is not Linux
-if [ "${DUPLICACY_OS}" != "linux" ]; then
-  echo "This script only works in Linux environments. Please run this script on a Linux system." 1>&2
+# Exit if the operating system is not Linux or architecture is not recognized
+if [ "${DUPLICACY_OS}" != "linux" ] || [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
+  echo "This script only works on Linux environments with arm64 or x64 architectures." 1>&2
   exit 1
 fi
 
-# Exit if the architecture is not recognized as arm64 or x64
-if [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
-  echo "This script only works on arm64 and x64 architectures." 1>&2
-  exit 1
-fi
+DUPLICACY_BIN_FILE_DIR="/opt/duplicacy"
+DUPLICACY_BIN_FILE_NAME="duplicacy_${DUPLICACY_OS}_${DUPLICACY_ARCHITECTURE}_${DUPLICACY_VERSION}"
+DUPLICACY_BIN_FILE_PATH="${DUPLICACY_BIN_FILE_DIR}/${DUPLICACY_BIN_FILE_NAME}"
+DUPLICACY_BIN_LINK_DIR="/usr/local/bin"
+DUPLICACY_BIN_LINK_NAME="duplicacy"
+DUPLICACY_BIN_LINK_PATH="${DUPLICACY_BIN_LINK_DIR}/${DUPLICACY_BIN_LINK_NAME}"
+DUPLICACY_BIN_URL="https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/${DUPLICACY_BIN_FILE_NAME}"
 
 mkdir -p "${DUPLICACY_KEYS_DIR}"
 
-echo    # Move to a new line
-read -p "Would you like to install the Duplicacy binary for use with Archiver (y|N)?" -n 1 -r
-echo    # Move to a new line
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  # Attempt to detect package manager and install necessary packages
+# Ensure necessary packages are installed
+install_packages() {
   if command -v apt &> /dev/null; then
-    echo "Attempting to install necessary packages using apt..."
+    echo "Installing necessary packages using apt..."
     apt update
     apt install -y "${REQUIRED_PACKAGES[@]}"
   elif command -v yum &> /dev/null; then
-    echo "Attempting to install necessary packages using yum..."
+    echo "Installing necessary packages using yum..."
     yum install -y "${REQUIRED_PACKAGES[@]}"
   elif command -v dnf &> /dev/null; then
-    echo "Attempting to install necessary packages using dnf..."
+    echo "Installing necessary packages using dnf..."
     dnf install -y "${REQUIRED_PACKAGES[@]}"
   else
     echo "Package manager not detected. Please manually install the necessary packages: ${REQUIRED_PACKAGES[*]}"
     exit 1
   fi
+}
+
+install_duplicacy() {
+  echo "Installing Duplicacy binary..."
   mkdir -p "${DUPLICACY_BIN_FILE_DIR}"
   wget -O "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_URL}"
   chmod 755 "${DUPLICACY_BIN_FILE_PATH}"
   mkdir -p "${DUPLICACY_BIN_LINK_DIR}"
   ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
-else
-  echo "Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run Archiver script."
-fi
+  echo "Duplicacy binary installed successfully."
+}
 
-# Check if the RSA key files exist
-if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
+backup_existing_file() {
+  local file_path="$1"
+  if [ -f "$file_path" ]; then
+    local backup_path="${file_path}.backup"
+    mv "$file_path" "$backup_path"
+    echo "Existing $file_path backed up to $backup_path"
+  fi
+}
+
+generate_rsa_keypair() {
+  echo "Generating RSA key pair for Duplicacy encryption..."
+  backup_existing_file "${DUPLICACY_KEYS_DIR}/private.pem"
+  backup_existing_file "${DUPLICACY_KEYS_DIR}/public.pem"
+  openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
+  openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
+  chmod 700 "${DUPLICACY_KEYS_DIR}"
+  chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
+  chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
+  echo "RSA key pair generated successfully."
+}
+
+generate_ssh_keypair() {
+  echo "Generating SSH key pair for Duplicacy SFTP storage..."
+  backup_existing_file "${DUPLICACY_KEYS_DIR}/id_rsa"
+  backup_existing_file "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
+  ssh-keygen -f "${DUPLICACY_KEYS_DIR}/id_rsa" -N "" -C "archiver"
+  chmod 700 "${DUPLICACY_KEYS_DIR}"
+  chmod 600 "${DUPLICACY_KEYS_DIR}/id_rsa"
+  chmod 644 "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
+  echo "SSH key pair generated successfully."
+}
+
+create_config_file() {
+  echo "Creating config.sh file..."
+  backup_existing_file "${ARCHIVER_DIR}/config.sh"
+
+  # Prompt user for SERVICE_DIRECTORIES
+  echo "Enter the service directories you would like to backup (comma-separated, e.g., /srv/*/,/mnt/*/,/home/user/):"
+  read -r service_directories_input
+  IFS=',' read -r -a service_directories <<< "$service_directories_input"
+
+  # Prompt user for Duplicacy security details
+  echo "Enter security details for Duplicacy access and encryption:"
+  echo "Create if this is a new install, or provide prior details if restoring:"
+  read -rsp "Storage Password: " storage_password
   echo    # Move to a new line
-  read -p "Would you like to generate a new RSA key pair for Duplicacy encryption (y|N)?" -n 1 -r
+  read -rsp "RSA Passphrase: " rsa_passphrase
+  echo    # Move to a new line
+
+  echo    # Move to a new line
+  read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
-    read -p "You must provide a passphrase for this generated key pair or this command will error. Are you ready to provide a passphrase (y|N)?" -n 1 -r
+    # Prompt user for Pushover Notifications details
+    echo "Enter Pushover notification details:"
+    notification_service="Pushover"
+    read -rp "Pushover User Key: " pushover_user_key
+    read -rp "Pushover API Token: " pushover_api_token
+  else
+    notification_service="None"
+    pushover_user_key=""
+    pushover_api_token=""
+  fi
+
+  # Function to prompt for SFTP storage details
+  prompt_sftp_storage() {
+    read -rp "SFTP URL (ip address or fqdn of sftp host): " sftp_url
+    read -rp "SFTP User: " sftp_user
+    read -rp "SFTP Path (directory path on sftp host): " sftp_path
+    sftp_key_file="${DUPLICACY_KEYS_DIR}/id_rsa"
+  }
+
+  # Function to prompt for B2 storage details
+  prompt_b2_storage() {
+    read -rp "B2 Bucket Name: " b2_bucketname
+    read -rp "B2 ID (keyID from BackBlaze): " b2_id
+    read -rp "B2 Key (applicationKey from BackBlaze): " b2_key
+  }
+
+  # Start writing the config file
+  cat <<EOL > "${ARCHIVER_DIR}/config.sh"
+# Archiver Backup Configuration
+
+SERVICE_DIRECTORIES=(
+$(for dir in "${service_directories[@]}"; do echo "  \"$dir\""; done)
+)
+
+EOL
+
+  # Prompt user for storage targets
+  i=1
+  while true; do
+    echo    # Move to a new line
+    read -p "Would you like to add a(nother) storage target? (y|N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      break
+    fi
+
+    echo "Enter details for STORAGE_TARGET_$i:"
+    read -rp "Name (you can call this whatever you want, but it must be unique): " name
+    while true; do
+      read -rp "Type (sftp/b2): " type
+      if [[ $type == "sftp" ]]; then
+        prompt_sftp_storage
+        break
+      elif [[ $type == "b2" ]]; then
+        prompt_b2_storage
+        break
+      else
+        echo "Unsupported storage type. Please enter either 'sftp' or 'b2'."
+      fi
+    done
+
+    # Write storage target details to config file
+    cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+
+STORAGE_TARGET_${i}_NAME="$name"
+STORAGE_TARGET_${i}_TYPE="$type"
+EOL
+    if [[ $type == "sftp" ]]; then
+      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+STORAGE_TARGET_${i}_SFTP_URL="$sftp_url"
+STORAGE_TARGET_${i}_SFTP_USER="$sftp_user"
+STORAGE_TARGET_${i}_SFTP_PATH="$sftp_path"
+STORAGE_TARGET_${i}_SFTP_KEY_FILE="$sftp_key_file"
+EOL
+    elif [[ $type == "b2" ]]; then
+      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+STORAGE_TARGET_${i}_B2_BUCKETNAME="$b2_bucketname"
+STORAGE_TARGET_${i}_B2_ID="$b2_id"
+STORAGE_TARGET_${i}_B2_KEY="$b2_key"
+EOL
+    fi
+
+    ((i++))
+  done
+
+  # Write the rest of the config file
+  cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+
+# Example SFTP Storage Target
+  # STORAGE_TARGET_1_NAME="name"
+  # STORAGE_TARGET_1_TYPE="type"
+  # STORAGE_TARGET_1_SFTP_URL="192.168.1.1"
+  # STORAGE_TARGET_1_SFTP_USER="user"
+  # STORAGE_TARGET_1_SFTP_PATH="remote/path"
+  # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_rsa"
+
+# Example B2 Storage Target
+  # STORAGE_TARGET_2_NAME="name"
+  # STORAGE_TARGET_2_TYPE="type"
+  # STORAGE_TARGET_2_B2_BUCKETNAME="bucketName"
+  # STORAGE_TARGET_2_B2_ID="keyID"
+  # STORAGE_TARGET_2_B2_KEY="applicationKey"
+
+# All Duplicacy
+STORAGE_PASSWORD="$storage_password" # Password for Duplicacy storage
+RSA_PASSPHRASE="$rsa_passphrase" # Passphrase for RSA private key
+
+# Pushover Notifications
+NOTIFICATION_SERVICE="$notification_service" # Currently support 'None' or 'Pushover'
+PUSHOVER_USER_KEY="$pushover_user_key" # Pushover user key (not email address), viewable when logged into Pushover dashboard
+PUSHOVER_API_TOKEN="$pushover_api_token" # Pushover application API token/key
+EOL
+
+  echo "Configuration file created at ${ARCHIVER_DIR}/config.sh"
+}
+
+schedule_with_cron() {
+  echo    # Move to a new line
+  read -p "Would you like to schedule the script with cron? (y|N):" -n 1 -r
+  echo    # Move to a new line
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | sudo crontab -
+    echo "Added to crontab."
+  else
+    echo "Not added. You can always add it later with this command:"
+    echo "--------------------------------------------"
+    echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | sudo crontab -"
+    echo "--------------------------------------------"
+  fi
+}
+
+main() {
+  install_packages
+
+  echo    # Move to a new line
+  read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N):" -n 1 -r
+  echo    # Move to a new line
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    install_duplicacy
+  else
+    echo "Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run Archiver script."
+  fi
+
+  if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
+    echo    # Move to a new line
+    read -p "Would you like to generate a new RSA key pair for Duplicacy encryption? (y|N):" -n 1 -r
+    echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ]; then
-        mv "${DUPLICACY_KEYS_DIR}/private.pem" "${DUPLICACY_KEYS_DIR}/private.pem.backup"
-      fi
-      if [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
-        mv "${DUPLICACY_KEYS_DIR}/public.pem" "${DUPLICACY_KEYS_DIR}/public.pem.backup"
-      fi
-      openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
-      openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
-      chmod 700 "${DUPLICACY_KEYS_DIR}"
-      chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
-      chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
+      generate_rsa_keypair
     else
       echo "RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
     fi
   else
-    echo "RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
+    echo "Skipping RSA key pair generation: RSA key files already present in .keys directory."
   fi
-else
-  echo "Skipping RSA key pair generation: RSA key files already present in .keys directory."
-fi
 
-# Check if the SSH key files exist
-if [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa.pub" ]; then
-  echo    # Move to a new line
-  read -p "Would you like to generate a new SSH key pair for Duplicacy SFTP storage (y|N)?" -n 1 -r
-  echo    # Move to a new line
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    read -p "This must be a no-passphrase SSH key. Please press <return> key when prompted to provide a passphrase. Are you ready (y|N)?" -n 1 -r
+  if [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa.pub" ]; then
+    echo    # Move to a new line
+    read -p "Would you like to generate a new SSH key pair for Duplicacy SFTP storage? (y|N):" -n 1 -r
+    echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      if [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa" ]; then
-        mv "${DUPLICACY_KEYS_DIR}/id_rsa" "${DUPLICACY_KEYS_DIR}/id_rsa.backup"
-      fi
-      if [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa.pub" ]; then
-        mv "${DUPLICACY_KEYS_DIR}/id_rsa.pub" "${DUPLICACY_KEYS_DIR}/id_rsa.pub.backup"
-      fi
-      ssh-keygen -f "${DUPLICACY_KEYS_DIR}/id_rsa" -N "" -C "archiver"
-      chmod 700 "${DUPLICACY_KEYS_DIR}"
-      chmod 600 "${DUPLICACY_KEYS_DIR}/id_rsa"
-      chmod 644 "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
+      generate_ssh_keypair
     else
       echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_rsa and archiver/.keys/id_rsa.pub"
     fi
   else
-    echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_rsa and archiver/.keys/id_rsa.pub"
+    echo "Skipping SSH key pair generation: SSH key files already present in .keys directory."
   fi
-else
-  echo "Skipping SSH key pair generation: SSH key files already present in .keys directory."
-fi
 
-# To add script to cron schedule:
-echo    # Move to a new line
-read -p "Would you like to schedule the script with cron (y|N)?" -n 1 -r
-echo    # Move to a new line
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | sudo crontab -
-  echo "Added to crontab."
-else
-  echo "Not added. You can always add it later with this command:"
-  echo "--------------------------------------------"
-  echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | sudo crontab -"
-  echo "--------------------------------------------"
-fi
+  echo    # Move to a new line
+  read -p "Would you like to generate your config.sh file now? (y|N):" -n 1 -r
+  echo    # Move to a new line
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    create_config_file
+  else
+    echo "Configuration file generation skipped."
+  fi
 
-echo "Installation and setup completed successfully."
-echo "If restoring, you must replace the RSA and SSH key files in the .keys directory."
-echo "Please keep a separate backup of your config.sh file and your .keys directory."
-echo "To manually run the script, use 'sudo ./main.sh' from the archiver directory."
+  schedule_with_cron
+
+  echo "Installation completed."
+  echo "Please keep a separate backup of your config.sh file and your .keys directory."
+  echo "To manually run the Archiver script, use 'sudo ./main.sh' from the archiver directory."
+}
+
+main
