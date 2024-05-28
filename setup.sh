@@ -57,9 +57,6 @@ fi
 # Get the UID and GID of the user who invoked the script
 CALLER_UID=$(id -u "${SUDO_USER}")
 CALLER_GID=$(id -g "${SUDO_USER}")
-echo "${CALLER_UID}"
-echo "${CALLER_GID}"
-exit
 
 # Exit if the operating system is not Linux or architecture is not recognized
 if [ "${DUPLICACY_OS}" != "linux" ] || [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
@@ -150,9 +147,10 @@ generate_rsa_keypair() {
       backup_existing_file "${DUPLICACY_KEYS_DIR}/public.pem"
       openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
       openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
+      chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
-      chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
+      chmod 600 "${DUPLICACY_KEYS_DIR}/public.pem"
       echo "RSA key pair generated successfully."
     else
       echo "RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
@@ -172,9 +170,10 @@ generate_ssh_keypair() {
       backup_existing_file "${DUPLICACY_KEYS_DIR}/id_rsa"
       backup_existing_file "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
       ssh-keygen -f "${DUPLICACY_KEYS_DIR}/id_rsa" -N "" -C "archiver"
+      chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/id_rsa"
-      chmod 644 "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
+      chmod 600 "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
       echo "SSH key pair generated successfully."
     else
       echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_rsa and archiver/.keys/id_rsa.pub"
@@ -321,6 +320,8 @@ PUSHOVER_USER_KEY="$pushover_user_key" # Pushover user key (not email address), 
 PUSHOVER_API_TOKEN="$pushover_api_token" # Pushover application API token/key
 EOL
 
+    chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"
+    chmod 600 "${ARCHIVER_DIR}/config.sh"
     echo "Configuration file created at ${ARCHIVER_DIR}/config.sh"
   else
     echo "Configuration file generation skipped."
