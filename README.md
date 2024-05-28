@@ -132,6 +132,23 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 
 ### Installation
 
+#### Git Installation
+
+- Check if git is already installed
+```bash
+git --version
+```
+
+- Install git if not installed
+```bash
+sudo apt update
+```
+```bash
+sudo apt install git -y
+```
+
+#### Archiver Script Installation
+
 - Navigate to the desired parent directory for the project.
   - For example, if installing in home dir:
 ```bash
