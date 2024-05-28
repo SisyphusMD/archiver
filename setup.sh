@@ -280,6 +280,7 @@ STORAGE_TARGET_${i}_SFTP_URL="$sftp_url"
 STORAGE_TARGET_${i}_SFTP_USER="$sftp_user"
 STORAGE_TARGET_${i}_SFTP_PATH="$sftp_path"
 STORAGE_TARGET_${i}_SFTP_KEY_FILE="$sftp_key_file"
+
 EOL
       elif [[ $type == "b2" ]]; then
         cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
