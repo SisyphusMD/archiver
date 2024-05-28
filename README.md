@@ -24,32 +24,6 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
 
 ### Storage Backend Preparation
 
-#### B2 - [BackBlaze](https://www.backblaze.com/)
-- **Account**:
-  - [Create an account](https://www.backblaze.com/sign-up/cloud-storage) or [Sign In](https://secure.backblaze.com/user_signin.htm) to **[BackBlaze](https://www.backblaze.com/)**.
-  - Select **My Settings** under **Account** in the left-hand menu.
-  - Check the box for **B2 Cloud Storage** under **Enabled Products**.
-  - Click **OK**.
-- **Bucket**:
-  - Select **Buckets** under **B2 Cloud Storage** in the left-hand menu.
-  - Select **Create a Bucket**.
-  - Give your bucket a **Bucket Unique Name**.
-  - Files in Bucket are: **Private**.
-  - Default Encryption: **Enable**.
-  - Object Lock: **Disable**.
-  - Select **Create a Bucket** at the bottom when ready.
-  - Lifecycle Settings should be default: **Keep all versions of the file (default)**
-- **Application Key**:
-  - Select **Application Keys** under **Account** in the left-hand menu.
-  - Select **Add a New Application Key**.
-  - Give your key a **Name of Key**.
-  - For **Allow access to Bucket(s)**, select the bucket you created above.
-  - For **Type of Access**, select **Read and Write**.
-  - Check the box to **Allow List All Bucket Names**.
-  - Leave **File name prefix** and **Duration (seconds)** blank.
-  - Select **Create New Key** at the bottom when ready.
-  - Make note of your **keyID** and **applicationKey** for use later. The Application Key will only be displayed once.
-
 #### SFTP - [Synology](https://www.synology.com/en-us) NAS
 - **Enable SFTP**:
   - Login to your Synology DiskStation Manager (DSM) Web UI (usually http://<ip.address.of.your.nas>:5000).
@@ -91,6 +65,47 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
   - Confirm your selections and click **Next**.
   - Select a user to give **Read/Write** access.
   - Click **Apply**.
+- **Provide SSH Public Key File**:
+  - If you already have an SSH key, you can complete this section now. Otherwise, the **Setup Script** below can create an SSH key for you, and you can come back to complete this section after once key file is created.
+  - From **Control Panel**, select **Terminal & SNMP** under **Connectivity**.
+  - Under **Terminal** check the box to **Enable SSH service**.
+  - Leave the **Port** at the default **22**.
+  - Click **Apply**.
+  - From **Control Panel**, select **User & Group** under **File Sharing**.
+  - Click **Advanced** in the top.
+  - At the bottom, under **User Home**, select the checkbox to **Enable user home service**.
+  - Click **Apply**.
+  - From the DSM home screen, open **File Station**.
+  - In the list of **Shared Folders** on the left, select **homes**.
+    - ***Important***: If you select **home** instead of **homes**, you will only see the home directory of the logged in user. To add an SSH key for another user, you will need to open **homes** instead.
+  - Open the folder for the user that will be used to access the share.
+  - If there is a folder named **.ssh**, open that folder. Otherwise, click **Create** in the top, 
+
+#### B2 - [BackBlaze](https://www.backblaze.com/)
+- **Account**:
+  - [Create an account](https://www.backblaze.com/sign-up/cloud-storage) or [Sign In](https://secure.backblaze.com/user_signin.htm) to **[BackBlaze](https://www.backblaze.com/)**.
+  - Select **My Settings** under **Account** in the left-hand menu.
+  - Check the box for **B2 Cloud Storage** under **Enabled Products**.
+  - Click **OK**.
+- **Bucket**:
+  - Select **Buckets** under **B2 Cloud Storage** in the left-hand menu.
+  - Select **Create a Bucket**.
+  - Give your bucket a **Bucket Unique Name**.
+  - Files in Bucket are: **Private**.
+  - Default Encryption: **Enable**.
+  - Object Lock: **Disable**.
+  - Select **Create a Bucket** at the bottom when ready.
+  - Lifecycle Settings should be default: **Keep all versions of the file (default)**
+- **Application Key**:
+  - Select **Application Keys** under **Account** in the left-hand menu.
+  - Select **Add a New Application Key**.
+  - Give your key a **Name of Key**.
+  - For **Allow access to Bucket(s)**, select the bucket you created above.
+  - For **Type of Access**, select **Read and Write**.
+  - Check the box to **Allow List All Bucket Names**.
+  - Leave **File name prefix** and **Duration (seconds)** blank.
+  - Select **Create New Key** at the bottom when ready.
+  - Make note of your **keyID** and **applicationKey** for use later. The Application Key will only be displayed once.
 
 ### Installation
 
