@@ -24,7 +24,7 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
 
 ### Storage Backend Preparation
 
-#### [BackBlaze](https://www.backblaze.com/)
+#### B2 - [BackBlaze](https://www.backblaze.com/)
 - **Account**:
   - [Create an account](https://www.backblaze.com/sign-up/cloud-storage) or [Sign In](https://secure.backblaze.com/user_signin.htm) to **[BackBlaze](https://www.backblaze.com/)**.
   - Select **My Settings** under **Account** in the left-hand menu.
@@ -50,7 +50,7 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
   - Select **Create New Key** at the bottom when ready.
   - Make note of your **keyID** and **applicationKey** for use later. The Application Key will only be displayed once.
 
-#### SFTP *via [Synology](https://www.synology.com/en-us) NAS*
+#### SFTP - [Synology](https://www.synology.com/en-us) NAS
 - **Enable SFTP**:
   - Login to your Synology DiskStation Manager (DSM) Web UI (usually http://<ip.address.of.your.nas>:5000).
   - Open **Control Panel**.
