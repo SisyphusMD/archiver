@@ -155,7 +155,7 @@ sudo apt install git -y
 cd ~
 ```
 
-- Clone the repository
+- Clone the GitHub repository
 ```bash
 git clone https://github.com/SisyphusMD/archiver.git
 ```
@@ -164,3 +164,31 @@ git clone https://github.com/SisyphusMD/archiver.git
 ```bash
 sudo ./archiver/setup.sh
 ```
+
+- More instructions for running the setup.sh script to come here.
+
+#### Restoring
+
+- Navigate to the desired parent directory for the project, and clone the GitHub repository as noted in the **Installation** steps.
+```bash
+cd ~
+```
+```bash
+git clone https://github.com/SisyphusMD/archiver.git
+```
+
+- Run the setup script to install dependencies and the Duplicacy binary, but otherwise skip the portions that create new SSH keys, RSA keys, config file, and Cron scheduling.
+```bash
+sudo ./archiver/setup.sh
+```
+
+- Copy your prior SSH and RSA key files into the .keys directory within the project directory. This should include **id_rsa**, **id_rsa.pub**, **private.pem**, and **public.pem**.
+
+- Copy your prior **config.sh** into the project directory.
+
+- Run the restore script once for each service you need to restore.
+```bash
+sudo ./archiver/restore.sh
+```
+
+- More instructions for running the restore.sh script to come here.
