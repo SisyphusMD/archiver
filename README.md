@@ -26,7 +26,7 @@ Archiver is a powerful, highly configurable backup tool, designed to remove barr
 
 #### BackBlaze
 - **Account**:
-  - [Create an account] (https://www.backblaze.com/sign-up/cloud-storage) or [Sign In] (https://secure.backblaze.com/user_signin.htm) to **[BackBlaze]** (https://www.backblaze.com/).
+  - [Create an account](https://www.backblaze.com/sign-up/cloud-storage) or [Sign In](https://secure.backblaze.com/user_signin.htm) to **[BackBlaze](https://www.backblaze.com/)**.
   - Select **My Settings** under **Account** in the left-hand menu.
   - Check the box for **B2 Cloud Storage** under **Enabled Products:**.
   - Click **OK**.
