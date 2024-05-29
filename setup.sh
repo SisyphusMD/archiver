@@ -226,6 +226,7 @@ create_config_file() {
       sftp_port=${sftp_port:-22}
       read -rp "SFTP User: " sftp_user
       read -rp "SFTP Path (directory path on sftp host): " sftp_path
+      sftp_path=$(echo "$sftp_path" | sed 's|^/*||;s|/*$||')
       sftp_key_file="${DUPLICACY_KEYS_DIR}/id_rsa"
     }
 
