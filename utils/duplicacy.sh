@@ -103,7 +103,7 @@ duplicacy_primary_backup() {
 
     "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
       -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-      "sftp://${STORAGE_TARGET_1_SFTP_USER}@${STORAGE_TARGET_1_SFTP_URL}//${STORAGE_TARGET_1_SFTP_PATH}" 2>&1 | \
+      "sftp://${STORAGE_TARGET_1_SFTP_USER}@${STORAGE_TARGET_1_SFTP_URL}:${STORAGE_TARGET_1_SFTP_PORT}//${STORAGE_TARGET_1_SFTP_PATH}" 2>&1 | \
       log_output "${DUPLICACY_LOG_FILE}"
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
@@ -234,12 +234,14 @@ duplicacy_copy_backup() {
       if [[ "${backup_type}" == "sftp" ]]; then
         # Add SFTP Duplicacy Storage if not already added
         local config_sftp_url_var
+        local config_sftp_port_var
         local config_sftp_user_var
         local config_sftp_path_var
         local config_sftp_key_file_var
         local duplicacy_ssh_key_file_var
 
         config_sftp_url_var="STORAGE_TARGET_${storage_id}_SFTP_URL"
+        config_sftp_port_var="STORAGE_TARGET_${storage_id}_SFTP_PORT"
         config_sftp_user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
         config_sftp_path_var="STORAGE_TARGET_${storage_id}_SFTP_PATH"
         config_sftp_key_file_var="STORAGE_TARGET_${storage_id}_SFTP_KEY_FILE"
@@ -251,7 +253,7 @@ duplicacy_copy_backup() {
         log_message "INFO" "Adding SFTP Duplicacy Storage '${storage_name} for the '${SERVICE}' service."
         "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
           "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-          "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}//${!config_sftp_path_var}" 2>&1 | \
+          "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" 2>&1 | \
           log_output "${DUPLICACY_LOG_FILE}"
         exit_status="${PIPESTATUS[0]}"
         if [ "${exit_status}" -ne 0 ]; then

@@ -33,7 +33,7 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
   - Select the **FTP** tab in the top.
   - Leave options under **FTP / FTPS** unselected. **SFTP** is not FTP or FTPS, even though the naming can be confusing.
   - Check the box to **Enable SFTP service** under **SFTP**.
-  - Leave the **Port number** at the default **22**.
+  - Can change the **Port number**, or leave as the default **22**.
   - Click **Apply** in the bottom right corner.
 - **Create User (if needed)**:
   - From **Control Panel**, select **User & Group** under **File Sharing**.

@@ -222,6 +222,8 @@ create_config_file() {
     # Function to prompt for SFTP storage details
     prompt_sftp_storage() {
       read -rp "SFTP URL (ip address or fqdn of sftp host): " sftp_url
+      read -rp "SFTP PORT (sftp port of host - default is 22): " sftp_port
+      sftp_port=${sftp_port:-22}
       read -rp "SFTP User: " sftp_user
       read -rp "SFTP Path (directory path on sftp host): " sftp_path
       sftp_key_file="${DUPLICACY_KEYS_DIR}/id_rsa"
@@ -277,6 +279,7 @@ EOL
       if [[ $type == "sftp" ]]; then
         cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 STORAGE_TARGET_${i}_SFTP_URL="$sftp_url"
+STORAGE_TARGET_${i}_SFTP_PORT="$sftp_port"
 STORAGE_TARGET_${i}_SFTP_USER="$sftp_user"
 STORAGE_TARGET_${i}_SFTP_PATH="$sftp_path"
 STORAGE_TARGET_${i}_SFTP_KEY_FILE="$sftp_key_file"
@@ -300,6 +303,7 @@ EOL
   # STORAGE_TARGET_1_NAME="name"
   # STORAGE_TARGET_1_TYPE="type"
   # STORAGE_TARGET_1_SFTP_URL="192.168.1.1"
+  # STORAGE_TARGET_1_SFTP_PORT="22"
   # STORAGE_TARGET_1_SFTP_USER="user"
   # STORAGE_TARGET_1_SFTP_PATH="remote/path"
   # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_rsa"
