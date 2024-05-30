@@ -397,11 +397,11 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 # Please provide a list of directories on your device to be backed up. Must provide the"
 #   full paths. Can use * to indicate each individual subdirectory within the parent"
 #   directory. Each directory will be backed up as an individual duplicacy repository."
-# SERVICE_DIRECTORIES=(
-#   "/srv/*/" # Will backup each subdirectory within /srv/ - multiple individual repositories.
-#   "/mnt/*/" # Will backup each subdirectory within /mnt/ - multiple individual repositories.
-#   "${CALLER_HOME}/" # Will backup the ${CALLER_HOME}/ directory - one individual repository.
-# )
+  # SERVICE_DIRECTORIES=(
+  #   "/srv/*/" # Will backup each subdirectory within /srv/ - multiple individual repositories.
+  #   "/mnt/*/" # Will backup each subdirectory within /mnt/ - multiple individual repositories.
+  #   "${CALLER_HOME}/" # Will backup the ${CALLER_HOME}/ directory - one individual repository.
+  # )
 
 EOL
 
