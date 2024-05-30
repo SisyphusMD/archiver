@@ -24,7 +24,7 @@ log_message() {
   log_level="${1}"
   message="${2}"
   timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
-  log_prefix="${3:-${archiver}}" # Use ARCHIVER_LOG_FILE by default if no log file is specified
+  log_prefix="${3:-archiver}" # Use ARCHIVER_LOG_FILE by default if no log file is specified
   target_log_file="${LOG_DIR}/${log_prefix}.log"
   # Use "archiver" if SERVICE is unset or empty
   local service_name="${SERVICE:-archiver}"
