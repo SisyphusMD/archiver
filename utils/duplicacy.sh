@@ -19,7 +19,17 @@ set_duplicacy_variables() {
   DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
 }
 
-# Function to check the number of storage targets
+# Function to check if duplicacy is installed and to exit if not
+duplicacy_binary_check() {
+  if ! command -v "${DUPLICACY_BIN}" &> /dev/null; then
+    handle_error "Duplicacy binary not installed. Please install Duplicacy binary before running main script."
+    exit 1
+  else
+    log_message "INFO" "Duplicacy binary is installed. Proceeding with backup script." 
+  fi
+}
+
+# Function to check the number of storage targets and to exit if none
 count_storage_targets() {
   local count=0
   while true; do

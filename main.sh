@@ -68,6 +68,7 @@ source "${ARCHIVER_DIR}/utils/error-handling.sh"
 source "${ARCHIVER_DIR}/utils/duplicacy.sh"
 # imports functions:
 #   - set_duplicacy_variables
+#   - duplicacy_binary_check
 #   - count_storage_targets
 #   - duplicacy_verify
 #   - duplicacy_filters
@@ -95,6 +96,9 @@ main() {
   for log_file in "${ALL_LOG_FILES[@]}"; do
       rotate_logs "${log_file}"
   done
+
+  # Make sure duplicacy binary is installed
+  duplicacy_binary_check
 
   # Count storage target variables from config file, require at least one
   count_storage_targets
