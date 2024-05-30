@@ -178,7 +178,7 @@ EOF
       chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
-      chmod 600 "${DUPLICACY_KEYS_DIR}/public.pem"
+      chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
       echo "RSA key pair generated successfully."
     else
       echo "RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
@@ -201,7 +201,7 @@ generate_ssh_keypair() {
       chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/id_ed25519"
-      chmod 600 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
+      chmod 644 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
       echo "SSH key pair generated successfully."
     else
       echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
