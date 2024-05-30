@@ -6,6 +6,7 @@
 #   Writes the log message to the archiver's log file. No console output except for WARNING or ERROR.
 
 LOG_DIR="${ARCHIVER_DIR}/logs" # Path to Archiver logs directory
+OLD_LOG_DIR="${LOG_DIR}/prior_logs"
 LOG_PREFIXES=(
   "archiver"
   "duplicacy"
@@ -24,7 +25,7 @@ log_message() {
   log_level="${1}"
   message="${2}"
   timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
-  log_prefix="${3:-${archiver}}" # Use ARCHIVER_LOG_FILE by default if no log file is specified
+  log_prefix="${3:-archiver}" # Use ARCHIVER_LOG_FILE by default if no log file is specified
   target_log_file="${LOG_DIR}/${log_prefix}.log"
   # Use "archiver" if SERVICE is unset or empty
   local service_name="${SERVICE:-archiver}"
@@ -62,13 +63,13 @@ log_output() {
 }
 
 rotate_logs() {
-  mkdir -p "${LOG_DIR}" || handle_error "Unable to create log directory '${LOG_DIR}'."
+  mkdir -p "${OLD_LOG_DIR}" || handle_error "Unable to create log directory '${OLD_LOG_DIR}'."
 
   for log_prefix in "${LOG_PREFIXES[@]}"; do
     local new_log_file
 
     # Generate a new log file name based on the log prefix and script variable: DATETIME
-    new_log_file="${LOG_DIR}/${log_prefix}-${DATETIME}.log"
+    new_log_file="${OLD_LOG_DIR}/${log_prefix}-${DATETIME}.log"
 
     # Create a new empty log file
     touch "${new_log_file}"  || \
@@ -81,7 +82,7 @@ rotate_logs() {
     log_message "INFO" "Updated/created symlink for '${log_prefix}.log' to '${new_log_file}'."
 
     # Delete log files older than 7 days
-    find "${LOG_DIR}" -name "${log_prefix}-*.log" -type f -mtime +7 -exec rm -f {} \; || \
+    find "${OLD_LOG_DIR}" -name "${log_prefix}-*.log" -type f -mtime +7 -exec rm -f {} \; || \
       handle_error "Failed to delete old '${log_prefix}' log files."
     log_message "INFO" "Deleted '${log_prefix}' log files older than 7 days."
   done
