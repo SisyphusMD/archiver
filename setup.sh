@@ -122,12 +122,11 @@ install_packages() {
 }
 
 install_duplicacy() {
-
-  # Check if unzip is available and install if not
+  # Check if duplicacy is available and install if not
   if ! command -v duplicacy &> /dev/null; then
     echo    # Move to a new line
     echo    # Move to a new line
-    echo "Duplicacy is required for Archiver, but it is not installed."
+    echo "Duplicacy binary is required for Archiver, but it is not installed."
     echo    # Move to a new line
     read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N): " -n 1 -r
     echo    # Move to a new line
@@ -140,8 +139,10 @@ install_duplicacy() {
       ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
       echo " - Duplicacy binary installed successfully."
     else
-      echo " - Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run the main script."
+      echo " - Duplicacy binary not installed. Please ensure Duplicacy binary is installed before attempting to run the main script."
     fi
+  else
+    echo " - Skipping Duplicacy binary installation: Duplicacy binary is already installed."
   fi
 }
 
@@ -199,7 +200,8 @@ EOF
       chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
       echo " - RSA key pair generated successfully."
     else
-      echo " - RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
+      echo " - RSA key pair not generated."
+      echo " - Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
       echo " - Details at: https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662"
     fi
   else
@@ -224,8 +226,9 @@ generate_ssh_keypair() {
       chmod 644 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
       echo " - SSH key pair generated successfully."
     else
-      echo " - SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
-      echo " - Only support key pairs with no passphrase. Prefer ed25519 over rsa."
+      echo " - SSH key pair not generated."
+      echo " - Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
+      echo " - Archiver only supports key pairs with no passphrase. Prefer ed25519 over rsa."
       echo " - Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver""
     fi
   else
@@ -234,131 +237,132 @@ generate_ssh_keypair() {
 }
 
 create_config_file() {
-  echo    # Move to a new line
-  echo    # Move to a new line
-  read -p "Would you like to generate your config.sh file now? (y|N): " -n 1 -r
-  echo    # Move to a new line
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo " - Creating config.sh file..."
-    backup_existing_file "${ARCHIVER_DIR}/config.sh"
-
-    # Prompt user for SERVICE_DIRECTORIES
+  if [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
     echo    # Move to a new line
-    echo "Please provide a list of directories on your device to be backed up. Must provide the"
-    echo "  full paths. Can use * to indicate each individual subdirectory within the parent"
-    echo "  directory. Each directory will be backed up as an individual duplicacy repository."
+    echo    # Move to a new line
+    read -p "Would you like to generate your config.sh file now? (y|N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      echo " - Creating config.sh file..."
+      backup_existing_file "${ARCHIVER_DIR}/config.sh"
 
-    while [ -z "${service_directories_input}" ]; do
+      # Prompt user for SERVICE_DIRECTORIES
       echo    # Move to a new line
-      echo "Enter the service directories you would like to backup (comma-separated, e.g., /srv/*/,/mnt/*/,/home/user/):"
-      read -r service_directories_input
-      echo    # Move to a new line
-      if [ -z "${service_directories_input}" ]; then
-        echo " - Error: At least one service directory is required."
-      fi
-    done
-    IFS=',' read -r -a service_directories <<< "$service_directories_input"
+      echo "Please provide a list of directories on your device to be backed up. Must provide the"
+      echo "  full paths. Can use * to indicate each individual subdirectory within the parent"
+      echo "  directory. Each directory will be backed up as an individual duplicacy repository."
 
-    # Prompt user for Duplicacy security details
-    echo "Enter security details for Duplicacy access and encryption:"
-    echo "Create this storage password and rsa passphrase if this is a new install, or provide prior details if restoring:"
-
-    while [ -z "${storage_password}" ]; do
-      echo    # Move to a new line
-      read -rsp "Storage Password (required): " storage_password
-      echo    # Move to a new line
-      if [ -z "${storage_password}" ]; then
-        echo " - Error: Storage Password is required."
-      fi
-    done
-
-    while [ -z "${RSA_PASSPHRASE}" ]; do
-      echo    # Move to a new line
-      read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
-      echo    # Move to a new line
-      if [ -z "${RSA_PASSPHRASE}" ]; then
-        echo " - Error: RSA Passphrase is required."
-      fi
-    done
-
-    # Function to prompt for SFTP storage details
-    prompt_sftp_storage() {
-      sftp_url=""
-      sftp_port=""
-      sftp_user=""
-      sftp_path=""
-
-      while [ -z "${sftp_url}" ]; do
+      while [ -z "${service_directories_input}" ]; do
         echo    # Move to a new line
-        read -rp "SFTP URL (The IP address or FQDN of the sftp host - example: 192.168.1.1): " sftp_url
-        if [ -z "${sftp_url}" ]; then
-          echo " - Error: SFTP URL is required."
+        echo "Enter the service directories you would like to backup (comma-separated, e.g., /srv/*/,/mnt/*/,/home/user/):"
+        read -r service_directories_input
+        echo    # Move to a new line
+        if [ -z "${service_directories_input}" ]; then
+          echo " - Error: At least one service directory is required."
+        fi
+      done
+      IFS=',' read -r -a service_directories <<< "$service_directories_input"
+
+      # Prompt user for Duplicacy security details
+      echo "Enter security details for Duplicacy access and encryption:"
+      echo "Create this storage password and rsa passphrase if this is a new install, or provide prior details if restoring:"
+
+      while [ -z "${storage_password}" ]; do
+        echo    # Move to a new line
+        read -rsp "Storage Password (required): " storage_password
+        echo    # Move to a new line
+        if [ -z "${storage_password}" ]; then
+          echo " - Error: Storage Password is required."
         fi
       done
 
-      while [ -z "${sftp_port}" ]; do
+      while [ -z "${RSA_PASSPHRASE}" ]; do
         echo    # Move to a new line
-        read -rp "SFTP Port (The sftp port of the sftp host - default is 22): " sftp_port
-        if [ -z "${sftp_port}" ]; then
-          echo " - No port entered. Using default port 22."
-          sftp_port=22
+        read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
+        echo    # Move to a new line
+        if [ -z "${RSA_PASSPHRASE}" ]; then
+          echo " - Error: RSA Passphrase is required."
         fi
       done
 
-      while [ -z "${sftp_user}" ]; do
-        echo    # Move to a new line
-        read -rp "SFTP User (User with sftp privileges on sftp host): " sftp_user
-        if [ -z "${sftp_user}" ]; then
-          echo " - Error: SFTP User is required."
-        fi
-      done
+      # Function to prompt for SFTP storage details
+      prompt_sftp_storage() {
+        sftp_url=""
+        sftp_port=""
+        sftp_user=""
+        sftp_path=""
 
-      while [ -z "${sftp_path}" ]; do
-        echo    # Move to a new line
-        read -rp "SFTP Path (Absolute path to remote backup directory - example: remote/path): " sftp_path
-        if [ -z "${sftp_path}" ]; then
-          echo " - Error: SFTP Path is required."
-        fi
-      done
-      sftp_path="$(echo "${sftp_path}" | sed 's|^/*||;s|/*$||')"
+        while [ -z "${sftp_url}" ]; do
+          echo    # Move to a new line
+          read -rp "SFTP URL (The IP address or FQDN of the sftp host - example: 192.168.1.1): " sftp_url
+          if [ -z "${sftp_url}" ]; then
+            echo " - Error: SFTP URL is required."
+          fi
+        done
 
-      sftp_key_file="${DUPLICACY_KEYS_DIR}/id_ed25519"
-    }
+        while [ -z "${sftp_port}" ]; do
+          echo    # Move to a new line
+          read -rp "SFTP Port (The sftp port of the sftp host - default is 22): " sftp_port
+          if [ -z "${sftp_port}" ]; then
+            echo " - No port entered. Using default port 22."
+            sftp_port=22
+          fi
+        done
 
-    # Function to prompt for B2 storage details
-    prompt_b2_storage() {
-      b2_bucketname=""
-      b2_id=""
-      b2_key=""
+        while [ -z "${sftp_user}" ]; do
+          echo    # Move to a new line
+          read -rp "SFTP User (User with sftp privileges on sftp host): " sftp_user
+          if [ -z "${sftp_user}" ]; then
+            echo " - Error: SFTP User is required."
+          fi
+        done
 
-      while [ -z "${b2_bucketname}" ]; do
-        echo    # Move to a new line
-        read -rp "B2 Bucket Name (BackBlaze bucket name - must be globally unique): " b2_bucketname
-        if [ -z "${b2_bucketname}" ]; then
-          echo " - Error: B2 Bucket Name is required."
-        fi
-      done
+        while [ -z "${sftp_path}" ]; do
+          echo    # Move to a new line
+          read -rp "SFTP Path (Absolute path to remote backup directory - example: remote/path): " sftp_path
+          if [ -z "${sftp_path}" ]; then
+            echo " - Error: SFTP Path is required."
+          fi
+        done
+        sftp_path="$(echo "${sftp_path}" | sed 's|^/*||;s|/*$||')"
 
-      while [ -z "${b2_id}" ]; do
-        echo    # Move to a new line
-        read -rp "B2 keyID (BackBlaze keyID with read/write access to the bucket): " b2_id
-        if [ -z "${b2_id}" ]; then
-          echo " - Error: B2 keyID is required."
-        fi
-      done
+        sftp_key_file="${DUPLICACY_KEYS_DIR}/id_ed25519"
+      }
 
-      while [ -z "${b2_key}" ]; do
-        echo    # Move to a new line
-        read -rsp "B2 applicationKey (BackBlaze applicationKey with read/write access to the bucket): " b2_key
-        echo    # Move to a new line
-        if [ -z "${b2_key}" ]; then
-          echo " - Error: B2 keyID is required."
-        fi
-      done
-    }
+      # Function to prompt for B2 storage details
+      prompt_b2_storage() {
+        b2_bucketname=""
+        b2_id=""
+        b2_key=""
 
-    # Start writing the config file
-    cat <<EOL > "${ARCHIVER_DIR}/config.sh"
+        while [ -z "${b2_bucketname}" ]; do
+          echo    # Move to a new line
+          read -rp "B2 Bucket Name (BackBlaze bucket name - must be globally unique): " b2_bucketname
+          if [ -z "${b2_bucketname}" ]; then
+            echo " - Error: B2 Bucket Name is required."
+          fi
+        done
+
+        while [ -z "${b2_id}" ]; do
+          echo    # Move to a new line
+          read -rp "B2 keyID (BackBlaze keyID with read/write access to the bucket): " b2_id
+          if [ -z "${b2_id}" ]; then
+            echo " - Error: B2 keyID is required."
+          fi
+        done
+
+        while [ -z "${b2_key}" ]; do
+          echo    # Move to a new line
+          read -rsp "B2 applicationKey (BackBlaze applicationKey with read/write access to the bucket): " b2_key
+          echo    # Move to a new line
+          if [ -z "${b2_key}" ]; then
+            echo " - Error: B2 keyID is required."
+          fi
+        done
+      }
+
+      # Start writing the config file
+      cat <<EOL > "${ARCHIVER_DIR}/config.sh"
 #########################################################################################
 # Archiver Backup User Configuration                                                    #
 #########################################################################################
@@ -396,46 +400,46 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 
 EOL
 
-    # Prompt user for storage targets
-    echo    # Move to a new line
-    echo "Add primary storage target. (Configuration of first storage target is required)"
-    i=1
-    while true; do
+      # Prompt user for storage targets
       echo    # Move to a new line
-      echo "Enter details for STORAGE_TARGET_$i:"
-
-      name=""
-      type=""
-
-      while [ -z "${name}" ]; do
-        echo    # Move to a new line
-        read -rp "Storage Name (You can call this whatever you want, but it must be unique): " name
-        if [ -z "${name}" ]; then
-          echo "Error: Storage Name is required."
-        fi
-      done
-
+      echo "Add primary storage target. (Configuration of first storage target is required)"
+      i=1
       while true; do
         echo    # Move to a new line
-        read -rp "Storage Type (Currently support sftp and b2): " type
-        if [[ "${type}" == "sftp" ]]; then
-          prompt_sftp_storage
-          break
-        elif [[ "${type}" == "b2" ]]; then
-          prompt_b2_storage
-          break
-        else
-          echo "Unsupported storage type. Please enter either 'sftp' or 'b2'."
-        fi
-      done
+        echo "Enter details for STORAGE_TARGET_$i:"
 
-      # Write storage target details to config file
-      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+        name=""
+        type=""
+
+        while [ -z "${name}" ]; do
+          echo    # Move to a new line
+          read -rp "Storage Name (You can call this whatever you want, but it must be unique): " name
+          if [ -z "${name}" ]; then
+            echo "Error: Storage Name is required."
+          fi
+        done
+
+        while true; do
+          echo    # Move to a new line
+          read -rp "Storage Type (Currently support sftp and b2): " type
+          if [[ "${type}" == "sftp" ]]; then
+            prompt_sftp_storage
+            break
+          elif [[ "${type}" == "b2" ]]; then
+            prompt_b2_storage
+            break
+          else
+            echo "Unsupported storage type. Please enter either 'sftp' or 'b2'."
+          fi
+        done
+
+        # Write storage target details to config file
+        cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 STORAGE_TARGET_${i}_NAME="$name"
 STORAGE_TARGET_${i}_TYPE="$type"
 EOL
-      if [[ $type == "sftp" ]]; then
-        cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+        if [[ $type == "sftp" ]]; then
+          cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 STORAGE_TARGET_${i}_SFTP_URL="$sftp_url"
 STORAGE_TARGET_${i}_SFTP_PORT="$sftp_port"
 STORAGE_TARGET_${i}_SFTP_USER="$sftp_user"
@@ -443,26 +447,26 @@ STORAGE_TARGET_${i}_SFTP_PATH="$sftp_path"
 STORAGE_TARGET_${i}_SFTP_KEY_FILE="$sftp_key_file"
 
 EOL
-      elif [[ $type == "b2" ]]; then
-        cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+        elif [[ $type == "b2" ]]; then
+          cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 STORAGE_TARGET_${i}_B2_BUCKETNAME="$b2_bucketname"
 STORAGE_TARGET_${i}_B2_ID="$b2_id"
 STORAGE_TARGET_${i}_B2_KEY="$b2_key"
 
 EOL
-      fi
+        fi
 
-      ((i++))
-      echo    # Move to a new line
-      read -p "Would you like to add another storage target? (y|N): " -n 1 -r
-      echo    # Move to a new line
-      if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
-        break
-      fi
-    done
+        ((i++))
+        echo    # Move to a new line
+        read -p "Would you like to add another storage target? (y|N): " -n 1 -r
+        echo    # Move to a new line
+        if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
+          break
+        fi
+      done
 
-    # Write more of the config file
-    cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+      # Write more of the config file
+      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # Storage targets must be numbered sequentially, starting with 1, following the naming
 #   scheme STORAGE_TARGET_X_OPTION="config", with all options for the same storage
 #   using the same X number, as in the below examples. SFTP and BackBlaze storage
@@ -490,55 +494,58 @@ RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key (required)
 
 EOL
 
-    echo    # Move to a new line
-    read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
-    echo    # Move to a new line
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-      # Prompt user for Pushover Notifications details
       echo    # Move to a new line
-      echo "Enter Pushover notification details:"
-      notification_service="Pushover"
-
-      while [ -z "${pushover_user_key}" ]; do
+      read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
+      echo    # Move to a new line
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+        # Prompt user for Pushover Notifications details
         echo    # Move to a new line
-        read -rp "Pushover User Key: " pushover_user_key
-        if [ -z "${pushover_user_key}" ]; then
-          echo "Error: Pushover User Key is required."
-        fi
-      done
+        echo "Enter Pushover notification details:"
+        notification_service="Pushover"
 
-      while [ -z "${pushover_api_token}" ]; do
-        echo    # Move to a new line
-        read -rsp "Pushover API Token: " pushover_api_token
-        echo    # Move to a new line
-        if [ -z "${pushover_api_token}" ]; then
-          echo "Error: Pushover API Token is required."
-        fi
-      done
-    else
-      echo " - Pushover notifications not set up."
-      echo " - They can be added manually later by editing config.sh."
-      notification_service="None"
-      pushover_user_key=""
-      pushover_api_token=""
-    fi
+        while [ -z "${pushover_user_key}" ]; do
+          echo    # Move to a new line
+          read -rp "Pushover User Key: " pushover_user_key
+          if [ -z "${pushover_user_key}" ]; then
+            echo "Error: Pushover User Key is required."
+          fi
+        done
 
-    # Write the rest of the config file
-    cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+        while [ -z "${pushover_api_token}" ]; do
+          echo    # Move to a new line
+          read -rsp "Pushover API Token: " pushover_api_token
+          echo    # Move to a new line
+          if [ -z "${pushover_api_token}" ]; then
+            echo "Error: Pushover API Token is required."
+          fi
+        done
+      else
+        echo " - Pushover notifications not set up."
+        echo " - They can be added manually later by editing config.sh."
+        notification_service="None"
+        pushover_user_key=""
+        pushover_api_token=""
+      fi
+
+      # Write the rest of the config file
+      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # Pushover Notifications
 NOTIFICATION_SERVICE="$notification_service" # Currently support 'None' or 'Pushover'
 PUSHOVER_USER_KEY="$pushover_user_key" # Pushover user key (not email address), viewable when logged into Pushover dashboard
 PUSHOVER_API_TOKEN="$pushover_api_token" # Pushover application API token/key
 EOL
 
-    chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"
-    chmod 600 "${ARCHIVER_DIR}/config.sh"
-    echo " - Configuration file created at ${ARCHIVER_DIR}/config.sh"
+      chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"
+      chmod 600 "${ARCHIVER_DIR}/config.sh"
+      echo " - Configuration file created at ${ARCHIVER_DIR}/config.sh"
+    else
+      echo " - Configuration file generation skipped."
+      echo " - If you would like to create your config.sh file manually, you can"
+      echo " -   copy config.sh.example from the examples directory to config.sh"
+      echo " -   and place it in the parent archiver directory."
+    fi
   else
-    echo " - Configuration file generation skipped."
-    echo " - If you would like to create your config.sh file manually, you can"
-    echo " -   copy config.sh.example from the examples directory to config.sh"
-    echo " -   and place it in the parent archiver directory."
+    echo " - Skipping configuration file creation: Configuration file already present in archiver directory."
   fi
 }
 
