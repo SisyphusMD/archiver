@@ -87,7 +87,7 @@ install_packages() {
 
   missing_packages=()
 
-  echo "Checking for missing required packages..."
+  echo " - Checking for missing required packages..."
 
   # Check for each required package
   for package in "${REQUIRED_PACKAGES[@]}"; do
@@ -103,22 +103,22 @@ install_packages() {
   fi
 
   # List missing packages and prompt user for installation
-  echo "The following required packages are missing: ${missing_packages[*]}"
+  echo " - The following required packages are missing: ${missing_packages[*]}"
   echo    # Move to a new line
   echo    # Move to a new line
   read -p "Would you like to install the missing packages? (y/N): " -n 1 -r
   echo    # Move to a new line
 
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Exiting the script. Please install the required packages manually."
+    echo " - Exiting the script. Please install the required packages manually."
     exit 1
   fi
 
   # Update apt and install missing packages
-  echo "Updating package list and installing missing packages..."
+  echo " - Updating package list and installing missing packages..."
   apt update
   apt install -y "${missing_packages[@]}"
-  echo "Missing packages installed successfully."
+  echo " - Missing packages installed successfully."
 }
 
 install_duplicacy() {
@@ -127,13 +127,13 @@ install_duplicacy() {
   read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N): " -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "Installing Duplicacy binary..."
+    echo " - Installing Duplicacy binary..."
     mkdir -p "${DUPLICACY_BIN_FILE_DIR}"
     wget -O "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_URL}"
     chmod 755 "${DUPLICACY_BIN_FILE_PATH}"
     mkdir -p "${DUPLICACY_BIN_LINK_DIR}"
     ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
-    echo "Duplicacy binary installed successfully."
+    echo " - Duplicacy binary installed successfully."
   else
     echo " - Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run the main script."
   fi
@@ -144,7 +144,7 @@ backup_existing_file() {
   if [ -f "$file_path" ]; then
     local backup_path="${file_path}.backup"
     mv "$file_path" "$backup_path"
-    echo "Existing $file_path backed up to $backup_path"
+    echo " - Existing $file_path backed up to $backup_path"
   fi
 }
 
@@ -155,7 +155,7 @@ generate_rsa_keypair() {
     read -p "Would you like to generate an RSA key pair for Duplicacy encryption? (y|N): " -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      echo "Generating RSA key pair for Duplicacy encryption..."
+      echo " - Generating RSA key pair for Duplicacy encryption..."
 
       backup_existing_file "${DUPLICACY_KEYS_DIR}/private.pem"
       backup_existing_file "${DUPLICACY_KEYS_DIR}/public.pem"
@@ -191,7 +191,7 @@ EOF
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
       chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
-      echo "RSA key pair generated successfully."
+      echo " - RSA key pair generated successfully."
     else
       echo " - RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
       echo " - Details at: https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662"
@@ -208,7 +208,7 @@ generate_ssh_keypair() {
     read -p "Would you like to generate an SSH key pair for Duplicacy SFTP storage? (y|N): " -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-      echo "Generating SSH key pair for Duplicacy SFTP storage..."
+      echo " - Generating SSH key pair for Duplicacy SFTP storage..."
       backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519"
       backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
       ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver"
@@ -216,7 +216,7 @@ generate_ssh_keypair() {
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/id_ed25519"
       chmod 644 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
-      echo "SSH key pair generated successfully."
+      echo " - SSH key pair generated successfully."
     else
       echo " - SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
       echo " - Only support key pairs with no passphrase. Prefer ed25519 over rsa."
@@ -233,7 +233,7 @@ create_config_file() {
   read -p "Would you like to generate your config.sh file now? (y|N): " -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "Creating config.sh file..."
+    echo " - Creating config.sh file..."
     backup_existing_file "${ARCHIVER_DIR}/config.sh"
 
     # Prompt user for SERVICE_DIRECTORIES
@@ -248,7 +248,7 @@ create_config_file() {
       read -r service_directories_input
       echo    # Move to a new line
       if [ -z "${service_directories_input}" ]; then
-        echo "Error: At least one service directory is required."
+        echo " - Error: At least one service directory is required."
       fi
     done
     IFS=',' read -r -a service_directories <<< "$service_directories_input"
@@ -262,7 +262,7 @@ create_config_file() {
       read -rsp "Storage Password (required): " storage_password
       echo    # Move to a new line
       if [ -z "${storage_password}" ]; then
-        echo "Error: Storage Password is required."
+        echo " - Error: Storage Password is required."
       fi
     done
 
@@ -271,7 +271,7 @@ create_config_file() {
       read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
       echo    # Move to a new line
       if [ -z "${RSA_PASSPHRASE}" ]; then
-        echo "Error: RSA Passphrase is required."
+        echo " - Error: RSA Passphrase is required."
       fi
     done
 
@@ -286,7 +286,7 @@ create_config_file() {
         echo    # Move to a new line
         read -rp "SFTP URL (The IP address or FQDN of the sftp host - example: 192.168.1.1): " sftp_url
         if [ -z "${sftp_url}" ]; then
-          echo "Error: SFTP URL is required."
+          echo " - Error: SFTP URL is required."
         fi
       done
 
@@ -303,7 +303,7 @@ create_config_file() {
         echo    # Move to a new line
         read -rp "SFTP User (User with sftp privileges on sftp host): " sftp_user
         if [ -z "${sftp_user}" ]; then
-          echo "Error: SFTP User is required."
+          echo " - Error: SFTP User is required."
         fi
       done
 
@@ -311,7 +311,7 @@ create_config_file() {
         echo    # Move to a new line
         read -rp "SFTP Path (Absolute path to remote backup directory - example: remote/path): " sftp_path
         if [ -z "${sftp_path}" ]; then
-          echo "Error: SFTP Path is required."
+          echo " - Error: SFTP Path is required."
         fi
       done
       sftp_path="$(echo "${sftp_path}" | sed 's|^/*||;s|/*$||')"
@@ -329,7 +329,7 @@ create_config_file() {
         echo    # Move to a new line
         read -rp "B2 Bucket Name (BackBlaze bucket name - must be globally unique): " b2_bucketname
         if [ -z "${b2_bucketname}" ]; then
-          echo "Error: B2 Bucket Name is required."
+          echo " - Error: B2 Bucket Name is required."
         fi
       done
 
@@ -337,7 +337,7 @@ create_config_file() {
         echo    # Move to a new line
         read -rp "B2 keyID (BackBlaze keyID with read/write access to the bucket): " b2_id
         if [ -z "${b2_id}" ]; then
-          echo "Error: B2 keyID is required."
+          echo " - Error: B2 keyID is required."
         fi
       done
 
@@ -346,7 +346,7 @@ create_config_file() {
         read -rsp "B2 applicationKey (BackBlaze applicationKey with read/write access to the bucket): " b2_key
         echo    # Move to a new line
         if [ -z "${b2_key}" ]; then
-          echo "Error: B2 keyID is required."
+          echo " - Error: B2 keyID is required."
         fi
       done
     }
@@ -391,11 +391,10 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 EOL
 
     # Prompt user for storage targets
-    echo    # Move to a new line
-    echo    # Move to a new line
     echo "Add primary storage target. (Configuration of first storage target is required)"
     i=1
     while true; do
+      echo    # Move to a new line
       echo "Enter details for STORAGE_TARGET_$i:"
 
       name=""
@@ -448,8 +447,7 @@ EOL
 
       ((i++))
       echo    # Move to a new line
-      echo    # Move to a new line
-      read -p "Would you like to add a(nother) storage target? (y|N): " -n 1 -r
+      read -p "Would you like to add another storage target? (y|N): " -n 1 -r
       echo    # Move to a new line
       if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
         break
@@ -528,7 +526,7 @@ EOL
 
     chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"
     chmod 600 "${ARCHIVER_DIR}/config.sh"
-    echo "Configuration file created at ${ARCHIVER_DIR}/config.sh"
+    echo " - Configuration file created at ${ARCHIVER_DIR}/config.sh"
   else
     echo " - Configuration file generation skipped."
     echo " - If you would like to create your config.sh file manually, you can"
@@ -544,7 +542,7 @@ schedule_with_cron() {
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | sudo crontab -
-    echo "Backup scheduled with cron for 3am daily."
+    echo " - Backup scheduled with cron for 3am daily."
   else
     echo " - Backup not scheduled with cron. You can always schedule it later with this command:"
     echo "--------------------------------------------"
@@ -569,7 +567,7 @@ main() {
   sleep 2
 
   echo    # Move to a new line
-  echo "Setup script completed."
+  echo " - Setup script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your .keys directory."
   echo "To manually run the Archiver script, use 'sudo ./main.sh' from the archiver directory."
   echo "To run it detached from the terminal, use 'sudo ./main.sh &' from the archiver directory instead."
