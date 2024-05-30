@@ -359,22 +359,40 @@ create_config_file() {
 
     # Start writing the config file
     cat <<EOL > "${ARCHIVER_DIR}/config.sh"
-# Archiver Backup Configuration
+#########################################################################################
+# Archiver Backup User Configuration                                                    #
+#########################################################################################
+# config.sh                                                                             #
+#   This file is intended to be sourced by the Archiver script to define user           #
+#   configurable variables.                                                             #
+#                                                                                       #
+# Usage:                                                                                #
+#   Include this file as "config.sh" in the archiver directory                          #
+#                                                                                       #
+# Note:                                                                                 #
+#   This script should not be executed directly. Instead, it will be sourced by the     #
+#   Archiver script.                                                                    #
+#                                                                                       #
+# Instructions:                                                                         #
+# - User must provide at least one service directory and one storage target.            #
+# - User must provide the STORAGE_PASSWORD and RSA_PASSPHRASE to be used by Archiver    #
+# - User can optionally provide a PUSHOVER_USER_KEY and PUSHOVER_API_TOKEN in order to  #
+#   receive backup notifications through Pushover.                                      #
+#########################################################################################
 
 SERVICE_DIRECTORIES=(
 $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 )
 
+# Example SERVICE_DIRECTORIES
 # Provide a list of directories on your device to be backed up. Must provide the
 #   full paths. Can use * to indicate all subdirectories within one level below
 #   the parent directory. Each directory will be backed up as an individual
 #   duplicacy repository.
-
-# Example SERVICE_DIRECTORIES
 # SERVICE_DIRECTORIES=(
-#   "/srv/*/"
-#   "/mnt/*/"
-#   "/home/user/"
+#   "/srv/*/"     # Will backup each subdirectory within /srv/ - multiple individual repositories.
+#   "/mnt/*/"     # Will backup each subdirectory within /mnt/ - multiple individual repositories.
+#   "/home/user/" # Will backup the /home/user/ directory      - one individual repository.
 # )
 
 EOL
@@ -516,7 +534,8 @@ main() {
   echo    # Move to a new line
   echo "Installation completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your .keys directory."
-  echo "To manually run the Archiver script, use 'sudo ./main.sh &' from the archiver directory."
+  echo "To manually run the Archiver script, use 'sudo ./main.sh' from the archiver directory."
+  echo "To run it detached from the terminal, use 'sudo ./main.sh &' from the archiver directory instead."
   echo "To watch the logs of the actively running backup, use 'tail -f logs/*.log' from the archiver directory."
 }
 
