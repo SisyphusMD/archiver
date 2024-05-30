@@ -487,6 +487,7 @@ EOL
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       # Prompt user for Pushover Notifications details
+      echo    # Move to a new line
       echo "Enter Pushover notification details:"
       notification_service="Pushover"
 
@@ -500,7 +501,7 @@ EOL
 
       while [ -z "${pushover_api_token}" ]; do
         echo    # Move to a new line
-        read -rp "Pushover API Token: " pushover_user_key
+        read -rsp "Pushover API Token: " pushover_api_token
         if [ -z "${pushover_api_token}" ]; then
           echo "Error: Pushover API Token is required."
         fi
