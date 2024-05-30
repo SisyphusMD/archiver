@@ -391,6 +391,7 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 EOL
 
     # Prompt user for storage targets
+    echo    # Move to a new line
     echo "Add primary storage target. (Configuration of first storage target is required)"
     i=1
     while true; do
