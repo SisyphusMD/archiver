@@ -122,20 +122,26 @@ install_packages() {
 }
 
 install_duplicacy() {
-  echo    # Move to a new line
-  echo    # Move to a new line
-  read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N): " -n 1 -r
-  echo    # Move to a new line
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo " - Installing Duplicacy binary..."
-    mkdir -p "${DUPLICACY_BIN_FILE_DIR}"
-    wget -O "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_URL}"
-    chmod 755 "${DUPLICACY_BIN_FILE_PATH}"
-    mkdir -p "${DUPLICACY_BIN_LINK_DIR}"
-    ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
-    echo " - Duplicacy binary installed successfully."
-  else
-    echo " - Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run the main script."
+
+  # Check if unzip is available and install if not
+  if ! command -v duplicacy &> /dev/null; then
+    echo    # Move to a new line
+    echo    # Move to a new line
+    echo "Duplicacy is required for Archiver, but it is not installed."
+    echo    # Move to a new line
+    read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      echo " - Installing Duplicacy binary..."
+      mkdir -p "${DUPLICACY_BIN_FILE_DIR}"
+      wget -O "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_URL}"
+      chmod 755 "${DUPLICACY_BIN_FILE_PATH}"
+      mkdir -p "${DUPLICACY_BIN_LINK_DIR}"
+      ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
+      echo " - Duplicacy binary installed successfully."
+    else
+      echo " - Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run the main script."
+    fi
   fi
 }
 
@@ -545,7 +551,8 @@ schedule_with_cron() {
     (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | sudo crontab -
     echo " - Backup scheduled with cron for 3am daily."
   else
-    echo " - Backup not scheduled with cron. You can always schedule it later with this command:"
+    echo " - Backup not scheduled with cron."
+    echo " - You can always schedule it later with this command:"
     echo "--------------------------------------------"
     echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | sudo crontab -"
     echo "--------------------------------------------"
