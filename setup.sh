@@ -162,6 +162,7 @@ generate_rsa_keypair() {
 
       while [ -z "${RSA_PASSPHRASE}" ]; do
         # Please provide an RSA Passphrase to use with this new RSA key pair
+        echo    # Move to a new line
         read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
         echo    # Move to a new line
         if [ -z "${RSA_PASSPHRASE}" ]; then
@@ -259,6 +260,7 @@ create_config_file() {
     while [ -z "${storage_password}" ]; do
       echo    # Move to a new line
       read -rsp "Storage Password (required): " storage_password
+      echo    # Move to a new line
       if [ -z "${storage_password}" ]; then
         echo "Error: Storage Password is required."
       fi
@@ -267,6 +269,7 @@ create_config_file() {
     while [ -z "${RSA_PASSPHRASE}" ]; do
       echo    # Move to a new line
       read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
+      echo    # Move to a new line
       if [ -z "${RSA_PASSPHRASE}" ]; then
         echo "Error: RSA Passphrase is required."
       fi
@@ -341,6 +344,7 @@ create_config_file() {
       while [ -z "${b2_key}" ]; do
         echo    # Move to a new line
         read -rsp "B2 applicationKey (BackBlaze applicationKey with read/write access to the bucket): " b2_key
+        echo    # Move to a new line
         if [ -z "${b2_key}" ]; then
           echo "Error: B2 keyID is required."
         fi
@@ -387,6 +391,8 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 EOL
 
     # Prompt user for storage targets
+    echo    # Move to a new line
+    echo    # Move to a new line
     echo "Add primary storage target. (Configuration of first storage target is required)"
     i=1
     while true; do
