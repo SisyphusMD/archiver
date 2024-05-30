@@ -387,16 +387,9 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 EOL
 
     # Prompt user for storage targets
+    echo "Add primary storage target. (Configuration of first storage target is required)"
     i=1
     while true; do
-      echo    # Move to a new line
-      echo    # Move to a new line
-      read -p "Would you like to add a(nother) storage target? (y|N): " -n 1 -r
-      echo    # Move to a new line
-      if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
-        break
-      fi
-
       echo "Enter details for STORAGE_TARGET_$i:"
 
       name=""
@@ -448,6 +441,13 @@ EOL
       fi
 
       ((i++))
+      echo    # Move to a new line
+      echo    # Move to a new line
+      read -p "Would you like to add a(nother) storage target? (y|N): " -n 1 -r
+      echo    # Move to a new line
+      if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
+        break
+      fi
     done
 
     # Write more of the config file
