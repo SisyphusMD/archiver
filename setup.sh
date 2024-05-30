@@ -61,6 +61,8 @@ fi
 # Get the UID and GID of the user who invoked the script
 CALLER_UID=$(id -u "${SUDO_USER}")
 CALLER_GID=$(id -g "${SUDO_USER}")
+# Get the home directory of the user who invoked the script
+CALLER_HOME=$(eval echo ~"${SUDO_USER}")
 
 # Exit if the operating system is not Linux or architecture is not recognized
 if [ "${DUPLICACY_OS}" != "linux" ] || [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
@@ -257,7 +259,7 @@ create_config_file() {
 
       while [ -z "${service_directories_input}" ]; do
         echo    # Move to a new line
-        echo "Enter the service directories you would like to backup (comma-separated, e.g., /srv/*/,/mnt/*/,/home/user/):"
+        echo "Enter the service directories you would like to backup (comma-separated, e.g., /srv/*/,/mnt/*/,${CALLER_HOME}/):"
         read -r service_directories_input
         echo    # Move to a new line
         if [ -z "${service_directories_input}" ]; then
@@ -396,9 +398,9 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 #   full paths. Can use * to indicate each individual subdirectory within the parent"
 #   directory. Each directory will be backed up as an individual duplicacy repository."
 # SERVICE_DIRECTORIES=(
-#   "/srv/*/"     # Will backup each subdirectory within /srv/ - multiple individual repositories.
-#   "/mnt/*/"     # Will backup each subdirectory within /mnt/ - multiple individual repositories.
-#   "/home/user/" # Will backup the /home/user/ directory      - one individual repository.
+#   "/srv/*/" # Will backup each subdirectory within /srv/ - multiple individual repositories.
+#   "/mnt/*/" # Will backup each subdirectory within /mnt/ - multiple individual repositories.
+#   "${CALLER_HOME}/" # Will backup the ${CALLER_HOME}/ directory - one individual repository.
 # )
 
 EOL
