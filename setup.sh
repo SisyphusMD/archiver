@@ -220,8 +220,20 @@ create_config_file() {
     backup_existing_file "${ARCHIVER_DIR}/config.sh"
 
     # Prompt user for SERVICE_DIRECTORIES
-    echo "Enter the service directories you would like to backup (comma-separated, e.g., /srv/*/,/mnt/*/,/home/user/):"
-    read -r service_directories_input
+    echo "Provide a list of directories on your device to be backed up. Must provide the"
+    echo "  full paths. Can use * to indicate all subdirectories within one level below"
+    echo "  the parent directory. Each directory will be backed up as an individual"
+    echo "  duplicacy repository."
+
+    while [ -z "${service_directories_input}" ]; do
+      echo    # Move to a new line
+      echo "Enter the service directories you would like to backup (comma-separated, e.g., /srv/*/,/mnt/*/,/home/user/):"
+      read -r service_directories_input
+      echo    # Move to a new line
+      if [ -z "${service_directories_input}" ]; then
+        echo "Error: At least one service directory is required."
+      fi
+    done
     IFS=',' read -r -a service_directories <<< "$service_directories_input"
 
     # Prompt user for Duplicacy security details
@@ -254,7 +266,9 @@ create_config_file() {
       echo "Enter Pushover notification details:"
       notification_service="Pushover"
       read -rp "Pushover User Key: " pushover_user_key
-      read -rp "Pushover API Token: " pushover_api_token
+      echo    # Move to a new line
+      read -rsp "Pushover API Token: " pushover_api_token
+      echo    # Move to a new line
     else
       notification_service="None"
       pushover_user_key=""
@@ -263,20 +277,84 @@ create_config_file() {
 
     # Function to prompt for SFTP storage details
     prompt_sftp_storage() {
-      read -rp "SFTP URL (ip address or fqdn of sftp host): " sftp_url
-      read -rp "SFTP PORT (sftp port of host - default is 22): " sftp_port
-      sftp_port=${sftp_port:-22}
-      read -rp "SFTP User: " sftp_user
-      read -rp "SFTP Path (directory path on sftp host): " sftp_path
-      sftp_path=$(echo "$sftp_path" | sed 's|^/*||;s|/*$||')
+      sftp_url=""
+      sftp_port=""
+      sftp_user=""
+      sftp_path=""
+
+      while [ -z "${sftp_url}" ]; do
+        echo    # Move to a new line
+        read -rp "SFTP URL (The IP address or FQDN of the sftp host - example: 192.168.1.1): " sftp_url
+        echo    # Move to a new line
+        if [ -z "${sftp_url}" ]; then
+          echo "Error: SFTP URL is required."
+        fi
+      done
+
+      while [ -z "${sftp_port}" ]; do
+        echo    # Move to a new line
+        read -rp "SFTP Port (The sftp port of the sftp host - default is 22): " sftp_port
+        echo    # Move to a new line
+        if [ -z "${sftp_port}" ]; then
+          echo "No port entered. Using default port 22."
+          sftp_port=22
+        fi
+      done
+
+      while [ -z "${sftp_user}" ]; do
+        echo    # Move to a new line
+        read -rp "SFTP User (User with sftp privileges on sftp host): " sftp_user
+        echo    # Move to a new line
+        if [ -z "${sftp_user}" ]; then
+          echo "Error: SFTP User is required."
+        fi
+      done
+
+      while [ -z "${sftp_path}" ]; do
+        echo    # Move to a new line
+        read -rp "SFTP Path (Absolute path to remote backup directory - example: remote/path): " sftp_path
+        echo    # Move to a new line
+        if [ -z "${sftp_path}" ]; then
+          echo "Error: SFTP Path is required."
+        fi
+      done
+      sftp_path="$(echo "${sftp_path}" | sed 's|^/*||;s|/*$||')"
+
       sftp_key_file="${DUPLICACY_KEYS_DIR}/id_ed25519"
     }
 
     # Function to prompt for B2 storage details
     prompt_b2_storage() {
-      read -rp "B2 Bucket Name: " b2_bucketname
-      read -rp "B2 ID (keyID from BackBlaze): " b2_id
-      read -rp "B2 Key (applicationKey from BackBlaze): " b2_key
+      b2_bucketname=""
+      b2_id=""
+      b2_key=""
+
+      while [ -z "${b2_bucketname}" ]; do
+        echo    # Move to a new line
+        read -rp "B2 Bucket Name (BackBlaze bucket name - must be globally unique): " b2_bucketname
+        echo    # Move to a new line
+        if [ -z "${b2_bucketname}" ]; then
+          echo "Error: B2 Bucket Name is required."
+        fi
+      done
+
+      while [ -z "${b2_id}" ]; do
+        echo    # Move to a new line
+        read -rp "B2 keyID (BackBlaze keyID with read/write access to the bucket): " b2_id
+        echo    # Move to a new line
+        if [ -z "${b2_id}" ]; then
+          echo "Error: B2 keyID is required."
+        fi
+      done
+
+      while [ -z "${b2_key}" ]; do
+        echo    # Move to a new line
+        read -rp "B2 applicationKey (BackBlaze applicationKey with read/write access to the bucket): " b2_key
+        echo    # Move to a new line
+        if [ -z "${b2_key}" ]; then
+          echo "Error: B2 keyID is required."
+        fi
+      done
     }
 
     # Start writing the config file
@@ -284,8 +362,20 @@ create_config_file() {
 # Archiver Backup Configuration
 
 SERVICE_DIRECTORIES=(
-$(for dir in "${service_directories[@]}"; do echo "  \"$dir\""; done)
+$(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 )
+
+# Provide a list of directories on your device to be backed up. Must provide the
+#   full paths. Can use * to indicate all subdirectories within one level below
+#   the parent directory. Each directory will be backed up as an individual
+#   duplicacy repository.
+
+# Example SERVICE_DIRECTORIES
+# SERVICE_DIRECTORIES=(
+#   "/srv/*/"
+#   "/mnt/*/"
+#   "/home/user/"
+# )
 
 EOL
 
@@ -295,18 +385,30 @@ EOL
       echo    # Move to a new line
       read -p "Would you like to add a(nother) storage target? (y|N): " -n 1 -r
       echo    # Move to a new line
-      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
         break
       fi
 
       echo "Enter details for STORAGE_TARGET_$i:"
-      read -rp "Name (you can call this whatever you want, but it must be unique): " name
+
+      name=""
+      type=""
+
+      while [ -z "${name}" ]; do
+        echo    # Move to a new line
+        read -rp "Storage Name (You can call this whatever you want, but it must be unique): " name
+        echo    # Move to a new line
+        if [ -z "${name}" ]; then
+          echo "Error: Storage Name is required."
+        fi
+      done
+
       while true; do
-        read -rp "Type (sftp/b2): " type
-        if [[ $type == "sftp" ]]; then
+        read -rp "Storage type (Currently support sftp and b2): " type
+        if [[ "${type}" == "sftp" ]]; then
           prompt_sftp_storage
           break
-        elif [[ $type == "b2" ]]; then
+        elif [[ "${type}" == "b2" ]]; then
           prompt_b2_storage
           break
         else
@@ -342,25 +444,30 @@ EOL
 
     # Write the rest of the config file
     cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+# Storage targets must be numbered sequentially, starting with 1, following the naming
+#   scheme STORAGE_TARGET_X_OPTION="config", with all options for the same storage
+#   using the same X number, as in the below examples. SFTP and BackBlaze storage
+#   targets are currently supported. Require at least one storage target.
+
 # Example SFTP Storage Target
-  # STORAGE_TARGET_1_NAME="name"
-  # STORAGE_TARGET_1_TYPE="type"
-  # STORAGE_TARGET_1_SFTP_URL="192.168.1.1"
-  # STORAGE_TARGET_1_SFTP_PORT="22"
-  # STORAGE_TARGET_1_SFTP_USER="user"
-  # STORAGE_TARGET_1_SFTP_PATH="remote/path"
-  # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_ed25519"
+  # STORAGE_TARGET_1_NAME="name" # You can call this whatever you want, but it must be unique.
+  # STORAGE_TARGET_1_TYPE="sftp" # Currently support sftp and b2. For sftp, require URL, PORT, USER, PATH, and KEY_FILE as below.
+  # STORAGE_TARGET_1_SFTP_URL="192.168.1.1" # The IP address or FQDN of the sftp host.
+  # STORAGE_TARGET_1_SFTP_PORT="22" # The sftp port of the sftp host. Default is 22.
+  # STORAGE_TARGET_1_SFTP_USER="user" # User with sftp privileges on sftp host.
+  # STORAGE_TARGET_1_SFTP_PATH="remote/path" # Absolute path to remote backup directory.
+  # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_ed25519" # Full path to private ssh key file.
 
 # Example B2 Storage Target
-  # STORAGE_TARGET_2_NAME="name"
-  # STORAGE_TARGET_2_TYPE="type"
-  # STORAGE_TARGET_2_B2_BUCKETNAME="bucketName"
-  # STORAGE_TARGET_2_B2_ID="keyID"
-  # STORAGE_TARGET_2_B2_KEY="applicationKey"
+  # STORAGE_TARGET_2_NAME="name" # You can call this whatever you want, but it must be unique.
+  # STORAGE_TARGET_2_TYPE="b2" # Currently support sftp and b2. For b2, require BUCKETNAME, ID, and KEY as below.
+  # STORAGE_TARGET_2_B2_BUCKETNAME="bucketName" # BackBlaze bucket name. Must be globally unique.
+  # STORAGE_TARGET_2_B2_ID="keyID" # BackBlaze keyID with read/write access to the above bucket.
+  # STORAGE_TARGET_2_B2_KEY="applicationKey"  # BackBlaze applicationKey with read/write access to the above bucket.
 
 # Secrets for all Duplicacy storage targets
-STORAGE_PASSWORD="${storage_password}" # Password for Duplicacy storage
-RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key
+STORAGE_PASSWORD="${storage_password}" # Password for Duplicacy storage (required)
+RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key (required)
 
 # Pushover Notifications
 NOTIFICATION_SERVICE="$notification_service" # Currently support 'None' or 'Pushover'
@@ -378,16 +485,18 @@ EOL
 
 schedule_with_cron() {
   echo    # Move to a new line
-  read -p "Would you like to schedule the script with cron? (y|N):" -n 1 -r
+  read -p "Would you like to schedule the backup with cron? (y|N):" -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | sudo crontab -
-    echo "Added to crontab."
+    echo "Backup scheduled with cron."
   else
-    echo "Not added. You can always add it later with this command:"
+    echo    # Move to a new line
+    echo "Backup not scheduled with cron. You can always schedule it later with this command:"
     echo "--------------------------------------------"
     echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | sudo crontab -"
     echo "--------------------------------------------"
+    echo    # Move to a new line
   fi
 }
 
@@ -404,9 +513,11 @@ main() {
 
   schedule_with_cron
 
+  echo    # Move to a new line
   echo "Installation completed."
-  echo "Please keep a separate backup of your config.sh file and your .keys directory."
-  echo "To manually run the Archiver script, use 'sudo ./main.sh' from the archiver directory."
+  echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your .keys directory."
+  echo "To manually run the Archiver script, use 'sudo ./main.sh &' from the archiver directory."
+  echo "To watch the logs of the actively running backup, use 'tail -f logs/*.log' from the archiver directory."
 }
 
 main
