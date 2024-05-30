@@ -228,6 +228,7 @@ create_config_file() {
     backup_existing_file "${ARCHIVER_DIR}/config.sh"
 
     # Prompt user for SERVICE_DIRECTORIES
+    echo    # Move to a new line
     echo "Provide a list of directories on your device to be backed up. Must provide the"
     echo "  full paths. Can use * to indicate all subdirectories within one level below"
     echo "  the parent directory. Each directory will be backed up as an individual"
@@ -266,23 +267,6 @@ create_config_file() {
       fi
     done
 
-    echo    # Move to a new line
-    read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
-    echo    # Move to a new line
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-      # Prompt user for Pushover Notifications details
-      echo "Enter Pushover notification details:"
-      notification_service="Pushover"
-      read -rp "Pushover User Key: " pushover_user_key
-      echo    # Move to a new line
-      read -rsp "Pushover API Token: " pushover_api_token
-      echo    # Move to a new line
-    else
-      notification_service="None"
-      pushover_user_key=""
-      pushover_api_token=""
-    fi
-
     # Function to prompt for SFTP storage details
     prompt_sftp_storage() {
       sftp_url=""
@@ -293,7 +277,6 @@ create_config_file() {
       while [ -z "${sftp_url}" ]; do
         echo    # Move to a new line
         read -rp "SFTP URL (The IP address or FQDN of the sftp host - example: 192.168.1.1): " sftp_url
-        echo    # Move to a new line
         if [ -z "${sftp_url}" ]; then
           echo "Error: SFTP URL is required."
         fi
@@ -302,9 +285,8 @@ create_config_file() {
       while [ -z "${sftp_port}" ]; do
         echo    # Move to a new line
         read -rp "SFTP Port (The sftp port of the sftp host - default is 22): " sftp_port
-        echo    # Move to a new line
         if [ -z "${sftp_port}" ]; then
-          echo "No port entered. Using default port 22."
+          echo " - No port entered. Using default port 22."
           sftp_port=22
         fi
       done
@@ -312,7 +294,6 @@ create_config_file() {
       while [ -z "${sftp_user}" ]; do
         echo    # Move to a new line
         read -rp "SFTP User (User with sftp privileges on sftp host): " sftp_user
-        echo    # Move to a new line
         if [ -z "${sftp_user}" ]; then
           echo "Error: SFTP User is required."
         fi
@@ -321,7 +302,6 @@ create_config_file() {
       while [ -z "${sftp_path}" ]; do
         echo    # Move to a new line
         read -rp "SFTP Path (Absolute path to remote backup directory - example: remote/path): " sftp_path
-        echo    # Move to a new line
         if [ -z "${sftp_path}" ]; then
           echo "Error: SFTP Path is required."
         fi
@@ -340,7 +320,6 @@ create_config_file() {
       while [ -z "${b2_bucketname}" ]; do
         echo    # Move to a new line
         read -rp "B2 Bucket Name (BackBlaze bucket name - must be globally unique): " b2_bucketname
-        echo    # Move to a new line
         if [ -z "${b2_bucketname}" ]; then
           echo "Error: B2 Bucket Name is required."
         fi
@@ -349,7 +328,6 @@ create_config_file() {
       while [ -z "${b2_id}" ]; do
         echo    # Move to a new line
         read -rp "B2 keyID (BackBlaze keyID with read/write access to the bucket): " b2_id
-        echo    # Move to a new line
         if [ -z "${b2_id}" ]; then
           echo "Error: B2 keyID is required."
         fi
@@ -357,8 +335,7 @@ create_config_file() {
 
       while [ -z "${b2_key}" ]; do
         echo    # Move to a new line
-        read -rp "B2 applicationKey (BackBlaze applicationKey with read/write access to the bucket): " b2_key
-        echo    # Move to a new line
+        read -rsp "B2 applicationKey (BackBlaze applicationKey with read/write access to the bucket): " b2_key
         if [ -z "${b2_key}" ]; then
           echo "Error: B2 keyID is required."
         fi
@@ -423,14 +400,14 @@ EOL
       while [ -z "${name}" ]; do
         echo    # Move to a new line
         read -rp "Storage Name (You can call this whatever you want, but it must be unique): " name
-        echo    # Move to a new line
         if [ -z "${name}" ]; then
           echo "Error: Storage Name is required."
         fi
       done
 
       while true; do
-        read -rp "Storage type (Currently support sftp and b2): " type
+        echo    # Move to a new line
+        read -rp "Storage Type (Currently support sftp and b2): " type
         if [[ "${type}" == "sftp" ]]; then
           prompt_sftp_storage
           break
@@ -468,7 +445,7 @@ EOL
       ((i++))
     done
 
-    # Write the rest of the config file
+    # Write more of the config file
     cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # Storage targets must be numbered sequentially, starting with 1, following the naming
 #   scheme STORAGE_TARGET_X_OPTION="config", with all options for the same storage
@@ -495,6 +472,41 @@ EOL
 STORAGE_PASSWORD="${storage_password}" # Password for Duplicacy storage (required)
 RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key (required)
 
+EOL
+
+    echo    # Move to a new line
+    read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      # Prompt user for Pushover Notifications details
+      echo "Enter Pushover notification details:"
+      notification_service="Pushover"
+
+      while [ -z "${pushover_user_key}" ]; do
+        echo    # Move to a new line
+        read -rp "Pushover User Key: " pushover_user_key
+        if [ -z "${pushover_user_key}" ]; then
+          echo "Error: Pushover User Key is required."
+        fi
+      done
+
+      while [ -z "${pushover_api_token}" ]; do
+        echo    # Move to a new line
+        read -rp "Pushover API Token: " pushover_user_key
+        if [ -z "${pushover_api_token}" ]; then
+          echo "Error: Pushover API Token is required."
+        fi
+      done
+    else
+      echo " - Pushover notifications not set up."
+      echo " - They can be added manually later by editing config.sh."
+      notification_service="None"
+      pushover_user_key=""
+      pushover_api_token=""
+    fi
+
+    # Write the rest of the config file
+    cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # Pushover Notifications
 NOTIFICATION_SERVICE="$notification_service" # Currently support 'None' or 'Pushover'
 PUSHOVER_USER_KEY="$pushover_user_key" # Pushover user key (not email address), viewable when logged into Pushover dashboard
