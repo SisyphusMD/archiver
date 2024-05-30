@@ -73,7 +73,12 @@ DUPLICACY_BIN_LINK_NAME="duplicacy"
 DUPLICACY_BIN_LINK_PATH="${DUPLICACY_BIN_LINK_DIR}/${DUPLICACY_BIN_LINK_NAME}"
 DUPLICACY_BIN_URL="https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/${DUPLICACY_BIN_FILE_NAME}"
 
-mkdir -p "${DUPLICACY_KEYS_DIR}"
+if [[ ! -d "${DUPLICACY_KEYS_DIR}" ]]; then
+  mkdir -p "${DUPLICACY_KEYS_DIR}"
+  chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
+  chmod 700 "${DUPLICACY_KEYS_DIR}"
+fi
+
 RSA_PASSPHRASE=""
 
 # Ensure necessary packages are installed
@@ -114,7 +119,7 @@ install_packages() {
 
 install_duplicacy() {
   echo    # Move to a new line
-  read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N):" -n 1 -r
+  read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N): " -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Installing Duplicacy binary..."
@@ -182,6 +187,7 @@ EOF
       echo "RSA key pair generated successfully."
     else
       echo "RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
+      echo "Details at: https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662"
     fi
   else
     echo "Skipping RSA key pair generation: RSA key files already present in .keys directory."
@@ -205,6 +211,8 @@ generate_ssh_keypair() {
       echo "SSH key pair generated successfully."
     else
       echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
+      echo "Only support key pairs with no passphrase. Prefer ed25519 over rsa."
+      echo "Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver""
     fi
   else
     echo "Skipping SSH key pair generation: SSH key files already present in .keys directory."
