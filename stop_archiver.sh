@@ -8,21 +8,34 @@ fi
 
 LOCKFILE="/var/lock/archiver.lock"
 
+# Function to clean up lock file
+cleanup_lockfile() {
+  if [ -e "${LOCKFILE}" ]; then
+    rm -f "${LOCKFILE}"
+    echo "Lock file ${LOCKFILE} removed."
+  fi
+}
+
 # Check if the lock file exists and contains a valid PID
 if [ -e "${LOCKFILE}" ]; then
   LOCK_PID=$(cat "${LOCKFILE}")
   if [ -n "${LOCK_PID}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
-    echo "Stopping Archiver process with PID ${LOCK_PID}."
+    echo "Stopping Archiver process with PID ${LOCK_PID} and its child processes."
+    
+    # Terminate the process and its children
+    pkill -TERM -P "${LOCK_PID}"
     kill "${LOCK_PID}"
-    # Optionally, wait for the process to terminate
+    
+    # Wait for the process to terminate
     wait "${LOCK_PID}" 2>/dev/null
-    echo "Archiver process stopped."
+
+    echo "Archiver process and its child processes stopped."
+    cleanup_lockfile
     exit 0
   else
     echo "Stale lock file detected. No running Archiver process found with PID ${LOCK_PID}."
     # Clean up stale lock file
-    rm -f "${LOCKFILE}"
-    echo "Stale lock file removed."
+    cleanup_lockfile
     exit 1
   fi
 else
