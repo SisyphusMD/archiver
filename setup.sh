@@ -560,11 +560,25 @@ schedule_with_cron() {
   read -p "Would you like to schedule the backup with cron? (y|N): " -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
-    (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/archiver.sh") | sudo crontab -
-    echo " - Backup scheduled with cron for 3am daily."
+    local cron_schedule
+    while [ -z "${cron_schedule}" ]; do
+      echo    # Move to a new line
+      echo "See guide for cron scheduling here: https://cronitor.io/guides/cron-jobs"
+      read -rp "Cron Schedule (default to daily at 3am '0 3 * * *'): " cron_schedule
+      if [ -z "${cron_schedule}" ]; then
+        echo " - No schedule entered. Using default '0 3 * * *'."
+        cron_schedule="0 3 * * *"
+      fi
+    done
+    (sudo crontab -l 2>/dev/null; echo "${cron_schedule} ${ARCHIVER_DIR}/archiver.sh") | sudo crontab -
+    echo " - Backup scheduled with cron."
+    echo " - You can edit the schedule with this command:"
+    echo "--------------------------------------------"
+    echo "sudo crontab -e"
+    echo "--------------------------------------------"
   else
     echo " - Backup not scheduled with cron."
-    echo " - You can always schedule it later with this command:"
+    echo " - You can always schedule it later with this command (daily at 3am in below example):"
     echo "--------------------------------------------"
     echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/archiver.sh\") | sudo crontab -"
     echo "--------------------------------------------"
