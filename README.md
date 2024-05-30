@@ -82,13 +82,13 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
   - Double click the newly created **.ssh** directory to open it.
   - If there is already a file named **authorized_keys**, do the following:
     - Double-click the **authorized_keys** file to download it.
-    - Using a text editor, add a new line to the bottom of the document containing the contents of your public SSH key file, usually named id_rsa.pub. The line should start with **ssh-rsa AAAA...**.
+    - Using a text editor, add a new line to the bottom of the document containing the contents of your public SSH key file, usually named id_ed25519.pub. The line should start with **ssh-ed25519 AAAA...**.
     - Save the document with the line added.
     - Back in **File Station**, right click **authorized_keys**, click **rename**, and rename the file to **authorized_keys.backup**.
     - Click **Upload** in the top, then click **Upload - Skip**, and browse to and select the edited **authorized_keys** file, and click **Open**.
     - Ensure the file uploads correctly and is named **authorized_keys**.
   - If there is not already a file named **authorized_keys**, do the following:
-    - Using a text editor, create a new file, and copy the contents of your public SSH key file, usually named id_rsa.pub, to this new file. The line should start with **ssh-rsa AAAA...**.  Save the new file as **authorized_keys**.
+    - Using a text editor, create a new file, and copy the contents of your public SSH key file, usually named id_ed25519.pub, to this new file. The line should start with **ssh-ed25519 AAAA...**.  Save the new file as **authorized_keys**.
     - Back in **File Station**, click **Upload** at the top, then click **Upload - Skip**, and browse to and select the newly created **authorized_keys** file, and click **Open**.
     - Ensure the file uploads correctly and is named **authorized_keys**.
 
@@ -182,7 +182,7 @@ git clone https://github.com/SisyphusMD/archiver.git
 sudo ./archiver/setup.sh
 ```
 
-- Copy your prior SSH and RSA key files into the .keys directory within the project directory. This should include **id_rsa**, **id_rsa.pub**, **private.pem**, and **public.pem**.
+- Copy your prior SSH and RSA key files into the .keys directory within the project directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
 
 - Copy your prior **config.sh** into the project directory.
 

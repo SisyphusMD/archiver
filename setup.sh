@@ -161,22 +161,22 @@ generate_rsa_keypair() {
 }
 
 generate_ssh_keypair() {
-  if [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_rsa.pub" ]; then
+  if [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ]; then
     echo    # Move to a new line
     read -p "Would you like to generate an SSH key pair for Duplicacy SFTP storage? (y|N):" -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo "Generating SSH key pair for Duplicacy SFTP storage..."
-      backup_existing_file "${DUPLICACY_KEYS_DIR}/id_rsa"
-      backup_existing_file "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
-      ssh-keygen -f "${DUPLICACY_KEYS_DIR}/id_rsa" -N "" -C "archiver"
+      backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519"
+      backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
+      ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver"
       chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
       chmod 700 "${DUPLICACY_KEYS_DIR}"
-      chmod 600 "${DUPLICACY_KEYS_DIR}/id_rsa"
-      chmod 600 "${DUPLICACY_KEYS_DIR}/id_rsa.pub"
+      chmod 600 "${DUPLICACY_KEYS_DIR}/id_ed25519"
+      chmod 600 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
       echo "SSH key pair generated successfully."
     else
-      echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_rsa and archiver/.keys/id_rsa.pub"
+      echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
     fi
   else
     echo "Skipping SSH key pair generation: SSH key files already present in .keys directory."
@@ -227,7 +227,7 @@ create_config_file() {
       read -rp "SFTP User: " sftp_user
       read -rp "SFTP Path (directory path on sftp host): " sftp_path
       sftp_path=$(echo "$sftp_path" | sed 's|^/*||;s|/*$||')
-      sftp_key_file="${DUPLICACY_KEYS_DIR}/id_rsa"
+      sftp_key_file="${DUPLICACY_KEYS_DIR}/id_ed25519"
     }
 
     # Function to prompt for B2 storage details
@@ -307,7 +307,7 @@ EOL
   # STORAGE_TARGET_1_SFTP_PORT="22"
   # STORAGE_TARGET_1_SFTP_USER="user"
   # STORAGE_TARGET_1_SFTP_PATH="remote/path"
-  # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_rsa"
+  # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_ed25519"
 
 # Example B2 Storage Target
   # STORAGE_TARGET_2_NAME="name"
