@@ -233,7 +233,7 @@ generate_ssh_keypair() {
     else
       echo " - SSH key pair not generated."
       echo " - Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
-      echo " - Archiver only supports key pairs with no passphrase. Prefer ed25519 over rsa."
+      echo " - Archiver only supports ed25519 key pairs with no passphrase for SFTP."
       echo " - Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver""
     fi
   else
@@ -560,13 +560,13 @@ schedule_with_cron() {
   read -p "Would you like to schedule the backup with cron? (y|N): " -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
-    (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | sudo crontab -
+    (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/archiver.sh") | sudo crontab -
     echo " - Backup scheduled with cron for 3am daily."
   else
     echo " - Backup not scheduled with cron."
     echo " - You can always schedule it later with this command:"
     echo "--------------------------------------------"
-    echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | sudo crontab -"
+    echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/archiver.sh\") | sudo crontab -"
     echo "--------------------------------------------"
   fi
 }
@@ -589,8 +589,8 @@ main() {
   echo    # Move to a new line
   echo " - Setup script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your .keys directory."
-  echo "To manually run the Archiver script, use 'sudo ./main.sh' from the archiver directory."
-  echo "To run it detached from the terminal, use 'sudo ./main.sh &' from the archiver directory instead."
+  echo "To manually start the Archiver script, use 'sudo ./archiver.sh' from the archiver directory."
+  echo "To manually stop the Archiver script early, use 'sudo ./stop_archiver.sh' from the archiver directory."
   echo "To watch the logs of the actively running backup, use 'tail -f logs/*.log' from the archiver directory."
 }
 

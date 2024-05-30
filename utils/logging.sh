@@ -5,33 +5,29 @@
 # Output:
 #   Writes the log message to the archiver's log file. No console output except for WARNING or ERROR.
 
-# Define log file paths. Add new log files to the below array to ensure they're included in rotation.
 LOG_DIR="${ARCHIVER_DIR}/logs" # Path to Archiver logs directory
-ARCHIVER_LOG_FILE="${LOG_DIR}/archiver.log" # Log file for Archiver logs
-DUPLICACY_LOG_FILE="${LOG_DIR}/duplicacy-output.log" # Log file for Duplicacy output
-DOCKER_LOG_FILE="${LOG_DIR}/docker-output.log" # Log file for Docker output
-CURL_LOG_FILE="${LOG_DIR}/curl-output.log" # Log file for Curl output
-# Array of log file variables, make sure to add more log file variables to this array if adding to the list above
-ALL_LOG_FILES=(
-  "${ARCHIVER_LOG_FILE}"
-  "${DUPLICACY_LOG_FILE}"
-  "${DOCKER_LOG_FILE}"
-  "${CURL_LOG_FILE}"
+LOG_PREFIXES=(
+  "archiver"
+  "duplicacy"
+  "docker"
+  "curl"
 )
 
 log_message() {
   local log_level
   local message
   local timestamp
-  local target_log_file
+  local log_prefix
   local service_name
+  local target_log_file
 
   log_level="${1}"
   message="${2}"
   timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
-  target_log_file="${3:-${ARCHIVER_LOG_FILE}}" # Use ARCHIVER_LOG_FILE by default if no log file is specified
-  # Use "Archiver" if SERVICE is unset or empty
-  local service_name="${SERVICE:-Archiver}"
+  log_prefix="${3:-${archiver}}" # Use ARCHIVER_LOG_FILE by default if no log file is specified
+  target_log_file="${LOG_DIR}/${log_prefix}.log"
+  # Use "archiver" if SERVICE is unset or empty
+  local service_name="${SERVICE:-archiver}"
 
   echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}" >> "${target_log_file}" || \
     handle_error "Failed to log message for ${service_name} service to ${target_log_file}. Check if the log file is writable and disk space is available."
@@ -54,89 +50,41 @@ log_message() {
 # Output:
 #   Writes the provided output message to the specified log file or the default archiver log file. No console output.
 log_output() {
-  local target_log_file
+  local log_prefix
   local log_level
 
-  target_log_file="${1}"
+  log_prefix="${1}"
   log_level="${2:-INFO}" # Use INFO log level by default if no log level is specified
 
   while IFS= read -r line; do
-    log_message "${log_level}" "${line}" "${target_log_file}"
+    log_message "${log_level}" "${line}" "${log_prefix}"
   done
 }
 
-# Rotates log files for the Archiver, ensuring log management adheres to a retention policy.
-# Parameters:
-#   1. Log File Path: The path to the log file to rotate.
-# Output:
-#   Old log files are archived or deleted according to the retention policy. No direct output.
 rotate_logs() {
-  # Enforces a retention policy by keeping only the specified maximum number of backup versions.
-  # Parameters:
-  #   1. Max Versions: The maximum number of backup versions to retain.
-  #   2. Backup Directory: The directory containing the backup files to apply the retention policy to.
-  # Output:
-  #   Deletes older backup files exceeding the specified maximum count, preserving only the most recent versions.
-  keep_max_versions() {
-    local log_prefix
-    local max_versions
-    local log_files
-    local num_files
+  mkdir -p "${LOG_DIR}" || handle_error "Unable to create log directory '${LOG_DIR}'."
 
-    log_prefix="${1}"
-    max_versions="${2}"
+  for log_prefix in "${LOG_PREFIXES[@]}"; do
+    local new_log_file
 
-    # Find all log files matching the prefix and sort them in reverse order
-    mapfile -t log_files < <(find "${LOG_DIR}" -name "${log_prefix}*.log" -type f -printf "%T@ %p\n" | sort -nr | cut -d' ' -f2-)
-    num_files="${#log_files[@]}"
+    # Generate a new log file name based on the log prefix and script variable: DATETIME
+    new_log_file="${LOG_DIR}/${log_prefix}-${DATETIME}.log"
 
-    # Check if the number of log files exceeds the maximum allowed
-    if [ "${num_files}" -gt "${max_versions}" ]; then
-      # Iterate over log files starting from the (max_versions - 1) index
-      # and remove any excess log files beyond the maximum allowed versions
-      for (( i = max_versions; i < num_files; i++ )); do
-        rm -f "${log_files[i]}" || handle_error "Failed to remove file ${log_files[i]} for ${SERVICE} service. Verify file permissions and that the file is not in use."
-        log_message "INFO" "Removed old log file: ${log_files[i]}"
-      done
-    fi
-  }
+    # Create a new empty log file
+    touch "${new_log_file}"  || \
+      handle_error "Could not create log file '${new_log_file}'."
+    log_message "INFO" "Created log file '${new_log_file}'."
 
-  local log_file
-  local log_name
-  local log_type
-  local max_versions
+    # Update or create the symlink to point to the new log file
+    ln -sf "${new_log_file}" "${LOG_DIR}/${log_prefix}.log" || \
+      handle_error "Could not update/create symlink for '${log_prefix}.log' to '${new_log_file}'."
+    log_message "INFO" "Updated/created symlink for '${log_prefix}.log' to '${new_log_file}'."
 
-  log_file="${1}"
-  log_name="$(basename "${log_file}")"
-  log_type="${log_name%.*}"
-  max_versions=7
-
-  # Check if the log directory exists, and create it if it doesn't
-  [ -d "${LOG_DIR}" ] || mkdir -p "${LOG_DIR}"
-
-  # Rotate the log file if needed
-  if [ -f "${log_file}" ]; then
-    local creation_date
-
-    # Extract the creation date of the log file
-    creation_date="$(date -r "${log_file}" +'%Y-%m-%d')"
-
-    # Check if the log file was created on a different date than today
-    if [ "${creation_date}" != "${DATE}" ]; then
-      local new_log_file
-
-      # Generate a new log file name based on the log type and current date
-      new_log_file="${LOG_DIR}/${log_type}-${creation_date}.log"
-
-      # Rename the existing log file to the new name
-      mv "${log_file}" "${new_log_file}" || \
-        handle_error "Could not rename the log file from '${log_file}' to '${new_log_file}' for the ${SERVICE} service. Check file permissions and path validity."
-      log_message "INFO" "Rotated log file: ${log_file} -> ${new_log_file}"
-
-      # Keep a maximum of max_versions log files after rotation
-      keep_max_versions "${log_type}" "${max_versions}"
-    fi
-  fi
+    # Delete log files older than 7 days
+    find "${LOG_DIR}" -name "${log_prefix}-*.log" -type f -mtime +7 -exec rm -f {} \; || \
+      handle_error "Failed to delete old '${log_prefix}' log files."
+    log_message "INFO" "Deleted '${log_prefix}' log files older than 7 days."
+  done
 }
 
 

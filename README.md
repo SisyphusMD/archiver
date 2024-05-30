@@ -192,3 +192,6 @@ sudo ./archiver/restore.sh
 ```
 
 - More instructions for running the restore.sh script to come here.
+
+
+- Then ultimately need instruction to run archiver.sh

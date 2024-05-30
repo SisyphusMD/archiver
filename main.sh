@@ -5,36 +5,76 @@
 #
 # Usage instructions: Execute the script as sudo without arguments (sudo ./main.sh).
 
+# ---------------------
+# Initial Checks
+# ---------------------
+
+LOCKFILE="/var/lock/archiver.lock"
+LOGFILE="/var/log/archiver.log"
+
+# Function to log messages
+log_message() {
+  local message="$1"
+  echo "$(date +"%Y-%m-%d %H:%M:%S") - ${message}" >> "${LOGFILE}"
+}
+
 # Exit if not run as root
 if [ "$(id -u)" -ne 0 ]; then
- echo "This script must be run as root. Please use sudo or log in as the root user." 1>&2
+ log_message "This script must be run as root. Please use sudo or log in as the root user."
  exit 1
 fi
 
-# Set time variables
+# Function to remove the lock file upon script exit
+cleanup() {
+  rm -f "${LOCKFILE}"
+  log_message "Archiver script ended."
+}
+
+# Trap signals to ensure cleanup is performed
+trap cleanup EXIT
+
+# Check if the lock file exists and contains a valid PID
+if [ -e "${LOCKFILE}" ]; then
+  LOCK_PID=$(cat "${LOCKFILE}")
+  if [ -n "${LOCK_PID}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
+    log_message "Another instance of Archiver is already running with PID ${LOCK_PID}."
+    exit 1
+  else
+    log_message "Stale lock file found. Cleaning up."
+    rm -f "${LOCKFILE}"
+  fi
+fi
+
+# Create the lock file with the current PID
+echo $$ > "${LOCKFILE}"
+log_message "Archiver script started."
+
+
+# ---------------------
+# Environment Variables
+# ---------------------
 START_TIME="$(date +%s)"
 DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')"
+MAIN_SCRIPT="$(readlink -f "${0}" 2>/dev/null)"
+ARCHIVER_DIR="$(cd "$(dirname "${MAIN_SCRIPT}")" && pwd)"
 
-# Determine the full path of the script
-ARCHIVER_SCRIPT_PATH="$(readlink -f "${0}" 2>/dev/null)"
-# Determine the full path of the containing dir of the script
-ARCHIVER_DIR="$(cd "$(dirname "${ARCHIVER_SCRIPT_PATH}")" && pwd)"
 
+# ---------------------
 # Configuration Section
 # ---------------------
 # Sourcing configurable variables from config.sh.
 # Please review and adjust the variables in config.sh as necessary to fit your setup.
 source "${ARCHIVER_DIR}/config.sh"
 # Initialize an empty array to hold the directory paths
-EXPANDED_DIRECTORIES=()
+EXPANDED_SERVICE_DIRECTORIES=()
 # Populate user defined service directories into the EXPANDED_DIRECTORIES array
 for pattern in "${SERVICE_DIRECTORIES[@]}"; do
   # Directly list directories for specific paths or wildcard patterns
   for dir in ${pattern}; do  # Important: Don't quote ${pattern} to allow glob expansion
     if [ -d "${dir}" ]; then
       # Add the directory to the array, removing the trailing slash
-      EXPANDED_DIRECTORIES+=("${dir%/}")
+      EXPANDED_SERVICE_DIRECTORIES+=("${dir%/}")
     fi
   done
 done
@@ -92,10 +132,8 @@ source "${ARCHIVER_DIR}/utils/notification.sh"
 # Output:
 #   Coordinates the backup process for each service, logging progress and results. No direct output.
 main() {
-  # Iterate over the array and call rotate_logs for each log file
-  for log_file in "${ALL_LOG_FILES[@]}"; do
-      rotate_logs "${log_file}"
-  done
+  # Rotate the logs
+  rotate_logs
 
   # Make sure duplicacy binary is installed
   duplicacy_binary_check
@@ -104,14 +142,15 @@ main() {
   count_storage_targets
 
   # Loop to iterate over user-defined service directories and perform backup function on each
-  for SERVICE_DIR in "${EXPANDED_DIRECTORIES[@]}" ; do
+  for SERVICE_DIR in "${EXPANDED_SERVICE_DIRECTORIES[@]}" ; do
     # Move to user defined service directory or exit if failed
-    cd "${SERVICE_DIR}" || { handle_error "Failed to change to service directory: ${SERVICE_DIR}. Continuing to next service."; continue; }
+    cd "${SERVICE_DIR}" || { handle_error "Failed to change to the '${SERVICE_DIR}' service directory. Continuing to the next service directory."; continue; }
+    LAST_WORKING_DIR="${SERVICE_DIR}"
 
     # Define service name from directory
     SERVICE="$(basename "${PWD}")"
 
-    log_message "INFO" "Successfully changed to the ${SERVICE} service directory."
+    log_message "INFO" "Successfully changed to the '${SERVICE_DIR}' service directory."
 
     set_duplicacy_variables
 
@@ -122,32 +161,32 @@ main() {
 
     # Check if the service-backup-settings.sh file exists
     if [ -f "${SERVICE_DIR}/service-backup-settings.sh" ]; then
-      log_message "INFO" "Found service-backup-settings.sh file for ${SERVICE} service. Attempting to import..."
+      log_message "INFO" "Found service-backup-settings.sh file for the '${SERVICE}' service. Attempting to import..."
       if source "${SERVICE_DIR}/service-backup-settings.sh"; then
-        log_message "INFO" "Successfully imported service-backup-settings.sh file for ${SERVICE} service."
+        log_message "INFO" "Successfully imported service-backup-settings.sh file for the '${SERVICE}' service."
       else
-        log_message "WARNING" "Failed to import service-backup-settings.sh file for ${SERVICE} service. Using default values."
+        log_message "WARNING" "Failed to import service-backup-settings.sh file for the '${SERVICE}' service. Using default values."
       fi
     else
-      log_message "INFO" "No service-backup-settings.sh file for ${SERVICE} service. Using default values."
+      log_message "INFO" "No service-backup-settings.sh file for the '${SERVICE}' service. Using default values."
     fi
 
-    log_message "INFO" "Starting backup process for ${SERVICE} service." 
+    log_message "INFO" "Starting backup process for the '${SERVICE}' service." 
 
     # Run any specific pre backup commands defined in the service-backup-settings.sh file
     service_specific_pre_backup_function
 
     # Run Duplicacy primary backup
-    duplicacy_primary_backup || { handle_error "Duplicacy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+    duplicacy_primary_backup || { handle_error "Duplicacy backup failed for the '${SERVICE}' service. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
     # Run any specific post backup commands defined in the source file
     service_specific_post_backup_function
 
     # Run Duplicacy copy backup
-    duplicacy_copy_backup || { handle_error "Duplicacy copy backup failed for ${SERVICE}. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+    duplicacy_copy_backup || { handle_error "Duplicacy copy backup failed for the '${SERVICE}' service. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
     # Success message
-    log_message "INFO" "Completed backup and duplication process successfully for ${SERVICE} service." || { handle_error "Failed to log the successful completion of backup and duplication for ${SERVICE}."; }
+    log_message "INFO" "Completed backup and duplication process successfully for the '${SERVICE}' service."
 
     # Unset SERVICE variable
     unset SERVICE
@@ -166,7 +205,7 @@ main() {
   #     This can greatly simplify the implementation.
   #
   # Move to last service directory
-  cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}."
+  cd "${LAST_WORKING_DIR}" || handle_error "Failed to change to the last working service directory, '${LAST_WORKING_DIR}', to complete the duplicacy prune."
 
   # Prune duplicacy from last successful backup directory
   duplicacy_prune || handle_error "Duplicacy prune failed. Review Duplicacy logs for details."
@@ -175,10 +214,10 @@ main() {
   END_TIME=$(date +%s)
 
   # Calculate the total runtime
-  ELAPSED_TIME=$(($END_TIME - $START_TIME))
+  ELAPSED_TIME="$(("${END_TIME}" - "${START_TIME}"))"
 
   # Get the total runtime in human-readable format
-  TOTAL_TIME_TAKEN=$(elapsed_time $ELAPSED_TIME)
+  TOTAL_TIME_TAKEN="$(elapsed_time "${ELAPSED_TIME}")"
 
   # Send terminal and notification of script completion with error count
   local message
