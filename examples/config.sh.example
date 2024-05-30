@@ -1,26 +1,60 @@
-SERVICE_DIRECTORIES=(
-  "/srv/*/"
-  "/mnt/*/"
-)
+#########################################################################################
+# Archiver Backup User Configuration                                                    #
+#########################################################################################
+# config.sh                                                                             #
+#   This file is intended to be sourced by the Archiver script to define user           #
+#   configurable variables.                                                             #
+#                                                                                       #
+# Usage:                                                                                #
+#   Include this file as "config.sh" in the archiver directory                          #
+#                                                                                       #
+# Note:                                                                                 #
+#   This script should not be executed directly. Instead, it will be sourced by the     #
+#   Archiver script.                                                                    #
+#                                                                                       #
+# Instructions:                                                                         #
+# - User must provide at least one service directory and one storage target.            #
+# - User must provide the STORAGE_PASSWORD and RSA_PASSPHRASE to be used by Archiver    #
+# - User can optionally provide a PUSHOVER_USER_KEY and PUSHOVER_API_TOKEN in order to  #
+#   receive backup notifications through Pushover.                                      #
+#########################################################################################
 
-STORAGE_TARGET_1_NAME="name"
-STORAGE_TARGET_1_TYPE="type"
-STORAGE_TARGET_1_SFTP_URL="url.tld"
-STORAGE_TARGET_1_SFTP_USER="user"
-STORAGE_TARGET_1_SFTP_PATH="remote/path"
-STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_ed25519"
+# Example SERVICE_DIRECTORIES
+# Please provide a list of directories on your device to be backed up. Must provide the"
+#   full paths. Can use * to indicate each individual subdirectory within the parent"
+#   directory. Each directory will be backed up as an individual duplicacy repository."
+  # SERVICE_DIRECTORIES=(
+  #   "/srv/*/" # Will backup each subdirectory within /srv/ - multiple individual repositories.
+  #   "/mnt/*/" # Will backup each subdirectory within /mnt/ - multiple individual repositories.
+  #   "/home/cody/" # Will backup the /home/cody/ directory - one individual repository.
+  # )
 
-STORAGE_TARGET_2_NAME="name"
-STORAGE_TARGET_2_TYPE="type"
-STORAGE_TARGET_2_B2_BUCKETNAME="bucketName"
-STORAGE_TARGET_2_B2_ID="keyID"
-STORAGE_TARGET_2_B2_KEY="applicationKey"
+# Storage targets must be numbered sequentially, starting with 1, following the naming
+#   scheme STORAGE_TARGET_X_OPTION="config", with all options for the same storage
+#   using the same X number, as in the below examples. SFTP and BackBlaze storage
+#   targets are currently supported. Require at least one storage target.
 
-# All Duplicacy
-RSA_PASSPHRASE="XXXXX" # Passphrase for RSA private key
-STORAGE_PASSWORD="XXXXX" # Password for Duplicacy storage
+# Example SFTP Storage Target
+  # STORAGE_TARGET_1_NAME="name" # You can call this whatever you want, but it must be unique.
+  # STORAGE_TARGET_1_TYPE="sftp" # Currently support sftp and b2. For sftp, require URL, PORT, USER, PATH, and KEY_FILE as below.
+  # STORAGE_TARGET_1_SFTP_URL="192.168.1.1" # The IP address or FQDN of the sftp host.
+  # STORAGE_TARGET_1_SFTP_PORT="22" # The sftp port of the sftp host. Default is 22.
+  # STORAGE_TARGET_1_SFTP_USER="user" # User with sftp privileges on sftp host.
+  # STORAGE_TARGET_1_SFTP_PATH="remote/path" # Absolute path to remote backup directory.
+  # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_ed25519" # Full path to private ssh key file.
+
+# Example B2 Storage Target
+  # STORAGE_TARGET_2_NAME="name" # You can call this whatever you want, but it must be unique.
+  # STORAGE_TARGET_2_TYPE="b2" # Currently support sftp and b2. For b2, require BUCKETNAME, ID, and KEY as below.
+  # STORAGE_TARGET_2_B2_BUCKETNAME="bucketName" # BackBlaze bucket name. Must be globally unique.
+  # STORAGE_TARGET_2_B2_ID="keyID" # BackBlaze keyID with read/write access to the above bucket.
+  # STORAGE_TARGET_2_B2_KEY="applicationKey"  # BackBlaze applicationKey with read/write access to the above bucket.
+
+# Secrets for all Duplicacy storage targets
+  # STORAGE_PASSWORD="" # Password for Duplicacy storage (required)
+  # RSA_PASSPHRASE="" # Passphrase for RSA private key (required)
 
 # Pushover Notifications
-NOTIFICATION_SERVICE="Pushover" # Currently support 'None' or "Pushover'
-PUSHOVER_API_TOKEN="XXXXX" # Pushover application API token/key
-PUSHOVER_USER_KEY="XXXXX" # Pushover user key (not email address), viewable when logged into Pushover dashboard
+  # NOTIFICATION_SERVICE="" # Currently support 'Pushover' or 'None'
+  # PUSHOVER_USER_KEY="" # Pushover user key (not email address), viewable when logged into Pushover dashboard
+  # PUSHOVER_API_TOKEN="" # Pushover application API token/key
