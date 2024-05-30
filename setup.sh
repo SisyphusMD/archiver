@@ -87,6 +87,8 @@ install_packages() {
 
   missing_packages=()
 
+  echo "Checking for missing required packages..."
+
   # Check for each required package
   for package in "${REQUIRED_PACKAGES[@]}"; do
     if ! dpkg -l | grep -q "^ii  $package "; then
@@ -102,6 +104,8 @@ install_packages() {
 
   # List missing packages and prompt user for installation
   echo "The following required packages are missing: ${missing_packages[*]}"
+  echo    # Move to a new line
+  echo    # Move to a new line
   read -p "Would you like to install the missing packages? (y/N): " -n 1 -r
   echo    # Move to a new line
 
@@ -119,6 +123,7 @@ install_packages() {
 
 install_duplicacy() {
   echo    # Move to a new line
+  echo    # Move to a new line
   read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N): " -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -130,7 +135,7 @@ install_duplicacy() {
     ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
     echo "Duplicacy binary installed successfully."
   else
-    echo " - Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run Archiver script."
+    echo " - Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run the main script."
   fi
 }
 
@@ -145,6 +150,7 @@ backup_existing_file() {
 
 generate_rsa_keypair() {
   if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
+    echo    # Move to a new line
     echo    # Move to a new line
     read -p "Would you like to generate an RSA key pair for Duplicacy encryption? (y|N): " -n 1 -r
     echo    # Move to a new line
@@ -197,6 +203,7 @@ EOF
 generate_ssh_keypair() {
   if [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ]; then
     echo    # Move to a new line
+    echo    # Move to a new line
     read -p "Would you like to generate an SSH key pair for Duplicacy SFTP storage? (y|N): " -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -220,6 +227,7 @@ generate_ssh_keypair() {
 }
 
 create_config_file() {
+  echo    # Move to a new line
   echo    # Move to a new line
   read -p "Would you like to generate your config.sh file now? (y|N): " -n 1 -r
   echo    # Move to a new line
@@ -252,7 +260,6 @@ create_config_file() {
     while [ -z "${storage_password}" ]; do
       echo    # Move to a new line
       read -rsp "Storage Password (required): " storage_password
-      echo    # Move to a new line
       if [ -z "${storage_password}" ]; then
         echo "Error: Storage Password is required."
       fi
@@ -261,7 +268,6 @@ create_config_file() {
     while [ -z "${RSA_PASSPHRASE}" ]; do
       echo    # Move to a new line
       read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
-      echo    # Move to a new line
       if [ -z "${RSA_PASSPHRASE}" ]; then
         echo "Error: RSA Passphrase is required."
       fi
@@ -386,6 +392,7 @@ EOL
     i=1
     while true; do
       echo    # Move to a new line
+      echo    # Move to a new line
       read -p "Would you like to add a(nother) storage target? (y|N): " -n 1 -r
       echo    # Move to a new line
       if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
@@ -475,6 +482,7 @@ RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key (required)
 EOL
 
     echo    # Move to a new line
+    echo    # Move to a new line
     read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -525,6 +533,7 @@ EOL
 }
 
 schedule_with_cron() {
+  echo    # Move to a new line
   echo    # Move to a new line
   read -p "Would you like to schedule the backup with cron? (y|N): " -n 1 -r
   echo    # Move to a new line
