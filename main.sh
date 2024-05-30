@@ -80,6 +80,7 @@ source "${ARCHIVER_DIR}/utils/duplicacy.sh"
 source "${ARCHIVER_DIR}/utils/notification.sh"
 # imports functions:
 #   - send_pushover_notification
+#   - notify
 
 # Main Function
 # ---------------------
@@ -175,13 +176,13 @@ main() {
   # Get the total runtime in human-readable format
   TOTAL_TIME_TAKEN=$(elapsed_time $ELAPSED_TIME)
 
-  # Send terminal and Pushover notification of script completion with error count
+  # Send terminal and notification of script completion with error count
   local message
   local timestamp
   timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
   message="[${timestamp}] [${HOSTNAME}] Archiver script completed in ${TOTAL_TIME_TAKEN} with ${ERROR_COUNT} error(s)."
   echo "${message}"
-  send_pushover_notification "Archiver Script Completed" "${message}"
+  notify "Archiver Script Completed" "${message}"
 }
 
 # Execution Flow

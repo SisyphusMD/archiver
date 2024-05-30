@@ -25,3 +25,15 @@ send_pushover_notification() {
   fi
   log_message "INFO" "Pushover notification sent successfully."
 }
+
+notify() {
+  local title
+  local message
+
+  title="${1}"
+  message="${2}"
+
+  if [ "$(echo "${NOTIFICATION_SERVICE}" | tr '[:upper:]' '[:lower:]')" == "pushover" ]; then
+    send_pushover_notification "${title}" "${message}"
+  fi
+}

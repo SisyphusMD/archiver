@@ -41,9 +41,9 @@ log_message() {
     echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
   fi
 
-  # Send ERROR messages as a Pushover notification
+  # Send ERROR messages as notification
   if [[ "${log_level}" == "ERROR" ]]; then
-    send_pushover_notification "Archiver Error" "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
+    notify "Archiver Error" "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
   fi
 }
 
