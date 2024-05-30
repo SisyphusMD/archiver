@@ -2,16 +2,16 @@
 
 # Function to print usage information
 usage() {
-  echo "Usage: $0 --starttime STARTTIME"
+  echo "Usage: $0 [--starttime STARTTIME]"
   echo
   echo "Options:"
-  echo "  --starttime STARTTIME  Specify the start time"
+  echo "  --starttime STARTTIME  Specify the start time (optional, defaults to 0)"
   echo "  --help                 Display this help message"
   exit 1
 }
 
 # Initialize variables
-start_time=""
+start_time=0
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -35,20 +35,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Exit if start_time is not provided
-if [ -z "$start_time" ]; then
-  echo "Error: --starttime is required."
-  usage  # Call usage if --starttime is not provided
-fi
-
 # Exit if not run as root
 if [ "$(id -u)" -ne 0 ]; then
  echo "This script must be run as root. Please use sudo or log in as the root user."
  exit 1
 fi
-
-# Record the current time to compare file modification times
-start_time=$(date +%s)
 
 # Determine the full path of the script
 VIEW_LOG_SCRIPT="$(readlink -f "${0}" 2>/dev/null)"
@@ -69,10 +60,7 @@ while [ ! -d "${LOG_DIR}" ]; do
   sleep 1
 done
 
-# Record the current time to compare file modification times
-start_time=$(date +%s)
-
-# Wait until all specified log files are present and updated after the script started
+# Wait until all specified log files are present and updated after the specified start time
 for log_prefix in "${LOG_PREFIXES[@]}"; do
   while true; do
     if [ -L "${LOG_DIR}/${log_prefix}.log" ]; then
