@@ -130,7 +130,7 @@ install_duplicacy() {
     ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
     echo "Duplicacy binary installed successfully."
   else
-    echo "Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run Archiver script."
+    echo " - Duplicacy binary not installed. Please ensure Duplicacy is installed before attempting to run Archiver script."
   fi
 }
 
@@ -146,7 +146,7 @@ backup_existing_file() {
 generate_rsa_keypair() {
   if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
     echo    # Move to a new line
-    read -p "Would you like to generate an RSA key pair for Duplicacy encryption? (y|N):" -n 1 -r
+    read -p "Would you like to generate an RSA key pair for Duplicacy encryption? (y|N): " -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo "Generating RSA key pair for Duplicacy encryption..."
@@ -186,18 +186,18 @@ EOF
       chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
       echo "RSA key pair generated successfully."
     else
-      echo "RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
-      echo "Details at: https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662"
+      echo " - RSA key pair not generated. Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
+      echo " - Details at: https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662"
     fi
   else
-    echo "Skipping RSA key pair generation: RSA key files already present in .keys directory."
+    echo " - Skipping RSA key pair generation: RSA key files already present in .keys directory."
   fi
 }
 
 generate_ssh_keypair() {
   if [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ]; then
     echo    # Move to a new line
-    read -p "Would you like to generate an SSH key pair for Duplicacy SFTP storage? (y|N):" -n 1 -r
+    read -p "Would you like to generate an SSH key pair for Duplicacy SFTP storage? (y|N): " -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo "Generating SSH key pair for Duplicacy SFTP storage..."
@@ -210,18 +210,18 @@ generate_ssh_keypair() {
       chmod 644 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
       echo "SSH key pair generated successfully."
     else
-      echo "SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
-      echo "Only support key pairs with no passphrase. Prefer ed25519 over rsa."
-      echo "Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver""
+      echo " - SSH key pair not generated. Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
+      echo " - Only support key pairs with no passphrase. Prefer ed25519 over rsa."
+      echo " - Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver""
     fi
   else
-    echo "Skipping SSH key pair generation: SSH key files already present in .keys directory."
+    echo " - Skipping SSH key pair generation: SSH key files already present in .keys directory."
   fi
 }
 
 create_config_file() {
   echo    # Move to a new line
-  read -p "Would you like to generate your config.sh file now? (y|N):" -n 1 -r
+  read -p "Would you like to generate your config.sh file now? (y|N): " -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Creating config.sh file..."
@@ -505,24 +505,25 @@ EOL
     chmod 600 "${ARCHIVER_DIR}/config.sh"
     echo "Configuration file created at ${ARCHIVER_DIR}/config.sh"
   else
-    echo "Configuration file generation skipped."
+    echo " - Configuration file generation skipped."
+    echo " - If you would like to create your config.sh file manually, you can"
+    echo " -   copy config.sh.example from the examples directory to config.sh"
+    echo " -   and place it in the parent archiver directory."
   fi
 }
 
 schedule_with_cron() {
   echo    # Move to a new line
-  read -p "Would you like to schedule the backup with cron? (y|N):" -n 1 -r
+  read -p "Would you like to schedule the backup with cron? (y|N): " -n 1 -r
   echo    # Move to a new line
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     (sudo crontab -l 2>/dev/null; echo "0 3 * * * ${ARCHIVER_DIR}/main.sh") | sudo crontab -
-    echo "Backup scheduled with cron."
+    echo "Backup scheduled with cron for 3am daily."
   else
-    echo    # Move to a new line
-    echo "Backup not scheduled with cron. You can always schedule it later with this command:"
+    echo " - Backup not scheduled with cron. You can always schedule it later with this command:"
     echo "--------------------------------------------"
     echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/main.sh\") | sudo crontab -"
     echo "--------------------------------------------"
-    echo    # Move to a new line
   fi
 }
 
@@ -540,7 +541,7 @@ main() {
   schedule_with_cron
 
   echo    # Move to a new line
-  echo "Installation completed."
+  echo "Setup script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your .keys directory."
   echo "To manually run the Archiver script, use 'sudo ./main.sh' from the archiver directory."
   echo "To run it detached from the terminal, use 'sudo ./main.sh &' from the archiver directory instead."
