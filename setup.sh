@@ -98,7 +98,7 @@ install_packages() {
 
   # If there are no missing packages, exit the function
   if [ ${#missing_packages[@]} -eq 0 ]; then
-    echo "All required packages are already installed."
+    echo " - All required packages are already installed."
     return
   fi
 
@@ -237,10 +237,9 @@ create_config_file() {
 
     # Prompt user for SERVICE_DIRECTORIES
     echo    # Move to a new line
-    echo "Provide a list of directories on your device to be backed up. Must provide the"
-    echo "  full paths. Can use * to indicate all subdirectories within one level below"
-    echo "  the parent directory. Each directory will be backed up as an individual"
-    echo "  duplicacy repository."
+    echo "Please provide a list of directories on your device to be backed up. Must provide the"
+    echo "  full paths. Can use * to indicate each individual subdirectory within the parent"
+    echo "  directory. Each directory will be backed up as an individual duplicacy repository."
 
     while [ -z "${service_directories_input}" ]; do
       echo    # Move to a new line
@@ -255,7 +254,7 @@ create_config_file() {
 
     # Prompt user for Duplicacy security details
     echo "Enter security details for Duplicacy access and encryption:"
-    echo "Create if this is a new install, or provide prior details if restoring:"
+    echo "Create this storage password and rsa passphrase if this is a new install, or provide prior details if restoring:"
 
     while [ -z "${storage_password}" ]; do
       echo    # Move to a new line
@@ -376,10 +375,9 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 )
 
 # Example SERVICE_DIRECTORIES
-# Provide a list of directories on your device to be backed up. Must provide the
-#   full paths. Can use * to indicate all subdirectories within one level below
-#   the parent directory. Each directory will be backed up as an individual
-#   duplicacy repository.
+# Please provide a list of directories on your device to be backed up. Must provide the"
+#   full paths. Can use * to indicate each individual subdirectory within the parent"
+#   directory. Each directory will be backed up as an individual duplicacy repository."
 # SERVICE_DIRECTORIES=(
 #   "/srv/*/"     # Will backup each subdirectory within /srv/ - multiple individual repositories.
 #   "/mnt/*/"     # Will backup each subdirectory within /mnt/ - multiple individual repositories.
@@ -482,7 +480,6 @@ RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key (required)
 EOL
 
     echo    # Move to a new line
-    echo    # Move to a new line
     read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -502,6 +499,7 @@ EOL
       while [ -z "${pushover_api_token}" ]; do
         echo    # Move to a new line
         read -rsp "Pushover API Token: " pushover_api_token
+        echo    # Move to a new line
         if [ -z "${pushover_api_token}" ]; then
           echo "Error: Pushover API Token is required."
         fi
@@ -561,6 +559,8 @@ main() {
   create_config_file
 
   schedule_with_cron
+
+  sleep 2
 
   echo    # Move to a new line
   echo "Setup script completed."
