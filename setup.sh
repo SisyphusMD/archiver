@@ -39,9 +39,10 @@ ARCHIVER_DIR="$(dirname "$(readlink -f "$0")")" # Path to Archiver directory
 DUPLICACY_VERSION="3.2.3"
 DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/.keys"
 REQUIRED_PACKAGES=(
-  "wget"
-  "openssl"
+  "expect"
   "openssh-client"
+  "openssl"
+  "wget"
 )
 
 # Determine environment
@@ -73,6 +74,7 @@ DUPLICACY_BIN_LINK_PATH="${DUPLICACY_BIN_LINK_DIR}/${DUPLICACY_BIN_LINK_NAME}"
 DUPLICACY_BIN_URL="https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/${DUPLICACY_BIN_FILE_NAME}"
 
 mkdir -p "${DUPLICACY_KEYS_DIR}"
+RSA_PASSPHRASE=""
 
 # Ensure necessary packages are installed
 install_packages() {
@@ -143,10 +145,36 @@ generate_rsa_keypair() {
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo "Generating RSA key pair for Duplicacy encryption..."
+
       backup_existing_file "${DUPLICACY_KEYS_DIR}/private.pem"
       backup_existing_file "${DUPLICACY_KEYS_DIR}/public.pem"
-      openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
-      openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
+
+      while [ -z "${RSA_PASSPHRASE}" ]; do
+        # Please provide an RSA Passphrase to use with this new RSA key pair
+        read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
+        echo    # Move to a new line
+        if [ -z "${RSA_PASSPHRASE}" ]; then
+          echo "Error: RSA Passphrase is required."
+        fi
+      done
+
+      # Running expect scripts to handle the prompts
+      expect <<EOF
+spawn openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
+expect "Enter PEM pass phrase:"
+send "${RSA_PASSPHRASE}\r"
+expect "Verifying - Enter PEM pass phrase:"
+send "${RSA_PASSPHRASE}\r"
+expect eof
+EOF
+
+      expect <<EOF
+spawn openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
+expect "Enter pass phrase for ${DUPLICACY_KEYS_DIR}/private.pem:"
+send "${RSA_PASSPHRASE}\r"
+expect eof
+EOF
+
       chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
@@ -199,10 +227,24 @@ create_config_file() {
     # Prompt user for Duplicacy security details
     echo "Enter security details for Duplicacy access and encryption:"
     echo "Create if this is a new install, or provide prior details if restoring:"
-    read -rsp "Storage Password: " storage_password
-    echo    # Move to a new line
-    read -rsp "RSA Passphrase: " rsa_passphrase
-    echo    # Move to a new line
+
+    while [ -z "${storage_password}" ]; do
+      echo    # Move to a new line
+      read -rsp "Storage Password (required): " storage_password
+      echo    # Move to a new line
+      if [ -z "${storage_password}" ]; then
+        echo "Error: Storage Password is required."
+      fi
+    done
+
+    while [ -z "${RSA_PASSPHRASE}" ]; do
+      echo    # Move to a new line
+      read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
+      echo    # Move to a new line
+      if [ -z "${RSA_PASSPHRASE}" ]; then
+        echo "Error: RSA Passphrase is required."
+      fi
+    done
 
     echo    # Move to a new line
     read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
@@ -317,8 +359,8 @@ EOL
   # STORAGE_TARGET_2_B2_KEY="applicationKey"
 
 # Secrets for all Duplicacy storage targets
-STORAGE_PASSWORD="$storage_password" # Password for Duplicacy storage
-RSA_PASSPHRASE="$rsa_passphrase" # Passphrase for RSA private key
+STORAGE_PASSWORD="${storage_password}" # Password for Duplicacy storage
+RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key
 
 # Pushover Notifications
 NOTIFICATION_SERVICE="$notification_service" # Currently support 'None' or 'Pushover'
