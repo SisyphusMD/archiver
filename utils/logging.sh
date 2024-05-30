@@ -87,14 +87,14 @@ rotate_logs() {
     max_versions="${2}"
 
     # Find all log files matching the prefix and sort them in reverse order
-    mapfile -t log_files < <(find "${LOG_DIR}" -name "${log_prefix}*.log" -type f -print0 | sort -rz)
+    mapfile -t log_files < <(find "${LOG_DIR}" -name "${log_prefix}*.log" -type f -printf "%T@ %p\n" | sort -nr | cut -d' ' -f2-)
     num_files="${#log_files[@]}"
 
     # Check if the number of log files exceeds the maximum allowed
     if [ "${num_files}" -gt "${max_versions}" ]; then
       # Iterate over log files starting from the (max_versions - 1) index
       # and remove any excess log files beyond the maximum allowed versions
-      for (( i = max_versions - 1; i < num_files; i++ )); do
+      for (( i = max_versions; i < num_files; i++ )); do
         rm -f "${log_files[i]}" || handle_error "Failed to remove file ${log_files[i]} for ${SERVICE} service. Verify file permissions and that the file is not in use."
         log_message "INFO" "Removed old log file: ${log_files[i]}"
       done
