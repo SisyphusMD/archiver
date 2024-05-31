@@ -1,4 +1,4 @@
-![Logo](logos/72x372.png)
+![Logo](logos/72x72.png)
 # Archiver
 
 Archiver is a powerful, highly-configurable backup tool, designed to remove barriers to following the [3-2-1 Backup Strategy](https://www.backblaze.com/blog/the-3-2-1-backup-strategy/). It leverages the robust capabilities of [Duplicacy](https://github.com/gilbertchen/duplicacy) to create encrypted and de-duplicated backups, and automates the processes of intiating, copying, pruning, and restoring Duplicacy repositories for any directory or service to any number of storage backends. It provides an easy way to run custom pre-backup, post-backup, and restore scripts for each directory or service, while offering scheduling via Cron and notifications vs [Pushover](https://pushover.net).
