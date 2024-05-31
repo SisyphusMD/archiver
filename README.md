@@ -145,10 +145,10 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
   - Make note of the **API Token/Key**, located at the top of the page after creating the Application.
 </details>
 
-### Installation
-
 <details>
-  <summary><h4>Git Installation</h3></summary>
+  <summary><h3>Installation</h3></summary>
+
+  #### Git Installation
 
   - Check if git is already installed
   ```bash
@@ -162,51 +162,51 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
   ```bash
   sudo apt install git -y
   ```
+
+  #### Archiver Script Installation
+
+  - ##### Navigate to the desired parent directory for the project.
+    - For example, if installing in home dir:
+    ```bash
+    cd ~
+    ```
+
+  - ##### Clone the GitHub repository
+  ```bash
+  git clone https://github.com/SisyphusMD/archiver.git
+  ```
+
+  - ##### Run the setup script
+  ```bash
+  sudo ./archiver/setup.sh
+  ```
+
+  - ##### Follow the instructions in this automated setup script to:
+    - Install required package dependencies for the setup script.
+      - If any missing dependencies are found, you will be prompted to allow their installation.
+    - Download the appropriate Duplicacy binary for your system.
+      - If the Duplicacy binary cannot be found, you will be prompted to allow its installation.
+    - Generate the required RSA keypair for Duplicacy storage encryption.
+      - If RSA key files are not found, you will be prompted to generate them.
+      - See [here](https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662) for manual generation details.
+    - Generate SSH key files required for SFTP storage backends.
+      - If SSH key files are not found, you will be prompted to generate them.
+      - To generate manually, run this from the archiver directory:
+        ```bash
+        mkdir -p .keys && ssh-keygen -t ed25519 -f .keys/id_ed25519" -N "" -C "archiver"
+        ```
+        - Do **NOT** provide a passphrase when prompted.
+    - Build your configuration file.
+      - If your configuration file is not found, you will be prompted to build it.
+      - An example configuration file is provided in the examples directory, if you prefer to configure manually.
+    - Schedule Archiver to run automatically via cron.
+      - See this [Cronitor Guide](https://cronitor.io/guides/cron-jobs) for details on scheduling via cron.
+
+  - ##### Optionally, prepare custom service-backup-settings.sh and restore-service.sh files for any of your services and place in their respective service directories. Examples of these files can be found in the examples directory.
+
+  - ##### ***IMPORTANT:*** You **MUST** keep backups of your .keys directory and all its contents, as well as your config.sh file. These will be needed to restore backups. If you can't restore your backups, why make them in the first place?
+    - Don't attempt to just back up your keys and config file using this script. If you did that, and you lost them, you may not be able to get them back, given you don't have them anymore to access their backups.
 </details>
-
-#### Archiver Script Installation
-
-- Navigate to the desired parent directory for the project.
-  - For example, if installing in home dir:
-```bash
-cd ~
-```
-
-- Clone the GitHub repository
-```bash
-git clone https://github.com/SisyphusMD/archiver.git
-```
-
-- Run the setup script
-```bash
-sudo ./archiver/setup.sh
-```
-
-- Follow the instructions in this automated setup script to:
-  - Install required package dependencies for the setup script.
-    - If any missing dependencies are found, you will be prompted to allow their installation.
-  - Download the appropriate Duplicacy binary for your system.
-    - If the Duplicacy binary cannot be found, you will be prompted to allow its installation.
-  - Generate the required RSA keypair for Duplicacy storage encryption.
-    - If RSA key files are not found, you will be prompted to generate them.
-    - See [here](https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662) for manual generation details.
-  - Generate SSH key files required for SFTP storage backends.
-    - If SSH key files are not found, you will be prompted to generate them.
-    - To generate manually, run this from the archiver directory:
-      ```bash
-      mkdir -p .keys && ssh-keygen -t ed25519 -f .keys/id_ed25519" -N "" -C "archiver"
-      ```
-      - Do **NOT** provide a passphrase when prompted.
-  - Build your configuration file.
-    - If your configuration file is not found, you will be prompted to build it.
-    - An example configuration file is provided in the examples directory, if you prefer to configure manually.
-  - Schedule Archiver to run automatically via cron.
-    - See this [Cronitor Guide](https://cronitor.io/guides/cron-jobs) for details on scheduling via cron.
-
-- Optionally, prepare custom service-backup-settings.sh and restore-service.sh files for any of your services and place in their respective service directories. Examples of these files can be found in the examples directory.
-
-- ***IMPORTANT:*** You **MUST** keep backups of your .keys directory and all its contents, as well as your config.sh file. These will be needed to restore backups. If you can't restore your backups, why make them in the first place?
-  - Don't attempt to just back up your keys and config file using this script. If you did that, and you lost them, you may not be able to get them back, given you don't have them anymore to access their backups.
 
 ### Restoring
 
