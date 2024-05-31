@@ -384,11 +384,13 @@ create_config_file() {
 #                                                                                       #
 # Instructions:                                                                         #
 # - User must provide at least one service directory and one storage target.            #
-# - User must provide the STORAGE_PASSWORD and RSA_PASSPHRASE to be used by Archiver    #
-# - User can optionally provide a PUSHOVER_USER_KEY and PUSHOVER_API_TOKEN in order to  #
-#   receive backup notifications through Pushover.                                      #
+# - User must provide the STORAGE_PASSWORD and RSA_PASSPHRASE to be used by Archiver.   #
+# - User can optionally provide notification and backup rotation configurations.        #
 #########################################################################################
 
+# ------------------ #
+# REQUIRED VARIABLES #
+# ------------------ #
 SERVICE_DIRECTORIES=(
 $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 )
@@ -497,6 +499,7 @@ EOL
 STORAGE_PASSWORD="${storage_password}" # Password for Duplicacy storage (required)
 RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key (required)
 
+
 EOL
 
       echo    # Move to a new line
@@ -534,10 +537,17 @@ EOL
 
       # Write the rest of the config file
       cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
-# Pushover Notifications
+# ------------------ #
+# OPTIONAL VARIABLES #
+# ------------------ #
+# Notifications
 NOTIFICATION_SERVICE="$notification_service" # Currently support 'None' or 'Pushover'
 PUSHOVER_USER_KEY="$pushover_user_key" # Pushover user key (not email address), viewable when logged into Pushover dashboard
 PUSHOVER_API_TOKEN="$pushover_api_token" # Pushover application API token/key
+
+# Backup Rotation
+  # ROTATE_BACKUPS="" # Default: "true". Set to 'true' to enable rotating out older backups.
+  # PRUNE_KEEP="" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
 EOL
 
       chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"

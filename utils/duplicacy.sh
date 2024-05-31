@@ -10,8 +10,6 @@ DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/.keys" # Path to Duplicacy key directory
 DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
 DUPLICACY_RSA_PRIVATE_KEY_FILE="${DUPLICACY_KEY_DIR}/private.pem" # Path to RSA private key file for Duplicacy
 
-STORAGE_TARGET_COUNT=0
-
 set_duplicacy_variables() {
   DUPLICACY_REPO_DIR="${SERVICE_DIR}/.duplicacy" # Directory for various Duplicacy repos
   DUPLICACY_FILTERS_FILE="${DUPLICACY_REPO_DIR}/filters" # Location for Duplicacy filters file
@@ -26,27 +24,6 @@ duplicacy_binary_check() {
     exit 1
   else
     log_message "INFO" "Duplicacy binary is installed. Proceeding with backup script." 
-  fi
-}
-
-# Function to check the number of storage targets and to exit if none
-count_storage_targets() {
-  local count=0
-  while true; do
-    count=$((count + 1))
-    var_name="STORAGE_TARGET_${count}_NAME"
-    if [[ -z "${!var_name}" ]]; then
-      count=$((count - 1))
-      break
-    fi
-  done
-
-  if [[ $count -eq 0 ]]; then
-    handle_error "No Storage Targets specified. Please edit config.sh and specify at least one storage target."
-    exit 1
-  else
-    log_message "INFO" "$count backup targets configured." 
-    STORAGE_TARGET_COUNT=$count
   fi
 }
 

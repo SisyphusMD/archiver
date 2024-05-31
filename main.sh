@@ -61,23 +61,17 @@ ARCHIVER_DIR="$(cd "$(dirname "${MAIN_SCRIPT}")" && pwd)"
 
 
 # ---------------------
-# Configuration Section
+# Configuration Check
 # ---------------------
-# Sourcing configurable variables from config.sh.
-# Please review and adjust the variables in config.sh as necessary to fit your setup.
-source "${ARCHIVER_DIR}/config.sh"
-# Initialize an empty array to hold the directory paths
-EXPANDED_SERVICE_DIRECTORIES=()
-# Populate user defined service directories into the EXPANDED_DIRECTORIES array
-for pattern in "${SERVICE_DIRECTORIES[@]}"; do
-  # Directly list directories for specific paths or wildcard patterns
-  for dir in ${pattern}; do  # Important: Don't quote ${pattern} to allow glob expansion
-    if [ -d "${dir}" ]; then
-      # Add the directory to the array, removing the trailing slash
-      EXPANDED_SERVICE_DIRECTORIES+=("${dir%/}")
-    fi
-  done
-done
+source "${ARCHIVER_DIR}/utils/set-config.sh"
+# imports functions:
+#   - verify_config
+#   - expand_service_directories
+#   - count_storage_targets
+#   - verify_target_settings
+#   - check_required_secrets
+#   - check_notification_config
+#   - check_backup_rotation_settings
 
 # Logging
 # ---------------------
@@ -138,8 +132,8 @@ main() {
   # Make sure duplicacy binary is installed
   duplicacy_binary_check
 
-  # Count storage target variables from config file, require at least one
-  count_storage_targets
+  # Verify configuration settings and export defaults and expanded directories array
+  verify_config
 
   # Loop to iterate over user-defined service directories and perform backup function on each
   for SERVICE_DIR in "${EXPANDED_SERVICE_DIRECTORIES[@]}" ; do

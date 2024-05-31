@@ -14,11 +14,13 @@
 #                                                                                       #
 # Instructions:                                                                         #
 # - User must provide at least one service directory and one storage target.            #
-# - User must provide the STORAGE_PASSWORD and RSA_PASSPHRASE to be used by Archiver    #
-# - User can optionally provide a PUSHOVER_USER_KEY and PUSHOVER_API_TOKEN in order to  #
-#   receive backup notifications through Pushover.                                      #
+# - User must provide the STORAGE_PASSWORD and RSA_PASSPHRASE to be used by Archiver.   #
+# - User can optionally provide notification and backup rotation configurations.        #
 #########################################################################################
 
+# ------------------ #
+# REQUIRED VARIABLES #
+# ------------------ #
 # Example SERVICE_DIRECTORIES
 # Please provide a list of directories on your device to be backed up. Must provide the"
 #   full paths. Can use * to indicate each individual subdirectory within the parent"
@@ -54,7 +56,15 @@
   # STORAGE_PASSWORD="" # Password for Duplicacy storage (required)
   # RSA_PASSPHRASE="" # Passphrase for RSA private key (required)
 
-# Pushover Notifications
+
+# ------------------ #
+# OPTIONAL VARIABLES #
+# ------------------ #
+# Notifications
   # NOTIFICATION_SERVICE="" # Currently support 'Pushover' or 'None'
   # PUSHOVER_USER_KEY="" # Pushover user key (not email address), viewable when logged into Pushover dashboard
   # PUSHOVER_API_TOKEN="" # Pushover application API token/key
+
+# Backup Rotation
+  # ROTATE_BACKUPS="" # Default: "true". Set to 'true' to enable rotating out older backups.
+  # PRUNE_KEEP="" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
