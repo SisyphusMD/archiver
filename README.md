@@ -194,7 +194,7 @@
       - If SSH key files are not found, you will be prompted to generate them.
       - To generate manually, run this from the archiver directory:
         ```bash
-        mkdir -p .keys && ssh-keygen -t ed25519 -f .keys/id_ed25519" -N "" -C "archiver"
+        mkdir -p keys && ssh-keygen -t ed25519 -f keys/id_ed25519" -N "" -C "archiver"
         ```
         - Do **NOT** provide a passphrase when prompted.
     - Build your configuration file.
@@ -205,7 +205,7 @@
 
   - ##### Optionally, prepare custom service-backup-settings.sh and restore-service.sh files for any of your services and place in their respective service directories. Examples of these files can be found in the examples directory.
 
-  - ##### ***IMPORTANT:*** You **MUST** keep backups of your .keys directory and all its contents, as well as your config.sh file. These will be needed to restore backups. If you can't restore your backups, why make them in the first place?
+  - ##### ***IMPORTANT:*** You **MUST** keep backups of your keys directory and all its contents, as well as your config.sh file. These will be needed to restore backups. If you can't restore your backups, why make them in the first place?
     - Don't attempt to just back up your keys and config file using this script. If you did that, and you lost them, you may not be able to get them back, given you don't have them anymore to access their backups.
 </details>
 
@@ -222,12 +222,12 @@
   git clone https://github.com/SisyphusMD/archiver.git
   ```
 
-  - Run the setup script to install dependencies and the Duplicacy binary, and restore cron scheduling, but otherwise you can skip the portions that create new SSH keys, RSA keys, and config file. You will need to provide your backed up .keys/ directory and config.sh file.
+  - Run the setup script to install dependencies and the Duplicacy binary, and restore cron scheduling, but otherwise you can skip the portions that create new SSH keys, RSA keys, and config file. You will need to provide your backed up keys directory and config.sh file.
   ```bash
   sudo ./archiver/setup.sh
   ```
 
-  - Copy your prior .keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
+  - Copy your prior keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
 
   - Copy your prior **config.sh** into the project directory.
 

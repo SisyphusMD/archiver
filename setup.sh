@@ -40,7 +40,7 @@ ARCHIVER_SCRIPT_PATH="$(readlink -f "${0}" 2>/dev/null)"
 # Determine the full path of the containing dir of the script
 ARCHIVER_DIR="$(cd "$(dirname "${ARCHIVER_SCRIPT_PATH}")" && pwd)"
 DUPLICACY_VERSION="3.2.3"
-DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/.keys"
+DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/keys"
 REQUIRED_PACKAGES=(
   "expect"
   "openssh-client"
@@ -206,11 +206,11 @@ EOF
       echo " - RSA key pair generated successfully."
     else
       echo " - RSA key pair not generated."
-      echo " - Please provide your own, and copy them to archiver/.keys/private.pem and archiver/.keys/public.pem"
+      echo " - Please provide your own, and copy them to ${DUPLICACY_KEYS_DIR}/private.pem and ${DUPLICACY_KEYS_DIR}/public.pem"
       echo " - Details at: https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662"
     fi
   else
-    echo " - Skipping RSA key pair generation: RSA key files already present in .keys directory."
+    echo " - Skipping RSA key pair generation: RSA key files already present in '${DUPLICACY_KEYS_DIR}'."
   fi
 }
 
@@ -232,12 +232,12 @@ generate_ssh_keypair() {
       echo " - SSH key pair generated successfully."
     else
       echo " - SSH key pair not generated."
-      echo " - Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
+      echo " - Please provide your own, and copy them to ${DUPLICACY_KEYS_DIR}/id_ed25519 and ${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
       echo " - Archiver only supports ed25519 key pairs with no passphrase for SFTP."
       echo " - Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C \"archiver\""
     fi
   else
-    echo " - Skipping SSH key pair generation: SSH key files already present in .keys directory."
+    echo " - Skipping SSH key pair generation: SSH key files already present in '${DUPLICACY_KEYS_DIR}'."
   fi
 }
 
@@ -612,7 +612,7 @@ main() {
 
   echo    # Move to a new line
   echo " - Setup script completed."
-  echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your .keys directory."
+  echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your keys directory."
   echo "To manually start the Archiver script, use 'sudo ./archiver.sh' from the archiver directory."
   echo "To manually start the Archiver script with logs on screen, use 'sudo ./archiver.sh --view-logs' from the archiver directory."
   echo "To manually stop the Archiver script early, use 'sudo ./stop-archiver.sh' from the archiver directory."

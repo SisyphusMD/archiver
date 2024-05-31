@@ -6,8 +6,8 @@
 # Ignore config file
 config.sh
 
-# Ignore .keys directory
-.keys/
+# Ignore keys directory
+keys/
 
 # Ignore logs directory
 logs/
