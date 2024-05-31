@@ -165,7 +165,13 @@ git clone https://github.com/SisyphusMD/archiver.git
 sudo ./archiver/setup.sh
 ```
 
-- More instructions for running the setup.sh script to come here.
+- Follow the instructions in the automated install script to set up the following:
+  - Install required package dependencies for the setup script.
+  - Download the appropriate Duplicacy binary for your system.
+  - Generate the required RSA keypair for Duplicacy storage encryption.
+  - Generate SSH keyfiles required for SFTP storage backends.
+  - Build your configuration file.
+  - Schedule the Archiver to run automatically via cron.
 
 #### Restoring
 
