@@ -7,7 +7,7 @@
 
 <br style="clear: both;" />
 
-##
+#
 
 ## TLDR
 - Archiver will automate the backup of any configured directory to any number of SFTP and B2 storage backends.
