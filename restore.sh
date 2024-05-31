@@ -8,8 +8,13 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
+# Creating this function for requirements of sourced functions
+log_message() {
+  echo "${1}"
+}
+
 handle_error() {
-  echo "Error: ${1}"
+  log_message "Error: ${1}"
   exit 1
 }
 
