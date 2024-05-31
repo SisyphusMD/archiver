@@ -22,14 +22,16 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 
 ## Getting Started
 
-### Prerequisites
+<details>
+  <summary><h3>Prerequisites</h3></summary>
 
-- **Supported OS**: Currently only support debian-based linux.
-- **Supported Architecture**: Currently support ARM64 and AMD64.
-- **Required Dependencies**: Requires git to clone this GitHub repository. All other required dependencies installed via setup script.
-- **SFTP-Supporting Storage (i.e. Synology NAS) or BackBlaze B2 Required**: You should have available storage configured before installing.
-- **Configuration File**: Setup script can optionally aid in creating a config file. Otherwise, you can manually copy and edit the example config file.
-- **Notifications**: Optional notifications via Pushover. Pushover account required to receive notifications.
+  - **Supported OS**: Currently only support debian-based linux.
+  - **Supported Architecture**: Currently support ARM64 and AMD64.
+  - **Required Dependencies**: Requires git to clone this GitHub repository. All other required dependencies installed via setup script.
+  - **SFTP-Supporting Storage (i.e. Synology NAS) or BackBlaze B2 Required**: You should have at least one available supported storage target (SFTP or B2) configured before installing.
+  - **Configuration File**: Setup script can optionally aid in creating a config file. Otherwise, you can manually copy and edit the example config file.
+  - **Notifications**: Optional notifications via Pushover. Pushover account required to receive notifications.
+</details>
 
 <details>
   <summary><h3>Storage Backend Preparation</h3></summary>
