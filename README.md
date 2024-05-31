@@ -137,6 +137,7 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 
   <details>
     <summary><h4><a href="https://pushover.net/">Pushover</a></h4></summary>
+    
     - [Create an account](https://pushover.net/signup) or [Sign In](https://pushover.net/login) to **[Pushover](https://pushover.net)**.
     - Make note of **Your User Key**, located at the top-right corner of the Pushover Dashboard after logging in.
     - In order to receive notifications, you will need to **[Add a Phone, Tablet, or Desktop](https://pushover.net/clients)** to your account.
@@ -145,6 +146,7 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
     - Check the box to agree to the **Terms and Conditions**, and click **Create Application**.
     - Make note of the **API Token/Key**, located at the top of the page after creating the Application.
   </details>
+
 </details>
 
 ### Installation
