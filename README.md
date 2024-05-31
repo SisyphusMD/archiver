@@ -194,7 +194,7 @@ sudo ./archiver/setup.sh
   - Schedule Archiver to run automatically via cron.
     - See this [Cronitor Guide](https://cronitor.io/guides/cron-jobs) for details on scheduling via cron.
 
-- Optionally, prepare custom service-backup-settings.sh and service-restore.sh files for any of your services and place in their respective service directories. Examples of these files can be found in the examples directory.
+- Optionally, prepare custom service-backup-settings.sh and restore-service.sh files for any of your services and place in their respective service directories. Examples of these files can be found in the examples directory.
 
 - ***IMPORTANT:*** You **MUST** keep backups of your .keys directory and all its contents, as well as your config.sh file. These will be needed to restore backups. If you can't restore your backups, why make them in the first place?
   - Don't attempt to just back up your keys and config file using this script. If you did that, and you lost them, you may not be able to get them back, given you don't have them anymore to access their backups.

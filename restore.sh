@@ -167,5 +167,5 @@ echo "Repository restored."
 
 if [ -f restore.sh ]; then
   echo "Now running restore.sh..."
-  bash restore.sh
+  bash restore-service.sh
 fi
