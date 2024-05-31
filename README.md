@@ -33,7 +33,7 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 
 ### Storage Backend Preparation
 <details>
-#### <summary>SFTP - [Synology](https://www.synology.com/en-us) NAS</summary>
+<summary><h4>SFTP - <a href="https://www.synology.com/en-us">Synology NAS</a></h4></summary>
 - **Enable SFTP**:
   - Login as an administrator to your Synology DiskStation Manager (DSM) Web UI (usually http://<ip.address.of.your.nas>:5000).
   - Open **Control Panel**.
