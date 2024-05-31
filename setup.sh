@@ -369,7 +369,7 @@ create_config_file() {
       # Start writing the config file
       cat <<EOL > "${ARCHIVER_DIR}/config.sh"
 #########################################################################################
-# Archiver Backup User Configuration                                                    #
+# Archiver User Configuration                                                           #
 #########################################################################################
 # config.sh                                                                             #
 #   This file is intended to be sourced by the Archiver script to define user           #

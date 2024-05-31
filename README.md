@@ -32,8 +32,8 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 - **SFTP-Supporting Storage (i.e. Synology NAS) or BackBlaze B2 Required**: You should have available storage configured before installing.
 
 ### Storage Backend Preparation
-
-#### SFTP - [Synology](https://www.synology.com/en-us) NAS
+<details>
+<summary>#### SFTP - [Synology](https://www.synology.com/en-us) NAS</summary>
 - **Enable SFTP**:
   - Login as an administrator to your Synology DiskStation Manager (DSM) Web UI (usually http://<ip.address.of.your.nas>:5000).
   - Open **Control Panel**.
@@ -99,6 +99,7 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
     - Using a text editor, create a new file, and copy the contents of your public SSH key file, usually named id_ed25519.pub, to this new file. The line should start with **ssh-ed25519 AAAA...**.  Save the new file as **authorized_keys**.
     - Back in **File Station**, click **Upload** at the top, then click **Upload - Skip**, and browse to and select the newly created **authorized_keys** file, and click **Open**.
     - Ensure the file uploads correctly and is named **authorized_keys**.
+</details>
 
 #### B2 - [BackBlaze](https://www.backblaze.com/)
 - **Account**:

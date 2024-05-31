@@ -1,5 +1,5 @@
 #########################################################################################
-# Archiver Backup User Configuration                                                    #
+# Archiver User Configuration                                                           #
 #########################################################################################
 # config.sh                                                                             #
 #   This file is intended to be sourced by the Archiver script to define user           #
