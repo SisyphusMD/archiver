@@ -604,8 +604,9 @@ main() {
   echo " - Setup script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your .keys directory."
   echo "To manually start the Archiver script, use 'sudo ./archiver.sh' from the archiver directory."
-  echo "To manually stop the Archiver script early, use 'sudo ./stop_archiver.sh' from the archiver directory."
-  echo "To watch the logs of the actively running backup, use 'tail -f logs/*.log' from the archiver directory."
+  echo "To manually start the Archiver script with logs on screen, use 'sudo ./archiver.sh --view-logs' from the archiver directory."
+  echo "To manually stop the Archiver script early, use 'sudo ./stop-archiver.sh' from the archiver directory."
+  echo "To watch the logs of the actively running backup, use 'sudo ./view-logs.sh' from the archiver directory."
 }
 
 main

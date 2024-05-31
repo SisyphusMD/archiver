@@ -2,10 +2,10 @@
 
 # Function to print usage information
 usage() {
-  echo "Usage: $0 [--starttime STARTTIME]"
+  echo "Usage: $0 [--start-time STARTTIME]"
   echo
   echo "Options:"
-  echo "  --starttime STARTTIME  Specify the start time (optional, defaults to 0)"
+  echo "  --start-time STARTTIME  Specify the start time (optional, defaults to 0)"
   echo "  --help                 Display this help message"
   exit 1
 }
@@ -16,13 +16,13 @@ start_time=0
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --starttime)
+    --start-time)
       if [ -n "$2" ] && [[ "$2" != --* ]]; then
         start_time="$2"
         shift 2
       else
-        echo "Error: --starttime requires a non-empty option argument."
-        usage  # Call usage if --starttime is missing a value
+        echo "Error: --start-time requires a non-empty option argument."
+        usage  # Call usage if --start-time is missing a value
       fi
       ;;
     --help)
