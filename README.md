@@ -247,5 +247,9 @@ sudo ./archiver/restore.sh
   ```bash
   sudo ./view_logs.sh
   ```
+- To stop/cancel an actively running Archiver backup, run the following from your archiver directory:
+  ```bash
+  sudo ./stop_archiver.sh
+  ```
 
 - All archiver scripts must be run with sudo or as root. This is in order to preserve ownership of files being backed up, and for access to files not owned by your user.
