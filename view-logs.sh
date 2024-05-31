@@ -84,7 +84,7 @@ if [ -e "${LOCKFILE}" ]; then
 
   # Follow the specified log files
   # Construct the tail command dynamically
-  tail_cmd="tail -f ${ARCHIVER_DIR}/logo"
+  tail_cmd="tail -f ${ARCHIVER_DIR}/logos/logo.ascii"
   for log_prefix in "${LOG_PREFIXES[@]}"; do
     tail_cmd+=" ${LOG_DIR}/${log_prefix}.log"
   done

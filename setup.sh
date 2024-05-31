@@ -234,7 +234,7 @@ generate_ssh_keypair() {
       echo " - SSH key pair not generated."
       echo " - Please provide your own, and copy them to archiver/.keys/id_ed25519 and archiver/.keys/id_ed25519.pub"
       echo " - Archiver only supports ed25519 key pairs with no passphrase for SFTP."
-      echo " - Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver""
+      echo " - Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C \"archiver\""
     fi
   else
     echo " - Skipping SSH key pair generation: SSH key files already present in .keys directory."
