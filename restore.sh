@@ -236,8 +236,15 @@ restore_repository() {
 
 service_specific_restore_script() {
   if [ -f restore-service.sh ]; then
-    echo "Now running restore-service.sh..."
-    bash restore-service.sh
+    echo    # Move to a new line
+    read -p "Found a restore-service.sh file. Would you like to run it now? (y|N):" -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      echo "Now running restore-service.sh..."
+      bash restore-service.sh
+    else
+      echo "Did not run restore-service.sh script."
+    fi
   fi
 }
 
