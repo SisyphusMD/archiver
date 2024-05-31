@@ -334,8 +334,9 @@ duplicacy_copy_backup() {
 
       if [ "${exit_status}" -ne 0 ]; then
         handle_error "Running the Duplicacy copy backup to '${storage_name}' storage for the '${SERVICE}' service failed."
+      else
+        log_message "INFO" "The Duplicacy copy backup to '${storage_name}' storage completed successfully for the '${SERVICE}' service."
       fi
-      log_message "INFO" "The Duplicacy copy backup to '${storage_name}' storage completed successfully for the '${SERVICE}' service."
     done
   fi
 }
@@ -362,8 +363,9 @@ duplicacy_wrap_up() {
     if [[ "${exit_status}" -ne 0 ]]; then
       handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
       continue
+    else
+      log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
     fi
-    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
 
     if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
       # Prune the Duplicacy storage
