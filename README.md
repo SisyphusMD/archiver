@@ -27,9 +27,9 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 - **Supported OS**: Currently only support debian-based linux.
 - **Supported Architecture**: Currently support ARM64 and AMD64.
 - **Required Dependencies**: Requires git to clone this GitHub repository. All other required dependencies installed via setup script.
-- **Configuration File**: Setup script can optionally aid in creating a config file. Otherwise, can manually copy and edit the example config file.
-- **Notifications**: Pushover account required to receive notifications.
 - **SFTP-Supporting Storage (i.e. Synology NAS) or BackBlaze B2 Required**: You should have available storage configured before installing.
+- **Configuration File**: Setup script can optionally aid in creating a config file. Otherwise, you can manually copy and edit the example config file.
+- **Notifications**: Optional notifications via Pushover. Pushover account required to receive notifications.
 
 ### Storage Backend Preparation
 
@@ -133,7 +133,7 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 </details>
 
 <details>
-  <summary><h3>Notification Set Up</h3></summary>
+  <summary><h3>Notification Set Up (optional)</h3></summary>
 
   #### [Pushover](https://pushover.net)
   - [Create an account](https://pushover.net/signup) or [Sign In](https://pushover.net/login) to **[Pushover](https://pushover.net)**.
@@ -147,20 +147,22 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 
 ### Installation
 
-#### Git Installation
+<details>
+  <summary><h4>Git Installation</h3></summary>
 
-- Check if git is already installed
-```bash
-git --version
-```
+  - Check if git is already installed
+  ```bash
+  git --version
+  ```
 
-- Install git if not installed
-```bash
-sudo apt update
-```
-```bash
-sudo apt install git -y
-```
+  - Install git if not installed
+  ```bash
+  sudo apt update
+  ```
+  ```bash
+  sudo apt install git -y
+  ```
+</details>
 
 #### Archiver Script Installation
 
