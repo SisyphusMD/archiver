@@ -40,15 +40,16 @@ VIEW_LOG_SCRIPT="${ARCHIVER_DIR}/view_logs.sh"
 # Check if Archiver is already running
 if pgrep -f "${MAIN_SCRIPT}" > /dev/null; then
   echo "Archiver is already running."
+  if [ "${view_logs}" = true ]; then
+    sudo "${VIEW_LOG_SCRIPT}"
+  fi
 else
   # Start Archiver in the background using nohup and pass all arguments
   nohup "${MAIN_SCRIPT}" "$@" &>/dev/null &
   echo "Archiver started in the background."
-fi
-
-# Call the view_logs.sh script and pass the start time as an argument if --viewlogs is set
-if [ "${view_logs}" = true ]; then
-  sudo "${VIEW_LOG_SCRIPT}" --starttime "$STARTTIME"
+  if [ "${view_logs}" = true ]; then
+    sudo "${VIEW_LOG_SCRIPT}" --starttime "$STARTTIME"
+  fi
 fi
 
 exit 0
