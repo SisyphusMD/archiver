@@ -197,6 +197,7 @@ sudo ./archiver/setup.sh
 - Optionally, prepare custom service-backup-settings.sh and service-restore.sh files for any of your services and place in their respective service directories. Examples of these files can be found in the examples directory.
 
 - ***IMPORTANT:*** You **MUST** keep backups of your .keys directory and all its contents, as well as your config.sh file. These will be needed to restore backups. If you can't restore your backups, why make them in the first place?
+  - Don't attempt to just back up your keys and config file using this script. If you did that, and you lost them, you may not be able to get them back, given you don't have them anymore to access their backups.
 
 ### Restoring
 
@@ -226,18 +227,13 @@ sudo ./archiver/setup.sh
 sudo ./archiver/restore.sh
 ```
 
-- More instructions for running the restore.sh script to come here.
+- More detailed instructions for running the restore.sh script to come here.
 
 ### Usage
 
 - If you completed the cron setup step while installing, Archiver will run automatically following the schedule you set.
   - Depending on the size of your directories and your network speeds, the first run may take a long time.
   - Archiver utilizes a LOCKFILE mechanism to ensure that multiple instances do not run concurrently.
-  - To check on the process, run the following from your archiver directory:
-    ```bash
-    sudo ./view_logs.sh
-    ```
-    Use ctrl+c to return to the terminal.
 
 - To manually start a backup, run the following from your archiver directory:
   ```bash
@@ -247,3 +243,9 @@ sudo ./archiver/restore.sh
   ```bash
   sudo ./archiver.sh --viewlogs
   ```
+- To check on the process of an actively running Archiver backup, run the following from your archiver directory:
+  ```bash
+  sudo ./view_logs.sh
+  ```
+
+- All archiver scripts must be run with sudo or as root. This is in order to preserve ownership of files being backed up, and for access to files not owned by your user.

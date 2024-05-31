@@ -41,49 +41,57 @@ if [ "$(id -u)" -ne 0 ]; then
  exit 1
 fi
 
-# Determine the full path of the script
-VIEW_LOG_SCRIPT="$(readlink -f "${0}" 2>/dev/null)"
-# Determine the full path of the containing dir of the script
-ARCHIVER_DIR="$(cd "$(dirname "${VIEW_LOG_SCRIPT}")" && pwd)"
-# Define the log directory and log files
-LOG_DIR="${ARCHIVER_DIR}/logs"
-LOG_PREFIXES=(
-    "archiver"
-    "duplicacy"
-    "docker"
-    "curl"
-)
+LOCKFILE="/var/lock/archiver.lock"
 
-# Check if the log directory exists, if not wait until it does
-while [ ! -d "${LOG_DIR}" ]; do
-  echo "Waiting for log directory ${LOG_DIR} to be created..."
-  sleep 1
-done
+# Check if the lock file exists and contains a valid PID
+if [ -e "${LOCKFILE}" ]; then
+  # Determine the full path of the script
+  VIEW_LOG_SCRIPT="$(readlink -f "${0}" 2>/dev/null)"
+  # Determine the full path of the containing dir of the script
+  ARCHIVER_DIR="$(cd "$(dirname "${VIEW_LOG_SCRIPT}")" && pwd)"
+  # Define the log directory and log files
+  LOG_DIR="${ARCHIVER_DIR}/logs"
+  LOG_PREFIXES=(
+      "archiver"
+      "duplicacy"
+      "docker"
+      "curl"
+  )
 
-# Wait until all specified log files are present and updated after the specified start time
-for log_prefix in "${LOG_PREFIXES[@]}"; do
-  while true; do
-    if [ -L "${LOG_DIR}/${log_prefix}.log" ]; then
-      file_time=$(stat -c %Y "${LOG_DIR}/${log_prefix}.log")
-      if [ "${file_time}" -ge "${start_time}" ]; then
-        echo "${log_prefix}.log is present and has been updated."
-        break
-      else
-        echo "Waiting for ${log_prefix}.log to be updated..."
-      fi
-    else
-      echo "Waiting for ${log_prefix}.log to be created..."
-    fi
+  # Check if the log directory exists, if not wait until it does
+  while [ ! -d "${LOG_DIR}" ]; do
+    echo "Waiting for log directory ${LOG_DIR} to be created..."
     sleep 1
   done
-done
 
-# Follow the specified log files
-# Construct the tail command dynamically
-tail_cmd="tail -f"
-for log_prefix in "${LOG_PREFIXES[@]}"; do
-  tail_cmd+=" ${LOG_DIR}/${log_prefix}.log"
-done
+  # Wait until all specified log files are present and updated after the specified start time
+  for log_prefix in "${LOG_PREFIXES[@]}"; do
+    while true; do
+      if [ -L "${LOG_DIR}/${log_prefix}.log" ]; then
+        file_time=$(stat -c %Y "${LOG_DIR}/${log_prefix}.log")
+        if [ "${file_time}" -ge "${start_time}" ]; then
+          echo "${log_prefix}.log is present and has been updated."
+          break
+        else
+          echo "Waiting for ${log_prefix}.log to be updated..."
+        fi
+      else
+        echo "Waiting for ${log_prefix}.log to be created..."
+      fi
+      sleep 1
+    done
+  done
 
-# Execute the tail command
-eval "${tail_cmd}"
+  # Follow the specified log files
+  # Construct the tail command dynamically
+  tail_cmd="tail -f"
+  for log_prefix in "${LOG_PREFIXES[@]}"; do
+    tail_cmd+=" ${LOG_DIR}/${log_prefix}.log"
+  done
+
+  # Execute the tail command
+  eval "${tail_cmd}"
+else
+  echo "Archiver is not running."
+  exit 1
+fi
