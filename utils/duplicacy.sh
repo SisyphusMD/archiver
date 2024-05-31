@@ -345,7 +345,7 @@ duplicacy_copy_backup() {
 #   None. Uses configured Duplicacy settings and operates within the final service's backup context.
 # Output:
 #   Performs a Duplicacy prune. Output is logged to the Duplicacy log file.
-duplicacy_prune() {
+duplicacy_wrap_up() {
   local exit_status
   local storage_id
   local storage_name_var
@@ -359,19 +359,22 @@ duplicacy_prune() {
     # Full Check the Duplicacy storage
     "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output "duplicacy"
     exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
+    if [[ "${exit_status}" -ne 0 ]]; then
       handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
+      continue
     fi
-    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully"
+    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
 
-    # Prune the Duplicacy storage
-    log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
-    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" \
-      -keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1 2>&1 | log_output "duplicacy"
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+    if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
+      # Prune the Duplicacy storage
+      log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
+      "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP}" 2>&1 | log_output "duplicacy"
+      exit_status="${PIPESTATUS[0]}"
+      if [[ "${exit_status}" -ne 0 ]]; then
+        handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+      else
+        log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
+      fi
     fi
-    log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
   done
 }

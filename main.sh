@@ -202,7 +202,7 @@ main() {
   cd "${LAST_WORKING_DIR}" || handle_error "Failed to change to the last working service directory, '${LAST_WORKING_DIR}', to complete the duplicacy prune."
 
   # Prune duplicacy from last successful backup directory
-  duplicacy_prune || handle_error "Duplicacy prune failed. Review Duplicacy logs for details."
+  duplicacy_wrap_up || handle_error "Duplicacy wrap-up failed. Review Duplicacy logs for details."
 
   # Capture the end time
   END_TIME=$(date +%s)
