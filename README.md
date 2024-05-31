@@ -135,21 +135,15 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 <details>
   <summary><h3>Notification Set Up</h3></summary>
 
-  <details>
-    <summary><h4><a href="https://pushover.net/">Pushover</a></h4></summary>
-    <ul>
-      <li><a href="https://pushover.net/signup">Create an account</a> or <a href="https://pushover.net/login">Sign In</a> to <a href="https://pushover.net">Pushover</a>.</li>
-      <li>Make note of <strong>Your User Key</strong>, located at the top-right corner of the Pushover Dashboard after logging in.</li>
-      <li>In order to receive notifications, you will need to <a href="https://pushover.net/clients">Add a Phone, Tablet, or Desktop</a> to your account.</li>
-      <li>From the Pushover Dashboard, scroll to the bottom and select <a href="https://pushover.net/apps/build">Create an Application/API Token</a>.</li>
-      <li>Give your application a <strong>Name</strong>, and optionally a <strong>Description</strong>, <strong>URL</strong>, and/or <strong>Icon</strong>.</li>
-      <li>Check the box to agree to the <strong>Terms and Conditions</strong>, and click <strong>Create Application</strong>.</li>
-      <li>Make note of the <strong>API Token/Key</strong>, located at the top of the page after creating the Application.</li>
-    </ul>
-  </details>
-
+  #### [Pushover](https://pushover.net)
+  - [Create an account](https://pushover.net/signup) or [Sign In](https://pushover.net/login) to **[Pushover](https://pushover.net)**.
+  - Make note of **Your User Key**, located at the top-right corner of the Pushover Dashboard after logging in.
+  - In order to receive notifications, you will need to **[Add a Phone, Tablet, or Desktop](https://pushover.net/clients)** to your account.
+  - From the Pushover Dashboard, scroll to the bottom and select **[Create an Application/API Token](https://pushover.net/apps/build)**.
+  - Give your application a **Name**, and optionally a **Description**, **URL**, and/or **Icon**.
+  - Check the box to agree to the **Terms and Conditions**, and click **Create Application**.
+  - Make note of the **API Token/Key**, located at the top of the page after creating the Application.
 </details>
-
 
 ### Installation
 
