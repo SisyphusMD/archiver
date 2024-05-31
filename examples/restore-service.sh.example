@@ -1,3 +1,6 @@
+#!/bin/bash
+# The above line is called a "shebang", and is required to be at the top to define this
+# file as a bash script
 #########################################################################################
 # restore-service.sh                                                                    #
 #   This file is intended to be invoked as the last step of the Archiver restore.sh     #
@@ -38,8 +41,6 @@
 # - It allows for service-specific restore scripts to be defined and run after file     #
 #   restoration, in order to return the service to its prior working state.             #
 #########################################################################################
-
-#!/bin/bash
 
 # Define a function to alert the user to errors, and exit the script after alerting the user
 handle_error() {
