@@ -1,6 +1,14 @@
 # Archiver
 
-Archiver is a powerful, highly-configurable backup tool, designed to remove barriers to following the [3-2-1 Backup Strategy](https://www.backblaze.com/blog/the-3-2-1-backup-strategy/). It leverages the robust capabilities of [Duplicacy](https://github.com/gilbertchen/duplicacy) to create encrypted and de-duplicated backups, and automates the process of intiating, copying, pruning, and restoring Duplicacy repositories for any directory or service to any number of storage backends. It provides an easy way to run custom pre- and post-backup scripts for each directory or service, while offering scheduling via Cron and notifications vs [Pushover](https://pushover.net).
+Archiver is a powerful, highly-configurable backup tool, designed to remove barriers to following the [3-2-1 Backup Strategy](https://www.backblaze.com/blog/the-3-2-1-backup-strategy/). It leverages the robust capabilities of [Duplicacy](https://github.com/gilbertchen/duplicacy) to create encrypted and de-duplicated backups, and automates the processes of intiating, copying, pruning, and restoring Duplicacy repositories for any directory or service to any number of storage backends. It provides an easy way to run custom pre-backup, post-backup, and restore scripts for each directory or service, while offering scheduling via Cron and notifications vs [Pushover](https://pushover.net).
+
+## TLDR
+- Archiver will automate the backup of any configured directory to any number of SFTP and B2 storage backends.
+- By default, it will back up all files within the configured directory.
+- You can optionally:
+  - Include and exclude files and subdirectories from the backups
+  - Run custom bash scripts before and after each backup operation
+  - Configure custom restore scripts to quickly get your services running again when the worst happens.
 
 ## Features
 
@@ -27,7 +35,7 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
 
 #### SFTP - [Synology](https://www.synology.com/en-us) NAS
 - **Enable SFTP**:
-  - Login to your Synology DiskStation Manager (DSM) Web UI (usually http://<ip.address.of.your.nas>:5000).
+  - Login as an administrator to your Synology DiskStation Manager (DSM) Web UI (usually http://<ip.address.of.your.nas>:5000).
   - Open **Control Panel**.
   - Select **File Services** under **File Sharing**.
   - Select the **FTP** tab in the top.
@@ -67,7 +75,7 @@ Archiver is a powerful, highly-configurable backup tool, designed to remove barr
   - Select a user to give **Read/Write** access.
   - Click **Apply**.
 - **Provide SSH Public Key File**:
-  - If you already have an SSH key, you can complete this section now. Otherwise, the **Setup Script** below can create an SSH key for you, and you can come back to complete this section after the SSH key file is created.
+  - If you already have an id_ed25519 SSH key (id_rsa not supported), you can complete this section now. Otherwise, the **Setup Script** below can create an SSH key for you, and you can come back to complete this section after the SSH key file is created.
   - From **Control Panel**, select **User & Group** under **File Sharing**.
   - Click **Advanced** at the top.
   - At the bottom, under **User Home**, select the checkbox to **Enable user home service**.
@@ -165,15 +173,30 @@ git clone https://github.com/SisyphusMD/archiver.git
 sudo ./archiver/setup.sh
 ```
 
-- Follow the instructions in the automated install script to set up the following:
+- Follow the instructions in this automated setup script to:
   - Install required package dependencies for the setup script.
+    - If any missing dependencies are found, you will be prompted to allow their installation.
   - Download the appropriate Duplicacy binary for your system.
+    - If the Duplicacy binary cannot be found, you will be prompted to allow its installation.
   - Generate the required RSA keypair for Duplicacy storage encryption.
-  - Generate SSH keyfiles required for SFTP storage backends.
+    - If RSA key files are not found, you will be prompted to generate them.
+    - See [here](https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662) for manual generation details.
+  - Generate SSH key files required for SFTP storage backends.
+    - If SSH key files are not found, you will be prompted to generate them.
+    - To generate manually, run this from the archiver directory:
+      ```bash
+      mkdir -p .keys && ssh-keygen -t ed25519 -f .keys/id_ed25519" -N "" -C "archiver"
+      ```
+      - Do **NOT** provide a passphrase when prompted.
   - Build your configuration file.
-  - Schedule the Archiver to run automatically via cron.
+    - If your configuration file is not found, you will be prompted to build it.
+    - An example configuration file is provided in the examples directory, if you prefer to configure manually.
+  - Schedule Archiver to run automatically via cron.
+    - See this [Cronitor Guide](https://cronitor.io/guides/cron-jobs) for details on scheduling via cron.
 
-#### Restoring
+- Optionally, prepare custom service-backup-settings.sh and service-restore.sh files for any of your services and place in their respective service directories. Examples of thesse files can be found in the examples directory.
+
+#### Restoring Archiver
 
 - Navigate to the desired parent directory for the project, and clone the GitHub repository as noted in the **Installation** steps.
 ```bash
@@ -183,14 +206,16 @@ cd ~
 git clone https://github.com/SisyphusMD/archiver.git
 ```
 
-- Run the setup script to install dependencies and the Duplicacy binary, but otherwise skip the portions that create new SSH keys, RSA keys, config file, and Cron scheduling.
+- Run the setup script to install dependencies and the Duplicacy binary, and restore cron scheduling, but otherwise you can skip the portions that create new SSH keys, RSA keys, and config file. You will need to provide your backed up .keys/ directory and config.sh file.
 ```bash
 sudo ./archiver/setup.sh
 ```
 
-- Copy your prior SSH and RSA key files into the .keys directory within the project directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
+- Copy your prior .keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
 
 - Copy your prior **config.sh** into the project directory.
+
+#### Restoring Services
 
 - Run the restore script once for each service you need to restore.
 ```bash
@@ -199,5 +224,22 @@ sudo ./archiver/restore.sh
 
 - More instructions for running the restore.sh script to come here.
 
+### Usage
 
-- Then ultimately need instruction to run archiver.sh
+- If you completed the cron setup step while installing, Archiver will run automatically following the schedule you set.
+  - Depending on the size of your directories and your network speeds, the first run may take a long time.
+  - Archiver utilizes a LOCKFILE mechanism to ensure that multiple instances do not run concurrently.
+  - To check on the process, run the following from your archiver directory:
+    ```bash
+    sudo ./view_logs.sh
+    ```
+    Use ctrl+c to return to the terminal.
+
+- To manually start a backup, run the following from your archiver directory:
+  ```bash
+  sudo ./archiver.sh
+  ```
+- To manually start a backup with logs displaying, run the following from your archiver directory:
+  ```bash
+  sudo ./archiver.sh --viewlogs
+  ```
