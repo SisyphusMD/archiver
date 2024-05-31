@@ -16,7 +16,7 @@
 # - This configuration file is optional. Default values will be used by the Archiver    #
 #   script if this file can not be found.                                               #
 # - To use this file, it must be named "service-backup-settings.sh" and placed in the   #
-#   backup directory listed in the BACKUP_REPOSITORIES variable in the config.sh file.  #
+#   backup directory listed in the SERVICE_REPOSITORIES variable in the config.sh file. #
 # - It allows for service-specific backup configurations and tasks to be defined,       #
 #   ensuring that each service can be backed up according to its specific requirements. #
 #########################################################################################

@@ -1,0 +1,82 @@
+#########################################################################################
+# restore-service.sh                                                                    #
+#   This file is intended to be invoked as the last step of the Archiver restore.sh     #
+#   script. It can run any custom bash commands to automate tasks such as bringing up   #
+#   a service, restoring database dumps, creating docker networks, or anything you can  #
+#   script in bash.                                                                     #
+#                                                                                       #
+#   Archiver's restore.sh script will return the file contents of the directory to      #
+#   their backed up state. Some services require commands be run to restore the service #
+#   to its prior functioning state. One example would be a directory containing the     #
+#   configuration files for a docker compose project.                                   #
+#                                                                                       #
+#   In this simple example, the script brings up docker services defined in a compose   #
+#   file. This restore-service.sh script would work well if the directory being backed  #
+#   up contained all necessary files for a docker compose project, and if bringing up   #
+#   that docker compose project were sufficient to return the service to its prior      # 
+#   operating state.                                                                    #
+#                                                                                       #
+#   Many of your directories may not need to use a 'restore-service.sh' file at all,    #
+#   particularly those containing only data without services running from that data.    #
+#                                                                                       #
+# Usage:                                                                                #
+#   In any service directory that requires certain commands be run in order to restore  #
+#   to its prior operating state, create a file titled 'restore-service.sh', containing #
+#   any custom bash script that can run from that environment. This restore-service.sh  #
+#   should be included in the directory backup, so that it is available to run after    #
+#   repository restore process completes.                                               #
+#                                                                                       #
+# Note:                                                                                 #
+#   This script should not be executed directly. Instead, it will invoked as the last   #
+#   step of the Archiver restore.sh script.                                             #
+#                                                                                       #
+# Instructions:                                                                         #
+# - This configuration file is optional. Not all service directories need to run custom #
+#   scripts following their restoration.                                                #
+# - To use this file, it must be named 'restore-service.sh' and placed in the service   #
+#   directory listed in the SERVICE_REPOSITORIES variable in the config.sh file.        #
+# - It allows for service-specific restore scripts to be defined and run after file     #
+#   restoration, in order to return the service to its prior working state.             #
+#########################################################################################
+
+#!/bin/bash
+
+# Define a function to alert the user to errors, and exit the script after alerting the user
+handle_error() {
+  echo "Error: $1"
+  exit 1
+}
+
+# Define a function to determine the absolute path of the parent directory, and ensure it is
+#   working in that directory, to create a consistent environment
+change_to_script_directory() {
+  # Get the directory where the script is located
+  SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+
+  # Change to the script's directory
+  cd "$SCRIPT_DIR" || handle_error "Failed to change to script directory."
+}
+
+# Define the main logical progression of this script
+main() {
+  # Check if Docker is available
+  if ! command -v docker &> /dev/null; then
+    handle_error "Docker is not installed or not in the PATH."
+  fi
+
+  # Run the above defined function to change to the directory containing this script
+  change_to_script_directory
+
+  # Pull the docker images defined in the compose.yaml file (backed up in this directory)
+  echo "Pulling Docker images..."
+  docker compose pull || handle_error "Failed to pull Docker images."
+
+  # Start the docekr services defined in the compose.yaml file (backed up in this directory)
+  echo "Starting Docker services..."
+  docker compose up -d || handle_error "Failed to start Docker services."
+
+  echo "Script completed successfully."
+}
+
+# Now invoke the main function defined above
+main
