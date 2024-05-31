@@ -10,7 +10,7 @@ fi
 
 # Creating this function for requirements of sourced functions
 log_message() {
-  echo "${1}"
+  echo "$@"
 }
 
 handle_error() {
