@@ -1,6 +1,6 @@
 #!/bin/bash
 # The above line is called a "shebang", and is required to be at the top to define this
-# file as a bash script
+#   file as a bash script.
 #########################################################################################
 # restore-service.sh                                                                    #
 #   This file is intended to be invoked as the last step of the Archiver restore.sh     #
@@ -42,9 +42,12 @@
 #   restoration, in order to return the service to its prior working state.             #
 #########################################################################################
 
+# All of the below functions are 100% optional. You can use any of these, or none. You
+#   can define your own functions, and can run any command you could from a bash terminal.
+
 # Define a function to alert the user to errors, and exit the script after alerting the user
 handle_error() {
-  echo "Error: $1"
+  echo "Error: ${1}"
   exit 1
 }
 
@@ -52,10 +55,10 @@ handle_error() {
 #   working in that directory, to create a consistent environment
 change_to_script_directory() {
   # Get the directory where the script is located
-  SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+  SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
   # Change to the script's directory
-  cd "$SCRIPT_DIR" || handle_error "Failed to change to script directory."
+  cd "${SCRIPT_DIR}" || handle_error "Failed to change to script directory."
 }
 
 # Define the main logical progression of this script
