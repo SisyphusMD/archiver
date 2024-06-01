@@ -600,7 +600,7 @@ EOL
       cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # Backup Rotation
 ROTATE_BACKUPS="${rotate_backups}" # Default: "true". Set to 'true' to enable rotating out older backups.
-PRUNE_KEEP=(${prune_keep}) # Default: (-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1). See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
+PRUNE_KEEP="${prune_keep}" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
 EOL
 
       chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"

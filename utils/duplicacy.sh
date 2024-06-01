@@ -370,7 +370,7 @@ duplicacy_wrap_up() {
     if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
       # Prune the Duplicacy storage
       log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
-      "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP[@]}" 2>&1 | log_output "duplicacy"
+      "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" 2>&1 | log_output "duplicacy"
       exit_status="${PIPESTATUS[0]}"
       if [[ "${exit_status}" -ne 0 ]]; then
         handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."

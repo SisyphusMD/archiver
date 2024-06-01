@@ -143,16 +143,20 @@ check_backup_rotation_settings() {
   fi
 
   # Check if PRUNE_KEEP is set, if not, assign the default value
-  if [ "${#PRUNE_KEEP[@]}" -eq 0 ]; then
-    PRUNE_KEEP=(-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1)
+  if [ -z "${PRUNE_KEEP}" ]; then
+    PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
   fi
+
+  declare -a PRUNE_KEEP_ARRAY
+  read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
 
   # Export the variables if they need to be used outside the function
   export ROTATE_BACKUPS
   export PRUNE_KEEP
+  export PRUNE_KEEP_ARRAY
 
   # Log the values being used for backup rotation
-  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}"
+  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}, PRUNE_KEEP_ARRAY=${PRUNE_KEEP_ARRAY[@]}"
 }
 
 # Function to verify the entire configuration

@@ -67,4 +67,4 @@
 
 # Backup Rotation
   # ROTATE_BACKUPS="" # Default: "true". Set to 'true' to enable rotating out older backups.
-  # PRUNE_KEEP=() # Default: (-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1). See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
+  # PRUNE_KEEP="" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
