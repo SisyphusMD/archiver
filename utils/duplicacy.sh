@@ -192,7 +192,7 @@ duplicacy_primary_backup() {
 #   None. Uses configured Duplicacy settings and operates within the service's backup context.
 # Output:
 #   Performs a Duplicacy copy backup. Output is logged to the Duplicacy log file.
-duplicacy_copy_backup() {
+duplicacy_add_backup() {
   if [[ STORAGE_TARGET_COUNT -gt 1 ]]; then
     for i in $(seq 2 "${STORAGE_TARGET_COUNT}"); do
       local exit_status
@@ -317,26 +317,36 @@ duplicacy_copy_backup() {
       if [ "${exit_status}" -ne 0 ]; then
         handle_error "Setting the Duplicacy storage RSA Passphrase for the '${SERVICE}' service failed."
       fi
+    done
+  fi
+}
 
-      # Verify additional storage initialization
-      if ! duplicacy_verify "${storage_name}"; then
-        handle_error "Verification of the Duplicacy Storage '${storage_name}' addition for the '${SERVICE}' service failed."
-      fi
-      log_message "INFO" "Duplicacy Storage '${storage_name}' addition verified for '${SERVICE}' service."
+duplicacy_copy_backup() {
+  if [[ STORAGE_TARGET_COUNT -gt 1 ]]; then
+    for i in $(seq 2 "${STORAGE_TARGET_COUNT}"); do
+      local exit_status
+      local storage_id
+      local storage_name_var
+      local storage_name
+
+      storage_id="${i}"
+      storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
+      storage_name="${!storage_name_var}"
 
       # Run the Duplicacy copy backup
-      log_message "INFO" "Running Duplicacy copy backup to '${storage_name}' storage for the '${SERVICE}' service."
+      log_message "INFO" "Running Duplicacy copy backup to '${storage_name}' storage."
 
-      "${DUPLICACY_BIN}" copy -id "${DUPLICACY_SNAPSHOT_ID}" \
-        -from "${STORAGE_TARGET_1_NAME}" -to "${storage_name}" \
+      "${DUPLICACY_BIN}" copy -from "${STORAGE_TARGET_1_NAME}" -to "${storage_name}" \
         -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 2>&1 | log_output "duplicacy"
       exit_status="${PIPESTATUS[0]}"
 
       if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Running the Duplicacy copy backup to '${storage_name}' storage for the '${SERVICE}' service failed."
+        handle_error "Running the Duplicacy copy backup to '${storage_name}' storage failed."
       else
-        log_message "INFO" "The Duplicacy copy backup to '${storage_name}' storage completed successfully for the '${SERVICE}' service."
+        log_message "INFO" "The Duplicacy copy backup to '${storage_name}' storage completed successfully."
       fi
+
+      duplicacy_wrap_up "${storage_name}"
     done
   fi
 }
@@ -348,35 +358,28 @@ duplicacy_copy_backup() {
 #   Performs a Duplicacy prune. Output is logged to the Duplicacy log file.
 duplicacy_wrap_up() {
   local exit_status
-  local storage_id
-  local storage_name_var
   local storage_name
 
-  for i in $(seq 1 "${STORAGE_TARGET_COUNT}"); do
-    storage_id="${i}"
-    storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
-    storage_name="${!storage_name_var}"
+  storage_name="${1}"
 
-    # Full Check the Duplicacy storage
-    "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output "duplicacy"
+  # Full Check the Duplicacy storage
+  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output "duplicacy"
+  exit_status="${PIPESTATUS[0]}"
+  if [[ "${exit_status}" -ne 0 ]]; then
+    handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
+  else
+    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
+  fi
+
+  if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
+    # Prune the Duplicacy storage
+    log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
+    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" 2>&1 | log_output "duplicacy"
     exit_status="${PIPESTATUS[0]}"
     if [[ "${exit_status}" -ne 0 ]]; then
-      handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
-      continue
+      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
     else
-      log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
+      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
     fi
-
-    if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
-      # Prune the Duplicacy storage
-      log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
-      "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" 2>&1 | log_output "duplicacy"
-      exit_status="${PIPESTATUS[0]}"
-      if [[ "${exit_status}" -ne 0 ]]; then
-        handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
-      else
-        log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
-      fi
-    fi
-  done
+  fi
 }

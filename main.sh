@@ -176,11 +176,8 @@ main() {
     # Run any specific post backup commands defined in the source file
     service_specific_post_backup_function
 
-    # Run Duplicacy copy backup
-    duplicacy_copy_backup || { handle_error "Duplicacy copy backup failed for the '${SERVICE}' service. Review Duplicacy logs for details. Continuing to next operation."; continue; }
-
-    # Success message
-    log_message "INFO" "Completed backup and duplication process successfully for the '${SERVICE}' service."
+    # Run Duplicacy add backup
+    duplicacy_add_backup || { handle_error "Duplicacy add backup failed for the '${SERVICE}' service. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
     # Unset SERVICE variable
     unset SERVICE
@@ -201,8 +198,11 @@ main() {
   # Move to last service directory
   cd "${LAST_WORKING_DIR}" || handle_error "Failed to change to the last working service directory, '${LAST_WORKING_DIR}', to complete the duplicacy prune."
 
-  # Prune duplicacy from last successful backup directory
-  duplicacy_wrap_up || handle_error "Duplicacy wrap-up failed. Review Duplicacy logs for details."
+  # Full check and prune the primary storage
+  duplicacy_wrap_up "${STORAGE_TARGET_1_NAME}" || handle_error "Duplicacy wrap-up failed. Review Duplicacy logs for details."
+
+  # For each storage, copy the backup, then full check and prune it
+  duplicacy_copy_backup
 
   # Capture the end time
   END_TIME=$(date +%s)
