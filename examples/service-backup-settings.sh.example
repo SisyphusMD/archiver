@@ -44,7 +44,7 @@
 #   :; # No operation placeholder
 # }
 
-# Define service-specific pre-backup functions.
+# Define service-specific post-backup functions.
 # This can include service startup, cleanup actions, etc.
 # By default, Archiver will not run any service-specific functions after backup.
 # Uncomment the below to use.
