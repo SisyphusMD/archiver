@@ -8,13 +8,13 @@ source "${ARCHIVER_DIR}/config.sh"
 expand_service_directories() {
   # Initialize an empty array to hold the directory paths
   local expanded_service_directories=()
-  
+
   # Ensure SERVICE_DIRECTORIES is defined and not empty
   if [[ -z "${SERVICE_DIRECTORIES[*]}" ]]; then
     handle_error "SERVICE_DIRECTORIES is not defined or is empty. Please set the SERVICE_DIRECTORIES array."
     exit 1
   fi
-  
+
   # Populate user-defined service directories into the expanded_service_directories array
   for pattern in "${SERVICE_DIRECTORIES[@]}"; do
     # Directly list directories for specific paths or wildcard patterns
@@ -25,7 +25,7 @@ expand_service_directories() {
       fi
     done
   done
-  
+
   # Export the expanded directories to be accessible globally if needed
   export EXPANDED_SERVICE_DIRECTORIES=("${expanded_service_directories[@]}")
 }
@@ -33,11 +33,11 @@ expand_service_directories() {
 # Function to check the number of storage targets and to exit if none
 count_storage_targets() {
   local count=0
-  
+
   while true; do
     count=$((count + 1))
     local var_name="STORAGE_TARGET_${count}_NAME"
-    
+
     if [[ -z "${!var_name}" ]]; then
       count=$((count - 1))
       break
@@ -61,7 +61,7 @@ verify_target_settings() {
     local storage_name="${!storage_name_var}"
     local storage_type_var="STORAGE_TARGET_${storage_id}_TYPE"
     local storage_type="${!storage_type_var}"
-    
+
     if [[ -z "${storage_name}" || -z "${storage_type}" ]]; then
       handle_error "Missing storage name or type for storage target ${storage_id}. Please check your configuration."
       exit 1
@@ -97,7 +97,7 @@ verify_target_settings() {
 # Function to check if required secrets are set
 check_required_secrets() {
   local secrets=("STORAGE_PASSWORD" "RSA_PASSPHRASE")
-  
+
   for secret in "${secrets[@]}"; do
     if [[ -z "${!secret}" ]]; then
       handle_error "The required secret '${secret}' is not set. Please edit config.sh and specify a value for '${secret}'."
@@ -143,8 +143,8 @@ check_backup_rotation_settings() {
   fi
 
   # Check if PRUNE_KEEP is set, if not, assign the default value
-  if [[ -z "${PRUNE_KEEP}" ]]; then
-    PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
+  if [ "${#PRUNE_KEEP[@]}" -eq 0 ]; then
+    PRUNE_KEEP=(-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1)
   fi
 
   # Export the variables if they need to be used outside the function
