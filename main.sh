@@ -177,7 +177,7 @@ main() {
     service_specific_post_backup_function
 
     # Run Duplicacy copy backup
-#    duplicacy_copy_backup || { handle_error "Duplicacy copy backup failed for the '${SERVICE}' service. Review Duplicacy logs for details. Continuing to next operation."; continue; }
+    duplicacy_copy_backup || { handle_error "Duplicacy copy backup failed for the '${SERVICE}' service. Review Duplicacy logs for details. Continuing to next operation."; continue; }
 
     # Success message
     log_message "INFO" "Completed backup and duplication process successfully for the '${SERVICE}' service."
