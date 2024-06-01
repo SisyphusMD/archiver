@@ -570,7 +570,7 @@ EOL
         echo "Archiver never deletes the only remaining backup, even if it would be deleted otherwise according to the time criteria."
         echo "The above schedule is achieved with the following configuration:"
         echo "----------------"
-        echo "(-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1)"
+        echo "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
         echo "----------------"
         echo "See https://forum.duplicacy.com/t/prune-command-details/1005 for details."
         echo    # Move to a new line
@@ -578,11 +578,10 @@ EOL
         echo    # Move to a new line
         if [[ $REPLY =~ ^[Yy]$ ]]; then
           echo    # Move to a new line
-          echo "All the -keep options must be contained in parentheses, similar to the above example."
-          read -rsp "Desired backup rotation schedule (press <return> for default): " prune_keep
+          read -rp "Desired backup rotation schedule (press <return> for default): " prune_keep
           echo    # Move to a new line
           if [ -z "${prune_keep}" ]; then
-            prune_keep=(-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1)
+            prune_keep="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
             echo " - No backup rotation schedule entered."
             echo " - Will use default backup rotation schedule: ${prune_keep}"
             echo "You can change this by editing your config.sh."
@@ -591,7 +590,7 @@ EOL
             echo "You can change this by editing your config.sh."
           fi
         else
-          prune_keep=(-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1)
+          prune_keep="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
           echo "Will use default backup rotation schedule: ${prune_keep}"
           echo "You can change this by editing your config.sh."
         fi
@@ -601,7 +600,7 @@ EOL
       cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # Backup Rotation
 ROTATE_BACKUPS="${rotate_backups}" # Default: "true". Set to 'true' to enable rotating out older backups.
-PRUNE_KEEP=(${prune_keep[@]}) # Default: (-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1). See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
+PRUNE_KEEP=(${prune_keep}) # Default: (-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1). See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
 EOL
 
       chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"
