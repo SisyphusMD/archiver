@@ -535,7 +535,7 @@ EOL
         pushover_api_token=""
       fi
 
-      # Write the rest of the config file
+      # Write more of the config file
       cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # ------------------ #
 # OPTIONAL VARIABLES #
@@ -545,9 +545,62 @@ NOTIFICATION_SERVICE="$notification_service" # Currently support 'None' or 'Push
 PUSHOVER_USER_KEY="$pushover_user_key" # Pushover user key (not email address), viewable when logged into Pushover dashboard
 PUSHOVER_API_TOKEN="$pushover_api_token" # Pushover application API token/key
 
+EOL
+
+      echo    # Move to a new line
+      echo "By default, Archiver runs a Duplicacy prune operation at the end of every run to rotate backups."
+      read -p "Would you like to disable rotating backups? (y|N):" -n 1 -r
+      echo    # Move to a new line
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo    # Move to a new line
+        rotate_backups="false"
+        prune_keep=""
+        echo "Backup rotations disabled. You can change this by editing your config.sh."
+      else
+        rotate_backups="true"
+        echo "Backup rotations enabled. You can change this by editing your config.sh."
+        echo    # Move to a new line
+        echo    # Move to a new line
+        echo "By default, Archiver's backup rotation schedule is as follows:"
+        echo "  - Keep all backups made in the past 1 day."
+        echo "  - Keep 1 backup per 1 day for backups older than 1 day."
+        echo "  - Keep 1 backup per 7 days for backups older than 7 days."
+        echo "  - Keep 1 backup per 30 days for backups older than 30 days."
+        echo "  - Discard all backups older than 180 days."
+        echo "Archiver never deletes the only remaining backup, even if it would be deleted otherwise according to the time criteria."
+        echo "The above schedule is achieved with the following configuration:"
+        echo "----------------"
+        echo "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
+        echo "----------------"
+        echo "See https://forum.duplicacy.com/t/prune-command-details/1005 for details."
+        echo    # Move to a new line
+        read -p "Would you like to change from the default backup rotation schedule? (y|N):" -n 1 -r
+        echo    # Move to a new line
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+          echo    # Move to a new line
+          read -rsp "Desired backup rotation schedule (press <return> for default): " prune_keep
+          echo    # Move to a new line
+          if [ -z "${prune_keep}" ]; then
+            prune_keep="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
+            echo " - No backup rotation schedule entered."
+            echo " - Will use default backup rotation schedule: ${prune_keep}"
+            echo "You can change this by editing your config.sh."
+          else
+            echo "Will use backup rotation schedule: ${prune_keep}"
+            echo "You can change this by editing your config.sh."
+          fi
+        else
+          prune_keep="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
+          echo "Will use default backup rotation schedule: ${prune_keep}"
+          echo "You can change this by editing your config.sh."
+        fi
+      fi
+
+      # Write rest of the config file
+      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # Backup Rotation
-  # ROTATE_BACKUPS="" # Default: "true". Set to 'true' to enable rotating out older backups.
-  # PRUNE_KEEP="" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
+ROTATE_BACKUPS="${rotate_backups}" # Default: "true". Set to 'true' to enable rotating out older backups.
+PRUNE_KEEP="${prune_keep}" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
 EOL
 
       chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"
