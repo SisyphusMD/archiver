@@ -485,7 +485,7 @@ EOL
   # STORAGE_TARGET_1_SFTP_URL="192.168.1.1" # The IP address or FQDN of the sftp host.
   # STORAGE_TARGET_1_SFTP_PORT="22" # The sftp port of the sftp host. Default is 22.
   # STORAGE_TARGET_1_SFTP_USER="user" # User with sftp privileges on sftp host.
-  # STORAGE_TARGET_1_SFTP_PATH="remote/path" # Absolute path to remote backup directory.
+  # STORAGE_TARGET_1_SFTP_PATH="remote/path" # Absolute path to remote backup directory. For synology, this starts with the name of the shared folder.
   # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_ed25519" # Full path to private ssh key file.
 
 # Example B2 Storage Target
