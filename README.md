@@ -92,8 +92,6 @@
     - Open the folder for the user that will be used to access the share.
     - If there is already a folder named **.ssh**, double click that folder to open it. Otherwise, click **Create** at the top, then click **Create folder** in the drop down, and name the new folder **.ssh** (the leading period is required), and finally double click the newly created **.ssh** folder to open it.
       - ***Important***: Must click **Create folder** and not **Create shared folder**. The former does what we need, creating a directory within the currently open directory. The latter is to create a new higher-level shared network folder.
-    - Name the new folder **.ssh**. The leading period is required.
-    - Double click the newly created **.ssh** directory to open it.
     - If there is already a file named **authorized_keys**, do the following:
       - Double-click the **authorized_keys** file to download it.
       - Using a text editor, add a new line to the bottom of the document containing the contents of your public SSH key file, usually named id_ed25519.pub. The line should start with **ssh-ed25519 AAAA...**.
