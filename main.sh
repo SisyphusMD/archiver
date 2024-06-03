@@ -157,8 +157,8 @@ if [ -e "${LOCKFILE}" ]; then
   fi
 fi
 
-# Check for running instances using pgrep
-pgrep_output=$(pgrep -f "${MAIN_SCRIPT_PATH}")
+# Check for running instances using pgrep excluding the current process
+pgrep_output=$(pgrep -f "${MAIN_SCRIPT_PATH}" | grep -v "^$$\$")
 if [ -n "${pgrep_output}" ]; then
   echo "An instance of ${MAIN_SCRIPT_PATH} is still running, even with no LOCKFILE present. Stopping the process."
 
