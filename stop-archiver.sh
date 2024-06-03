@@ -61,4 +61,6 @@ if [ -n "${pgrep_output}" ]; then
       echo "Killed running instance of ${MAIN_SCRIPT_PATH} with PID: ${pid}"
     fi
   done <<< "${pgrep_output}"
+else
+  echo "No orphan instances found."
 fi
