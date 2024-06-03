@@ -26,14 +26,14 @@ while [[ $# -gt 0 ]]; do
   case "${1}" in
     --view-logs)
       view_logs=true
-      args+=("--no-view-logs-error")
+      main_script_args+=("--no-view-logs-error")
       shift
       ;;
     --help)
       usage  # Call usage when --help is provided
       ;;
     # --pause) # Example for the future for passing specific arguments to the main script
-    #   args+=("${1}")
+    #   main_script_args+=("${1}")
     #   shift
     #   ;;
     *)
