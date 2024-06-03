@@ -48,9 +48,9 @@ else
 fi
 
 # Check for running instances using pgrep
-pgrep_output=$(pgrep -f "${SCRIPT_PATH}")
+pgrep_output=$(pgrep -f "${MAIN_SCRIPT_PATH}")
 if [ -n "${pgrep_output}" ]; then
-  echo "An instance of ${SCRIPT_PATH} is still running, even with no LOCKFILE present. Stopping the process."
+  echo "An instance of ${MAIN_SCRIPT_PATH} is still running, even with no LOCKFILE present. Stopping the process."
 
   # Kill the running instance(s) and their child processes
   while read -r pid; do
@@ -58,6 +58,6 @@ if [ -n "${pgrep_output}" ]; then
     pkill -TERM -P "${pid}"
     kill "${pid}"
     # Log the PID that was killed
-    echo "Killed running instance of ${SCRIPT_PATH} with PID: ${pid}"
+    echo "Killed running instance of ${MAIN_SCRIPT_PATH} with PID: ${pid}"
   done <<< "${pgrep_output}"
 fi
