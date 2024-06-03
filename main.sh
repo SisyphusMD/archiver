@@ -158,11 +158,18 @@ if [ -e "${LOCKFILE}" ]; then
 fi
 
 # Check for running instances using pgrep excluding the current process
-if pgrep -f "${SCRIPT_PATH}" | grep -v "^$$\$" > /dev/null; then
-  if [ "${no_view_logs_error}" != "true" ]; then
-    handle_error "Another instance of ${SCRIPT_PATH} is already running."
-  fi
-  exit 1
+pgrep_output=$(pgrep -f "${SCRIPT_PATH}" | grep -v "^$$\$")
+if [ -n "${pgrep_output}" ]; then
+  log_message "WARNING" "Another instance of ${SCRIPT_PATH} is already running. Stopping the process."
+
+  # Kill the running instance(s) and their child processes
+  while read -r pid; do
+    # Terminate the process and its children
+    pkill -TERM -P "${pid}"
+    kill "${pid}"
+    # Log the PID that was killed
+    log_message "WARNING" "Killed running instance of ${SCRIPT_PATH} with PID: ${pid}"
+  done <<< "${pgrep_output}"
 fi
 
 # Create the lock file with the current PID and script path
