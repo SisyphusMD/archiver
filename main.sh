@@ -114,6 +114,7 @@ usage() {
 }
 
 # Parse command-line arguments
+no_view_logs_error=""
 while [[ $# -gt 0 ]]; do
   case "${1}" in
     --start-time)
@@ -127,6 +128,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --help)
       usage  # Call usage when --help is provided
+      ;;
+    --no-view-logs-error)
+      no_view_logs_error="true"
+      shift
       ;;
     *)
       echo "Unknown option: ${1}"
@@ -142,7 +147,9 @@ if [ -e "${LOCKFILE}" ]; then
   LOCK_SCRIPT="$(echo "${LOCK_INFO}" | cut -d' ' -f2)"
 
   if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
-    handle_error "Another instance of ${SCRIPT_PATH} is already running with PID ${LOCK_PID}."
+    if [ "${no_view_logs_error}" != "true" ]; then
+      handle_error "Another instance of ${SCRIPT_PATH} is already running with PID ${LOCK_PID}."
+    fi
     exit 1
   else
     log_message "WARNING" "Stale lock file found. Cleaning up."
@@ -152,7 +159,9 @@ fi
 
 # Check for running instances using pgrep excluding the current process
 if pgrep -f "${SCRIPT_PATH}" | grep -v "^$$\$" > /dev/null; then
-  handle_error "Another instance of ${SCRIPT_PATH} is already running."
+  if [ "${no_view_logs_error}" != "true" ]; then
+    handle_error "Another instance of ${SCRIPT_PATH} is already running."
+  fi
   exit 1
 fi
 

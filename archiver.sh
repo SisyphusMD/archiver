@@ -21,11 +21,12 @@ usage() {
 
 # Parse command-line arguments
 view_logs=false
-args=()
+main_script_args=("--start-time" "${START_TIME}")
 while [[ $# -gt 0 ]]; do
   case "${1}" in
     --view-logs)
       view_logs=true
+      args+=("--no-view-logs-error")
       shift
       ;;
     --help)
@@ -49,8 +50,8 @@ MAIN_SCRIPT="${ARCHIVER_DIR}/main.sh"
 VIEW_LOG_SCRIPT="${ARCHIVER_DIR}/view-logs.sh"
 
 # Start Archiver in the background using nohup and pass appropriate arguments
-nohup "${MAIN_SCRIPT}" "${args[@]}" --start-time "${START_TIME}" &>/dev/null &
-echo "Archiver started in the background."
+nohup "${MAIN_SCRIPT}" "${main_script_args[@]}" &>/dev/null &
+echo "Archiver main script started in the background."
 
 # Optionally view logs
 if [ "${view_logs}" = true ]; then
