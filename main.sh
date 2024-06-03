@@ -14,11 +14,11 @@ DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')"
 
 # Define unique identifier for the script (e.g., script's full path)
-SCRIPT_PATH="$(realpath "$0")"
-LOCKFILE="/var/lock/archiver-$(echo "${SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
+MAIN_SCRIPT_PATH="$(realpath "$0")"
+LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
 
 # Determine main Archiver directory paths
-ARCHIVER_DIR="$(dirname "${SCRIPT_PATH}")"
+ARCHIVER_DIR="$(dirname "${MAIN_SCRIPT_PATH}")"
 UTILS_DIR="${ARCHIVER_DIR}/utils"
 
 # Source all the necessary utils scripts
@@ -146,9 +146,9 @@ if [ -e "${LOCKFILE}" ]; then
   LOCK_PID="$(echo "${LOCK_INFO}" | cut -d' ' -f1)"
   LOCK_SCRIPT="$(echo "${LOCK_INFO}" | cut -d' ' -f2)"
 
-  if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
+  if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${MAIN_SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
     if [ "${no_view_logs_error}" != "true" ]; then
-      handle_error "Another instance of ${SCRIPT_PATH} is already running with PID ${LOCK_PID}."
+      handle_error "Another instance of ${MAIN_SCRIPT_PATH} is already running with PID ${LOCK_PID}."
     fi
     exit 1
   else
@@ -157,28 +157,29 @@ if [ -e "${LOCKFILE}" ]; then
   fi
 fi
 
-# Check for running instances using pgrep excluding the current process
-pgrep_output=$(pgrep -f "${SCRIPT_PATH}" | grep -v "^$$\$")
+# Check for running instances using pgrep
+pgrep_output=$(pgrep -f "${MAIN_SCRIPT_PATH}")
 if [ -n "${pgrep_output}" ]; then
-  log_message "WARNING" "Another instance of ${SCRIPT_PATH} is already running. Stopping the process."
+  echo "An instance of ${MAIN_SCRIPT_PATH} is still running, even with no LOCKFILE present. Stopping the process."
 
   # Kill the running instance(s) and their child processes
   while read -r pid; do
     # Terminate the process and its children
     pkill -TERM -P "${pid}"
-    kill "${pid}"
-    # Log the PID that was killed
-    log_message "WARNING" "Killed running instance of ${SCRIPT_PATH} with PID: ${pid}"
+    if kill -0 "${pid}" 2>/dev/null; then
+      kill "${pid}"
+      echo "Killed running instance of ${MAIN_SCRIPT_PATH} with PID: ${pid}"
+    fi
   done <<< "${pgrep_output}"
 fi
 
 # Create the lock file with the current PID and script path
-echo "$$ ${SCRIPT_PATH}" > "${LOCKFILE}"
+echo "$$ ${MAIN_SCRIPT_PATH}" > "${LOCKFILE}"
 
 # Rotate the logs
 rotate_logs
 
-log_message "INFO" "${SCRIPT_PATH} script started."
+log_message "INFO" "${MAIN_SCRIPT_PATH} script started."
 
 # Make sure duplicacy binary is installed
 duplicacy_binary_check
