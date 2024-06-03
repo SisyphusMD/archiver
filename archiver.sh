@@ -49,15 +49,13 @@ ARCHIVER_DIR="$(dirname "${ARCHIVER_SCRIPT}")"
 MAIN_SCRIPT="${ARCHIVER_DIR}/main.sh"
 VIEW_LOG_SCRIPT="${ARCHIVER_DIR}/view-logs.sh"
 
-# Start Archiver in the background using nohup and pass appropriate arguments
-nohup "${MAIN_SCRIPT}" "${main_script_args[@]}" &>/dev/null &
-main_pid=$!
-disown $main_pid
+# Start Archiver in a new session using setsid
+setsid nohup "${MAIN_SCRIPT}" "${main_script_args[@]}" &>/dev/null &
 echo "Archiver main script started in the background."
 
 # Optionally view logs
 if [ "${view_logs}" = true ]; then
-  env -i bash -c "source ${VIEW_LOG_SCRIPT} --start-time ${START_TIME}"
+  (env -i bash -c "source ${VIEW_LOG_SCRIPT} --start-time ${START_TIME}")
 fi
 
 exit 0
