@@ -56,8 +56,9 @@ if [ -n "${pgrep_output}" ]; then
   while read -r pid; do
     # Terminate the process and its children
     pkill -TERM -P "${pid}"
-    kill "${pid}"
-    # Log the PID that was killed
-    echo "Killed running instance of ${MAIN_SCRIPT_PATH} with PID: ${pid}"
+    if kill -0 "${pid}" 2>/dev/null; then
+      kill "${pid}"
+      echo "Killed running instance of ${MAIN_SCRIPT_PATH} with PID: ${pid}"
+    fi
   done <<< "${pgrep_output}"
 fi
