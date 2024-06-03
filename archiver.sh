@@ -55,7 +55,7 @@ echo "Archiver main script started in the background."
 
 # Optionally view logs
 if [ "${view_logs}" = true ]; then
-  "${VIEW_LOG_SCRIPT}" --start-time "${START_TIME}"
+  env -i bash -c "source ${VIEW_LOG_SCRIPT} --start-time ${START_TIME}"
 fi
 
 exit 0
