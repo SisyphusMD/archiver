@@ -1,88 +1,62 @@
 #!/bin/bash
 
+# Initialize variables
+START_TIME=0
+
+# Define unique identifier for the main script (e.g., main script's full path)
+SCRIPT_PATH="$(realpath "$0")"
+ARCHIVER_DIR="$(dirname "${SCRIPT_PATH}")"
+MAIN_SCRIPT_PATH="${ARCHIVER_DIR}/main.sh"
+LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
+
+# Define the log directory and log files
+LOG_DIR="${ARCHIVER_DIR}/logs"
+LOG_PREFIXES=(
+    "archiver"
+    "duplicacy"
+    "docker"
+    "curl"
+)
+
+# Check if the script is run with sudo
+if [ "$(id -u)" -ne 0 ]; then
+  echo "This script must be run as root. Please use sudo or log in as the root user."
+  exit 1
+fi
+
 # Function to print usage information
 usage() {
-  echo "Usage: $0 [--start-time STARTTIME]"
+  echo "Usage: ${0}"
   echo
   echo "Options:"
-  echo "  --start-time STARTTIME  Specify the start time (optional, defaults to 0)"
-  echo "  --help                 Display this help message"
+  echo "  --start-time START_TIME  Specify the start time (optional, defaults to 0)"
+  echo "  --help                   Display this help message"
   exit 1
 }
 
-# Initialize variables
-start_time=0
-
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
-  case "$1" in
+  case "${1}" in
     --start-time)
-      if [ -n "$2" ] && [[ "$2" != --* ]]; then
-        start_time="$2"
+      if [[ -n "${2}" && "${2}" != --* ]]; then
+        START_TIME="${2}"
         shift 2
       else
-        echo "Error: --start-time requires a non-empty option argument."
-        usage  # Call usage if --start-time is missing a value
+        echo "Error: --start-time requires a value."
+        usage
       fi
       ;;
     --help)
       usage  # Call usage when --help is provided
       ;;
     *)
-      echo "Unknown option: $1"
+      echo "Unknown option: ${1}"
       usage  # Call usage for unknown options
       ;;
   esac
 done
 
-# Exit if not run as root
-if [ "$(id -u)" -ne 0 ]; then
- echo "This script must be run as root. Please use sudo or log in as the root user."
- exit 1
-fi
-
-LOCKFILE="/var/lock/archiver.lock"
-
-# Check if the lock file exists and contains a valid PID
-if [ -e "${LOCKFILE}" ]; then
-  # Determine the full path of the script
-  VIEW_LOG_SCRIPT="$(readlink -f "${0}" 2>/dev/null)"
-  # Determine the full path of the containing dir of the script
-  ARCHIVER_DIR="$(cd "$(dirname "${VIEW_LOG_SCRIPT}")" && pwd)"
-  # Define the log directory and log files
-  LOG_DIR="${ARCHIVER_DIR}/logs"
-  LOG_PREFIXES=(
-      "archiver"
-      "duplicacy"
-      "docker"
-      "curl"
-  )
-
-  # Check if the log directory exists, if not wait until it does
-  while [ ! -d "${LOG_DIR}" ]; do
-    echo "Waiting for log directory ${LOG_DIR} to be created..."
-    sleep 1
-  done
-
-  # Wait until all specified log files are present and updated after the specified start time
-  for log_prefix in "${LOG_PREFIXES[@]}"; do
-    while true; do
-      if [ -L "${LOG_DIR}/${log_prefix}.log" ]; then
-        file_time=$(stat -c %Y "${LOG_DIR}/${log_prefix}.log")
-        if [ "${file_time}" -ge "${start_time}" ]; then
-          echo "${log_prefix}.log is present and has been updated."
-          break
-        else
-          echo "Waiting for ${log_prefix}.log to be updated..."
-        fi
-      else
-        echo "Waiting for ${log_prefix}.log to be created..."
-      fi
-      sleep 1
-    done
-  done
-
-  # Follow the specified log files
+tail_logs() {
   # Construct the tail command dynamically
   tail_cmd="tail -f ${ARCHIVER_DIR}/logos/logo.ascii"
   for log_prefix in "${LOG_PREFIXES[@]}"; do
@@ -91,6 +65,45 @@ if [ -e "${LOCKFILE}" ]; then
 
   # Execute the tail command
   eval "${tail_cmd}"
+}
+
+# Check if the lock file exists and contains a valid PID
+if [ -e "${LOCKFILE}" ]; then
+  LOCK_INFO="$(cat "${LOCKFILE}")"
+  LOCK_PID="$(echo "${LOCK_INFO}" | cut -d' ' -f1)"
+  LOCK_SCRIPT="$(echo "${LOCK_INFO}" | cut -d' ' -f2)"
+
+  if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${MAIN_SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
+    # Other instance of main script is running; view logs directly
+    tail_logs
+  else
+    # Lock file exists but main script is not running; wait for logs to be created/updated
+    while [ ! -d "${LOG_DIR}" ]; do
+      echo "Waiting for log directory ${LOG_DIR} to be created..."
+      sleep 0.1
+    done
+
+    # Wait until all specified log files are present and updated after the specified start time
+    for log_prefix in "${LOG_PREFIXES[@]}"; do
+      while true; do
+        if [ -L "${LOG_DIR}/${log_prefix}.log" ]; then
+          file_time="$(stat -c %Y "${LOG_DIR}/${log_prefix}.log")"
+          if [ "${file_time}" -ge "${START_TIME}" ]; then
+            echo "${log_prefix}.log is present and has been updated."
+            break
+          else
+            echo "Waiting for ${log_prefix}.log to be updated..."
+          fi
+        else
+          echo "Waiting for ${log_prefix}.log to be created..."
+        fi
+        sleep 0.1
+      done
+    done
+
+    # Now view the logs
+    tail_logs
+  fi
 else
   echo "Archiver is not running."
   exit 1

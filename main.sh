@@ -3,120 +3,174 @@
 # Archiver Main Script
 # Performs Duplicacy backup operations on services located in specified directories
 #
-# Usage instructions: Execute the script as sudo without arguments (sudo ./main.sh).
+# Usage instructions: This script is intended to be run by archiver.sh, rather than invoking directly.
 
 # ---------------------
-# Initial Checks
+# Initial Setup
 # ---------------------
+# Time Variables
+START_TIME="$(date +%s)"
+DATE="$(date +'%Y-%m-%d')"
+DATETIME="$(date +'%Y-%m-%d_%H%M%S')"
 
-LOCKFILE="/var/lock/archiver.lock"
-LOGFILE="/var/log/archiver.log"
+# Define unique identifier for the script (e.g., script's full path)
+SCRIPT_PATH="$(realpath "$0")"
+LOCKFILE="/var/lock/archiver-$(echo "${SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
 
-# Function to log messages
-log_message() {
-  local message="$1"
-  echo "$(date +"%Y-%m-%d %H:%M:%S") - ${message}" >> "${LOGFILE}"
-}
+# Determine main Archiver directory paths
+ARCHIVER_DIR="$(dirname "${SCRIPT_PATH}")"
+UTILS_DIR="${ARCHIVER_DIR}/utils"
 
-# Exit if not run as root
-if [ "$(id -u)" -ne 0 ]; then
- log_message "This script must be run as root. Please use sudo or log in as the root user."
- exit 1
-fi
+# Source all the necessary utils scripts
+for script in "${UTILS_DIR}/"*.sh; do
+  [ -r "${script}" ] && source "${script}"
+  # ---------------------
+  # Configuration Check
+  # ---------------------
+  # set-config.sh
+  #
+  # imports functions:
+  #   - verify_config
+  #   - expand_service_directories
+  #   - count_storage_targets
+  #   - verify_target_settings
+  #   - check_required_secrets
+  #   - check_notification_config
+  #   - check_backup_rotation_settings
+
+  # ---------------------
+  # Logging
+  # ---------------------
+  # logging.sh
+  #
+  # imports variables:
+  #   - LOG_DIR
+  #   - ARCHIVER_LOG_FILE
+  #   - DUPLICACY_LOG_FILE
+  #   - DOCKER_LOG_FILE
+  #   - CURL_LOG_FILE
+  #   - ALL_LOG_FILES
+  # imports functions:
+  #   - log_message
+  #   - log_output
+  #   - rotate_logs
+  #   - elapsed_time
+
+  # ---------------------
+  # Error Handling
+  # ---------------------
+  # error-handling.sh
+  # imports variables:
+  #   - ERROR_COUNT
+  # imports functions:
+  #   - handle_error
+
+  # ---------------------
+  # Duplicacy Functions
+  # ---------------------
+  # duplicacy.sh
+  # imports functions:
+  #   - set_duplicacy_variables
+  #   - duplicacy_binary_check
+  #   - count_storage_targets
+  #   - duplicacy_verify
+  #   - duplicacy_filters
+  #   - duplicacy_primary_backup
+  #   - duplicacy_copy_backup
+  #   - duplicacy_prune
+
+  # ---------------------
+  # Notification Functions
+  # ---------------------
+  # notification.sh
+  # imports functions:
+  #   - send_pushover_notification
+  #   - notify
+done
 
 # Function to remove the lock file upon script exit
 cleanup() {
   rm -f "${LOCKFILE}"
-  log_message "Archiver script ended."
+  log_message "INFO" "Archiver main script exited."
 }
 
 # Trap signals to ensure cleanup is performed
 trap cleanup EXIT
 
+# Exit if not run as root
+if [ "$(id -u)" -ne 0 ]; then
+ handle_error "This script must be run as root. Please use sudo or log in as the root user."
+ exit 1
+fi
+
+# Function to print usage information
+usage() {
+  echo "Usage: ${0}"
+  echo
+  echo "Options:"
+  echo "  --start-time START_TIME  Specify the start time (optional, defaults to script start time)"
+  echo "  --help                   Display this help message"
+  exit 1
+}
+
+# Parse command-line arguments
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+    --start-time)
+      if [[ -n "${2}" && "${2}" != --* ]]; then
+        START_TIME="${2}"
+        shift 2
+      else
+        echo "Error: --start-time requires a value."
+        usage
+      fi
+      ;;
+    --help)
+      usage  # Call usage when --help is provided
+      ;;
+    *)
+      echo "Unknown option: ${1}"
+      usage  # Call usage for unknown options
+      ;;
+  esac
+done
+
+# Check if another instance of the script is running using pgrep
+if pgrep -f "${SCRIPT_PATH}" > /dev/null; then
+  handle_error "Another instance of ${SCRIPT_PATH} is already running."
+  exit 1
+fi
+
 # Check if the lock file exists and contains a valid PID
 if [ -e "${LOCKFILE}" ]; then
-  LOCK_PID=$(cat "${LOCKFILE}")
-  if [ -n "${LOCK_PID}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
-    log_message "Another instance of Archiver is already running with PID ${LOCK_PID}."
+  LOCK_INFO="$(cat "${LOCKFILE}")"
+  LOCK_PID="$(echo "${LOCK_INFO}" | cut -d' ' -f1)"
+  LOCK_SCRIPT="$(echo "${LOCK_INFO}" | cut -d' ' -f2)"
+
+  if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
+    handle_error "Another instance of ${SCRIPT_PATH} is already running with PID ${LOCK_PID}."
     exit 1
   else
-    log_message "Stale lock file found. Cleaning up."
+    log_message "WARNING" "Stale lock file found. Cleaning up."
     rm -f "${LOCKFILE}"
   fi
 fi
 
-# Create the lock file with the current PID
-echo $$ > "${LOCKFILE}"
-log_message "Archiver script started."
+# Create the lock file with the current PID and script path
+echo "$$ ${SCRIPT_PATH}" > "${LOCKFILE}"
 
+# Rotate the logs
+rotate_logs
+
+log_message "INFO" "${SCRIPT_PATH} script started."
+
+# Make sure duplicacy binary is installed
+duplicacy_binary_check
+
+# Verify configuration settings and export defaults and expanded directories array
+verify_config
 
 # ---------------------
-# Environment Variables
-# ---------------------
-START_TIME="$(date +%s)"
-DATE="$(date +'%Y-%m-%d')"
-DATETIME="$(date +'%Y-%m-%d_%H%M%S')"
-MAIN_SCRIPT="$(readlink -f "${0}" 2>/dev/null)"
-ARCHIVER_DIR="$(cd "$(dirname "${MAIN_SCRIPT}")" && pwd)"
-
-
-# ---------------------
-# Configuration Check
-# ---------------------
-source "${ARCHIVER_DIR}/utils/set-config.sh"
-# imports functions:
-#   - verify_config
-#   - expand_service_directories
-#   - count_storage_targets
-#   - verify_target_settings
-#   - check_required_secrets
-#   - check_notification_config
-#   - check_backup_rotation_settings
-
-# Logging
-# ---------------------
-source "${ARCHIVER_DIR}/utils/logging.sh"
-# imports variables:
-#   - LOG_DIR
-#   - ARCHIVER_LOG_FILE
-#   - DUPLICACY_LOG_FILE
-#   - DOCKER_LOG_FILE
-#   - CURL_LOG_FILE
-#   - ALL_LOG_FILES
-# imports functions:
-#   - log_message
-#   - log_output
-#   - rotate_logs
-#   - elapsed_time
-
-# Error Handling
-# ---------------------
-source "${ARCHIVER_DIR}/utils/error-handling.sh"
-# imports variables:
-#   - ERROR_COUNT
-# imports functions:
-#   - handle_error
-
-# Duplicacy Functions
-# ---------------------
-source "${ARCHIVER_DIR}/utils/duplicacy.sh"
-# imports functions:
-#   - set_duplicacy_variables
-#   - duplicacy_binary_check
-#   - count_storage_targets
-#   - duplicacy_verify
-#   - duplicacy_filters
-#   - duplicacy_primary_backup
-#   - duplicacy_copy_backup
-#   - duplicacy_prune
-
-# Notification Functions
-# ---------------------
-source "${ARCHIVER_DIR}/utils/notification.sh"
-# imports functions:
-#   - send_pushover_notification
-#   - notify
-
 # Main Function
 # ---------------------
 
@@ -126,15 +180,6 @@ source "${ARCHIVER_DIR}/utils/notification.sh"
 # Output:
 #   Coordinates the backup process for each service, logging progress and results. No direct output.
 main() {
-  # Rotate the logs
-  rotate_logs
-
-  # Make sure duplicacy binary is installed
-  duplicacy_binary_check
-
-  # Verify configuration settings and export defaults and expanded directories array
-  verify_config
-
   # Loop to iterate over user-defined service directories and perform backup function on each
   for SERVICE_DIR in "${EXPANDED_SERVICE_DIRECTORIES[@]}" ; do
     # Move to user defined service directory or exit if failed
