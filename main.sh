@@ -135,12 +135,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Check if another instance of the script is running using pgrep
-if pgrep -f "${SCRIPT_PATH}" > /dev/null; then
-  handle_error "Another instance of ${SCRIPT_PATH} is already running."
-  exit 1
-fi
-
 # Check if the lock file exists and contains a valid PID
 if [ -e "${LOCKFILE}" ]; then
   LOCK_INFO="$(cat "${LOCKFILE}")"
@@ -154,6 +148,12 @@ if [ -e "${LOCKFILE}" ]; then
     log_message "WARNING" "Stale lock file found. Cleaning up."
     rm -f "${LOCKFILE}"
   fi
+fi
+
+# Check for running instances using pgrep excluding the current process
+if pgrep -f "${SCRIPT_PATH}" | grep -v "^$$\$" > /dev/null; then
+  handle_error "Another instance of ${SCRIPT_PATH} is already running."
+  exit 1
 fi
 
 # Create the lock file with the current PID and script path
