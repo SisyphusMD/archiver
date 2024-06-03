@@ -38,14 +38,26 @@ if [ -e "${LOCKFILE}" ]; then
 
     echo "Archiver process and its child processes stopped."
     cleanup_lockfile
-    exit 0
   else
     echo "Stale lock file detected. No running Archiver process found with PID ${LOCK_PID}."
     # Clean up stale lock file
     cleanup_lockfile
-    exit 1
   fi
 else
-  echo "Archiver is not running."
-  exit 1
+  echo "No lock file found."
+fi
+
+# Check for running instances using pgrep
+pgrep_output=$(pgrep -f "${SCRIPT_PATH}")
+if [ -n "${pgrep_output}" ]; then
+  echo "An instance of ${SCRIPT_PATH} is still running, even with no LOCKFILE present. Stopping the process."
+
+  # Kill the running instance(s) and their child processes
+  while read -r pid; do
+    # Terminate the process and its children
+    pkill -TERM -P "${pid}"
+    kill "${pid}"
+    # Log the PID that was killed
+    echo "Killed running instance of ${SCRIPT_PATH} with PID: ${pid}"
+  done <<< "${pgrep_output}"
 fi
