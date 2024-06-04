@@ -244,7 +244,7 @@
     - Depending on the size of your directories and your network speeds, the first run may take a long time.
     - Archiver utilizes a LOCKFILE mechanism to ensure that multiple instances do not run concurrently.
 
-  - To manually start a backup, run the following from your archiver directory:
+  - To manually start a backup, run the following:
     ```bash
     archiver
     ```
