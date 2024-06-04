@@ -54,7 +54,7 @@ MAIN_SCRIPT="${ARCHIVER_DIR}/main.sh"
 VIEW_LOG_SCRIPT="${ARCHIVER_DIR}/view-logs.sh"
 
 # Start Archiver in a new session using setsid
-setsid nohup "${MAIN_SCRIPT}" "${main_script_args[@]}" &>/dev/null & # setsid + nohup was required to fix bug related to duplicacy exported env vars when user rann script with --view-logs, then closed that running log view
+setsid nohup "${MAIN_SCRIPT}" "${main_script_args[@]}" &>/dev/null & # setsid + nohup was required to fix bug related to duplicacy exported env vars when user ran script with --view-logs, then closed that running log view
 echo "Archiver main script started in the background."
 
 # Optionally view logs
