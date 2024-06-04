@@ -2,10 +2,14 @@
 
 set -e # Exit immediately if a command exits with a non-zero status
 
-# Ensure the script is run as root
+escalate_privileges() {
+  echo "This script must be run as root. Attempting to restart with sudo..."
+  exec sudo "$0" "$@"
+}
+
+# Check if the script is run with sudo
 if [ "$(id -u)" -ne 0 ]; then
-  echo "This script must be run as root. Please use sudo or log in as the root user." 1>&2
-  exit 1
+  escalate_privileges "$@"
 fi
 
 # Creating this function for requirements of sourced functions
