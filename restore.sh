@@ -81,8 +81,6 @@ select_storage_target() {
     local storage_id="${i}"
     local storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
     local storage_name="${!storage_name_var}"
-    local storage_type_var="STORAGE_TARGET_${storage_id}_TYPE"
-    local storage_type="${!storage_type_var}"
     
     storage_targets+=("${storage_id}) ${storage_name}")
   done
