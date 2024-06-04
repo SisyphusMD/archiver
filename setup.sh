@@ -26,13 +26,10 @@
 
 set -e # Exit immediately if a command exits with a non-zero status
 
-escalate_privileges() {
-  exec sudo "$0" "$@"
-}
-
 # Check if the script is run with sudo
 if [ "$(id -u)" -ne 0 ]; then
-  escalate_privileges "$@"
+  # Escalate privileges if not sudo
+  exec sudo "$0" "$@"
 fi
 
 # Configuration Section

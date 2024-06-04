@@ -5,9 +5,6 @@
 # Output:
 #   Writes the log message to the archiver's log file. No console output except for WARNING or ERROR.
 
-LOG_DIR="${ARCHIVER_DIR}/logs" # Path to Archiver logs directory
-OLD_LOG_DIR="${LOG_DIR}/prior_logs"
-
 log_message() {
   local log_level
   local message

@@ -3,13 +3,10 @@
 # Record the start time before calling main.sh
 START_TIME="$(date +%s)"
 
-escalate_privileges() {
-  exec sudo "$0" "$@"
-}
-
 # Check if the script is run with sudo
 if [ "$(id -u)" -ne 0 ]; then
-  escalate_privileges "$@"
+  # Escalate privileges if not sudo
+  exec sudo "$0" "$@"
 fi
 
 # Function to print usage information
@@ -46,11 +43,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Define the path to the Archiver scripts
+# Define the path to the Archiver script
 ARCHIVER_SCRIPT="$(realpath "${0}")"
 ARCHIVER_DIR="$(dirname "${ARCHIVER_SCRIPT}")"
-MAIN_SCRIPT="${ARCHIVER_DIR}/main.sh"
-VIEW_LOG_SCRIPT="${ARCHIVER_DIR}/view-logs.sh"
+# Define src and mod directories
+SRC_DIR="${ARCHIVER_DIR}/lib/src"
+MOD_DIR="${ARCHIVER_DIR}/lib/mod"
+# Define paths to various scripts
+MAIN_SCRIPT="${MOD_DIR}/main.sh"
+VIEW_LOGS_SCRIPT="${MOD_DIR}/view-logs.sh"
 
 # Start Archiver in a new session using setsid
 setsid nohup "${MAIN_SCRIPT}" "${main_script_args[@]}" &>/dev/null & # setsid + nohup was required to fix bug related to duplicacy exported env vars when user ran script with --view-logs, then closed that running log view
@@ -58,7 +59,7 @@ echo "Archiver main script started in the background."
 
 # Optionally view logs
 if [ "${view_logs}" = true ]; then
-  "${VIEW_LOG_SCRIPT}" --start-time "${START_TIME}"
+  "${VIEW_LOGS_SCRIPT}" --start-time "${START_TIME}"
 fi
 
 exit 0

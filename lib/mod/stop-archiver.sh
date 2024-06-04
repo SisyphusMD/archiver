@@ -1,18 +1,39 @@
 #!/bin/bash
 
-escalate_privileges() {
-  exec sudo "$0" "$@"
-}
-
 # Check if the script is run with sudo
 if [ "$(id -u)" -ne 0 ]; then
-  escalate_privileges "$@"
+  # Escalate privileges if not sudo
+  exec sudo "$0" "$@"
 fi
 
+# Determine archiver repo directory path by traversing up the directory tree until we find 'archiver.sh' or reach the root
+STOP_SCRIPT_PATH="$(realpath "$0")"
+CURRENT_DIR="$(dirname "${STOP_SCRIPT_PATH}")"
+ARCHIVER_DIR=""
+while [ "${CURRENT_DIR}" != "/" ]; do
+  if [ -f "${CURRENT_DIR}/archiver.sh" ]; then
+    ARCHIVER_DIR="${CURRENT_DIR}"
+    break
+  fi
+  CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
+done
+
+# Check if we found the file
+if [ -z "${ARCHIVER_DIR}" ]; then
+  echo "Error: archiver.sh not found in any parent directory."
+  exit 1
+fi
+
+# Define lib, src, mod, log, logo directories
+LOG_DIR="${ARCHIVER_DIR}/logs"
+OLD_LOG_DIR="${LOG_DIR}/prior_logs"
+LIB_DIR="${ARCHIVER_DIR}/lib"
+SRC_DIR="${LIB_DIR}/src"
+MOD_DIR="${LIB_DIR}/mod"
+LOGO_DIR="${LIB_DIR}/logos"
+
 # Define unique identifier for the main script (e.g., main script's full path)
-SCRIPT_PATH="$(realpath "$0")"
-ARCHIVER_DIR="$(dirname "${SCRIPT_PATH}")"
-MAIN_SCRIPT_PATH="${ARCHIVER_DIR}/main.sh"
+MAIN_SCRIPT_PATH="${MOD_DIR}/main.sh"
 LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
 
 # Function to clean up lock file

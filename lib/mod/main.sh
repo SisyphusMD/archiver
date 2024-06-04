@@ -17,12 +17,37 @@ DATETIME="$(date +'%Y-%m-%d_%H%M%S')"
 MAIN_SCRIPT_PATH="$(realpath "$0")"
 LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
 
-# Determine main Archiver directory paths
-ARCHIVER_DIR="$(dirname "${MAIN_SCRIPT_PATH}")"
-UTILS_DIR="${ARCHIVER_DIR}/utils"
+# Determine archiver repo directory path by traversing up the directory tree until we find 'archiver.sh' or reach the root
+CURRENT_DIR="$(dirname "${MAIN_SCRIPT_PATH}")"
+ARCHIVER_DIR=""
+while [ "${CURRENT_DIR}" != "/" ]; do
+  if [ -f "${CURRENT_DIR}/archiver.sh" ]; then
+    ARCHIVER_DIR="${CURRENT_DIR}"
+    break
+  fi
+  CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
+done
 
-# Source all the necessary utils scripts
-for script in "${UTILS_DIR}/"*.sh; do
+# Check if we found the file
+if [ -z "${ARCHIVER_DIR}" ]; then
+  echo "Error: archiver.sh not found in any parent directory."
+  exit 1
+fi
+
+# Define lib, src, mod, log, logo directories
+LOG_DIR="${ARCHIVER_DIR}/logs"
+OLD_LOG_DIR="${LOG_DIR}/prior_logs"
+LIB_DIR="${ARCHIVER_DIR}/lib"
+SRC_DIR="${LIB_DIR}/src"
+MOD_DIR="${LIB_DIR}/mod"
+LOGO_DIR="${LIB_DIR}/logos"
+
+# Define module scripts
+VIEW_LOGS_SCRIPT="${MOD_DIR}/view-logs.sh"
+STOP_SCRIPT="${MOD_DIR}/stop-archiver.sh"
+
+# Source all the necessary src files
+for script in "${SRC_DIR}/"*.sh; do
   [ -r "${script}" ] && source "${script}"
   # ---------------------
   # Configuration Check
@@ -100,13 +125,10 @@ cleanup() {
 # Trap signals to ensure cleanup is performed
 trap cleanup EXIT
 
-escalate_privileges() {
-  exec sudo "$0" "$@"
-}
-
 # Check if the script is run with sudo
 if [ "$(id -u)" -ne 0 ]; then
-  escalate_privileges "$@"
+  # Escalate privileges if not sudo
+  exec sudo "$0" "$@"
 fi
 
 # Function to print usage information

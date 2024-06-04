@@ -3,22 +3,40 @@
 # Initialize variables
 START_TIME=0
 
-# Define unique identifier for the main script (e.g., main script's full path)
-SCRIPT_PATH="$(realpath "$0")"
-ARCHIVER_DIR="$(dirname "${SCRIPT_PATH}")"
-MAIN_SCRIPT_PATH="${ARCHIVER_DIR}/main.sh"
-LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
+# Determine archiver repo directory path by traversing up the directory tree until we find 'archiver.sh' or reach the root
+VIEW_LOGS_SCRIPT_PATH="$(realpath "$0")"
+CURRENT_DIR="$(dirname "${VIEW_LOGS_SCRIPT_PATH}")"
+ARCHIVER_DIR=""
+while [ "${CURRENT_DIR}" != "/" ]; do
+  if [ -f "${CURRENT_DIR}/archiver.sh" ]; then
+    ARCHIVER_DIR="${CURRENT_DIR}"
+    break
+  fi
+  CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
+done
 
-# Define the log directory
+# Check if we found the file
+if [ -z "${ARCHIVER_DIR}" ]; then
+  echo "Error: archiver.sh not found in any parent directory."
+  exit 1
+fi
+
+# Define lib, src, mod, log, logo directories
 LOG_DIR="${ARCHIVER_DIR}/logs"
+OLD_LOG_DIR="${LOG_DIR}/prior_logs"
+LIB_DIR="${ARCHIVER_DIR}/lib"
+SRC_DIR="${LIB_DIR}/src"
+MOD_DIR="${LIB_DIR}/mod"
+LOGO_DIR="${LIB_DIR}/logos"
 
-escalate_privileges() {
-  exec sudo "$0" "$@"
-}
+# Define unique identifier for the main script (e.g., main script's full path)
+MAIN_SCRIPT_PATH="${MOD_DIR}/main.sh"
+LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
 
 # Check if the script is run with sudo
 if [ "$(id -u)" -ne 0 ]; then
-  escalate_privileges "$@"
+  # Escalate privileges if not sudo
+  exec sudo "$0" "$@"
 fi
 
 # Function to print usage information
@@ -54,7 +72,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 tail_logs() {
-  tail -f "${ARCHIVER_DIR}/logos/logo.ascii" "${LOG_DIR}/archiver.log"
+  tail -f "${LOGO_DIR}/logo.ascii" "${LOG_DIR}/archiver.log"
 }
 
 wait_for_logs() {
