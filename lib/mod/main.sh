@@ -115,12 +115,11 @@ done
 
 # Function to remove the lock file upon script exit
 cleanup() {
-  if [ "${perform_cleanup}" = true ]; then
+  if [ "${early_exit}" != true ]; then
     rm -f "${LOCKFILE}"
     log_message "INFO" "Archiver main script exited."
   fi
 }
-
 
 # Trap signals to ensure cleanup is performed
 trap cleanup EXIT
@@ -178,8 +177,8 @@ if [ -e "${LOCKFILE}" ]; then
     if [ "${no_view_logs_error}" != "true" ]; then
       handle_error "Another instance of ${MAIN_SCRIPT_PATH} is already running with PID ${LOCK_PID}."
     fi
-    # Set perform_cleanup to false to avoid removing the lockfile
-    perform_cleanup=false
+    # Set early_exit to true to avoid removing the lockfile
+    early_exit=true
     exit 1
   else
     log_message "WARNING" "Stale lock file found. Cleaning up."
