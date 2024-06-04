@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Fixed
 - Fixed LOCKFILE being left by main.sh.
 
+### Improved
+- Setup script places archiver in PATH.
+  - Please run 'sudo ./setup.sh' again from the archiver repo directory to make this change.
+    - You can skip all sections of the setup script by typing 'n' when prompted. The script will make this change regardless.
+  - You should now run Archiver backups with the command 'archiver'.
+  - This is global, no more need to change to your archiver directory.
+  - It accepts arguments, such as 'archiver --view-logs' and 'archiver --stop'. More arguments to come soon.
+  - Cron can also call 'archiver' directly: (e.g. '0 3 * * * archiver').
+    - To edit your prior cronjob, run 'sudo crontab -e', and replace the path to the archiver script with simply 'archiver'.
+
 ## [0.2.2] - 2024-06-03
 ### Improved
 - Scripts will auto-escalate to sudo now. So README no longer recommends to run with sudo.

@@ -86,6 +86,34 @@ fi
 
 RSA_PASSPHRASE=""
 
+# Place archiver in PATH
+archiver_in_path() {
+  local symlink_path
+  symlink_path="/usr/local/bin/archiver"
+
+  if [ ! -L "${symlink_path}" ]; then
+    sudo ln -s "${ARCHIVER_SCRIPT_PATH}" "${symlink_path}"
+  else
+    local existing_target
+    existing_target="$(readlink -f "${symlink_path}")"
+
+    if [ "${existing_target}" != "${ARCHIVER_SCRIPT_PATH}" ]; then
+      echo    # Move to a new line
+      echo "Another archiver symlink exists but points to a different script: '${existing_target}'."
+      read -p "Would you like to update it to point to '${ARCHIVER_SCRIPT_PATH}'? (y/N): " -n 1 -r
+      echo    # Move to a new line
+
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+        sudo rm "${symlink_path}"
+        sudo ln -s "${ARCHIVER_SCRIPT_PATH}" "${symlink_path}"
+        echo "Symlink has been updated: ${symlink_path} -> ${ARCHIVER_SCRIPT_PATH}"
+      else
+        echo "Symlink not updated."
+      fi
+    fi
+  fi
+}
+
 # Ensure necessary packages are installed
 install_packages() {
   local missing_packages
@@ -633,7 +661,7 @@ schedule_with_cron() {
         cron_schedule="0 3 * * *"
       fi
     done
-    (sudo crontab -l 2>/dev/null; echo "${cron_schedule} ${ARCHIVER_DIR}/archiver.sh") | sudo crontab -
+    (sudo crontab -l 2>/dev/null; echo "${cron_schedule} archiver") | sudo crontab -
     echo " - Backup scheduled with cron."
     echo " - You can edit the schedule with this command:"
     echo "--------------------------------------------"
@@ -643,12 +671,14 @@ schedule_with_cron() {
     echo " - Backup not scheduled with cron."
     echo " - You can always schedule it later with this command (daily at 3am in below example):"
     echo "--------------------------------------------"
-    echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * ${ARCHIVER_DIR}/archiver.sh\") | sudo crontab -"
+    echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * archiver\") | sudo crontab -"
     echo "--------------------------------------------"
   fi
 }
 
 main() {
+  archiver_in_path
+
   install_packages
 
   install_duplicacy
@@ -666,9 +696,10 @@ main() {
   echo    # Move to a new line
   echo " - Setup script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your keys directory."
-  echo "To manually start the Archiver script, use './archiver.sh' from the archiver directory."
-  echo "To manually start the Archiver script with logs on screen, or to watch the logs of the actively running backup, use './archiver.sh --view-logs' from the archiver directory."
-  echo "To manually stop the Archiver script early, use './archiver.sh --stop' from the archiver directory."
+  echo "Usage:"
+  echo " - To manually start the Archiver backup, use 'archiver'."
+  echo " - To watch the logs of the actively running Archiver backup, use 'archiver --view-logs'. Will start Archiver backup if not already running."
+  echo " - To manually stop the Archiver backup early, use 'archiver --stop'."
 }
 
 main
