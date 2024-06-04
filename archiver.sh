@@ -54,8 +54,7 @@ done
 # Define the path to the Archiver script
 ARCHIVER_SCRIPT="$(realpath "${0}")"
 ARCHIVER_DIR="$(dirname "${ARCHIVER_SCRIPT}")"
-# Define src and mod directories
-SRC_DIR="${ARCHIVER_DIR}/lib/src"
+# Define mod directory
 MOD_DIR="${ARCHIVER_DIR}/lib/mod"
 # Define paths to various scripts
 MAIN_SCRIPT="${MOD_DIR}/main.sh"
