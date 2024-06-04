@@ -94,6 +94,7 @@ archiver_in_path() {
 
   if [ ! -L "${symlink_path}" ]; then
     sudo ln -s "${ARCHIVER_SCRIPT_PATH}" "${symlink_path}"
+    echo " - Added 'archiver' to PATH."
   else
     local existing_target
     existing_target="$(readlink -f "${symlink_path}")"
@@ -107,10 +108,12 @@ archiver_in_path() {
       if [[ $REPLY =~ ^[Yy]$ ]]; then
         sudo rm "${symlink_path}"
         sudo ln -s "${ARCHIVER_SCRIPT_PATH}" "${symlink_path}"
-        echo "Symlink has been updated: ${symlink_path} -> ${ARCHIVER_SCRIPT_PATH}"
+        echo " - Symlink has been updated: ${symlink_path} -> ${ARCHIVER_SCRIPT_PATH}"
       else
-        echo "Symlink not updated."
+        echo " - Symlink not updated."
       fi
+    else
+      echo " - Symlink in PATH already points to '${ARCHIVER_SCRIPT_PATH}' correctly."
     fi
   fi
 }
