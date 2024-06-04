@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Improved
 - Setup script places archiver in PATH.
-  - Please run 'sudo ./setup.sh' again from the archiver repo directory to make this change.
+  - Please run './setup.sh' again from the archiver repo directory to make this change.
     - You can skip all sections of the setup script by typing 'n' when prompted. The script will make this change regardless.
   - You should now run Archiver backups with the command 'archiver'.
   - This is global, no more need to change to your archiver directory.
