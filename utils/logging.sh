@@ -7,26 +7,18 @@
 
 LOG_DIR="${ARCHIVER_DIR}/logs" # Path to Archiver logs directory
 OLD_LOG_DIR="${LOG_DIR}/prior_logs"
-LOG_PREFIXES=(
-  "archiver"
-  "duplicacy"
-  "docker"
-  "curl"
-)
 
 log_message() {
   local log_level
   local message
   local timestamp
-  local log_prefix
   local service_name
   local target_log_file
 
   log_level="${1}"
   message="${2}"
   timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
-  log_prefix="${3:-archiver}" # Use ARCHIVER_LOG_FILE by default if no log file is specified
-  target_log_file="${LOG_DIR}/${log_prefix}.log"
+  target_log_file="${LOG_DIR}/archiver.log"
   # Use "archiver" if SERVICE is unset or empty
   local service_name="${SERVICE:-archiver}"
 
@@ -51,41 +43,37 @@ log_message() {
 # Output:
 #   Writes the provided output message to the specified log file or the default archiver log file. No console output.
 log_output() {
-  local log_prefix
   local log_level
 
-  log_prefix="${1}"
-  log_level="${2:-INFO}" # Use INFO log level by default if no log level is specified
+  log_level="${1:-INFO}" # Use INFO log level by default if no log level is specified
 
   while IFS= read -r line; do
-    log_message "${log_level}" "${line}" "${log_prefix}"
+    log_message "${log_level}" "${line}"
   done
 }
 
 rotate_logs() {
+  local new_log_file
+
   mkdir -p "${OLD_LOG_DIR}" || handle_error "Unable to create log directory '${OLD_LOG_DIR}'."
 
-  for log_prefix in "${LOG_PREFIXES[@]}"; do
-    local new_log_file
+  # Generate a new log file name based on the script variable: DATETIME
+  new_log_file="${OLD_LOG_DIR}/archiver-${DATETIME}.log"
 
-    # Generate a new log file name based on the log prefix and script variable: DATETIME
-    new_log_file="${OLD_LOG_DIR}/${log_prefix}-${DATETIME}.log"
+  # Create a new empty log file
+  touch "${new_log_file}"  || \
+    handle_error "Could not create log file '${new_log_file}'."
+  log_message "INFO" "Created log file '${new_log_file}'."
 
-    # Create a new empty log file
-    touch "${new_log_file}"  || \
-      handle_error "Could not create log file '${new_log_file}'."
-    log_message "INFO" "Created log file '${new_log_file}'."
+  # Update or create the symlink to point to the new log file
+  ln -sf "${new_log_file}" "${LOG_DIR}/archiver.log" || \
+    handle_error "Could not update/create symlink for 'archiver.log' to '${new_log_file}'."
+  log_message "INFO" "Updated/created symlink for 'archiver.log' to '${new_log_file}'."
 
-    # Update or create the symlink to point to the new log file
-    ln -sf "${new_log_file}" "${LOG_DIR}/${log_prefix}.log" || \
-      handle_error "Could not update/create symlink for '${log_prefix}.log' to '${new_log_file}'."
-    log_message "INFO" "Updated/created symlink for '${log_prefix}.log' to '${new_log_file}'."
-
-    # Delete log files older than 7 days
-    find "${OLD_LOG_DIR}" -name "${log_prefix}-*.log" -type f -mtime +7 -exec rm -f {} \; || \
-      handle_error "Failed to delete old '${log_prefix}' log files."
-    log_message "INFO" "Deleted '${log_prefix}' log files older than 7 days."
-  done
+  # Delete log files older than 7 days
+  find "${OLD_LOG_DIR}" -name "*.log" -type f -mtime +7 -exec rm -f {} \; || \
+    handle_error "Failed to delete old 'archiver' log files."
+  log_message "INFO" "Deleted 'archiver' log files older than 7 days."
 }
 
 

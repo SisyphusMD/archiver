@@ -18,7 +18,7 @@ send_pushover_notification() {
     --form-string "user=${PUSHOVER_USER_KEY}" \
     --form-string "title=${title}" \
     --form-string "message=${message}" \
-    https://api.pushover.net/1/messages.json | log_output "curl"
+    https://api.pushover.net/1/messages.json | log_output
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Failed to send pushover notification. Check Pushover variables in the secrets file."

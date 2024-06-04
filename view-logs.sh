@@ -9,14 +9,8 @@ ARCHIVER_DIR="$(dirname "${SCRIPT_PATH}")"
 MAIN_SCRIPT_PATH="${ARCHIVER_DIR}/main.sh"
 LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
 
-# Define the log directory and log files
+# Define the log directory
 LOG_DIR="${ARCHIVER_DIR}/logs"
-LOG_PREFIXES=(
-    "archiver"
-    "duplicacy"
-    "docker"
-    "curl"
-)
 
 escalate_privileges() {
   echo "This script must be run as root. Attempting to restart with sudo..."
@@ -61,14 +55,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 tail_logs() {
-  # Construct the tail command dynamically
-  tail_cmd="tail -f ${ARCHIVER_DIR}/logos/logo.ascii"
-  for log_prefix in "${LOG_PREFIXES[@]}"; do
-    tail_cmd+=" ${LOG_DIR}/${log_prefix}.log"
-  done
-
-  # Execute the tail command
-  eval "${tail_cmd}"
+  tail -f "${ARCHIVER_DIR}/logos/logo.ascii ${LOG_DIR}/archiver.log"
 }
 
 wait_for_logs() {
@@ -78,22 +65,20 @@ wait_for_logs() {
     sleep 0.1
   done
 
-  # Wait for all specified log files to be present and updated after the specified start time
-  for log_prefix in "${LOG_PREFIXES[@]}"; do
-    while true; do
-      if [ -f "${LOG_DIR}/${log_prefix}.log" ]; then
-        file_time="$(stat -c %Y "${LOG_DIR}/${log_prefix}.log")"
-        if [ "${file_time}" -ge "${START_TIME}" ]; then
-          echo "${log_prefix}.log is present and has been updated."
-          break
-        else
-          echo "Waiting for ${log_prefix}.log to be updated..."
-        fi
+  # Wait for the log file symlink to be present and updated after the specified start time
+  while true; do
+    if [ -f "${LOG_DIR}/archiver.log" ]; then
+      file_time="$(stat -c %Y "${LOG_DIR}/archiver.log")"
+      if [ "${file_time}" -ge "${START_TIME}" ]; then
+        echo "archiver.log is present and has been updated."
+        break
       else
-        echo "Waiting for ${log_prefix}.log to be created..."
+        echo "Waiting for archiver.log to be updated..."
       fi
-      sleep 0.1
-    done
+    else
+      echo "Waiting for archiver.log to be created..."
+    fi
+    sleep 0.1
   done
 }
 
