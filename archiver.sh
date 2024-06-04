@@ -15,18 +15,26 @@ usage() {
   echo
   echo "Options:"
   echo "  --view-logs  View the logs after starting Archiver"
+  echo "  --stop       Stop a running Archiver backup."
   echo "  --help       Display this help message"
   exit 1
 }
 
 # Parse command-line arguments
+run=true
 view_logs=false
+stop=false
 main_script_args=("--start-time" "${START_TIME}")
 while [[ $# -gt 0 ]]; do
   case "${1}" in
     --view-logs)
       view_logs=true
       main_script_args+=("--no-view-logs-error")
+      shift
+      ;;
+    --stop)
+      stop=true
+      run=false
       shift
       ;;
     --help)
@@ -52,14 +60,21 @@ MOD_DIR="${ARCHIVER_DIR}/lib/mod"
 # Define paths to various scripts
 MAIN_SCRIPT="${MOD_DIR}/main.sh"
 VIEW_LOGS_SCRIPT="${MOD_DIR}/view-logs.sh"
+STOP_SCRIPT="${MOD_DIR}/stop-archiver.sh"
 
-# Start Archiver in a new session using setsid
-setsid nohup "${MAIN_SCRIPT}" "${main_script_args[@]}" &>/dev/null & # setsid + nohup was required to fix bug related to duplicacy exported env vars when user ran script with --view-logs, then closed that running log view
-echo "Archiver main script started in the background."
+if [[ "${stop}" == "true" ]]; then
+  "${STOP_SCRIPT}"
+fi
 
-# Optionally view logs
-if [ "${view_logs}" = true ]; then
-  "${VIEW_LOGS_SCRIPT}" --start-time "${START_TIME}"
+if [[ "${run}" == "true" ]]; then
+  # Start Archiver in a new session using setsid
+  setsid nohup "${MAIN_SCRIPT}" "${main_script_args[@]}" &>/dev/null & # setsid + nohup was required to fix bug related to duplicacy exported env vars when user ran script with --view-logs, then closed that running log view
+  echo "Archiver main script started in the background."
+
+  # Optionally view logs
+  if [ "${view_logs}" = true ]; then
+    "${VIEW_LOGS_SCRIPT}" --start-time "${START_TIME}"
+  fi
 fi
 
 exit 0

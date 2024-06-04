@@ -248,16 +248,12 @@
     ```bash
     ./archiver.sh
     ```
-  - To manually start a backup with logs displaying, run the following from your archiver directory:
+  - To manually start a backup with logs displaying, or to check on the process of an actively running Archiver backup, run the following from your archiver directory:
     ```bash
     ./archiver.sh --view-logs
     ```
-  - To check on the process of an actively running Archiver backup, run the following from your archiver directory:
-    ```bash
-    ./view-logs.sh
-    ```
   - To stop/cancel an actively running Archiver backup, run the following from your archiver directory:
     ```bash
-    ./stop-archiver.sh
+    ./archiver.sh --stop
     ```
 </details>
