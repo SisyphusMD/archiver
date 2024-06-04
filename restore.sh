@@ -94,7 +94,7 @@ select_storage_target() {
   # Prompt user for selection
   local choice
   while true; do
-    read -p "Enter the number of your choice: " choice
+    read -rp "Enter the number of your choice: " choice
     if [[ "${choice}" =~ ^[0-9]+$ ]] && [ "${choice}" -ge 1 ] && [ "${choice}" -le "${STORAGE_TARGET_COUNT}" ]; then
       break
     else
