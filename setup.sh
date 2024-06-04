@@ -36,9 +36,10 @@ fi
 # ---------------------
 
 # Determine the full path of the script
-ARCHIVER_SCRIPT_PATH="$(readlink -f "${0}" 2>/dev/null)"
+SETUP_SCRIPT_PATH="$(readlink -f "${0}" 2>/dev/null)"
 # Determine the full path of the containing dir of the script
-ARCHIVER_DIR="$(cd "$(dirname "${ARCHIVER_SCRIPT_PATH}")" && pwd)"
+ARCHIVER_DIR="$(cd "$(dirname "${SETUP_SCRIPT_PATH}")" && pwd)"
+ARCHIVER_SCRIPT_PATH="${ARCHIVER_DIR}/archiver.sh"
 DUPLICACY_VERSION="3.2.3"
 DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/keys"
 REQUIRED_PACKAGES=(
