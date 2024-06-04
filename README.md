@@ -177,7 +177,7 @@
 
   - ##### Run the setup script
   ```bash
-  sudo ./archiver/setup.sh
+  ./archiver/setup.sh
   ```
 
   - ##### Follow the instructions in the automated setup script to:
@@ -222,7 +222,7 @@
 
   - Run the setup script to install dependencies and the Duplicacy binary, and restore cron scheduling, but otherwise you can skip the portions that create new SSH keys, RSA keys, and config file. You will need to provide your backed up keys directory and config.sh file.
   ```bash
-  sudo ./archiver/setup.sh
+  ./archiver/setup.sh
   ```
 
   - Copy your prior keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
@@ -233,7 +233,7 @@
 
   - Run the restore script once for each service you need to restore.
   ```bash
-  sudo ./archiver/restore.sh
+  ./archiver/restore.sh
   ```
 </details>
 
@@ -246,20 +246,18 @@
 
   - To manually start a backup, run the following from your archiver directory:
     ```bash
-    sudo ./archiver.sh
+    ./archiver.sh
     ```
   - To manually start a backup with logs displaying, run the following from your archiver directory:
     ```bash
-    sudo ./archiver.sh --view-logs
+    ./archiver.sh --view-logs
     ```
   - To check on the process of an actively running Archiver backup, run the following from your archiver directory:
     ```bash
-    sudo ./view-logs.sh
+    ./view-logs.sh
     ```
   - To stop/cancel an actively running Archiver backup, run the following from your archiver directory:
     ```bash
-    sudo ./stop-archiver.sh
+    ./stop-archiver.sh
     ```
-
-  - All archiver scripts must be run with sudo or as root. This is in order to preserve ownership of files being backed up, and for access to files not owned by your user.
 </details>
