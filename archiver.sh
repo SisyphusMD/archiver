@@ -22,22 +22,22 @@ usage() {
 
 # Parse command-line arguments
 run=true
-view_logs=false
+logs=false
 stop=false
 main_script_args=("--start-time" "${START_TIME}")
 while [[ $# -gt 0 ]]; do
   case "${1}" in
-    --view-logs)
-      view_logs=true
+    logs)
+      logs=true
       main_script_args+=("--no-view-logs-error")
       shift
       ;;
-    --stop)
+    stop)
       stop=true
       run=false
       shift
       ;;
-    --help)
+    help)
       usage  # Call usage when --help is provided
       ;;
     # --pause) # Example for the future for passing specific arguments to the main script
@@ -59,8 +59,8 @@ SRC_DIR="${ARCHIVER_DIR}/lib/src"
 MOD_DIR="${ARCHIVER_DIR}/lib/mod"
 # Define paths to various scripts
 MAIN_SCRIPT="${MOD_DIR}/main.sh"
-VIEW_LOGS_SCRIPT="${MOD_DIR}/view-logs.sh"
-STOP_SCRIPT="${MOD_DIR}/stop-archiver.sh"
+LOGS_SCRIPT="${MOD_DIR}/logs.sh"
+STOP_SCRIPT="${MOD_DIR}/stop.sh"
 
 if [[ "${stop}" == "true" ]]; then
   "${STOP_SCRIPT}"
@@ -72,8 +72,8 @@ if [[ "${run}" == "true" ]]; then
   echo "Archiver main script started in the background."
 
   # Optionally view logs
-  if [ "${view_logs}" = true ]; then
-    "${VIEW_LOGS_SCRIPT}" --start-time "${START_TIME}"
+  if [ "${logs}" = true ]; then
+    "${LOGS_SCRIPT}" --start-time "${START_TIME}"
   fi
 fi
 

@@ -250,10 +250,10 @@
     ```
   - To watch the logs of the actively running Archiver backup (will start Archiver backup if not already running):
     ```bash
-    archiver --view-logs
+    archiver logs
     ```
   - To stop/cancel an actively running Archiver backup, run the following from your archiver directory:
     ```bash
-    archiver --stop
+    archiver stop
     ```
 </details>

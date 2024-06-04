@@ -43,8 +43,8 @@ MOD_DIR="${LIB_DIR}/mod"
 LOGO_DIR="${LIB_DIR}/logos"
 
 # Define module scripts
-VIEW_LOGS_SCRIPT="${MOD_DIR}/view-logs.sh"
-STOP_SCRIPT="${MOD_DIR}/stop-archiver.sh"
+LOGS_SCRIPT="${MOD_DIR}/logs.sh"
+STOP_SCRIPT="${MOD_DIR}/archiver.sh"
 
 # Source all the necessary src files
 for script in "${SRC_DIR}/"*.sh; do

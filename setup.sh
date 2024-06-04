@@ -702,8 +702,8 @@ main() {
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your keys directory."
   echo "Usage:"
   echo " - To manually start the Archiver backup, use 'archiver'."
-  echo " - To watch the logs of the actively running Archiver backup, use 'archiver --view-logs'. Will start Archiver backup if not already running."
-  echo " - To manually stop the Archiver backup early, use 'archiver --stop'."
+  echo " - To watch the logs of the actively running Archiver backup, use 'archiver logs'. Will start Archiver backup if not already running."
+  echo " - To manually stop the Archiver backup early, use 'archiver stop'."
 }
 
 main
