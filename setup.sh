@@ -52,7 +52,7 @@ REQUIRED_PACKAGES=(
 # Determine environment
 ENVIRONMENT_OS="$(uname -s)"
 ENVIRONMENT_ARCHITECTURE="$(uname -m)"
-DUPLICACY_OS="$(echo ${ENVIRONMENT_OS} | tr '[:upper:]' '[:lower:]')"
+DUPLICACY_OS="$(echo "${ENVIRONMENT_OS}" | tr '[:upper:]' '[:lower:]')"
 DUPLICACY_ARCHITECTURE="unknown"
 if [[ "${ENVIRONMENT_ARCHITECTURE}" == "aarch64" || "${ENVIRONMENT_ARCHITECTURE}" == "arm64" ]]; then
   DUPLICACY_ARCHITECTURE="arm64"
@@ -266,7 +266,7 @@ generate_ssh_keypair() {
       echo " - SSH key pair not generated."
       echo " - Please provide your own, and copy them to ${DUPLICACY_KEYS_DIR}/id_ed25519 and ${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
       echo " - Archiver only supports ed25519 key pairs with no passphrase for SFTP."
-      echo " - Can use the following command: ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C \"archiver\""
+      echo " - Can use the following command: ssh-keygen -t ed25519 -f ${DUPLICACY_KEYS_DIR}/id_ed25519 -N \"\" -C archiver"
     fi
   else
     echo " - Skipping SSH key pair generation: SSH key files already present in '${DUPLICACY_KEYS_DIR}'."
