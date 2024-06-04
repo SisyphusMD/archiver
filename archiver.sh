@@ -4,7 +4,6 @@
 START_TIME="$(date +%s)"
 
 escalate_privileges() {
-  echo "This script must be run as root. Attempting to restart with sudo..."
   exec sudo "$0" "$@"
 }
 

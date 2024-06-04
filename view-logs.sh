@@ -13,7 +13,6 @@ LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -
 LOG_DIR="${ARCHIVER_DIR}/logs"
 
 escalate_privileges() {
-  echo "This script must be run as root. Attempting to restart with sudo..."
   exec sudo "$0" "$@"
 }
 
@@ -61,7 +60,6 @@ tail_logs() {
 wait_for_logs() {
   # Wait for the log directory to be created
   while [ ! -d "${LOG_DIR}" ]; do
-    echo "Waiting for log directory ${LOG_DIR} to be created..."
     sleep 0.1
   done
 
@@ -70,13 +68,8 @@ wait_for_logs() {
     if [ -f "${LOG_DIR}/archiver.log" ]; then
       file_time="$(stat -c %Y "${LOG_DIR}/archiver.log")"
       if [ "${file_time}" -ge "${START_TIME}" ]; then
-        echo "archiver.log is present and has been updated."
         break
-      else
-        echo "Waiting for archiver.log to be updated..."
       fi
-    else
-      echo "Waiting for archiver.log to be created..."
     fi
     sleep 0.1
   done
@@ -101,7 +94,6 @@ while [ ${retry} -gt 0 ]; do
       exit 0
     fi
   else
-    echo "Archiver is not running. Retrying..."
     sleep 0.1
     retry=$((retry - 1))
   fi

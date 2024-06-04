@@ -3,7 +3,6 @@
 set -e # Exit immediately if a command exits with a non-zero status
 
 escalate_privileges() {
-  echo "This script must be run as root. Attempting to restart with sudo..."
   exec sudo "$0" "$@"
 }
 
