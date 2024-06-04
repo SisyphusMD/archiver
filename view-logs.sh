@@ -55,7 +55,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 tail_logs() {
-  tail -f "${ARCHIVER_DIR}/logos/logo.ascii ${LOG_DIR}/archiver.log"
+  tail -f "${ARCHIVER_DIR}/logos/logo.ascii" "${LOG_DIR}/archiver.log"
 }
 
 wait_for_logs() {
