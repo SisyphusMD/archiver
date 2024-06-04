@@ -14,9 +14,9 @@ usage() {
   echo "Usage: ${0}"
   echo
   echo "Options:"
-  echo "  --view-logs  View the logs after starting Archiver"
-  echo "  --stop       Stop a running Archiver backup."
-  echo "  --help       Display this help message"
+  echo "  logs    View the logs after starting Archiver"
+  echo "  stop    Stop a running Archiver backup."
+  echo "  help    Display this help message"
   exit 1
 }
 
