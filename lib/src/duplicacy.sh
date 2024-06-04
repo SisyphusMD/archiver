@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Function to verify if a given storage is already initialized
 # Parameters:
 #   1. Duplicacy Storage Name

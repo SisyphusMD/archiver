@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Logs a message to the archiver's log file with a timestamp.
 # Parameters:
 #   1. Log Level: The severity level of the log message (e.g., INFO, WARNING, ERROR).

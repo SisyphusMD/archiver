@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Notifies user of any errors, as well as successful completion of the backup
 # Parameters:
 #   1. Title: The title of the notification.

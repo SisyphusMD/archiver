@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Handles error scenarios by logging an error message and optionally exiting the script with a failure status.
 # Parameters:
 #   1. Error Message: The error message to log.

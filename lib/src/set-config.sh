@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Read and prepare user-defined configuration.
 
 # Sourcing configurable variables from config.sh.
