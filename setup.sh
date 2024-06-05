@@ -665,7 +665,7 @@ schedule_with_cron() {
         cron_schedule="0 3 * * *"
       fi
     done
-    (sudo crontab -l 2>/dev/null; echo "${cron_schedule} archiver") | sudo crontab -
+    (sudo crontab -l 2>/dev/null; echo "${cron_schedule} archiver start") | sudo crontab -
     echo " - Backup scheduled with cron."
     echo " - You can edit the schedule with this command:"
     echo "--------------------------------------------"
@@ -675,7 +675,7 @@ schedule_with_cron() {
     echo " - Backup not scheduled with cron."
     echo " - You can always schedule it later with this command (daily at 3am in below example):"
     echo "--------------------------------------------"
-    echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * archiver\") | sudo crontab -"
+    echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * archiver start\") | sudo crontab -"
     echo "--------------------------------------------"
   fi
 }
@@ -701,8 +701,8 @@ main() {
   echo " - Setup script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your keys directory."
   echo "Usage:"
-  echo " - To manually start the Archiver backup, use 'archiver'."
-  echo " - To watch the logs of the actively running Archiver backup, use 'archiver logs'. Will start Archiver backup if not already running."
+  echo " - To manually start the Archiver backup, use 'archiver start'."
+  echo " - To watch the logs of the actively running Archiver backup, use 'archiver logs'."
   echo " - To manually stop the Archiver backup early, use 'archiver stop'."
 }
 

@@ -177,7 +177,7 @@
 
   - ##### Run the setup script
   ```bash
-  ./archiver/setup.sh
+  ./archiver.sh setup
   ```
 
   - ##### Follow the instructions in the automated setup script to:
@@ -222,7 +222,7 @@
 
   - Run the setup script to install dependencies and the Duplicacy binary, and restore cron scheduling, but otherwise you can skip the portions that create new SSH keys, RSA keys, and config file. You will need to provide your backed up keys directory and config.sh file.
   ```bash
-  ./archiver/setup.sh
+  ./archiver.sh setup
   ```
 
   - Copy your prior keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
@@ -233,7 +233,7 @@
 
   - Run the restore script once for each service you need to restore.
   ```bash
-  ./archiver/restore.sh
+  archiver restore
   ```
 </details>
 
@@ -246,9 +246,9 @@
 
   - To manually start a backup, run the following:
     ```bash
-    archiver
+    archiver start
     ```
-  - To watch the logs of the actively running Archiver backup (will start Archiver backup if not already running):
+  - To watch the logs of the actively running Archiver backup:
     ```bash
     archiver logs
     ```

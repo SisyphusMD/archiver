@@ -4,12 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.4] - 2024-06-XX
+## [0.3.0] - 2024-06-XX
 ### Improved
-- Arguments are now single words, not prefaced by '--'.
-  - archiver stop
-  - archiver logs
-  - archiver help
+- Massive argument improvements:
+  - Arguments are now single words, not prefaced by '--'
+    - archiver start|stop|pause|resume|restart|logs|status|setup|uninstall|restore|help
+  - 'archiver' command with no argument (or with 'help' argument) prints a guide to available arguments
+  - 'start':
+    - 'archiver start' is now required to initiate a backup
+      - May need to edit 'sudo crontab -e' if it previously did not include the 'start' argument
+    - 'archiver start logs' to initiate a backup and view logs
+    - 'archiver start prune|retain' prune and retain will override the behavior to prune or retain backups for this run only
+    - logs and prune|retain can be combined
+  - 'stop|pause|resume':
+    - 'archiver stop|pause|resume' manually stops, pauses, or resumes a running backup
+  - 'logs'
+    - 'archiver logs' will display the logs of a running backup (but no longer starts a new backup)
+  - 'status'
+    - 'archiver status' prints whether or not there is a currently running backup process
+  - 'restart'
+    - 'archiver restart' will stop any running backup and start a new one from the beginning
+    - similar to 'archiver start' can be used with logs|prune|retain
+  - 'setup|uninstall'
+    - 'archiver setup|uninstall' will run the setup or uninstall scripts
+  - 'restore'
+    - 'archiver restore' will run the restore script
 
 ## [0.2.3] - 2024-06-04
 ### Fixed

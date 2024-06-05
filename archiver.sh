@@ -10,9 +10,9 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|install|uninstall|restore|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|uninstall|restore|help} [logs|prune|retain]"
   echo "Note:"
-  echo "  stop|pause|logs|status|install|uninstall|restore|help cannot have further arguments."
+  echo "  stop|pause|logs|status|setup|uninstall|restore|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
   exit 1
@@ -60,7 +60,7 @@ case "${command}" in
       usage
     fi
     ;;
-  stop|pause|logs|status|install|uninstall|restore|help)
+  stop|pause|logs|status|setup|uninstall|restore|help)
     if [[ $# -gt 0 ]]; then
       echo "'${command}' cannot have further arguments."
       usage
@@ -113,6 +113,6 @@ if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
 fi
 
 # Others to write
-# Still need to write functions for pause|resume|restart|status|install|uninstall|restore|help
+# Still need to write functions for pause|resume|restart|status|setup|uninstall|restore|help
 
 exit 0
