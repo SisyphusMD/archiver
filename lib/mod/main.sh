@@ -130,6 +130,9 @@ if [ "$(id -u)" -ne 0 ]; then
   exec sudo "$0" "$@"
 fi
 
+# Store argument in case of prune or retain
+ROTATION_OVERRIDE="${1}"
+
 # Check if the lock file exists and contains a valid PID
 if [ -e "${LOCKFILE}" ]; then
   LOCK_INFO="$(cat "${LOCKFILE}")"

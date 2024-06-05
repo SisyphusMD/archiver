@@ -37,34 +37,16 @@ if [ "$(id -u)" -ne 0 ]; then
   exec sudo "$0" "$@"
 fi
 
-# Function to print usage information
-usage() {
-  echo "Usage: ${0}"
-  echo
-  echo "Options:"
-  echo "  --start-time START_TIME  Specify the start time (optional, defaults to 0)"
-  echo "  --help                   Display this help message"
-  exit 1
-}
-
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
   case "${1}" in
-    --start-time)
-      if [[ -n "${2}" && "${2}" != --* ]]; then
+    time)
+      if [[ -n "${2}" ]]; then
         START_TIME="${2}"
         shift 2
       else
-        echo "Error: --start-time requires a value."
-        usage
+        START_TIME=0
       fi
-      ;;
-    --help)
-      usage  # Call usage when --help is provided
-      ;;
-    *)
-      echo "Unknown option: ${1}"
-      usage  # Call usage for unknown options
       ;;
   esac
 done

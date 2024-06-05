@@ -154,7 +154,7 @@ fi
 
 # Archiver logs logic
 if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
-  "${LOGS_SCRIPT}" --start-time "${START_TIME}"
+  "${LOGS_SCRIPT}" "time" "${START_TIME}"
 fi
 
 # Archiver help logic
