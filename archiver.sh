@@ -82,6 +82,7 @@ MAIN_SCRIPT="${MOD_DIR}/main.sh"
 LOGS_SCRIPT="${MOD_DIR}/logs.sh"
 STOP_SCRIPT="${MOD_DIR}/stop.sh"
 SETUP_SCRIPT="${MOD_DIR}/setup.sh"
+STATUS_SCRIPT="${MOD_DIR}/status.sh"
 RESTORE_SCRIPT="${MOD_DIR}/restore.sh"
 
 # Archiver Start Logic
@@ -119,12 +120,17 @@ if [[ "${command}" == "restore" ]]; then
   "${RESTORE_SCRIPT}"
 fi
 
+# Archiver status logic
+if [[ "${command}" == "status" ]]; then
+  "${STATUS_SCRIPT}"
+fi
+
 # Archiver logs logic
 if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
   "${LOGS_SCRIPT}" --start-time "${START_TIME}"
 fi
 
 # Others to write
-# Still need to write functions for pause|resume|restart|status|uninstall|help
+# Still need to write functions for pause|resume|restart|uninstall|help
 
 exit 0

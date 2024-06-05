@@ -716,6 +716,7 @@ main() {
   echo "Usage:"
   echo " - To manually start the Archiver backup, use 'archiver start'."
   echo " - To watch the logs of the actively running Archiver backup, use 'archiver logs'."
+  echo " - To check on the Archiver backup status, use 'archiver status'."
   echo " - To manually stop the Archiver backup early, use 'archiver stop'."
   echo " - To start the Archiver restore script, use 'archiver restore'."
 }

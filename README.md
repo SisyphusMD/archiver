@@ -252,6 +252,10 @@
     ```bash
     archiver logs
     ```
+  - To check on the Archiver backup status:
+    ```bash
+    archiver status
+    ```
   - To stop/cancel an actively running Archiver backup, run the following from your archiver directory:
     ```bash
     archiver stop
