@@ -61,7 +61,7 @@ tail_logs() {
   tail -f "${LOGO_DIR}/logo.ascii" "${log_file}" &
   tail_pid=$!
 
-  while sleep 1; do
+  while sleep 0.1; do
     current_inode=$(stat -c %i "${log_file}")
     if [[ "${current_inode}" != "${last_inode}" ]]; then
       echo "Log file has changed. Following the new log file..."
