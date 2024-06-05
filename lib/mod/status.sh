@@ -41,13 +41,12 @@ if [ -e "${LOCKFILE}" ]; then
   if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${MAIN_SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
     # This means PID exists
     state="$(awk '/State/ {print $3}' /proc/"${LOCK_PID}"/status)"
-    echo "DEBUG: Process state is '${state}'"
-    if [ "${state}" == "R" ]; then
+    if [ "${state}" == "(running)" ] || [ "${state}" == "(sleeping)" ]; then
         echo "An Archiver backup is running."
-    elif [ "${state}" == "T" ]; then
+    elif [ "${state}" == "(stopped)" ]; then
         echo "An Archiver backup is paused."
     else
-        echo "An Archiver backup is in an unknown state."
+        echo "Process state is '${state}'."
     fi
   else
     echo "Stale lock file detected. No running Archiver backup found with PID ${LOCK_PID}. Run 'archiver stop' to fix this."
