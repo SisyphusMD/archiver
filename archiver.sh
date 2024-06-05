@@ -32,31 +32,31 @@ command="${1}"
 shift
 
 case "${command}" in
-  start)
+  start|restart)
     if [[ $# -gt 0 ]]; then
       case "${1}" in
         logs)
           if [[ $# -gt 2 || ( $# -eq 2 && ! ( "${2}" == "prune" || "${2}" == "retain" ) ) ]]; then
-            echo "'${2}' is not a valid argument for 'archiver start logs'."
+            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
             usage
           fi
           ;;
         prune|retain)
           if [[ $# -gt 2 || ( $# -eq 2 && "${2}" != "logs" ) ]]; then
-            echo "'${2}' is not a valid argument for 'archiver start ${1}'."
+            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
             usage
           fi
           ;;
         *)
-          echo "'${1}' is not a valid argument for 'archiver start'."
+          echo "'${*:1}' is not valid for 'archiver ${command}'."
           usage
           ;;
       esac
     fi
     ;;
-  resume|restart)
+  resume)
     if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "logs" ) ]]; then
-      echo "'${1}' is not a valid argument for '${command}'."
+      echo "'${*:1}' is not valid for 'archiver ${command}'."
       usage
     fi
     ;;
@@ -85,8 +85,7 @@ SETUP_SCRIPT="${MOD_DIR}/setup.sh"
 STATUS_SCRIPT="${MOD_DIR}/status.sh"
 RESTORE_SCRIPT="${MOD_DIR}/restore.sh"
 
-# Archiver Start Logic
-if [[ "${command}" == "start" ]]; then
+start_archiver() {
   if [[ -n "${1}" ]]; then
     if [[ "${1}" == "logs" ]]; then
       logs="true"
@@ -103,6 +102,11 @@ if [[ "${command}" == "start" ]]; then
   # Start Archiver in a new session using setsid
   setsid nohup "${MAIN_SCRIPT}" "${args[@]}" &>/dev/null & # setsid + nohup was required to fix bug related to duplicacy exported env vars when user ran script with --view-logs, then closed that running log view
   echo "Archiver main script called in the background."
+}
+
+# Archiver Start Logic
+if [[ "${command}" == "start" ]]; then
+  start_archiver "${@}"
 fi
 
 # Archiver stop logic
@@ -139,6 +143,15 @@ if [[ "${command}" == "resume" ]]; then
   "${STATUS_SCRIPT}" "${command}"
 fi
 
+# Archiver restart logic
+if [[ "${command}" == "restart" ]]; then
+  # First stop
+  "${STOP_SCRIPT}"
+
+  # Then start again with arguments as needed
+  start_archiver "${@}"
+fi
+
 # Archiver logs logic
 if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
   "${LOGS_SCRIPT}" --start-time "${START_TIME}"
@@ -150,6 +163,6 @@ if [[ "${command}" == "help" ]]; then
 fi
 
 # Others to write
-# Still need to write functions for restart|uninstall
+# Still need to write functions for: uninstall
 
 exit 0
