@@ -44,10 +44,16 @@ cleanup_lockfile() {
 terminate_process_tree() {
   local pid=$1
   echo "Terminating process tree for PID ${pid}"
-  pkill -TERM -P "${pid}"
-  kill -TERM "${pid}" 2>/dev/null
+  
+  # Get all child PIDs
+  child_pids=$(pgrep -P "${pid}")
 
-  # Wait for the process to terminate
+  for child_pid in ${child_pids}; do
+    terminate_process_tree "${child_pid}"
+  done
+
+  # Terminate the main process
+  kill -TERM "${pid}" 2>/dev/null
   wait "${pid}" 2>/dev/null
 }
 
