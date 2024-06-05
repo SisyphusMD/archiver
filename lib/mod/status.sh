@@ -40,7 +40,8 @@ if [ -e "${LOCKFILE}" ]; then
 
   if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${MAIN_SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
     # This means PID exists
-    state="$(awk '/State/ {print $2}' /proc/"${LOCK_PID}"/status)"
+    state="$(awk '/State/ {print $3}' /proc/"${LOCK_PID}"/status)"
+    echo "DEBUG: Process state is '${state}'"
     if [ "${state}" == "R" ]; then
         echo "An Archiver backup is running."
     elif [ "${state}" == "T" ]; then
