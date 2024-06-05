@@ -37,24 +37,24 @@ PAUSED_FLAG="paused"
 
 # Function to check if the process is paused
 is_paused() {
-  tail -n 1 "${LOCKFILE}" | grep -q "${PAUSED_FLAG}"
+  grep -q "${PAUSED_FLAG}" "${LOCKFILE}"
 }
 
 # Function to set the paused state in the LOCKFILE
 set_paused_flag() {
-  echo "${PAUSED_FLAG}" >> "${LOCKFILE}"
+  sed -i "s/$/ ${PAUSED_FLAG}/" "${LOCKFILE}"
 }
 
 # Function to clear the paused state in the LOCKFILE
 clear_paused_flag() {
-  sed -i "/${PAUSED_FLAG}/d" "${LOCKFILE}"
+  sed -i "s/ ${PAUSED_FLAG}//" "${LOCKFILE}"
 }
 
 # Check if the lock file exists and contains a valid PID
 if [ -e "${LOCKFILE}" ]; then
-  LOCK_INFO="$(head -n 2 "${LOCKFILE}")"
-  LOCK_PID="$(echo "${LOCK_INFO}" | head -n 1 | cut -d' ' -f1)"
-  LOCK_SCRIPT="$(echo "${LOCK_INFO}" | head -n 1 | cut -d' ' -f2)"
+  LOCK_INFO="$(cat "${LOCKFILE}")"
+  LOCK_PID="$(echo "${LOCK_INFO}" | cut -d' ' -f1)"
+  LOCK_SCRIPT="$(echo "${LOCK_INFO}" | cut -d' ' -f2)"
 
   if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${MAIN_SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
     if is_paused; then
