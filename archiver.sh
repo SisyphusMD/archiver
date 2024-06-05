@@ -125,6 +125,6 @@ if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
 fi
 
 # Others to write
-# Still need to write functions for pause|resume|restart|status|setup|uninstall|restore|help
+# Still need to write functions for pause|resume|restart|status|uninstall|help
 
 exit 0
