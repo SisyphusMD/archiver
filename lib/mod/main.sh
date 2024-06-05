@@ -130,43 +130,6 @@ if [ "$(id -u)" -ne 0 ]; then
   exec sudo "$0" "$@"
 fi
 
-# Function to print usage information
-usage() {
-  echo "Usage: ${0}"
-  echo
-  echo "Options:"
-  echo "  --start-time START_TIME  Specify the start time (optional, defaults to script start time)"
-  echo "  --help                   Display this help message"
-  exit 1
-}
-
-# Parse command-line arguments
-no_view_logs_error=""
-while [[ $# -gt 0 ]]; do
-  case "${1}" in
-    --start-time)
-      if [[ -n "${2}" && "${2}" != --* ]]; then
-        START_TIME="${2}"
-        shift 2
-      else
-        echo "Error: --start-time requires a value."
-        usage
-      fi
-      ;;
-    --help)
-      usage  # Call usage when --help is provided
-      ;;
-    --no-view-logs-error)
-      no_view_logs_error="true"
-      shift
-      ;;
-    *)
-      echo "Unknown option: ${1}"
-      usage  # Call usage for unknown options
-      ;;
-  esac
-done
-
 # Check if the lock file exists and contains a valid PID
 if [ -e "${LOCKFILE}" ]; then
   LOCK_INFO="$(cat "${LOCKFILE}")"
@@ -174,9 +137,6 @@ if [ -e "${LOCKFILE}" ]; then
   LOCK_SCRIPT="$(echo "${LOCK_INFO}" | cut -d' ' -f2)"
 
   if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${MAIN_SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
-    if [ "${no_view_logs_error}" != "true" ]; then
-      handle_error "Another instance of ${MAIN_SCRIPT_PATH} is already running with PID ${LOCK_PID}."
-    fi
     # Set early_exit to true to avoid removing the lockfile
     early_exit=true
     exit 1
