@@ -324,7 +324,7 @@ duplicacy_add_backup() {
 }
 
 duplicacy_copy_backup() {
-  if [[ STORAGE_TARGET_COUNT -gt 1 ]]; then
+  if [[ "${STORAGE_TARGET_COUNT}" -gt 1 ]]; then
     for i in $(seq 2 "${STORAGE_TARGET_COUNT}"); do
       local exit_status
       local storage_id
