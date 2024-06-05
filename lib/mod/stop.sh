@@ -63,11 +63,12 @@ terminate_process_tree() {
   else
     echo "Failed to send TERM signal to PID ${pid}"
   fi
-  
-  if wait "${pid}" 2>/dev/null; then
-    echo "PID ${pid} has terminated"
-  else
-    echo "Failed to wait for PID ${pid}"
+
+  # Verify if the process still exists
+  sleep 2  # Give it some time to terminate
+  if kill -0 "${pid}" 2>/dev/null; then
+    echo "Process ${pid} did not terminate, sending KILL signal"
+    kill -KILL "${pid}" 2>/dev/null
   fi
 }
 
