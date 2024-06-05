@@ -47,14 +47,28 @@ terminate_process_tree() {
   
   # Get all child PIDs
   child_pids=$(pgrep -P "${pid}")
-
-  for child_pid in ${child_pids}; do
-    terminate_process_tree "${child_pid}"
-  done
+  
+  if [ -n "${child_pids}" ]; then
+    for child_pid in ${child_pids}; do
+      echo "Found child process with PID ${child_pid}"
+      terminate_process_tree "${child_pid}"
+    done
+  else
+    echo "No child processes found for PID ${pid}"
+  fi
 
   # Terminate the main process
-  kill -TERM "${pid}" 2>/dev/null
-  wait "${pid}" 2>/dev/null
+  if kill -TERM "${pid}" 2>/dev/null; then
+    echo "Sent TERM signal to PID ${pid}"
+  else
+    echo "Failed to send TERM signal to PID ${pid}"
+  fi
+  
+  if wait "${pid}" 2>/dev/null; then
+    echo "PID ${pid} has terminated"
+  else
+    echo "Failed to wait for PID ${pid}"
+  fi
 }
 
 # Check if the lock file exists and contains a valid PID
