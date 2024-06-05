@@ -115,7 +115,7 @@ if [[ "${command}" == "setup" ]]; then
   "${SETUP_SCRIPT}"
 fi
 
-# Archiver setup logic
+# Archiver restore logic
 if [[ "${command}" == "restore" ]]; then
   "${RESTORE_SCRIPT}"
 fi
@@ -125,12 +125,31 @@ if [[ "${command}" == "status" ]]; then
   "${STATUS_SCRIPT}"
 fi
 
+# Archiver pause logic
+if [[ "${command}" == "pause" ]]; then
+  "${STATUS_SCRIPT}" "${command}"
+fi
+
+# Archiver resume logic
+if [[ "${command}" == "resume" ]]; then
+  if [[ -n "${1}" ]]; then
+    logs="true"
+    START_TIME=0
+  fi
+  "${STATUS_SCRIPT}" "${command}"
+fi
+
 # Archiver logs logic
 if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
   "${LOGS_SCRIPT}" --start-time "${START_TIME}"
 fi
 
+# Archiver help logic
+if [[ "${command}" == "help" ]]; then
+  usage
+fi
+
 # Others to write
-# Still need to write functions for pause|resume|restart|uninstall|help
+# Still need to write functions for restart|uninstall
 
 exit 0

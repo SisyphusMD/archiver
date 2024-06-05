@@ -6,6 +6,8 @@ if [ "$(id -u)" -ne 0 ]; then
   exec sudo "$0" "$@"
 fi
 
+command="${1}"
+
 # Determine archiver repo directory path by traversing up the directory tree until we find 'archiver.sh' or reach the root
 STATUS_SCRIPT_PATH="$(realpath "$0")"
 CURRENT_DIR="$(dirname "${STATUS_SCRIPT_PATH}")"
@@ -42,11 +44,29 @@ if [ -e "${LOCKFILE}" ]; then
     # This means PID exists
     state="$(awk '/State/ {print $3}' /proc/"${LOCK_PID}"/status)"
     if [ "${state}" == "(running)" ] || [ "${state}" == "(sleeping)" ]; then
+      # This means Archiver backup is running
+      if [ -z "${command}" ]; then
         echo "An Archiver backup is running."
+      elif [ "${command}" = "pause" ]; then
+        echo "Pausing Archiver backup."
+        pkill -STOP -P "${LOCK_PID}"
+        echo "Archiver backup paused. Use 'archiver resume' to resume."
+      elif [ "${command}" = "resume" ]; then
+        echo "Archiver backup is not paused. No need to resume. Use 'archiver pause' to pause."
+      fi
     elif [ "${state}" == "(stopped)" ]; then
+      # This means Archiver backup is paused
+      if [ -z "${command}" ]; then
         echo "An Archiver backup is paused."
+      elif [ "${command}" = "pause" ]; then
+        echo "An Archiver backup is already paused. Use 'archiver resume' to resume."
+      elif [ "${command}" = "resume" ]; then
+        echo "Resuming Archiver backup."
+        pkill -CONT -P "${LOCK_PID}"
+        echo "Archiver backup resumed."
+      fi
     else
-        echo "Process state is '${state}'."
+      echo "Error: Unknown process state: '${state}'. Please report this unknown process state by submitting a GitHub issue."
     fi
   else
     echo "Stale lock file detected. No running Archiver backup found with PID ${LOCK_PID}. Run 'archiver stop' to fix this."
