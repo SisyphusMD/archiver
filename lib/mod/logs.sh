@@ -23,9 +23,7 @@ fi
 
 # Define lib, src, mod, log, logo directories
 LOG_DIR="${ARCHIVER_DIR}/logs"
-OLD_LOG_DIR="${LOG_DIR}/prior_logs"
 LIB_DIR="${ARCHIVER_DIR}/lib"
-SRC_DIR="${LIB_DIR}/src"
 MOD_DIR="${LIB_DIR}/mod"
 LOGO_DIR="${LIB_DIR}/logos"
 
@@ -72,7 +70,25 @@ while [[ $# -gt 0 ]]; do
 done
 
 tail_logs() {
-  tail -f "${LOGO_DIR}/logo.ascii" "${LOG_DIR}/archiver.log"
+  local log_file
+  local last_inode
+
+  log_file="${LOG_DIR}/archiver.log"
+  last_inode=$(stat -c %i "${log_file}")
+
+  tail -f "${LOGO_DIR}/logo.ascii" "${log_file}" &
+  tail_pid=$!
+
+  while sleep 1; do
+    current_inode=$(stat -c %i "${log_file}")
+    if [[ "${current_inode}" != "${last_inode}" ]]; then
+      echo "Log file has changed. Following the new log file..."
+      kill "${tail_pid}"
+      last_inode="${current_inode}"
+      tail -f "${LOGO_DIR}/logo.ascii" "${log_file}" &
+      tail_pid=$!
+    fi
+  done
 }
 
 wait_for_logs() {
