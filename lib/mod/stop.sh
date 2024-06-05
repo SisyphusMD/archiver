@@ -25,12 +25,8 @@ if [ -z "${ARCHIVER_DIR}" ]; then
 fi
 
 # Define lib, src, mod, log, logo directories
-LOG_DIR="${ARCHIVER_DIR}/logs"
-OLD_LOG_DIR="${LOG_DIR}/prior_logs"
 LIB_DIR="${ARCHIVER_DIR}/lib"
-SRC_DIR="${LIB_DIR}/src"
 MOD_DIR="${LIB_DIR}/mod"
-LOGO_DIR="${LIB_DIR}/logos"
 
 # Define unique identifier for the main script (e.g., main script's full path)
 MAIN_SCRIPT_PATH="${MOD_DIR}/main.sh"
