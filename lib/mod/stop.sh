@@ -40,38 +40,6 @@ cleanup_lockfile() {
   fi
 }
 
-# Function to terminate a process and its child processes
-terminate_process_tree() {
-  local pid=$1
-  echo "Terminating process tree for PID ${pid}"
-  
-  # Get all child PIDs
-  child_pids=$(pgrep -P "${pid}")
-  
-  if [ -n "${child_pids}" ]; then
-    for child_pid in ${child_pids}; do
-      echo "Found child process with PID ${child_pid}"
-      terminate_process_tree "${child_pid}"
-    done
-  else
-    echo "No child processes found for PID ${pid}"
-  fi
-
-  # Terminate the main process
-  if kill -TERM "${pid}" 2>/dev/null; then
-    echo "Sent TERM signal to PID ${pid}"
-  else
-    echo "Failed to send TERM signal to PID ${pid}"
-  fi
-
-  # Verify if the process still exists
-  sleep 2  # Give it some time to terminate
-  if kill -0 "${pid}" 2>/dev/null; then
-    echo "Process ${pid} did not terminate, sending KILL signal"
-    kill -KILL "${pid}" 2>/dev/null
-  fi
-}
-
 # Check if the lock file exists and contains a valid PID
 if [ -e "${LOCKFILE}" ]; then
   LOCK_INFO="$(cat "${LOCKFILE}")"
@@ -82,7 +50,11 @@ if [ -e "${LOCKFILE}" ]; then
     echo "Stopping Archiver process with PID ${LOCK_PID} and its child processes."
     
     # Terminate the process and its children
-    terminate_process_tree "${LOCK_PID}"
+    pkill -TERM -P "${LOCK_PID}"
+    kill "${LOCK_PID}"
+    
+    # Wait for the process to terminate
+    wait "${LOCK_PID}" 2>/dev/null
 
     echo "Archiver process and its child processes stopped."
     cleanup_lockfile
@@ -102,8 +74,10 @@ if [ -n "${pgrep_output}" ]; then
 
   # Kill the running instance(s) and their child processes
   while read -r pid; do
+    # Terminate the process and its children
+    pkill -TERM -P "${pid}"
     if kill -0 "${pid}" 2>/dev/null; then
-      terminate_process_tree "${pid}"
+      kill "${pid}"
       echo "Killed running instance of ${MAIN_SCRIPT_PATH} with PID: ${pid}"
     fi
   done <<< "${pgrep_output}"
