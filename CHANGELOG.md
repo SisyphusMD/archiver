@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2024-06-XX
+## [0.3.0] - 2024-06-05
 ### Improved
 - Massive argument improvements:
   - Arguments are now single words, not prefaced by '--'
@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - logs and prune|retain can be combined
   - 'stop|pause|resume':
     - 'archiver stop|pause|resume' manually stops, pauses, or resumes a running backup
+    - 'archiver resume' can be combined with 'logs'
   - 'logs'
     - 'archiver logs' will display the logs of a running backup (but no longer starts a new backup)
   - 'status'
@@ -25,11 +26,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - 'restart'
     - 'archiver restart' will stop any running backup and start a new one from the beginning
     - similar to 'archiver start' can be used with logs|prune|retain
+  - 'restore'
+    - 'archiver restore' will run the restore script
+  - 'help'
+    - 'archiver help' will display information about available commands and arguments
   - 'setup|uninstall'
     - 'archiver setup|uninstall' will run the setup or uninstall scripts
     - although, on first run, setup will require './archiver.sh setup' from the archiver dir, given archiver will not be in the PATH yet
-  - 'restore'
-    - 'archiver restore' will run the restore script
+    - uninstall function coming soon
 
 ## [0.2.3] - 2024-06-04
 ### Fixed

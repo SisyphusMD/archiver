@@ -162,7 +162,9 @@ if [[ "${command}" == "help" ]]; then
   usage
 fi
 
-# Others to write
-# Still need to write functions for: uninstall
+# Archiver uninstall logic
+if [[ "${command}" == "uninstall" ]]; then
+  echo "Uninstall function coming soon."
+fi
 
 exit 0

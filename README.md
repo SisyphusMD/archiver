@@ -261,3 +261,26 @@
     archiver stop
     ```
 </details>
+
+<details>
+  <summary><h3>Available Arguments</h3></summary>
+
+  - The 'archiver' command will accept the following arguments:
+    - start
+    - stop
+    - restart
+    - pause
+    - resume
+    - logs
+    - status
+    - help
+    - setup (although the first run will require './archiver.sh setup')
+    - uninstall (coming soon)
+  
+  - The 'start', 'restart', and 'resume' arguments can be combined with 'logs'.
+
+  - The 'start' and 'restart' arguments can also be combined with:
+    - 'prune' to override your configuration setup and rotate your backups during one run only
+    - 'retain' to override your configuration setup and do **NOT** rotate your backups during one run only
+
+</details>
