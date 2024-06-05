@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - 'archiver' command with no argument (or with 'help' argument) prints a guide to available arguments
   - 'start':
     - 'archiver start' is now required to initiate a backup
-      - May need to edit 'sudo crontab -e' if it previously did not include the 'start' argument
+      - may need to edit 'sudo crontab -e' if it previously did not include the 'start' argument
     - 'archiver start logs' to initiate a backup and view logs
     - 'archiver start prune|retain' prune and retain will override the behavior to prune or retain backups for this run only
     - logs and prune|retain can be combined
@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - similar to 'archiver start' can be used with logs|prune|retain
   - 'setup|uninstall'
     - 'archiver setup|uninstall' will run the setup or uninstall scripts
+    - although, on first run, setup will require './archiver.sh setup' from the archiver dir, given archiver will not be in the PATH yet
   - 'restore'
     - 'archiver restore' will run the restore script
 

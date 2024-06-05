@@ -81,6 +81,8 @@ MOD_DIR="${ARCHIVER_DIR}/lib/mod"
 MAIN_SCRIPT="${MOD_DIR}/main.sh"
 LOGS_SCRIPT="${MOD_DIR}/logs.sh"
 STOP_SCRIPT="${MOD_DIR}/stop.sh"
+SETUP_SCRIPT="${MOD_DIR}/setup.sh"
+RESTORE_SCRIPT="${MOD_DIR}/restore.sh"
 
 # Archiver Start Logic
 if [[ "${command}" == "start" ]]; then
@@ -105,6 +107,16 @@ fi
 # Archiver stop logic
 if [[ "${command}" == "stop" ]]; then
   "${STOP_SCRIPT}"
+fi
+
+# Archiver setup logic
+if [[ "${command}" == "setup" ]]; then
+  "${SETUP_SCRIPT}"
+fi
+
+# Archiver setup logic
+if [[ "${command}" == "restore" ]]; then
+  "${RESTORE_SCRIPT}"
 fi
 
 # Archiver logs logic

@@ -34,11 +34,24 @@ fi
 
 # Configuration Section
 # ---------------------
+# Determine archiver repo directory path by traversing up the directory tree until we find 'archiver.sh' or reach the root
+SETUP_SCRIPT_PATH="$(realpath "$0")"
+CURRENT_DIR="$(dirname "${SETUP_SCRIPT_PATH}")"
+ARCHIVER_DIR=""
+while [ "${CURRENT_DIR}" != "/" ]; do
+  if [ -f "${CURRENT_DIR}/archiver.sh" ]; then
+    ARCHIVER_DIR="${CURRENT_DIR}"
+    break
+  fi
+  CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
+done
 
-# Determine the full path of the script
-SETUP_SCRIPT_PATH="$(readlink -f "${0}" 2>/dev/null)"
-# Determine the full path of the containing dir of the script
-ARCHIVER_DIR="$(cd "$(dirname "${SETUP_SCRIPT_PATH}")" && pwd)"
+# Check if we found the file
+if [ -z "${ARCHIVER_DIR}" ]; then
+  echo "Error: archiver.sh not found in any parent directory."
+  exit 1
+fi
+
 ARCHIVER_SCRIPT_PATH="${ARCHIVER_DIR}/archiver.sh"
 DUPLICACY_VERSION="3.2.3"
 DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/keys"
@@ -704,6 +717,7 @@ main() {
   echo " - To manually start the Archiver backup, use 'archiver start'."
   echo " - To watch the logs of the actively running Archiver backup, use 'archiver logs'."
   echo " - To manually stop the Archiver backup early, use 'archiver stop'."
+  echo " - To start the Archiver restore script, use 'archiver restore'."
 }
 
 main
