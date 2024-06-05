@@ -61,7 +61,7 @@ fi
 # ---------------------
 # Configuration Check
 # ---------------------
-source "${ARCHIVER_DIR}/utils/set-config.sh"
+source "${ARCHIVER_DIR}/lib/src/set-config.sh"
 # imports functions:
 #   - verify_config
 #   - expand_service_directories
