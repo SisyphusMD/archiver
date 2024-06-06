@@ -385,7 +385,7 @@ duplicacy_wrap_up() {
     recent_command=$(fc -ln -1)
 
     # Display the most recent command
-    log_message "Most recent command: $recent_command"
+    log_message "INFO" "Most recent command: $recent_command"
     #exit_status="${PIPESTATUS[0]}"
     #if [[ "${exit_status}" -ne 0 ]]; then
     #  handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
