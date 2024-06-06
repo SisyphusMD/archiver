@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Notifies user of any errors, as well as successful completion of the backup
-# Parameters:
-#   1. Title: The title of the notification.
-#   2. Message: The body of the notification.
-# Output:
-#   Call the notification API with the provided parameters.
 send_pushover_notification() {
   local title
   local message

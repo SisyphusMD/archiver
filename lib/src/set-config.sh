@@ -1,14 +1,8 @@
 #!/bin/bash
 
-# Read and prepare user-defined configuration.
-
-# Sourcing configurable variables from config.sh.
-# Please review and adjust the variables in config.sh as necessary to fit your setup.
 source "${ARCHIVER_DIR}/config.sh"
 
-# Function to expand the user-defined service directories
 expand_service_directories() {
-  # Initialize an empty array to hold the directory paths
   local expanded_service_directories=()
 
   # Ensure SERVICE_DIRECTORIES is defined and not empty

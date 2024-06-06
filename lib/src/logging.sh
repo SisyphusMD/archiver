@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# Logs a message to the archiver's log file with a timestamp.
-# Parameters:
-#   1. Log Level: The severity level of the log message (e.g., INFO, WARNING, ERROR).
-#   2. Message: The log message to be recorded.
-# Output:
-#   Writes the log message to the archiver's log file. No console output except for WARNING or ERROR.
-
 log_message() {
   local log_level
   local message
@@ -35,12 +28,6 @@ log_message() {
   fi
 }
 
-# Logs output from backup operations, capturing both stdout and stderr streams.
-# Parameters:
-#   1. Output Message: The output message from the backup operation to be logged.
-#   2. Log File (optional): Specifies the log file to write to. Defaults to the main archiver log file if not provided.
-# Output:
-#   Writes the provided output message to the specified log file or the default archiver log file. No console output.
 log_output() {
   local log_level
 
@@ -75,9 +62,8 @@ rotate_logs() {
   log_message "INFO" "Deleted 'archiver' log files older than 7 days."
 }
 
-
 # Function to convert seconds to human-readable format
-function elapsed_time {
+elapsed_time() {
   local T=$1
   local D=$((T/60/60/24))
   local H=$((T/60/60%24))

@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# Handles error scenarios by logging an error message and optionally exiting the script with a failure status.
-# Parameters:
-#   1. Error Message: The error message to log.
-#   2. Exit Code (optional): The exit code to terminate the script with. If not provided, the script does not exit.
-# Output:
-#   Logs the error message to the standard error stream and exits the script if an exit code is provided.
-
 # Initialize starting error count.
 ERROR_COUNT=0
 
