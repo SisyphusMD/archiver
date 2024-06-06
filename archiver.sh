@@ -10,7 +10,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|uninstall|restore|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|export|uninstall|restore|help} [logs|prune|retain]"
   echo "Note:"
   echo "  stop|pause|logs|status|setup|uninstall|restore|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
@@ -60,7 +60,7 @@ case "${command}" in
       usage
     fi
     ;;
-  stop|pause|logs|status|setup|uninstall|restore|help)
+  stop|pause|logs|status|setup|export|uninstall|restore|help)
     if [[ $# -gt 0 ]]; then
       echo "'${command}' cannot have further arguments."
       usage
@@ -84,6 +84,7 @@ STOP_SCRIPT="${MOD_DIR}/stop.sh"
 SETUP_SCRIPT="${MOD_DIR}/setup.sh"
 STATUS_SCRIPT="${MOD_DIR}/status.sh"
 RESTORE_SCRIPT="${MOD_DIR}/restore.sh"
+EXPORT_SCRIPT="${MOD_DIR}/export.sh"
 
 start_archiver() {
   if [[ -n "${1}" ]]; then
@@ -160,6 +161,11 @@ fi
 # Archiver help logic
 if [[ "${command}" == "help" ]]; then
   usage
+fi
+
+# Archiver export logic
+if [[ "${command}" == "export" ]]; then
+  "${EXPORT_SCRIPT}"
 fi
 
 # Archiver uninstall logic
