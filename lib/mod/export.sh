@@ -27,6 +27,25 @@ if [ "$(id -u)" -ne 0 ]; then
   exec sudo "$0" "$@"
 fi
 
+echo "This export script will create an archive file containing your config.sh file and keys directory for backup."
+echo "The file will be encrypted, and protected by a password you provide below."
+echo "You must remember this password, and keep a copy of the export file created by this script."
+
+# Prompt for password twice and compare
+while true; do
+    echo "Enter password to encrypt the export:"
+    read -rs PASSWORD
+    echo
+    echo "Re-enter password to confirm:"
+    read -rs PASSWORD_CONFIRM
+    echo
+    if [ "${PASSWORD}" == "${PASSWORD_CONFIRM}" ]; then
+        break
+    else
+        echo "Passwords do not match. Please try again."
+    fi
+done
+
 # Get the current timestamp
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 
@@ -47,10 +66,6 @@ INPUT_FILES=("${ARCHIVER_DIR}/keys/" "${ARCHIVER_DIR}/config.sh")
 
 # Create tarball
 tar -cvf "${OUTPUT_TAR}" "${INPUT_FILES[@]}"
-
-echo "This export script will create an archive file containing your config.sh file and keys directory for backup."
-echo "The file will be encrypted, and protected by a password you provide below."
-echo "You must remember this password, and keep a copy of the export file created by this script."
 
 # Prompt for password twice and compare
 while true; do
