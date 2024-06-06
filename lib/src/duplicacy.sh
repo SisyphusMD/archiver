@@ -380,13 +380,19 @@ duplicacy_wrap_up() {
   if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
     # Prune the Duplicacy storage
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
+
+    # Function to log the most recent command
+    log_recent_command() {
+        log_message "INFO" "Most recent command: $1"
+    }
+
+    # Set the trap to capture the last executed command
+    trap 'log_recent_command "$BASH_COMMAND"' DEBUG
+
     "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[*]}" 2>&1 #| log_output
 
-    # Capture the most recent command using history
-    recent_command=$(history | tail -n 2 | head -n 1 | sed 's/^[ ]*[0-9]*[ ]*//')
-
-    # Log the most recent command
-    log_message "INFO" "Most recent command: $recent_command"
+    # Reset the trap to avoid logging the log_message command itself
+    trap - DEBUG
     #exit_status="${PIPESTATUS[0]}"
     #if [[ "${exit_status}" -ne 0 ]]; then
     #  handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
