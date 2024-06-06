@@ -385,29 +385,29 @@ duplicacy_wrap_up() {
     log_message "DEBUG" "PRUNE_KEEP_ARRAY: ${PRUNE_KEEP_ARRAY[*]}"
 
     # Create an array to hold the command and its arguments
-    prune_cmd=("${DUPLICACY_BIN}" prune -all -storage "${storage_name}")
+    prune_args=(prune -all -storage "${storage_name}")
 
     # Add the PRUNE_KEEP_ARRAY elements to the command array
     for item in "${PRUNE_KEEP_ARRAY[@]}"; do
-        prune_cmd+=("${item}")
+        prune_args+=("${item}")
     done
 
     # Debug: Log each element of the constructed command array
-    for i in "${!prune_cmd[@]}"; do
-        log_message "DEBUG" "prune_cmd[$i]: ${prune_cmd[$i]}"
+    for i in "${!prune_args[@]}"; do
+        log_message "DEBUG" "prune_cmd[$i]: ${prune_args[$i]}"
     done
 
     # Log the constructed command for debugging
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
-    log_message "INFO" "Prune command @: ${prune_cmd[@]}"
-    log_message "INFO" "Prune command *: ${prune_cmd[*]}"
+    log_message "INFO" "Prune command @: ${prune_args[@]}"
+    log_message "INFO" "Prune command *: ${prune_args[*]}"
 
-    #"${prune_cmd[*]}" 2>&1 | log_output
-    #exit_status="${PIPESTATUS[0]}"
-    #if [[ "${exit_status}" -ne 0 ]]; then
-    #  handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
-    #else
-    #  log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
-    #fi
+    "${DUPLICACY_BIN}" "${prune_args[*]}" 2>&1 | log_output
+    exit_status="${PIPESTATUS[0]}"
+    if [[ "${exit_status}" -ne 0 ]]; then
+      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+    else
+      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
+    fi
   fi
 }
