@@ -359,35 +359,33 @@ duplicacy_copy_backup() {
 # Output:
 #   Performs a Duplicacy prune. Output is logged to the Duplicacy log file.
 duplicacy_wrap_up() {
-# Debugging: print the array to verify its contents
-declare -a PRUNE_KEEP_ARRAY
-PRUNE_KEEP_ARRAY=()
-read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
-log_message "INFO" "PRUNE_KEEP: ${PRUNE_KEEP}"
-log_message "INFO" "PRUNE_KEEP_ARRAY: ${PRUNE_KEEP_ARRAY[*]}"
-#  local exit_status
-#  local storage_name
+  # Build the keep options array
+  declare -a PRUNE_KEEP_ARRAY
+  PRUNE_KEEP_ARRAY=()
+  read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
+  local exit_status
+  local storage_name
 
-#  storage_name="${1}"
+  storage_name="${1}"
 
-#  # Full Check the Duplicacy storage
-#  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
-#  exit_status="${PIPESTATUS[0]}"
-#  if [[ "${exit_status}" -ne 0 ]]; then
-#    handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
-#  else
-#    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
-#  fi
+  # Full Check the Duplicacy storage
+  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
+  exit_status="${PIPESTATUS[0]}"
+  if [[ "${exit_status}" -ne 0 ]]; then
+    handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
+  else
+    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
+  fi
 
-#  if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
-#    # Prune the Duplicacy storage
-#    log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
-#    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" 2>&1 | log_output
-#    exit_status="${PIPESTATUS[0]}"
-#    if [[ "${exit_status}" -ne 0 ]]; then
-#      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
-#    else
-#      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
-#    fi
-#  fi
+  if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
+    # Prune the Duplicacy storage
+    log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
+    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[*]}" 2>&1 | log_output
+    exit_status="${PIPESTATUS[0]}"
+    if [[ "${exit_status}" -ne 0 ]]; then
+      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+    else
+      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
+    fi
+  fi
 }
