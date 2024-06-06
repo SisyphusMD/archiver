@@ -389,7 +389,7 @@ duplicacy_wrap_up() {
     # Set the trap to capture the last executed command
     trap 'log_recent_command "$BASH_COMMAND"' DEBUG
 
-    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[*]}" 2>&1 #| log_output
+    eval "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[*]}" 2>&1 | log_output
 
     # Reset the trap to avoid logging the log_message command itself
     trap - DEBUG
