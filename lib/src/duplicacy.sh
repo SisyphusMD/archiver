@@ -360,6 +360,8 @@ duplicacy_copy_backup() {
 #   Performs a Duplicacy prune. Output is logged to the Duplicacy log file.
 duplicacy_wrap_up() {
 # Debugging: print the array to verify its contents
+declare -a PRUNE_KEEP_ARRAY
+read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
 log_message "INFO" "PRUNE_KEEP: ${PRUNE_KEEP}"
 log_message "INFO" "PRUNE_KEEP_ARRAY: ${PRUNE_KEEP_ARRAY[@]}"
 #  local exit_status

@@ -149,9 +149,6 @@ check_backup_rotation_settings() {
     PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
   fi
 
-  declare -a PRUNE_KEEP_ARRAY
-  IFS=' ' read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
-
   # Override prune decision for this run only
   if [[ "${ROTATION_OVERRIDE}" == "prune" ]]; then
     log_message "INFO" "Prune flag set, will perform backup rotation on this run."
@@ -164,7 +161,6 @@ check_backup_rotation_settings() {
   # Export the variables if they need to be used outside the function
   export ROTATE_BACKUPS
   export PRUNE_KEEP
-  export PRUNE_KEEP_ARRAY
 
   # Log the values being used for backup rotation
   log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}, PRUNE_KEEP_ARRAY=${PRUNE_KEEP_ARRAY[*]}"
