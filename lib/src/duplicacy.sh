@@ -389,8 +389,8 @@ duplicacy_wrap_up() {
 
     # Prune the Duplicacy storage
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
-    log_message "INFO" "Prune command @: ${prune_command[@]}"
-    log_message "INFO" "Prune command *: ${prune_command[*]}"
+    log_message "INFO" "Prune command @: ${prune_cmd[@]}"
+    log_message "INFO" "Prune command *: ${prune_cmd[*]}"
 
 #    "${prune_cmd[@]}" 2>&1 | log_output
 #    exit_status="${PIPESTATUS[0]}"
