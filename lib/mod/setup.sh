@@ -76,7 +76,7 @@ fi
 CALLER_UID=$(id -u "${SUDO_USER}")
 CALLER_GID=$(id -g "${SUDO_USER}")
 # Get the home directory of the user who invoked the script
-CALLER_HOME=$(eval echo ~"${SUDO_USER}")
+CALLER_HOME=$(getent passwd "${SUDO_USER}" | cut -d: -f6)
 
 # Exit if the operating system is not Linux or architecture is not recognized
 if [ "${DUPLICACY_OS}" != "linux" ] || [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
