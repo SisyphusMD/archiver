@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Function to verify if a given storage is already initialized
-# Parameters:
-#   1. Duplicacy Storage Name
-# Output:
-#   Returns exit code 0 if initialized, and non-0 if not initialized
-
 # Define primary Duplicacy-related configuration variables.
 DUPLICACY_BIN="duplicacy" # Path to Duplicacy binary. Maybe a bad idea, but assuming duplicacy is in PATH. Previously used "/usr/local/bin/duplicacy".
 DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/keys" # Path to Duplicacy key directory
@@ -19,7 +13,6 @@ set_duplicacy_variables() {
   DUPLICACY_SNAPSHOT_ID="${HOSTNAME}-${SERVICE}" # Snapshot ID for Duplicacy
 }
 
-# Function to check if duplicacy is installed and to exit if not
 duplicacy_binary_check() {
   if ! command -v "${DUPLICACY_BIN}" &> /dev/null; then
     handle_error "Duplicacy binary not installed. Please install Duplicacy binary before running main script."
@@ -54,11 +47,6 @@ duplicacy_filters() {
   log_message "INFO" "Preparation for Duplicacy filter for '${SERVICE}' service completed successfully."
 }
 
-# Initializes and runs the Duplicacy primary storage backup for the current service.
-# Parameters:
-#   None. Uses configured Duplicacy settings and operates within the service's backup context.
-# Output:
-#   Performs a Duplicacy primary backup. Output is logged to the Duplicacy log file.
 duplicacy_primary_backup() {
   local exit_status
   local storage_name
@@ -189,11 +177,6 @@ duplicacy_primary_backup() {
   log_message "INFO" "Duplicacy primary storage backup to '${STORAGE_TARGET_1_NAME}' storage for the '${SERVICE}' service completed successfully."
 }
 
-# Runs the Duplicacy copy backup operation for the current service's data.
-# Parameters:
-#   None. Uses configured Duplicacy settings and operates within the service's backup context.
-# Output:
-#   Performs a Duplicacy copy backup. Output is logged to the Duplicacy log file.
 duplicacy_add_backup() {
   if [[ "${STORAGE_TARGET_COUNT}" -gt 1 ]]; then
     for i in $(seq 2 "${STORAGE_TARGET_COUNT}"); do
@@ -353,11 +336,6 @@ duplicacy_copy_backup() {
   fi
 }
 
-# Runs the Duplicacy check and prune operation for all repositories.
-# Parameters:
-#   None. Uses configured Duplicacy settings and operates within the final service's backup context.
-# Output:
-#   Performs a Duplicacy prune. Output is logged to the Duplicacy log file.
 duplicacy_wrap_up() {
   local exit_status
   local storage_name
