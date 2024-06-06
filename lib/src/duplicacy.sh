@@ -364,25 +364,20 @@ duplicacy_wrap_up() {
 
   storage_name="${1}"
 
-#  # Full Check the Duplicacy storage
-#  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
-#  exit_status="${PIPESTATUS[0]}"
-#  if [[ "${exit_status}" -ne 0 ]]; then
-#    handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
-#  else
-#    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
-#  fi
+  # Full Check the Duplicacy storage
+  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
+  exit_status="${PIPESTATUS[0]}"
+  if [[ "${exit_status}" -ne 0 ]]; then
+    handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
+  else
+    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
+  fi
 
   if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
     # Build the keep options array
     declare -a PRUNE_KEEP_ARRAY
     PRUNE_KEEP_ARRAY=()
     read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
-
-    # Debug: Log the initial variables
-    log_message "DEBUG" "DUPLICACY_BIN: ${DUPLICACY_BIN}"
-    log_message "DEBUG" "storage_name: ${storage_name}"
-    log_message "DEBUG" "PRUNE_KEEP_ARRAY: ${PRUNE_KEEP_ARRAY[*]}"
 
     # Create an array to hold the command and its arguments
     prune_args=(prune -all -storage "${storage_name}")
@@ -391,16 +386,6 @@ duplicacy_wrap_up() {
     for item in "${PRUNE_KEEP_ARRAY[@]}"; do
         prune_args+=("${item}")
     done
-
-    # Debug: Log each element of the constructed command array
-    for i in "${!prune_args[@]}"; do
-        log_message "DEBUG" "prune_cmd[$i]: ${prune_args[$i]}"
-    done
-
-    # Log the constructed command for debugging
-    log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
-    log_message "INFO" "Prune command @: ${prune_args[@]}"
-    log_message "INFO" "Prune command *: ${prune_args[*]}"
 
     "${DUPLICACY_BIN}" "${prune_args[@]}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
