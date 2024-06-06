@@ -364,14 +364,14 @@ duplicacy_wrap_up() {
 
   storage_name="${1}"
 
-  # Full Check the Duplicacy storage
-  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
-  exit_status="${PIPESTATUS[0]}"
-  if [[ "${exit_status}" -ne 0 ]]; then
-    handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
-  else
-    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
-  fi
+#  # Full Check the Duplicacy storage
+#  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
+#  exit_status="${PIPESTATUS[0]}"
+#  if [[ "${exit_status}" -ne 0 ]]; then
+#    handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
+#  else
+#    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
+#  fi
 
   if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
     # Build the keep options array
@@ -389,13 +389,15 @@ duplicacy_wrap_up() {
 
     # Prune the Duplicacy storage
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
+    log_message "INFO" "Prune command @: ${prune_command[@]}"
+    log_message "INFO" "Prune command *: ${prune_command[*]}"
 
-    "${prune_cmd[@]}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [[ "${exit_status}" -ne 0 ]]; then
-      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
-    else
-      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
-    fi
+#    "${prune_cmd[@]}" 2>&1 | log_output
+#    exit_status="${PIPESTATUS[0]}"
+#    if [[ "${exit_status}" -ne 0 ]]; then
+#      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+#    else
+#      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
+#    fi
   fi
 }
