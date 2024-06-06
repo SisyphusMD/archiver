@@ -150,7 +150,7 @@ check_backup_rotation_settings() {
   fi
 
   declare -a PRUNE_KEEP_ARRAY
-  read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
+  IFS=' ' read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
 
   # Override prune decision for this run only
   if [[ "${ROTATION_OVERRIDE}" == "prune" ]]; then
