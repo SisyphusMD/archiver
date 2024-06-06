@@ -369,35 +369,24 @@ duplicacy_wrap_up() {
   storage_name="${1}"
 
   # Full Check the Duplicacy storage
-  #"${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
-  #exit_status="${PIPESTATUS[0]}"
-  #if [[ "${exit_status}" -ne 0 ]]; then
-  #  handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
-  #else
-  #  log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
-  #fi
+  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
+  exit_status="${PIPESTATUS[0]}"
+  if [[ "${exit_status}" -ne 0 ]]; then
+    handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
+  else
+    log_message "INFO" "The Duplicacy full '${storage_name}' storage check completed successfully."
+  fi
 
   if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
     # Prune the Duplicacy storage
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
 
-    # Function to log the most recent command
-    log_recent_command() {
-        log_message "INFO" "Most recent command: $1"
-    }
-
-    # Set the trap to capture the last executed command
-    trap 'log_recent_command "$BASH_COMMAND"' DEBUG
-
     eval "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[*]}" 2>&1 | log_output
-
-    # Reset the trap to avoid logging the log_message command itself
-    trap - DEBUG
-    #exit_status="${PIPESTATUS[0]}"
-    #if [[ "${exit_status}" -ne 0 ]]; then
-    #  handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
-    #else
-    #  log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
-    #fi
+    exit_status="${PIPESTATUS[0]}"
+    if [[ "${exit_status}" -ne 0 ]]; then
+      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+    else
+      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
+    fi
   fi
 }
