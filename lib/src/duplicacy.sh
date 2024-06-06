@@ -387,12 +387,20 @@ duplicacy_wrap_up() {
         prune_cmd+=("${item}")
     done
 
-    "${prune_cmd[*]}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [[ "${exit_status}" -ne 0 ]]; then
-      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
-    else
-      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
-    fi
+    # Debug: Log the constructed command array
+    log_message "DEBUG" "Constructed prune_cmd: ${prune_cmd[@]}"
+
+    # Log the constructed command for debugging
+    log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
+    log_message "INFO" "Prune command @: ${prune_cmd[@]}"
+    log_message "INFO" "Prune command *: ${prune_cmd[*]}"
+
+    #"${prune_cmd[*]}" 2>&1 | log_output
+    #exit_status="${PIPESTATUS[0]}"
+    #if [[ "${exit_status}" -ne 0 ]]; then
+    #  handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+    #else
+    #  log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
+    #fi
   fi
 }
