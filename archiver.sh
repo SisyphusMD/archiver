@@ -12,7 +12,7 @@ fi
 usage() {
   echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|export|uninstall|restore|help} [logs|prune|retain]"
   echo "Note:"
-  echo "  stop|pause|logs|status|setup|uninstall|restore|help cannot have further arguments."
+  echo "  stop|pause|logs|status|setup|export|uninstall|restore|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
   exit 1
