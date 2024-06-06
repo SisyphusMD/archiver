@@ -365,7 +365,7 @@ duplicacy_wrap_up() {
   read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
   #Debugging
   log_message "INFO" "PRUNE_KEEP_ARRAY[@]: ${PRUNE_KEEP_ARRAY[@]}"
-  log_message "INFO" "PRUNE_KEEP_ARRAY[*]: ${PRUNE_KEEP_ARRAY[@]}"
+  log_message "INFO" "PRUNE_KEEP_ARRAY[*]: ${PRUNE_KEEP_ARRAY[*]}"
   local exit_status
   local storage_name
 
