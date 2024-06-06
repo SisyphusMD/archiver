@@ -64,11 +64,11 @@ OUTPUT_TAR="${EXPORTS_DIR}/export-${TIMESTAMP}.tar"
 # Define the files and directories to be tarred
 INPUT_FILES=("${ARCHIVER_DIR}/keys/" "${ARCHIVER_DIR}/config.sh")
 
-# Create tarball
-tar -cvf "${OUTPUT_TAR}" "${INPUT_FILES[@]}"
+# Create tarball quietly
+tar -cf "${OUTPUT_TAR}" "${INPUT_FILES[@]}"
 
-# Encrypt tarball
-openssl enc -aes-256-cbc -salt -in "${OUTPUT_TAR}" -out "${OUTPUT_TAR}.enc" -k "${PASSWORD}"
+# Encrypt tarball with pbkdf2
+openssl enc -aes-256-cbc -pbkdf2 -salt -in "${OUTPUT_TAR}" -out "${OUTPUT_TAR}.enc" -k "${PASSWORD}"
 
 # Remove unencrypted tarball
 rm "${OUTPUT_TAR}"
