@@ -386,8 +386,10 @@ duplicacy_wrap_up() {
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
     "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[*]}" 2>&1 #| log_output
 
-    # Display the most recent command
+    # Temporarily disable the trap to avoid capturing the log_message command
+    trap - DEBUG
     log_message "INFO" "Most recent command: $last_command"
+    trap 'last_command=$BASH_COMMAND' DEBUG
     #exit_status="${PIPESTATUS[0]}"
     #if [[ "${exit_status}" -ne 0 ]]; then
     #  handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
