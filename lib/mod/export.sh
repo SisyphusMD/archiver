@@ -67,21 +67,6 @@ INPUT_FILES=("${ARCHIVER_DIR}/keys/" "${ARCHIVER_DIR}/config.sh")
 # Create tarball
 tar -cvf "${OUTPUT_TAR}" "${INPUT_FILES[@]}"
 
-# Prompt for password twice and compare
-while true; do
-    echo "Enter password to encrypt the export:"
-    read -rs PASSWORD
-    echo
-    echo "Re-enter password to confirm:"
-    read -rs PASSWORD_CONFIRM
-    echo
-    if [ "${PASSWORD}" == "${PASSWORD_CONFIRM}" ]; then
-        break
-    else
-        echo "Passwords do not match. Please try again."
-    fi
-done
-
 # Encrypt tarball
 openssl enc -aes-256-cbc -salt -in "${OUTPUT_TAR}" -out "${OUTPUT_TAR}.enc" -k "${PASSWORD}"
 
