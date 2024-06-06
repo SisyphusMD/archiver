@@ -379,16 +379,23 @@ duplicacy_wrap_up() {
     PRUNE_KEEP_ARRAY=()
     read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
 
+    # Debug: Log the initial variables
+    log_message "DEBUG" "DUPLICACY_BIN: ${DUPLICACY_BIN}"
+    log_message "DEBUG" "storage_name: ${storage_name}"
+    log_message "DEBUG" "PRUNE_KEEP_ARRAY: ${PRUNE_KEEP_ARRAY[*]}"
+
     # Create an array to hold the command and its arguments
-    prune_cmd=()
     prune_cmd=("${DUPLICACY_BIN}" prune -all -storage "${storage_name}")
+
     # Add the PRUNE_KEEP_ARRAY elements to the command array
     for item in "${PRUNE_KEEP_ARRAY[@]}"; do
         prune_cmd+=("${item}")
     done
 
-    # Debug: Log the constructed command array
-    log_message "DEBUG" "Constructed prune_cmd: ${prune_cmd[@]}"
+    # Debug: Log each element of the constructed command array
+    for i in "${!prune_cmd[@]}"; do
+        log_message "DEBUG" "prune_cmd[$i]: ${prune_cmd[$i]}"
+    done
 
     # Log the constructed command for debugging
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
