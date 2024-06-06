@@ -402,7 +402,7 @@ duplicacy_wrap_up() {
     log_message "INFO" "Prune command @: ${prune_args[@]}"
     log_message "INFO" "Prune command *: ${prune_args[*]}"
 
-    "${DUPLICACY_BIN}" "${prune_args[*]}" 2>&1 | log_output
+    "${DUPLICACY_BIN}" "${prune_args[@]}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [[ "${exit_status}" -ne 0 ]]; then
       handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
