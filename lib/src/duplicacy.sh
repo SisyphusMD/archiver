@@ -378,16 +378,13 @@ duplicacy_wrap_up() {
     declare -a PRUNE_KEEP_ARRAY
     PRUNE_KEEP_ARRAY=()
     read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
-
-    # Create an array to hold the command and its arguments
-    prune_args=(prune -all -storage "${storage_name}")
-
+    
     # Add the PRUNE_KEEP_ARRAY elements to the command array
     for item in "${PRUNE_KEEP_ARRAY[@]}"; do
         prune_args+=("${item}")
     done
 
-    "${DUPLICACY_BIN}" "${prune_args[@]}" 2>&1 | log_output
+    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${prune_args[@]}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [[ "${exit_status}" -ne 0 ]]; then
       handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
