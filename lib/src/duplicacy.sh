@@ -380,12 +380,17 @@ duplicacy_wrap_up() {
   if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
     # Prune the Duplicacy storage
     log_message "INFO" "Running Duplicacy storage '${storage_name}' prune for all repositories."
-    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[*]}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [[ "${exit_status}" -ne 0 ]]; then
-      handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
-    else
-      log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
-    fi
+    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[*]}" 2>&1 #| log_output
+    # Capture the most recent command
+    recent_command=$(fc -ln -1)
+
+    # Display the most recent command
+    log_message "Most recent command: $recent_command"
+    #exit_status="${PIPESTATUS[0]}"
+    #if [[ "${exit_status}" -ne 0 ]]; then
+    #  handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
+    #else
+    #  log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
+    #fi
   fi
 }
