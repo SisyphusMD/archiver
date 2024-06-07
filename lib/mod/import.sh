@@ -80,8 +80,7 @@ if [ -f "${ARCHIVER_DIR}/config.sh" ]; then
 fi
 
 if [ -d "${ARCHIVER_DIR}/keys" ]; then
-  mkdir -p "${ARCHIVER_DIR}/keys.bckp"
-  mv "${ARCHIVER_DIR}/keys"/* "${ARCHIVER_DIR}/keys.bckp/"
+  mv "${ARCHIVER_DIR}/keys" "${ARCHIVER_DIR}/keys.bckp"
 fi
 
 # Move the extracted files to their original locations
