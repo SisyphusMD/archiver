@@ -61,11 +61,9 @@ chmod 700 "${EXPORTS_DIR}"
 # Define the output tar file name
 OUTPUT_TAR="${EXPORTS_DIR}/export-${TIMESTAMP}.tar"
 
-# Define the files and directories to be tarred
-INPUT_FILES=("${ARCHIVER_DIR}/keys/" "${ARCHIVER_DIR}/config.sh")
-
-# Create tarball quietly
-tar -cf "${OUTPUT_TAR}" "${INPUT_FILES[@]}"
+# Change to the ARCHIVER_DIR directory and create the tarball
+cd "${ARCHIVER_DIR}"
+tar -cf "${OUTPUT_TAR}" keys config.sh
 
 # Encrypt tarball with pbkdf2
 openssl enc -aes-256-cbc -pbkdf2 -salt -in "${OUTPUT_TAR}" -out "${OUTPUT_TAR}.enc" -k "${PASSWORD}"
