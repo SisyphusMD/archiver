@@ -22,6 +22,8 @@ fi
 CALLER_UID=$(id -u "${SUDO_USER}")
 CALLER_GID=$(id -g "${SUDO_USER}")
 
+EXPORTS_DIR="${ARCHIVER_DIR}/exports"
+
 # Find export files in the archiver directory
 mapfile -t EXPORT_FILES < <(ls -t "${ARCHIVER_DIR}"/export-*.tar.enc 2>/dev/null)
 
