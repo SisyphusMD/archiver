@@ -219,7 +219,7 @@
   ```bash
   git clone https://github.com/SisyphusMD/archiver.git
   ```
-  - If you have a prior export file 'export-YYYYMMDD-HHMMSS.tar.enc', place it in the repo directory before running the setup script. Otherwise, do the following:
+  - If you have a prior export file 'export-YYYYMMDD-HHMMSS.tar.enc', place it in the archiver repo directory before running the setup script. Otherwise, do the following:
 
     - Copy your prior keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
 
@@ -266,6 +266,10 @@
     ```bash
     archiver export
     ```
+  - To import a previously created export file, place the export file in the archiver repo directory and run:
+    ```bash
+    archiver import
+    ```
 </details>
 
 <details>
@@ -281,7 +285,7 @@
     - status
     - help
     - export (creates a password protected backup of your config file and keys)
-    - import (imports data from prior backup of config file and keys)
+    - import (imports data from prior export backup of config file and keys)
     - setup (although the first run will require './archiver.sh setup')
     - uninstall (coming soon)
   
