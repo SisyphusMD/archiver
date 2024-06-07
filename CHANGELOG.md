@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [0.3.2] - 2024-06-06
 ### Improved
-- Added import and export functions
+- Added import and export functions to backup your config.sh and keys files
 - Setup script will auto-import any export file placed in the archiver repo directory
 - Setup script also ensures you have an export file, and places it in an 'exports' directory
 
