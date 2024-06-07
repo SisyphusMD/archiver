@@ -96,12 +96,6 @@ DUPLICACY_BIN_LINK_NAME="duplicacy"
 DUPLICACY_BIN_LINK_PATH="${DUPLICACY_BIN_LINK_DIR}/${DUPLICACY_BIN_LINK_NAME}"
 DUPLICACY_BIN_URL="https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/${DUPLICACY_BIN_FILE_NAME}"
 
-if [[ ! -d "${DUPLICACY_KEYS_DIR}" ]]; then
-  mkdir -p "${DUPLICACY_KEYS_DIR}"
-  chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
-  chmod 700 "${DUPLICACY_KEYS_DIR}"
-fi
-
 RSA_PASSPHRASE=""
 
 # Place archiver in PATH
@@ -205,6 +199,14 @@ import_if_missing() {
     [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ] ||\
     [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
       "${IMPORT_SCRIPT}"
+  fi
+}
+
+create_keys_dir() {
+  if [[ ! -d "${DUPLICACY_KEYS_DIR}" ]]; then
+    mkdir -p "${DUPLICACY_KEYS_DIR}"
+    chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
+    chmod 700 "${DUPLICACY_KEYS_DIR}"
   fi
 }
 
@@ -719,6 +721,8 @@ main() {
   install_duplicacy
 
   import_if_missing
+
+  create_keys_dir
 
   generate_rsa_keypair
 
