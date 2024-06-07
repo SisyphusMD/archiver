@@ -3,13 +3,12 @@
 # Description: This file lists all files and directories that Git should ignore.
 # Note: Update this file if new sensitive or non-source files are introduced.
 
-# Ignore config file
+# Ignore files
 config.sh
 
-# Ignore keys directory
+# Ignore directories
 keys/
-
-# Ignore logs directory
 logs/
+exports/
 
 # Add additional entries below
