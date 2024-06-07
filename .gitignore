@@ -5,6 +5,7 @@
 
 # Ignore files
 config.sh
+*.tar.enc
 
 # Ignore directories
 keys/
