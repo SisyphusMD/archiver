@@ -219,15 +219,17 @@
   ```bash
   git clone https://github.com/SisyphusMD/archiver.git
   ```
+  - If you have a prior export file 'export-YYYYMMDD-HHMMSS.tar.enc', place it in the repo directory before running the setup script. Otherwise, do the following:
 
-  - Run the setup script to install dependencies and the Duplicacy binary, and restore cron scheduling, but otherwise you can skip the portions that create new SSH keys, RSA keys, and config file. You will need to provide your backed up keys directory and config.sh file.
+    - Copy your prior keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
+
+    - Copy your prior **config.sh** into the project directory.
+
+  - Run the setup script to install dependencies and the Duplicacy binary, and restore cron scheduling, but otherwise you can skip the portions that create new SSH keys, RSA keys, and config file.
   ```bash
   ./archiver.sh setup
   ```
-
-  - Copy your prior keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
-
-  - Copy your prior **config.sh** into the project directory.
+  - If needed, a password protected backup of your new config file and keys will be placed in an 'exports' directory. You MUST save a backup of this export file separately, and remember the password created.
 
   #### Restoring Services
 
@@ -260,6 +262,10 @@
     ```bash
     archiver stop
     ```
+  - To export a password-protected backup of your config.sh and key files:
+    ```bash
+    archiver export
+    ```
 </details>
 
 <details>
@@ -274,6 +280,8 @@
     - logs
     - status
     - help
+    - export (creates a password protected backup of your config file and keys)
+    - import (imports data from prior backup of config file and keys)
     - setup (although the first run will require './archiver.sh setup')
     - uninstall (coming soon)
   

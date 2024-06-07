@@ -62,6 +62,10 @@ REQUIRED_PACKAGES=(
   "wget"
 )
 
+IMPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/import.sh"
+EXPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/export.sh"
+EXPORTS_DIR="${ARCHIVER_DIR}/exports"
+
 # Determine environment
 ENVIRONMENT_OS="$(uname -s)"
 ENVIRONMENT_ARCHITECTURE="$(uname -m)"
@@ -193,6 +197,14 @@ install_duplicacy() {
     fi
   else
     echo " - Skipping Duplicacy binary installation: Duplicacy binary is already installed."
+  fi
+}
+
+import_if_missing() {
+  if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ] || \
+    [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ] ||\
+    [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
+      "${IMPORT_SCRIPT}"
   fi
 }
 
@@ -662,6 +674,12 @@ EOL
   fi
 }
 
+create_new_export() {
+  if [ ! -d "${EXPORTS_DIR}" ]; then
+    "${EXPORT_SCRIPT}"
+  fi
+}
+
 schedule_with_cron() {
   echo    # Move to a new line
   echo    # Move to a new line
@@ -700,19 +718,26 @@ main() {
 
   install_duplicacy
 
+  import_if_missing
+
   generate_rsa_keypair
 
   generate_ssh_keypair
 
   create_config_file
 
+  create_new_export
+
   schedule_with_cron
 
   sleep 2
 
   echo    # Move to a new line
+  echo    # Move to a new line
   echo " - Setup script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your keys directory."
+  echo " - This script attempts to create a password protected one in the exports dir."
+  echo " - Please save a backup of that file, or run 'archiver export' if that file is missing."
   echo "Usage:"
   echo " - To manually start the Archiver backup, use 'archiver start'."
   echo " - To watch the logs of the actively running Archiver backup, use 'archiver logs'."

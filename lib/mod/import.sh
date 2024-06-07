@@ -99,4 +99,14 @@ chmod 600 "${ARCHIVER_DIR}/config.sh"
 # Clean up temporary directory
 rm -rf "${TEMP_DIR}"
 
+# Copy exported file to exports dir
+# Setup exports directory
+mkdir -p "${EXPORTS_DIR}"
+chown -R "${CALLER_UID}:${CALLER_GID}" "${EXPORTS_DIR}"
+chmod -R 700 "${EXPORTS_DIR}"
+# Set permissions of imported file and move to exports directory
+chown "${CALLER_UID}:${CALLER_GID}" "${SELECTED_FILE}"
+chmod 600 "${SELECTED_FILE}"
+mv "${SELECTED_FILE}" "${EXPORTS_DIR}"
+
 echo "Import completed successfully. Existing config.sh and keys have been backed up with .bckp suffix."
