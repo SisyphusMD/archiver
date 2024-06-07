@@ -168,7 +168,6 @@ fi
 if [[ "${command}" == "export" ]]; then
   "${EXPORT_SCRIPT}"
 fi
-fi
 
 # Archiver import logic
 if [[ "${command}" == "import" ]]; then
