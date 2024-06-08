@@ -9,9 +9,8 @@
 # Initial Setup
 # ---------------------
 # Time Variables
-START_TIME="$(date +%s)"
-DATE="$(date +'%Y-%m-%d')"
-DATETIME="$(date +'%Y-%m-%d_%H%M%S')"
+DATE="$(date)"
+START_TIME="$(date -d "${DATE}" +%s)"
 
 # Define unique identifier for the script (e.g., script's full path)
 MAIN_SCRIPT_PATH="$(realpath "$0")"
@@ -35,16 +34,8 @@ if [ -z "${ARCHIVER_DIR}" ]; then
 fi
 
 # Define lib, src, mod, log, logo directories
-LOG_DIR="${ARCHIVER_DIR}/logs"
-OLD_LOG_DIR="${LOG_DIR}/prior_logs"
 LIB_DIR="${ARCHIVER_DIR}/lib"
 SRC_DIR="${LIB_DIR}/src"
-MOD_DIR="${LIB_DIR}/mod"
-LOGO_DIR="${LIB_DIR}/logos"
-
-# Define module scripts
-LOGS_SCRIPT="${MOD_DIR}/logs.sh"
-STOP_SCRIPT="${MOD_DIR}/archiver.sh"
 
 # Source all the necessary src files
 for script in "${SRC_DIR}/"*.sh; do
@@ -100,7 +91,6 @@ for script in "${SRC_DIR}/"*.sh; do
   #   - duplicacy_copy_backup
   #   - duplicacy_wrap_up
   # exported variables:
-  #   - DUPLICACY_BIN
   #   - DUPLICACY_KEY_DIR
   #   - DUPLICACY_RSA_PUBLIC_KEY_FILE
   #   - DUPLICACY_RSA_PRIVATE_KEY_FILE
@@ -131,7 +121,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Store argument in case of prune or retain
-ROTATION_OVERRIDE="${1}"
+export ROTATION_OVERRIDE="${1}"
 
 # Check if the lock file exists and contains a valid PID
 if [ -e "${LOCKFILE}" ]; then
@@ -203,7 +193,7 @@ main() {
     set_duplicacy_variables
 
     # Define default service variables before attempting to source file
-    DUPLICACY_FILTERS_PATTERNS=("+*")
+    export DUPLICACY_FILTERS_PATTERNS=("+*")
     service_specific_pre_backup_function() { :; }
     service_specific_post_backup_function() { :; }
 

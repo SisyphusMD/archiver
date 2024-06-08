@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Define log directories
+LOG_DIR=""
+OLD_LOG_DIR=""
+LOG_DIR="${ARCHIVER_DIR}/logs"
+OLD_LOG_DIR="${LOG_DIR}/prior_logs"
+
 log_message() {
   local log_level
   local message
@@ -39,12 +45,15 @@ log_output() {
 }
 
 rotate_logs() {
+  local datetime
+  datetime="$(date +'%Y-%m-%d_%H%M%S')"
+
   local new_log_file
 
   mkdir -p "${OLD_LOG_DIR}" || handle_error "Unable to create log directory '${OLD_LOG_DIR}'."
 
-  # Generate a new log file name based on the script variable: DATETIME
-  new_log_file="${OLD_LOG_DIR}/archiver-${DATETIME}.log"
+  # Generate a new log file name
+  new_log_file="${OLD_LOG_DIR}/archiver-${datetime}.log"
 
   # Create a new empty log file
   touch "${new_log_file}"  || \

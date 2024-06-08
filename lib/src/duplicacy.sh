@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Define primary Duplicacy-related configuration variables.
-export DUPLICACY_BIN="duplicacy" # Path to Duplicacy binary. Maybe a bad idea, but assuming duplicacy is in PATH. Previously used "/usr/local/bin/duplicacy".
 export DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/keys" # Path to Duplicacy key directory
 export DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
 export DUPLICACY_RSA_PRIVATE_KEY_FILE="${DUPLICACY_KEY_DIR}/private.pem" # Path to RSA private key file for Duplicacy
@@ -14,7 +13,7 @@ set_duplicacy_variables() {
 }
 
 duplicacy_binary_check() {
-  if ! command -v "${DUPLICACY_BIN}" &> /dev/null; then
+  if ! command -v duplicacy &> /dev/null; then
     handle_error "Duplicacy binary not installed. Please install Duplicacy binary before running main script."
     exit 1
   else
@@ -27,7 +26,7 @@ duplicacy_verify() {
   storage_name="${1}"
 
   # Verify Duplicacy Storage existance with a duplicacy list command
-  "${DUPLICACY_BIN}" list -storage "${storage_name}" 2>&1 | log_output
+  duplicacy list -storage "${storage_name}" 2>&1 | log_output
   exit_status="${PIPESTATUS[0]}"
   return "${exit_status}"
 }
@@ -78,7 +77,7 @@ duplicacy_primary_backup() {
     # Initialize SFTP storage
     log_message "INFO" "Initializing Primary Duplicacy Storage for ${SERVICE} service."
 
-    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
       -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
       "sftp://${STORAGE_TARGET_1_SFTP_USER}@${STORAGE_TARGET_1_SFTP_URL}:${STORAGE_TARGET_1_SFTP_PORT}//${STORAGE_TARGET_1_SFTP_PATH}" 2>&1 | \
       log_output
@@ -88,7 +87,7 @@ duplicacy_primary_backup() {
     fi
 
     # Set SSH key file for Primary Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${STORAGE_TARGET_1_SFTP_KEY_FILE}" 2>&1 | log_output
+    duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${STORAGE_TARGET_1_SFTP_KEY_FILE}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
       handle_error "Setting the Primary Duplicacy Storage SSH key file for the ${SERVICE} service failed. Verify the SSH key file path and permissions."
@@ -106,7 +105,7 @@ duplicacy_primary_backup() {
     # Initialize B2 storage
     log_message "INFO" "Initializing Primary Duplicacy Storage for '${SERVICE}' service."
 
-    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
       -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
       "b2://${STORAGE_TARGET_1_B2_BUCKETNAME}" 2>&1 | \
       log_output
@@ -116,7 +115,7 @@ duplicacy_primary_backup() {
     fi
 
     # Set Key ID for BackBlaze Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
+    duplicacy set -storage "${storage_name}" -key b2_id \
       -value "${STORAGE_TARGET_1_B2_ID}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
@@ -124,7 +123,7 @@ duplicacy_primary_backup() {
     fi
 
     # Set Application Key for BackBlaze Duplicacy Storage
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
+    duplicacy set -storage "${storage_name}" -key b2_key \
       -value "${STORAGE_TARGET_1_B2_KEY}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
@@ -135,14 +134,14 @@ duplicacy_primary_backup() {
   fi
 
   # Set Password for Primary Duplicacy Storage
-  "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" 2>&1 | log_output
+  duplicacy set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" 2>&1 | log_output
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Setting the Primary Duplicacy Storage password for the '${SERVICE}' service failed."
   fi
 
   # Set RSA Passphrase for Primary Duplicacy Storage
-  "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
+  duplicacy set -storage "${storage_name}" -key rsa_passphrase \
     -value "${RSA_PASSPHRASE}" 2>&1 | log_output
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
@@ -168,7 +167,7 @@ duplicacy_primary_backup() {
   # Run the Duplicacy backup to the Primary Storage
   log_message "INFO" "Running Duplicacy primary storage backup to '${STORAGE_TARGET_1_NAME}' storage for the '${SERVICE}' service."
   
-  "${DUPLICACY_BIN}" backup -storage "${STORAGE_TARGET_1_NAME}" 2>&1 | log_output
+  duplicacy backup -storage "${STORAGE_TARGET_1_NAME}" 2>&1 | log_output
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Duplicacy primary storage backup to '${STORAGE_TARGET_1_NAME}' storage for the '${SERVICE}' service failed."
@@ -223,7 +222,7 @@ duplicacy_add_backup() {
 
         # Add SFTP Duplicacy Storage
         log_message "INFO" "Adding SFTP Duplicacy Storage '${storage_name} for the '${SERVICE}' service."
-        "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
+        duplicacy add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
           "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
           "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" 2>&1 | \
           log_output
@@ -233,7 +232,7 @@ duplicacy_add_backup() {
         fi
 
         # Set SSH key file for SFTP Duplicacy Storage
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" 2>&1 | log_output
+        duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" 2>&1 | log_output
         exit_status="${PIPESTATUS[0]}"
         if [ "${exit_status}" -ne 0 ]; then
           handle_error "Setting the SFTP Duplicacy storage '${storage_name}' SSH key file for the '${SERVICE}'service failed. Verify the SSH key file path and permissions."
@@ -258,7 +257,7 @@ duplicacy_add_backup() {
 
         # Add BackBlaze Duplicacy Storage
         log_message "INFO" "Adding BackBlaze Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
-        "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
+        duplicacy add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
           "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
           "b2://${!config_b2_bucketname_var}" 2>&1 | \
           log_output
@@ -268,7 +267,7 @@ duplicacy_add_backup() {
         fi
 
         # Set Key ID for BackBlaze Duplicacy Storage
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
+        duplicacy set -storage "${storage_name}" -key b2_id \
           -value "${!config_b2_id_var}" 2>&1 | log_output
         exit_status="${PIPESTATUS[0]}"
         if [ "${exit_status}" -ne 0 ]; then
@@ -276,7 +275,7 @@ duplicacy_add_backup() {
         fi
 
         # Set Application Key for BackBlaze Duplicacy Storage
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
+        duplicacy set -storage "${storage_name}" -key b2_key \
           -value "${!config_b2_key_var}" 2>&1 | log_output
         exit_status="${PIPESTATUS[0]}"
         if [ "${exit_status}" -ne 0 ]; then
@@ -288,7 +287,7 @@ duplicacy_add_backup() {
       fi
 
       # Set Password for the additional storage
-      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password \
+      duplicacy set -storage "${storage_name}" -key password \
         -value "${STORAGE_PASSWORD}" 2>&1 | log_output
       exit_status="${PIPESTATUS[0]}"
       if [ "${exit_status}" -ne 0 ]; then
@@ -296,7 +295,7 @@ duplicacy_add_backup() {
       fi
 
       # Set RSA Passphrase for the additional storage
-      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
+      duplicacy set -storage "${storage_name}" -key rsa_passphrase \
         -value "${RSA_PASSPHRASE}" 2>&1 | log_output
       exit_status="${PIPESTATUS[0]}"
       if [ "${exit_status}" -ne 0 ]; then
@@ -321,7 +320,7 @@ duplicacy_copy_backup() {
       # Run the Duplicacy copy backup
       log_message "INFO" "Running Duplicacy copy backup to '${storage_name}' storage."
 
-      "${DUPLICACY_BIN}" copy -from "${STORAGE_TARGET_1_NAME}" -to "${storage_name}" \
+      duplicacy copy -from "${STORAGE_TARGET_1_NAME}" -to "${storage_name}" \
         -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 2>&1 | log_output
       exit_status="${PIPESTATUS[0]}"
 
@@ -343,7 +342,7 @@ duplicacy_wrap_up() {
   storage_name="${1}"
 
   # Full Check the Duplicacy storage
-  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
+  duplicacy check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
   exit_status="${PIPESTATUS[0]}"
   if [[ "${exit_status}" -ne 0 ]]; then
     handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
@@ -357,7 +356,7 @@ duplicacy_wrap_up() {
     PRUNE_KEEP_ARRAY=()
     read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
 
-    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" 2>&1 | log_output
+    duplicacy prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [[ "${exit_status}" -ne 0 ]]; then
       handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."
