@@ -17,7 +17,7 @@ send_pushover_notification() {
     https://api.pushover.net/1/messages.json | log_output
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Failed to send pushover notification. Check Pushover variables in the secrets file."
+    handle_error "Failed to send pushover notification. Check Pushover variables in the config file."
   fi
   log_message "INFO" "Pushover notification sent successfully."
 }

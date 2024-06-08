@@ -50,65 +50,65 @@ STOP_SCRIPT="${MOD_DIR}/archiver.sh"
 for script in "${SRC_DIR}/"*.sh; do
   [ -r "${script}" ] && source "${script}"
   # ---------------------
-  # Configuration Check
-  # ---------------------
   # set-config.sh
-  #
-  # imports functions:
-  #   - verify_config
+  # ---------------------
+  # functions:
   #   - expand_service_directories
   #   - count_storage_targets
   #   - verify_target_settings
   #   - check_required_secrets
   #   - check_notification_config
   #   - check_backup_rotation_settings
-
-  # ---------------------
-  # Logging
+  #   - verify_config
+  # exported variables:
+  #   - EXPANDED_SERVICE_DIRECTORIES
+  #   - STORAGE_TARGET_COUNT
+  #   - NOTIFICATION_SERVICE
+  #   - PUSHOVER_USER_KEY
+  #   - PUSHOVER_API_TOKEN
+  #   - ROTATE_BACKUPS
+  #   - PRUNE_KEEP
+  #
   # ---------------------
   # logging.sh
-  #
-  # imports variables:
-  #   - LOG_DIR
-  #   - ARCHIVER_LOG_FILE
-  #   - DUPLICACY_LOG_FILE
-  #   - DOCKER_LOG_FILE
-  #   - CURL_LOG_FILE
-  #   - ALL_LOG_FILES
-  # imports functions:
+  # ---------------------
+  # functions:
   #   - log_message
   #   - log_output
   #   - rotate_logs
   #   - elapsed_time
-
-  # ---------------------
-  # Error Handling
+  #
   # ---------------------
   # error-handling.sh
-  # imports variables:
-  #   - ERROR_COUNT
-  # imports functions:
-  #   - handle_error
-
   # ---------------------
-  # Duplicacy Functions
+  # functions:
+  #   - handle_error
+  # exported variables:
+  #   - ERROR_COUNT
+  #
   # ---------------------
   # duplicacy.sh
-  # imports functions:
+  # ---------------------
+  # functions:
   #   - set_duplicacy_variables
   #   - duplicacy_binary_check
   #   - count_storage_targets
   #   - duplicacy_verify
   #   - duplicacy_filters
   #   - duplicacy_primary_backup
+  #   - duplicacy_add_backup
   #   - duplicacy_copy_backup
-  #   - duplicacy_prune
-
-  # ---------------------
-  # Notification Functions
+  #   - duplicacy_wrap_up
+  # exported variables:
+  #   - DUPLICACY_BIN
+  #   - DUPLICACY_KEY_DIR
+  #   - DUPLICACY_RSA_PUBLIC_KEY_FILE
+  #   - DUPLICACY_RSA_PRIVATE_KEY_FILE
+  #
   # ---------------------
   # notification.sh
-  # imports functions:
+  # ---------------------
+  # functions:
   #   - send_pushover_notification
   #   - notify
 done

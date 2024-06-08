@@ -62,7 +62,12 @@ chmod 700 "${EXPORTS_DIR}"
 OUTPUT_TAR="${EXPORTS_DIR}/export-${TIMESTAMP}.tar"
 
 # Change to the ARCHIVER_DIR directory and create the tarball
-cd "${ARCHIVER_DIR}"
+if [ -d "${ARCHIVER_DIR}" ]; then
+  cd "${ARCHIVER_DIR}" || exit 1
+else
+  echo "Error changing to '${ARCHIVER_DIR}' directory."
+  exit 1
+fi
 tar -cf "${OUTPUT_TAR}" keys config.sh
 
 # Encrypt tarball with pbkdf2

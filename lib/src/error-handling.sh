@@ -12,6 +12,7 @@ handle_error() {
 
   # Increment ERROR_COUNT by 1
   ((ERROR_COUNT++))
+  export ERROR_COUNT
 
   if [[ -z "${RECURSIVE_CALL}" ]]; then
     export RECURSIVE_CALL=true

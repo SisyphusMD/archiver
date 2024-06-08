@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Define primary Duplicacy-related configuration variables.
-DUPLICACY_BIN="duplicacy" # Path to Duplicacy binary. Maybe a bad idea, but assuming duplicacy is in PATH. Previously used "/usr/local/bin/duplicacy".
-DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/keys" # Path to Duplicacy key directory
-DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
-DUPLICACY_RSA_PRIVATE_KEY_FILE="${DUPLICACY_KEY_DIR}/private.pem" # Path to RSA private key file for Duplicacy
+export DUPLICACY_BIN="duplicacy" # Path to Duplicacy binary. Maybe a bad idea, but assuming duplicacy is in PATH. Previously used "/usr/local/bin/duplicacy".
+export DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/keys" # Path to Duplicacy key directory
+export DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
+export DUPLICACY_RSA_PRIVATE_KEY_FILE="${DUPLICACY_KEY_DIR}/private.pem" # Path to RSA private key file for Duplicacy
 
 set_duplicacy_variables() {
   DUPLICACY_REPO_DIR="${SERVICE_DIR}/.duplicacy" # Directory for various Duplicacy repos
