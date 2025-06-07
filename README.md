@@ -134,7 +134,7 @@
   - There are many different S3 providers, so no specific instructions can meaningfully be provided here.
   - In general, you will need to obtain the following parameters:
     - Bucket Name (unique)
-    - Endpoint (ex: s3.us-east-1.amazonaws.com or hel1.your-objectstorage.com)
+    - Endpoint (ex: amazon.com or hel1.your-objectstorage.com)
     - Region (optional, depending on service. ex: us-east-1)
     - ID (S3 Access ID with read/write access to the bucket)
     - Secret (S3 Secret Key with read/write access to the bucket)
