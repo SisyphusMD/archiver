@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.4.0] - 2025-06-06
 
 ### Added
-- AWS S3 storage backend support added alongside existing SFTP and B2 backends.
+- S3 storage backend support added alongside existing SFTP and B2 backends.
 
 ### Improved
 - Setup script explicitly checks for export file existence, skipping import gracefully if no exports exist.
