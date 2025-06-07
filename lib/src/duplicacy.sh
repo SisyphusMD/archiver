@@ -93,6 +93,7 @@ duplicacy_primary_backup() {
     if [ "${exit_status}" -ne 0 ]; then
       handle_error "Setting the Primary Duplicacy Storage SSH key file for the ${SERVICE} service failed. Verify the SSH key file path and permissions."
     fi
+
   elif [[ "${backup_type}" == "b2" ]]; then
     local duplicacy_b2_id_var
     local duplicacy_b2_key_var
@@ -120,7 +121,7 @@ duplicacy_primary_backup() {
       -value "${STORAGE_TARGET_1_B2_ID}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Setting the BackBlaze Duplicacy Storage Key ID for the ${SERVICE} service failed."
+      handle_error "Setting the BackBlaze Duplicacy Storage Key ID for the '${SERVICE}' service failed."
     fi
 
     # Set Application Key for BackBlaze Duplicacy Storage
@@ -130,6 +131,45 @@ duplicacy_primary_backup() {
     if [ "${exit_status}" -ne 0 ]; then
       handle_error "Setting the BackBlaze Duplicacy Storage Application Key for the '${SERVICE}' service failed."
     fi
+
+  elif [[ "${backup_type}" == "s3" ]]; then
+    local duplicacy_s3_id_var
+    local duplicacy_s3_secret_var
+
+    duplicacy_s3_id_var="DUPLICACY_${storage_name_upper}_S3_ID"
+    duplicacy_s3_secret_var="DUPLICACY_${storage_name_upper}_S3_SECRET"
+
+    export "${duplicacy_s3_id_var}"="${STORAGE_TARGET_1_S3_ID}" # Export S3 Access Key so Duplicacy binary can see variable
+    export "${duplicacy_s3_secret_var}"="${STORAGE_TARGET_1_S3_SECRET}" # Export S3 Secret Key so Duplicacy binary can see variable
+
+    # Initialize S3 storage
+    log_message "INFO" "Initializing Primary Duplicacy Storage for '${SERVICE}' service."
+
+    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+      -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+      "s3://${STORAGE_TARGET_1_S3_ENDPOINT}/${STORAGE_TARGET_1_S3_BUCKETNAME}" 2>&1 | \
+      log_output
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Primary Duplicacy Storage initialization for the '${SERVICE}' service failed."
+    fi
+
+    # Set ID for S3 Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key s3_id \
+      -value "${STORAGE_TARGET_1_S3_ID}" 2>&1 | log_output
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the S3 Duplicacy ID for the '${SERVICE}' service failed."
+    fi
+
+    # Set Secret for S3 Duplicacy Storage
+    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key s3_secret \
+      -value "${STORAGE_TARGET_1_S3_SECRET}" 2>&1 | log_output
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Setting the S3 Duplicacy Secret for the '${SERVICE}' service failed."
+    fi
+
   else
     handle_error "'${backup_type}' is not a supported backup type. Please edit config.sh to fix."
   fi
