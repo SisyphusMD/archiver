@@ -425,6 +425,47 @@ create_config_file() {
         done
       }
 
+      # Function to prompt for S3 storage details
+      prompt_s3_storage() {
+        s3_bucketname=""
+        s3_endpoint=""
+        s3_id=""
+        s3_secret=""
+
+        while [ -z "${s3_bucketname}" ]; do
+          echo    # Move to a new line
+          read -rp "S3 Bucket Name (Not the entire url, just the unique name of the bucket): " s3_bucketname
+          if [ -z "${s3_bucketname}" ]; then
+            echo " - Error: S3 Bucket Name is required."
+          fi
+        done
+
+        while [ -z "${s3_endpoint}" ]; do
+          echo    # Move to a new line
+          read -rp "S3 Endpoint (Include the region. Don't include any protocol such as https://): " s3_endpoint
+          if [ -z "${s3_endpoint}" ]; then
+            echo " - Error: S3 Endpoint is required."
+          fi
+        done
+
+        while [ -z "${s3_id}" ]; do
+          echo    # Move to a new line
+          read -rp "S3 ID (ID with read/write access to the bucket): " s3_id
+          if [ -z "${s3_id}" ]; then
+            echo " - Error: S3 ID is required."
+          fi
+        done
+
+        while [ -z "${s3_secret}" ]; do
+          echo    # Move to a new line
+          read -rsp "S3 Secret (Secret with read/write access to the bucket): " s3_secret
+          echo    # Move to a new line
+          if [ -z "${s3_secret}" ]; then
+            echo " - Error: S3 Secret is required."
+          fi
+        done
+      }
+
       # Start writing the config file
       cat <<EOL > "${ARCHIVER_DIR}/config.sh"
 #########################################################################################
@@ -487,15 +528,18 @@ EOL
 
         while true; do
           echo    # Move to a new line
-          read -rp "Storage Type (Currently support sftp and b2): " type
+          read -rp "Storage Type (Currently support sftp, b2, and s3): " type
           if [[ "${type}" == "sftp" ]]; then
             prompt_sftp_storage
             break
           elif [[ "${type}" == "b2" ]]; then
             prompt_b2_storage
             break
+          elif [[ "${type}" == "s3" ]]; then
+            prompt_s3_storage
+            break
           else
-            echo "Unsupported storage type. Please enter either 'sftp' or 'b2'."
+            echo "Unsupported storage type. Please enter either 'sftp', 'b2', or 's3'."
           fi
         done
 
@@ -520,6 +564,14 @@ STORAGE_TARGET_${i}_B2_ID="$b2_id"
 STORAGE_TARGET_${i}_B2_KEY="$b2_key"
 
 EOL
+        elif [[ $type == "s3" ]]; then
+          cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+STORAGE_TARGET_${i}_S3_BUCKETNAME="$s3_bucketname"
+STORAGE_TARGET_${i}_S3_ENDPOINT="$s3_endpoint"
+STORAGE_TARGET_${i}_S3_ID="$s3_id"
+STORAGE_TARGET_${i}_S3_SECRET="$s3_secret"
+
+EOL
         fi
 
         ((i++))
@@ -540,7 +592,7 @@ EOL
 
 # Example SFTP Storage Target
   # STORAGE_TARGET_1_NAME="name" # You can call this whatever you want, but it must be unique.
-  # STORAGE_TARGET_1_TYPE="sftp" # Currently support sftp and b2. For sftp, require URL, PORT, USER, PATH, and KEY_FILE as below.
+  # STORAGE_TARGET_1_TYPE="sftp" # Currently support sftp, b2, and s3. For sftp, require URL, PORT, USER, PATH, and KEY_FILE as below.
   # STORAGE_TARGET_1_SFTP_URL="192.168.1.1" # The IP address or FQDN of the sftp host.
   # STORAGE_TARGET_1_SFTP_PORT="22" # The sftp port of the sftp host. Default is 22.
   # STORAGE_TARGET_1_SFTP_USER="user" # User with sftp privileges on sftp host.
@@ -549,10 +601,18 @@ EOL
 
 # Example B2 Storage Target
   # STORAGE_TARGET_2_NAME="name" # You can call this whatever you want, but it must be unique.
-  # STORAGE_TARGET_2_TYPE="b2" # Currently support sftp and b2. For b2, require BUCKETNAME, ID, and KEY as below.
+  # STORAGE_TARGET_2_TYPE="b2" # Currently support sftp, b2, and s3. For b2, require BUCKETNAME, ID, and KEY as below.
   # STORAGE_TARGET_2_B2_BUCKETNAME="bucketName" # BackBlaze bucket name. Must be globally unique.
   # STORAGE_TARGET_2_B2_ID="keyID" # BackBlaze keyID with read/write access to the above bucket.
-  # STORAGE_TARGET_2_B2_KEY="applicationKey"  # BackBlaze applicationKey with read/write access to the above bucket.
+  # STORAGE_TARGET_2_B2_KEY="applicationKey" # BackBlaze applicationKey with read/write access to the above bucket.
+
+# Example S3 Storage Target
+  # STORAGE_TARGET_3_NAME="name" # You can call this whatever you want, but it must be unique.
+  # STORAGE_TARGET_3_TYPE="s3" # Currently support sftp, b2, and s3. For s3, require BUCKETNAME, ENDPOINT, ID, and SECRET as below.
+  # STORAGE_TARGET_3_S3_BUCKETNAME="bucketName" # S3 bucket name. Must be globally unique.
+  # STORAGE_TARGET_3_S3_ENDPOINT="endpoint" # S3 endpoint.
+  # STORAGE_TARGET_3_S3_ID="id" # S3 ID with read/write access to the above bucket.
+  # STORAGE_TARGET_3_S3_SECRET="secret" # S3 secret with read/write access to the above bucket.
 
 # Secrets for all Duplicacy storage targets
 STORAGE_PASSWORD="${storage_password}" # Password for Duplicacy storage (required)
