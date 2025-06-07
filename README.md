@@ -6,7 +6,7 @@
 </p>
 
 ## TLDR
-- Archiver will automate the backup of any configured directory to any number of SFTP and B2 storage backends.
+- Archiver will automate the backup of any configured directory to any number of SFTP, B2, and S3 storage backends.
 - By default, it will back up all files within the configured directory.
 - You can optionally:
   - Include and exclude files and subdirectories from the backups
@@ -21,7 +21,7 @@
 - **Automated Rotation**: Implements smart backup rotation policies to manage storage effectively.
 - **Easy Restoration**: Restore script provided to get up and running again quickly after data loss.
 - **Notifications**: Receive notifications via Pushover for successful backup completions, as well as any errors the script encounters. No more silent failures. Plan to support further notifcation services in the future.
-- **Multiple Storage Backends Supported**: Currently support SFTP and B2 storage backends via duplicacy. Plan to add further backend support in the future.
+- **Multiple Storage Backends Supported**: Currently support SFTP, B2, and S3 storage backends via duplicacy. Plan to add further backend support in the future.
 
 ## Getting Started
 
@@ -129,6 +129,14 @@
     - Leave **File name prefix** and **Duration (seconds)** blank.
     - Select **Create New Key** at the bottom when ready.
     - Make note of your **keyID** and **applicationKey**. The Application Key will only be displayed once.
+
+  #### S3
+  - There are many different S3 providers, so no specific instructions can meaningfully be provided here.
+  - In general, you will need to obtain the following parameters:
+    - Bucket Name (unique)
+    - Endpoint (ex: s3.us-east-1.amazonaws.com or hel1.your-objectstorage.com)
+    - ID (S3 Access ID with read/write access to the bucket)
+    - Secret (S3 Secret Key with read/write access to the bucket)
 </details>
 
 <details>
