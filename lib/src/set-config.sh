@@ -83,6 +83,16 @@ verify_target_settings() {
         fi
       done
 
+    elif [[ "${storage_type}" == "s3" ]]; then
+      local config_vars=("S3_BUCKETNAME" "S3_ENDPOINT" "S3_ID" "S3_SECRET")
+      for var in "${config_vars[@]}"; do
+        local config_var="STORAGE_TARGET_${storage_id}_${var}"
+        if [[ -z "${!config_var}" ]]; then
+          handle_error "Missing S3 configuration setting '${var}' for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          exit 1
+        fi
+      done
+
     else
       handle_error "The storage type '${storage_type}' is not supported. Please check your '${storage_type_var}' configuration."
       exit 1
