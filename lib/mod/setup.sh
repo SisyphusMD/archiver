@@ -449,9 +449,17 @@ create_config_file() {
 
         while [ -z "${s3_endpoint}" ]; do
           echo    # Move to a new line
-          read -rp "S3 Endpoint (ex: s3.us-east-1.amazonaws.com or hel1.your-objectstorage.com): " s3_endpoint
+          read -rp "S3 Endpoint (ex: amazon.com or hel1.your-objectstorage.com): " s3_endpoint
           if [ -z "${s3_endpoint}" ]; then
             echo " - Error: S3 Endpoint is required."
+          fi
+        done
+
+        while [ -z "${s3_region}" ]; do
+          echo    # Move to a new line
+          read -rp "S3 Region (ex: amazon.com or hel1.your-objectstorage.com): " s3_region
+          if [ -z "${s3_region}" ]; then
+            s3_region="none"
           fi
         done
 
@@ -575,6 +583,7 @@ EOL
           cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 STORAGE_TARGET_${i}_S3_BUCKETNAME="$s3_bucketname"
 STORAGE_TARGET_${i}_S3_ENDPOINT="$s3_endpoint"
+STORAGE_TARGET_${i}_S3_REGION="$s3_region"
 STORAGE_TARGET_${i}_S3_ID="$s3_id"
 STORAGE_TARGET_${i}_S3_SECRET="$s3_secret"
 
@@ -617,7 +626,8 @@ EOL
   # STORAGE_TARGET_3_NAME="name" # You can call this whatever you want, but it must be unique.
   # STORAGE_TARGET_3_TYPE="s3" # Currently support sftp, b2, and s3. For s3, require BUCKETNAME, ENDPOINT, ID, and SECRET as below.
   # STORAGE_TARGET_3_S3_BUCKETNAME="bucketName" # S3 bucket name. Must be globally unique.
-  # STORAGE_TARGET_3_S3_ENDPOINT="endpoint" # S3 endpoint (ex: s3.us-east-1.amazonaws.com or hel1.your-objectstorage.com).
+  # STORAGE_TARGET_3_S3_ENDPOINT="endpoint" # S3 endpoint (ex: amazon.com or hel1.your-objectstorage.com).
+  # STORAGE_TARGET_3_S3_REGION="none" # S3 region (optional, depending on service. ex: us-east-1)
   # STORAGE_TARGET_3_S3_ID="id" # S3 Access ID with read/write access to the bucket.
   # STORAGE_TARGET_3_S3_SECRET="secret" # S3 Secret Key with read/write access to the bucket.
 
