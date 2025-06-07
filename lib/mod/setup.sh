@@ -198,7 +198,14 @@ import_if_missing() {
   if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ] || \
     [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ] ||\
     [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
-      "${IMPORT_SCRIPT}"
+
+      # Check for export file:
+      if ls "${ARCHIVER_DIR}"/export-*.tar.enc >/dev/null 2>&1; then
+        "${IMPORT_SCRIPT}"
+      else
+        echo "No export files found. Skipping import and continuing fresh setup."
+      fi
+
   fi
 }
 
