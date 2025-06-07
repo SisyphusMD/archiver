@@ -442,7 +442,7 @@ create_config_file() {
 
         while [ -z "${s3_endpoint}" ]; do
           echo    # Move to a new line
-          read -rp "S3 Endpoint (Include the region. Don't include any protocol such as https://): " s3_endpoint
+          read -rp "S3 Endpoint (ex: s3.us-east-1.amazonaws.com or hel1.your-objectstorage.com): " s3_endpoint
           if [ -z "${s3_endpoint}" ]; then
             echo " - Error: S3 Endpoint is required."
           fi
@@ -450,7 +450,7 @@ create_config_file() {
 
         while [ -z "${s3_id}" ]; do
           echo    # Move to a new line
-          read -rp "S3 ID (ID with read/write access to the bucket): " s3_id
+          read -rp "S3 ID (S3 Access ID with read/write access to the bucket): " s3_id
           if [ -z "${s3_id}" ]; then
             echo " - Error: S3 ID is required."
           fi
@@ -458,7 +458,7 @@ create_config_file() {
 
         while [ -z "${s3_secret}" ]; do
           echo    # Move to a new line
-          read -rsp "S3 Secret (Secret with read/write access to the bucket): " s3_secret
+          read -rsp "S3 Secret (S3 Secret Key with read/write access to the bucket): " s3_secret
           echo    # Move to a new line
           if [ -z "${s3_secret}" ]; then
             echo " - Error: S3 Secret is required."
@@ -610,9 +610,9 @@ EOL
   # STORAGE_TARGET_3_NAME="name" # You can call this whatever you want, but it must be unique.
   # STORAGE_TARGET_3_TYPE="s3" # Currently support sftp, b2, and s3. For s3, require BUCKETNAME, ENDPOINT, ID, and SECRET as below.
   # STORAGE_TARGET_3_S3_BUCKETNAME="bucketName" # S3 bucket name. Must be globally unique.
-  # STORAGE_TARGET_3_S3_ENDPOINT="endpoint" # S3 endpoint.
-  # STORAGE_TARGET_3_S3_ID="id" # S3 ID with read/write access to the above bucket.
-  # STORAGE_TARGET_3_S3_SECRET="secret" # S3 secret with read/write access to the above bucket.
+  # STORAGE_TARGET_3_S3_ENDPOINT="endpoint" # S3 endpoint (ex: s3.us-east-1.amazonaws.com or hel1.your-objectstorage.com).
+  # STORAGE_TARGET_3_S3_ID="id" # S3 Access ID with read/write access to the bucket.
+  # STORAGE_TARGET_3_S3_SECRET="secret" # S3 Secret Key with read/write access to the bucket.
 
 # Secrets for all Duplicacy storage targets
 STORAGE_PASSWORD="${storage_password}" # Password for Duplicacy storage (required)

@@ -56,9 +56,9 @@
   # STORAGE_TARGET_3_NAME="name" # You can call this whatever you want, but it must be unique.
   # STORAGE_TARGET_3_TYPE="s3" # Currently support sftp, b2, and s3. For s3, require BUCKETNAME, ENDPOINT, ID, and SECRET as below.
   # STORAGE_TARGET_3_S3_BUCKETNAME="bucketName" # S3 bucket name. Must be globally unique.
-  # STORAGE_TARGET_3_S3_ENDPOINT="endpoint" # S3 endpoint.
-  # STORAGE_TARGET_3_S3_ID="id" # S3 ID with read/write access to the above bucket.
-  # STORAGE_TARGET_3_S3_SECRET="secret" # S3 secret with read/write access to the above bucket.
+  # STORAGE_TARGET_3_S3_ENDPOINT="endpoint" # S3 endpoint (ex: s3.us-east-1.amazonaws.com or hel1.your-objectstorage.com).
+  # STORAGE_TARGET_3_S3_ID="id" # S3 Access ID with read/write access to the bucket.
+  # STORAGE_TARGET_3_S3_SECRET="secret" # S3 Secret Key with read/write access to the bucket.
 
 # Secrets for all Duplicacy storage targets
   # STORAGE_PASSWORD="" # Password for Duplicacy storage (required)
