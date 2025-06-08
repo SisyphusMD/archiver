@@ -5,7 +5,9 @@ set -e # Exit immediately if a command exits with a non-zero status
 # Check if the script is run with sudo
 if [ "$(id -u)" -ne 0 ]; then
   # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
+  export INVOKING_UID="$(id -u)"
+  export INVOKING_GID="$(id -g)"
+  exec sudo -E "$0" "$@"
 fi
 
 # Creating this function for requirements of sourced functions
@@ -151,7 +153,14 @@ local_restore_selections() {
 }
 
 initialize_duplicacy() {
-  mkdir -p -m 0755 "${LOCAL_DIR}"
+  if [ ! -d "${LOCAL_DIR}" ]; then
+    mkdir -p -m 0755 "${LOCAL_DIR}"
+    # If variables available, use them for ownership
+    if [ -n "$INVOKING_UID" ] && [ -n "$INVOKING_GID" ]; then
+      chown "$INVOKING_UID":"$INVOKING_GID" "${LOCAL_DIR}"
+    fi
+  fi
+  
   cd "${LOCAL_DIR}" || handle_error "Failed to change directory to '${LOCAL_DIR}'."
 
   local storage_id
