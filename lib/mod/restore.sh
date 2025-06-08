@@ -5,7 +5,9 @@ set -e # Exit immediately if a command exits with a non-zero status
 # Check if the script is run with sudo
 if [ "$(id -u)" -ne 0 ]; then
   # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
+  export INVOKING_UID="$(id -u)"
+  export INVOKING_GID="$(id -g)"
+  exec sudo -E "$0" "$@"
 fi
 
 # Creating this function for requirements of sourced functions
@@ -151,7 +153,14 @@ local_restore_selections() {
 }
 
 initialize_duplicacy() {
-  mkdir -p -m 0755 "${LOCAL_DIR}"
+  if [ ! -d "${LOCAL_DIR}" ]; then
+    mkdir -p -m 0755 "${LOCAL_DIR}"
+    # If variables available, use them for ownership
+    if [ -n "$INVOKING_UID" ] && [ -n "$INVOKING_GID" ]; then
+      chown "$INVOKING_UID":"$INVOKING_GID" "${LOCAL_DIR}"
+    fi
+  fi
+  
   cd "${LOCAL_DIR}" || handle_error "Failed to change directory to '${LOCAL_DIR}'."
 
   local storage_id
@@ -190,6 +199,7 @@ initialize_duplicacy() {
     
     duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" || \
       handle_error "Setting the Duplicacy SFTP key file failed."
+
   elif [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "b2" ]]; then
     local config_b2_bucketname_var
     local config_b2_id_var
@@ -216,6 +226,45 @@ initialize_duplicacy() {
 
     duplicacy set -storage "${storage_name}" -key b2_key -value "${!config_b2_key_var}" || \
       handle_error "Setting the Duplicacy B2 applicationKey failed."
+
+  elif [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "s3" ]]; then
+    local config_s3_bucketname_var
+    local config_s3_endpoint_var
+    local config_s3_region_var
+    local config_s3_id_var
+    local config_s3_secret_var
+    local duplicacy_s3_id_var
+    local duplicacy_s3_secret_var
+    local s3_region
+
+    config_s3_bucketname_var="STORAGE_TARGET_${storage_id}_S3_BUCKETNAME"
+    config_s3_endpoint_var="STORAGE_TARGET_${storage_id}_S3_ENDPOINT"
+    config_s3_region_var="STORAGE_TARGET_${storage_id}_S3_REGION"
+    config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
+    config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
+    duplicacy_s3_id_var="DUPLICACY_${storage_name_upper}_S3_ID"
+    duplicacy_s3_secret_var="DUPLICACY_${storage_name_upper}_S3_SECRET"
+
+    s3_region="${!config_s3_region_var}"
+    s3_region="${s3_region:-none}"
+
+    export "${duplicacy_s3_id_var}"="${!config_s3_id_var}" # Export S3 ID so Duplicacy binary can see variable
+    export "${duplicacy_s3_secret_var}"="${!config_s3_secret_var}" # Export S3 Secret so Duplicacy binary can see variable
+
+    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
+      "s3://${s3_region}@${!config_s3_endpoint_var}/${!config_s3_bucketname_var}" || \
+      handle_error "Duplicacy S3 Storage initialization failed."
+
+    duplicacy set -storage "${storage_name}" -key s3_id -value "${!config_s3_id_var}" || \
+      handle_error "Setting the Duplicacy S3 ID failed."
+
+    duplicacy set -storage "${storage_name}" -key s3_secret -value "${!config_s3_secret_var}" || \
+      handle_error "Setting the Duplicacy S3 Secret failed."
+
+  else
+    handle_error "'${SELECTED_STORAGE_TARGET_TYPE}' is not a supported backup type. Please edit config.sh to only reference supported backup types."
+
   fi
 
   duplicacy set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" || \
