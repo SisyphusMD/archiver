@@ -62,6 +62,17 @@ tail_logs() {
   tail_pid=$!
 
   while sleep 0.1; do
+    # Check if lockfile still exists (backup still running)
+    if [ ! -e "${LOCKFILE}" ]; then
+      # Lockfile removed - backup completed
+      # Give tail a moment to catch up with final log lines
+      sleep 1
+      kill "${tail_pid}" 2>/dev/null
+      echo ""
+      echo "Backup completed. Exiting log viewer."
+      exit 0
+    fi
+
     current_inode=$(stat -c %i "${log_file}")
     if [[ "${current_inode}" != "${last_inode}" ]]; then
       echo "Log file has changed. Following the new log file..."

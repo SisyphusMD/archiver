@@ -1,0 +1,32 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# User-specific files (should not be in image)
+config.sh
+keys/
+logs/
+bundle/
+
+# Backup files
+*.bckp
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+
+# Docker files (not needed in image)
+.dockerignore
+compose.yaml
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store

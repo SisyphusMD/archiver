@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-01-11
+
+### Added
+- **Docker Support**: Run Archiver in containers on any platform
+  - Interactive setup mode generates bundle file without Linux installation
+  - Automated backups with cron scheduling or manual execution
+  - Multi-architecture images (linux/amd64, linux/arm64) published to GHCR
+- **Bundle Commands**: `archiver bundle export` and `archiver bundle import` for managing configuration
+- **Health Check**: `archiver healthcheck` command for monitoring system health
+
+### Changed
+- **BREAKING**: Renamed export/import to bundle terminology
+  - `archiver export` → `archiver bundle export`
+  - `archiver import` → `archiver bundle import`
+  - Directory: `exports/` → `bundle/`
+  - Environment: `EXPORT_PASSWORD` → `BUNDLE_PASSWORD`
+- Bundle file is now always `bundle.tar.enc` (previous version saved as `.old`, no timestamps)
+- Cron jobs now scheduled for invoking user instead of root user
+- Logs now show storage target name (e.g., "Service: Synology") instead of generic "Archiver" during copy/wrap-up operations
+
+### Fixed
+- Setup script now handles special characters (like `$`) in passwords and API keys correctly
+- Setup script now creates bundle file even if one wasn't imported
+- Setup script improved S3 region prompt with better examples and optional handling
+- Setup script and bundle-export script now work correctly in Docker (no SUDO_USER dependency)
+- Cron schedule now properly created from setup script for the correct user
+- Log viewer now properly exits when backup completes instead of hanging
+- Restored files now have correct ownership matching the invoking user
+- Directory ownership fixed when restoring to non-existent directory
+- Removed obsolete `PRUNE_KEEP_ARRAY` from log output
+- Better error messages when running setup on unsupported platforms
+
+### Improved
+- Setup script auto-imports existing bundle files
+- Version pinning for reliable installations
+- Platform detection provides helpful Docker guidance for non-Linux systems
+- Cron instructions now show correct commands for user crontab
+
 ## [0.4.1] - 2025-06-07
 ### Fixed
 - Added missing restore function for S3 storage backend.

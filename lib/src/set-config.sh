@@ -167,7 +167,7 @@ check_backup_rotation_settings() {
   export PRUNE_KEEP
 
   # Log the values being used for backup rotation
-  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}, PRUNE_KEEP_ARRAY=${PRUNE_KEEP_ARRAY[*]}"
+  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}"
 }
 
 # Function to verify the entire configuration

@@ -62,9 +62,9 @@ REQUIRED_PACKAGES=(
   "wget"
 )
 
-IMPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/import.sh"
-EXPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/export.sh"
-EXPORTS_DIR="${ARCHIVER_DIR}/exports"
+BUNDLE_IMPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/bundle-import.sh"
+BUNDLE_EXPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/bundle-export.sh"
+BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
 
 # Determine environment
 ENVIRONMENT_OS="$(uname -s)"
@@ -77,14 +77,33 @@ elif [[ "${ENVIRONMENT_ARCHITECTURE}" == "x86_64" || "${ENVIRONMENT_ARCHITECTURE
   DUPLICACY_ARCHITECTURE="x64"
 fi
 # Get the UID and GID of the user who invoked the script
-CALLER_UID=$(id -u "${SUDO_USER}")
-CALLER_GID=$(id -g "${SUDO_USER}")
-# Get the home directory of the user who invoked the script
-CALLER_HOME=$(getent passwd "${SUDO_USER}" | cut -d: -f6)
+if [ -n "${SUDO_USER}" ]; then
+  CALLER_UID=$(id -u "${SUDO_USER}")
+  CALLER_GID=$(id -g "${SUDO_USER}")
+  CALLER_HOME=$(getent passwd "${SUDO_USER}" | cut -d: -f6)
+else
+  # Running as root directly (e.g., in Docker)
+  CALLER_UID=$(id -u)
+  CALLER_GID=$(id -g)
+  CALLER_HOME="${HOME}"
+fi
 
 # Exit if the operating system is not Linux or architecture is not recognized
 if [ "${DUPLICACY_OS}" != "linux" ] || [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
-  echo "This script only works on Linux environments with arm64 or x64 architectures." 1>&2
+  echo "================================================================" >&2
+  echo "ERROR: Unsupported platform for direct installation" >&2
+  echo "================================================================" >&2
+  echo "" >&2
+  echo "Detected: ${ENVIRONMENT_OS} (${ENVIRONMENT_ARCHITECTURE})" >&2
+  echo "Required: Linux (arm64 or x86_64)" >&2
+  echo "" >&2
+  echo "To use Archiver on non-Linux systems:" >&2
+  echo "1. Set up Archiver on a Linux machine or VM first" >&2
+  echo "2. Run 'archiver bundle export' to create bundle.tar.enc" >&2
+  echo "3. Use Docker with your bundle file on any platform" >&2
+  echo "" >&2
+  echo "See DOCKER.md or README Docker Installation section for details." >&2
+  echo "================================================================" >&2
   exit 1
 fi
 
@@ -199,11 +218,11 @@ import_if_missing() {
     [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ] ||\
     [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
 
-      # Check for export file:
-      if ls "${ARCHIVER_DIR}"/export-*.tar.enc >/dev/null 2>&1; then
-        "${IMPORT_SCRIPT}"
+      # Check for bundle file
+      if [ -f "${ARCHIVER_DIR}/bundle.tar.enc" ] || [ -f "${BUNDLE_DIR}/bundle.tar.enc" ]; then
+        "${BUNDLE_IMPORT_SCRIPT}"
       else
-        echo "No export files found. Skipping import and continuing fresh setup."
+        echo "No bundle file found. Skipping import and continuing fresh setup."
       fi
 
   fi
@@ -457,7 +476,7 @@ create_config_file() {
 
         while [ -z "${s3_region}" ]; do
           echo    # Move to a new line
-          read -rp "S3 Region (ex: amazon.com or hel1.your-objectstorage.com): " s3_region
+          read -rp "S3 Region (optional, ex: us-east-1, or leave empty for 'none'): " s3_region
           if [ -z "${s3_region}" ]; then
             s3_region="none"
           fi
@@ -559,35 +578,37 @@ EOL
         done
 
         # Write storage target details to config file
-        cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
-STORAGE_TARGET_${i}_NAME="$name"
-STORAGE_TARGET_${i}_TYPE="$type"
-EOL
+        # Use printf to handle special characters in user input (like $ in passwords)
+        {
+          printf 'STORAGE_TARGET_%s_NAME="%s"\n' "${i}" "${name}"
+          printf 'STORAGE_TARGET_%s_TYPE="%s"\n' "${i}" "${type}"
+        } >> "${ARCHIVER_DIR}/config.sh"
+
         if [[ $type == "sftp" ]]; then
-          cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
-STORAGE_TARGET_${i}_SFTP_URL="$sftp_url"
-STORAGE_TARGET_${i}_SFTP_PORT="$sftp_port"
-STORAGE_TARGET_${i}_SFTP_USER="$sftp_user"
-STORAGE_TARGET_${i}_SFTP_PATH="$sftp_path"
-STORAGE_TARGET_${i}_SFTP_KEY_FILE="$sftp_key_file"
-
-EOL
+          {
+            printf 'STORAGE_TARGET_%s_SFTP_URL="%s"\n' "${i}" "${sftp_url}"
+            printf 'STORAGE_TARGET_%s_SFTP_PORT="%s"\n' "${i}" "${sftp_port}"
+            printf 'STORAGE_TARGET_%s_SFTP_USER="%s"\n' "${i}" "${sftp_user}"
+            printf 'STORAGE_TARGET_%s_SFTP_PATH="%s"\n' "${i}" "${sftp_path}"
+            printf 'STORAGE_TARGET_%s_SFTP_KEY_FILE="%s"\n' "${i}" "${sftp_key_file}"
+            printf '\n'
+          } >> "${ARCHIVER_DIR}/config.sh"
         elif [[ $type == "b2" ]]; then
-          cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
-STORAGE_TARGET_${i}_B2_BUCKETNAME="$b2_bucketname"
-STORAGE_TARGET_${i}_B2_ID="$b2_id"
-STORAGE_TARGET_${i}_B2_KEY="$b2_key"
-
-EOL
+          {
+            printf 'STORAGE_TARGET_%s_B2_BUCKETNAME="%s"\n' "${i}" "${b2_bucketname}"
+            printf 'STORAGE_TARGET_%s_B2_ID="%s"\n' "${i}" "${b2_id}"
+            printf 'STORAGE_TARGET_%s_B2_KEY="%s"\n' "${i}" "${b2_key}"
+            printf '\n'
+          } >> "${ARCHIVER_DIR}/config.sh"
         elif [[ $type == "s3" ]]; then
-          cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
-STORAGE_TARGET_${i}_S3_BUCKETNAME="$s3_bucketname"
-STORAGE_TARGET_${i}_S3_ENDPOINT="$s3_endpoint"
-STORAGE_TARGET_${i}_S3_REGION="$s3_region"
-STORAGE_TARGET_${i}_S3_ID="$s3_id"
-STORAGE_TARGET_${i}_S3_SECRET="$s3_secret"
-
-EOL
+          {
+            printf 'STORAGE_TARGET_%s_S3_BUCKETNAME="%s"\n' "${i}" "${s3_bucketname}"
+            printf 'STORAGE_TARGET_%s_S3_ENDPOINT="%s"\n' "${i}" "${s3_endpoint}"
+            printf 'STORAGE_TARGET_%s_S3_REGION="%s"\n' "${i}" "${s3_region}"
+            printf 'STORAGE_TARGET_%s_S3_ID="%s"\n' "${i}" "${s3_id}"
+            printf 'STORAGE_TARGET_%s_S3_SECRET="%s"\n' "${i}" "${s3_secret}"
+            printf '\n'
+          } >> "${ARCHIVER_DIR}/config.sh"
         fi
 
         ((i++))
@@ -631,12 +652,15 @@ EOL
   # STORAGE_TARGET_3_S3_ID="id" # S3 Access ID with read/write access to the bucket.
   # STORAGE_TARGET_3_S3_SECRET="secret" # S3 Secret Key with read/write access to the bucket.
 
-# Secrets for all Duplicacy storage targets
-STORAGE_PASSWORD="${storage_password}" # Password for Duplicacy storage (required)
-RSA_PASSPHRASE="${RSA_PASSPHRASE}" # Passphrase for RSA private key (required)
-
-
 EOL
+
+      # Write secrets to config file using printf to handle special characters
+      {
+        printf '# Secrets for all Duplicacy storage targets\n'
+        printf 'STORAGE_PASSWORD="%s" # Password for Duplicacy storage (required)\n' "${storage_password}"
+        printf 'RSA_PASSPHRASE="%s" # Passphrase for RSA private key (required)\n' "${RSA_PASSPHRASE}"
+        printf '\n\n'
+      } >> "${ARCHIVER_DIR}/config.sh"
 
       echo    # Move to a new line
       read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
@@ -671,17 +695,18 @@ EOL
         pushover_api_token=""
       fi
 
-      # Write more of the config file
-      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
-# ------------------ #
-# OPTIONAL VARIABLES #
-# ------------------ #
-# Notifications
-NOTIFICATION_SERVICE="$notification_service" # Currently support 'None' or 'Pushover'
-PUSHOVER_USER_KEY="$pushover_user_key" # Pushover user key (not email address), viewable when logged into Pushover dashboard
-PUSHOVER_API_TOKEN="$pushover_api_token" # Pushover application API token/key
-
-EOL
+      # Write notification config to file
+      # Use printf for API tokens/keys to handle special characters
+      {
+        printf '# ------------------ #\n'
+        printf '# OPTIONAL VARIABLES #\n'
+        printf '# ------------------ #\n'
+        printf '# Notifications\n'
+        printf 'NOTIFICATION_SERVICE="%s" # Currently support '"'"'None'"'"' or '"'"'Pushover'"'"'\n' "${notification_service}"
+        printf 'PUSHOVER_USER_KEY="%s" # Pushover user key (not email address), viewable when logged into Pushover dashboard\n' "${pushover_user_key}"
+        printf 'PUSHOVER_API_TOKEN="%s" # Pushover application API token/key\n' "${pushover_api_token}"
+        printf '\n'
+      } >> "${ARCHIVER_DIR}/config.sh"
 
       echo    # Move to a new line
       echo "By default, Archiver runs a Duplicacy prune operation at the end of every run to rotate backups."
@@ -753,13 +778,29 @@ EOL
   fi
 }
 
-create_new_export() {
-  if [ ! -d "${EXPORTS_DIR}" ]; then
-    "${EXPORT_SCRIPT}"
+create_new_bundle() {
+  # Check if bundle file exists
+  if [ ! -f "${BUNDLE_DIR}/bundle.tar.enc" ]; then
+    echo    # Move to a new line
+    echo "Creating encrypted bundle file..."
+    "${BUNDLE_EXPORT_SCRIPT}"
+  else
+    echo    # Move to a new line
+    echo " - Bundle file already exists: ${BUNDLE_DIR}/bundle.tar.enc"
+    echo " - Run 'archiver bundle export' to update it (old version will be saved as .old)"
   fi
 }
 
 schedule_with_cron() {
+  # Skip cron scheduling in Docker environment
+  if [ -f "/.dockerenv" ] || grep -q 'docker\|lxc' /proc/1/cgroup 2>/dev/null; then
+    echo    # Move to a new line
+    echo " - Cron scheduling skipped (Docker environment detected)."
+    echo " - Use the CRON_SCHEDULE environment variable when running your container."
+    echo " - Example: docker run -e CRON_SCHEDULE=\"0 3 * * *\" ..."
+    return
+  fi
+
   echo    # Move to a new line
   echo    # Move to a new line
   read -p "Would you like to schedule the backup with cron? (y|N): " -n 1 -r
@@ -775,17 +816,25 @@ schedule_with_cron() {
         cron_schedule="0 3 * * *"
       fi
     done
-    (sudo crontab -l 2>/dev/null; echo "${cron_schedule} archiver start") | sudo crontab -
-    echo " - Backup scheduled with cron."
+    # Get existing crontab, add new entry, and install it
+    if [ -n "${SUDO_USER}" ]; then
+      # Use SUDO_USER to add to the correct user's crontab
+      (crontab -u "${SUDO_USER}" -l 2>/dev/null; echo "${cron_schedule} archiver start") | crontab -u "${SUDO_USER}" -
+      echo " - Backup scheduled with cron (user: ${SUDO_USER})."
+    else
+      # Running as root directly (e.g., in Docker) - add to root's crontab
+      (crontab -l 2>/dev/null; echo "${cron_schedule} archiver start") | crontab -
+      echo " - Backup scheduled with cron (user: root)."
+    fi
     echo " - You can edit the schedule with this command:"
     echo "--------------------------------------------"
-    echo "sudo crontab -e"
+    echo "crontab -e"
     echo "--------------------------------------------"
   else
     echo " - Backup not scheduled with cron."
     echo " - You can always schedule it later with this command (daily at 3am in below example):"
     echo "--------------------------------------------"
-    echo "(sudo crontab -l 2>/dev/null; echo \"0 3 * * * archiver start\") | sudo crontab -"
+    echo "(crontab -l 2>/dev/null; echo \"0 3 * * * archiver start\") | crontab -"
     echo "--------------------------------------------"
   fi
 }
@@ -807,7 +856,7 @@ main() {
 
   create_config_file
 
-  create_new_export
+  create_new_bundle
 
   schedule_with_cron
 
@@ -817,8 +866,8 @@ main() {
   echo    # Move to a new line
   echo " - Setup script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your keys directory."
-  echo " - This script attempts to create a password protected one in the exports dir."
-  echo " - Please save a backup of that file, or run 'archiver export' if that file is missing."
+  echo " - This script attempts to create a password protected bundle file."
+  echo " - Please save a backup of that file, or run 'archiver bundle export' if missing."
   echo "Usage:"
   echo " - To manually start the Archiver backup, use 'archiver start'."
   echo " - To watch the logs of the actively running Archiver backup, use 'archiver logs'."

@@ -10,11 +10,12 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|export|import|uninstall|restore|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|bundle|uninstall|restore|healthcheck|help} [logs|prune|retain]"
   echo "Note:"
-  echo "  stop|pause|logs|status|setup|export|import|uninstall|restore|help cannot have further arguments."
+  echo "  stop|pause|logs|status|setup|uninstall|restore|healthcheck|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
+  echo "  bundle requires a subcommand: export or import"
   exit 1
 }
 
@@ -60,9 +61,20 @@ case "${command}" in
       usage
     fi
     ;;
-  stop|pause|logs|status|setup|export|import|uninstall|restore|help)
+  stop|pause|logs|status|setup|uninstall|restore|healthcheck|help)
     if [[ $# -gt 0 ]]; then
       echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    ;;
+  bundle)
+    if [[ $# -ne 1 ]]; then
+      echo "'bundle' requires exactly one subcommand: export or import"
+      usage
+    fi
+    if [[ "${1}" != "export" && "${1}" != "import" ]]; then
+      echo "Unknown bundle subcommand: ${1}"
+      echo "Valid subcommands: export, import"
       usage
     fi
     ;;
@@ -84,8 +96,9 @@ STOP_SCRIPT="${MOD_DIR}/stop.sh"
 SETUP_SCRIPT="${MOD_DIR}/setup.sh"
 STATUS_SCRIPT="${MOD_DIR}/status.sh"
 RESTORE_SCRIPT="${MOD_DIR}/restore.sh"
-EXPORT_SCRIPT="${MOD_DIR}/export.sh"
-IMPORT_SCRIPT="${MOD_DIR}/import.sh"
+BUNDLE_EXPORT_SCRIPT="${MOD_DIR}/bundle-export.sh"
+BUNDLE_IMPORT_SCRIPT="${MOD_DIR}/bundle-import.sh"
+HEALTHCHECK_SCRIPT="${MOD_DIR}/healthcheck.sh"
 
 start_archiver() {
   if [[ -n "${1}" ]]; then
@@ -164,14 +177,19 @@ if [[ "${command}" == "help" ]]; then
   usage
 fi
 
-# Archiver export logic
-if [[ "${command}" == "export" ]]; then
-  "${EXPORT_SCRIPT}"
+# Archiver bundle logic
+if [[ "${command}" == "bundle" ]]; then
+  subcommand="${1}"
+  if [[ "${subcommand}" == "export" ]]; then
+    "${BUNDLE_EXPORT_SCRIPT}"
+  elif [[ "${subcommand}" == "import" ]]; then
+    "${BUNDLE_IMPORT_SCRIPT}"
+  fi
 fi
 
-# Archiver import logic
-if [[ "${command}" == "import" ]]; then
-  "${IMPORT_SCRIPT}"
+# Archiver healthcheck logic
+if [[ "${command}" == "healthcheck" ]]; then
+  "${HEALTHCHECK_SCRIPT}"
 fi
 
 # Archiver uninstall logic

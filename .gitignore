@@ -10,6 +10,6 @@ config.sh
 # Ignore directories
 keys/
 logs/
-exports/
+bundle/
 
 # Add additional entries below

@@ -19,40 +19,57 @@ if [ -z "${ARCHIVER_DIR}" ]; then
 fi
 
 # Get the UID and GID of the user who invoked the script
-CALLER_UID=$(id -u "${SUDO_USER}")
-CALLER_GID=$(id -g "${SUDO_USER}")
-
-EXPORTS_DIR="${ARCHIVER_DIR}/exports"
-
-# Find export files in the archiver directory
-mapfile -t EXPORT_FILES < <(ls -t "${ARCHIVER_DIR}"/export-*.tar.enc 2>/dev/null)
-
-# Check if there are any export files
-if [ ${#EXPORT_FILES[@]} -eq 0 ]; then
-  echo "No export files found in ${ARCHIVER_DIR}."
-  exit 1
-elif [ ${#EXPORT_FILES[@]} -eq 1 ]; then
-  SELECTED_FILE="${EXPORT_FILES[0]}"
+# In Docker, this might be root, which is fine
+if [ -n "${SUDO_USER}" ]; then
+  CALLER_UID=$(id -u "${SUDO_USER}")
+  CALLER_GID=$(id -g "${SUDO_USER}")
 else
-  echo "Multiple export files found. Please choose one to import:"
-  select FILE in "${EXPORT_FILES[@]}"; do
-    if [ -n "$FILE" ]; then
-      SELECTED_FILE="$FILE"
-      break
-    else
-      echo "Invalid selection. Please try again."
-    fi
-  done
+  CALLER_UID=$(id -u)
+  CALLER_GID=$(id -g)
 fi
 
-# Prompt for password to decrypt the selected file
-echo "Enter password to decrypt the selected export file:"
-read -rs PASSWORD
+BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
+
+# Check if running in non-interactive mode (Docker)
+if [ "${ARCHIVER_NON_INTERACTIVE}" = "1" ]; then
+  # Non-interactive mode: use environment variables
+  if [ -z "${ARCHIVER_BUNDLE_PASSWORD}" ]; then
+    echo "Error: ARCHIVER_BUNDLE_PASSWORD not set in non-interactive mode"
+    exit 1
+  fi
+
+  if [ -n "${ARCHIVER_BUNDLE_FILE}" ] && [ -f "${ARCHIVER_BUNDLE_FILE}" ]; then
+    SELECTED_FILE="${ARCHIVER_BUNDLE_FILE}"
+  else
+    echo "Error: ARCHIVER_BUNDLE_FILE not set or file not found in non-interactive mode"
+    exit 1
+  fi
+
+  PASSWORD="${ARCHIVER_BUNDLE_PASSWORD}"
+else
+  # Interactive mode: original behavior
+  # Look for bundle.tar.enc in the archiver directory or bundle directory
+  if [ -f "${ARCHIVER_DIR}/bundle.tar.enc" ]; then
+    SELECTED_FILE="${ARCHIVER_DIR}/bundle.tar.enc"
+  elif [ -f "${BUNDLE_DIR}/bundle.tar.enc" ]; then
+    SELECTED_FILE="${BUNDLE_DIR}/bundle.tar.enc"
+  else
+    echo "No bundle file found."
+    echo "Expected: ${ARCHIVER_DIR}/bundle.tar.enc or ${BUNDLE_DIR}/bundle.tar.enc"
+    exit 1
+  fi
+
+  echo "Found bundle file: ${SELECTED_FILE}"
+
+  # Prompt for password to decrypt the file
+  echo "Enter password to decrypt the bundle file:"
+  read -rs PASSWORD
+fi
 
 # Define temporary output tar file
 TEMP_TAR="${SELECTED_FILE%.enc}"
 
-# Decrypt the selected export file
+# Decrypt the selected bundle file
 openssl enc -d -aes-256-cbc -pbkdf2 -in "${SELECTED_FILE}" -out "${TEMP_TAR}" -k "${PASSWORD}"
 if [ $? -ne 0 ]; then
   echo "Error: Decryption failed. Please check your password and try again."
@@ -100,14 +117,17 @@ chmod 600 "${ARCHIVER_DIR}/config.sh"
 # Clean up temporary directory
 rm -rf "${TEMP_DIR}"
 
-# Copy exported file to exports dir
-# Setup exports directory
-mkdir -p "${EXPORTS_DIR}"
-chown -R "${CALLER_UID}:${CALLER_GID}" "${EXPORTS_DIR}"
-chmod -R 700 "${EXPORTS_DIR}"
-# Set permissions of imported file and move to exports directory
-chown "${CALLER_UID}:${CALLER_GID}" "${SELECTED_FILE}"
-chmod 600 "${SELECTED_FILE}"
-mv "${SELECTED_FILE}" "${EXPORTS_DIR}"
+# In non-interactive mode (Docker), skip moving the bundle file since it's mounted read-only
+if [ "${ARCHIVER_NON_INTERACTIVE}" != "1" ]; then
+  # Move bundle file to bundle directory
+  # Setup bundle directory
+  mkdir -p "${BUNDLE_DIR}"
+  chown -R "${CALLER_UID}:${CALLER_GID}" "${BUNDLE_DIR}"
+  chmod -R 700 "${BUNDLE_DIR}"
+  # Set permissions of imported file and move to bundle directory
+  chown "${CALLER_UID}:${CALLER_GID}" "${SELECTED_FILE}"
+  chmod 600 "${SELECTED_FILE}"
+  mv "${SELECTED_FILE}" "${BUNDLE_DIR}"
+fi
 
 echo "Import completed successfully. Existing config.sh and keys have been backed up with .bckp suffix."

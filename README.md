@@ -2,306 +2,480 @@
 
 <p>
   <img src="lib/logos/72x72.png" alt="Logo" align="left" style="margin-right: 10px;">
-  Archiver is a powerful, highly-configurable backup tool, designed to remove barriers to following the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 Backup Strategy</a>. It leverages the robust capabilities of <a href="https://github.com/gilbertchen/duplicacy">Duplicacy</a> to create encrypted and de-duplicated backups, and automates the processes of initiating, copying, pruning, and restoring Duplicacy repositories for any directory or service to any number of storage backends. It provides an easy way to run custom pre-backup, post-backup, and restore scripts for each directory or service, while offering scheduling via Cron and notifications via <a href="https://pushover.net">Pushover</a>.
+  Automated encrypted backups with deduplication to SFTP, BackBlaze B2, and S3 storage. Leverages <a href="https://github.com/gilbertchen/duplicacy">Duplicacy</a> to follow the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 Backup Strategy</a> while removing the complexity of manual configuration.
 </p>
 
-## TLDR
-- Archiver will automate the backup of any configured directory to any number of SFTP, B2, and S3 storage backends.
-- By default, it will back up all files within the configured directory.
-- You can optionally:
-  - Include and exclude files and subdirectories from the backups
-  - Run custom bash scripts before and after each backup operation
-  - Configure custom restore scripts to quickly get your services running again when the worst happens.
+## What is Archiver?
+
+Archiver automates backing up directories to multiple remote storage locations with encryption and deduplication. Configure once, then backups run automatically via cron or Docker scheduling.
+
+Each directory gets backed up independently, with optional pre/post-backup scripts for service-specific needs (like database dumps). Backups are encrypted at rest and deduplicated across all your directories to save storage space.
+
+Supports SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage. Run it natively on Linux or via Docker on any platform.
+
+## Quick Start
+
+### Docker (any platform)
+Run interactive setup in a container to generate your bundle file:
+```bash
+docker run -it --rm \
+  -v ./archiver-bundle:/opt/archiver/bundle \
+  ghcr.io/sisyphusmd/archiver:0.5.0 setup
+```
+Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker Installation](#docker-installation) for details.
+
+### Direct Installation (Linux only)
+1. Prepare storage backend ([SFTP](#sftp---synology-nas), [B2](#b2---backblaze), or [S3](#s3-compatible-storage))
+2. Clone repository and run `./archiver.sh setup`
+3. See [Traditional Installation](#traditional-installation) for details
 
 ## Features
 
-- **Efficient Deduplication**: Utilizes Duplicacy's block-level deduplication to minimize required storage space.
-- **Secure Backups**: Ensures data integrity and confidentiality with encryption.
-- **Flexible Configuration**: Offers easy setup and customization through a simple configuration file.
-- **Automated Rotation**: Implements smart backup rotation policies to manage storage effectively.
-- **Easy Restoration**: Restore script provided to get up and running again quickly after data loss.
-- **Notifications**: Receive notifications via Pushover for successful backup completions, as well as any errors the script encounters. No more silent failures. Plan to support further notifcation services in the future.
-- **Multiple Storage Backends Supported**: Currently support SFTP, B2, and S3 storage backends via duplicacy. Plan to add further backend support in the future.
+- **Encrypted & Deduplicated**: Block-level deduplication minimizes storage, RSA encryption secures data
+- **Multiple Backends**: SFTP, BackBlaze B2, S3-compatible storage
+- **Automated Rotation**: Configurable retention policies (keep daily, weekly, monthly snapshots)
+- **Service Integration**: Pre/post-backup scripts, custom restore procedures
+- **Notifications**: Pushover alerts for successes and failures
+- **Easy Restoration**: Interactive restore script to recover specific revisions
 
-## Getting Started
+---
 
-<details>
-  <summary><h3>Prerequisites</h3></summary>
+## Traditional Installation
 
-  - **Supported OS**: Currently only support debian-based linux.
-  - **Supported Architecture**: Currently support ARM64 and AMD64.
-  - **Required Dependencies**: Requires git to clone this GitHub repository. All other required dependencies installed via setup script.
-  - **SFTP-Supporting Storage (i.e. Synology NAS) or BackBlaze B2 Required**: You should have at least one available supported storage target (SFTP or B2) configured before installing.
-  - **Configuration File**: Setup script can optionally aid in creating a config file. Otherwise, you can manually copy and edit the example config file.
-  - **Notifications**: Optional notifications via Pushover. Pushover account required to receive notifications.
-</details>
+For direct installation on Linux systems.
 
-<details>
-  <summary><h3>Storage Backend Preparation</h3></summary>
+### Prerequisites
 
-  #### SFTP - [Synology](https://www.synology.com/en-us) NAS
-  - **Enable SFTP**:
-    - Login as an administrator to your Synology DiskStation Manager (DSM) Web UI (usually http://<ip.address.of.your.nas>:5000).
-    - Open **Control Panel**.
-    - Select **File Services** under **File Sharing**.
-    - Select the **FTP** tab in the top.
-    - Leave options under **FTP / FTPS** unselected. **SFTP** is not FTP or FTPS, even though the naming can be confusing.
-    - Check the box to **Enable SFTP service** under **SFTP**.
-    - Can change the **Port number**, or leave as the default **22**.
-    - Click **Apply** in the bottom right corner.
-  - **Create User (if needed)**:
-    - From **Control Panel**, select **User & Group** under **File Sharing**.
-    - Under **User** in the top, click **Create**.
-    - Give your user a **Name** and **Password**.
-    - Click **Next**.
-    - Select the checkboxes for the **Groups** this user should join.
-    - Click **Next**.
-    - **Assign shared folder permissions** if desired.
-    - Click **Next**.
-    - **Assign user quota** if desired.
-    - Click **Next**.
-    - Select the checkbox for **Allow** for **SFTP**, and set other **Application Permissions** as desired.
-    - Click **Next**.
-    - **Set user speed limit** if desired.
-    - Click **Next**.
-    - Confirm your selections and click **Done**.
-  - **Create Shared Folder**:
-    - From **Control Panel**, select **Shared Folder** under **File Sharing**.
-    - Click **Create** and then **Create Shared Folder** in the top.
-    - Give your new shared folder a **Name**, and either leave all settings on the page at their default, or adjust as you see fit.
-    - Click **Next**.
-    - On the next page, select **Skip** or **Protect this shared folder by encrypting it**.
-      - Best practice is to encrypt at the *Volume* level, rather than at the *Shared Folder* level.
-      - Do not select **Protect this shared folder with WriteOnce**.
-    - Click **Next**.
-    - Configure advanced settings to your preference.
-      - If your underlying file system is BTRFS, recommend selecting **Enable data checksum for advanced data integrity**.
-    - Click **Next**.
-    - Confirm your selections and click **Next**.
-    - Select a user to give **Read/Write** access.
-    - Click **Apply**.
-  - **Provide SSH Public Key File**:
-    - If you already have an id_ed25519 SSH key (id_rsa not supported), you can complete this section now. Otherwise, the **Setup Script** below can create an SSH key for you, and you can come back to complete this section after the SSH key file is created.
-    - From **Control Panel**, select **User & Group** under **File Sharing**.
-    - Click **Advanced** at the top.
-    - At the bottom, under **User Home**, select the checkbox to **Enable user home service**.
-    - Click **Apply**.
-    - From the DSM home screen, open **File Station**.
-    - In the list of **Shared Folders** on the left, select **homes**.
-      - ***Important***: If you select **home** instead of **homes**, you will only see the home directory of the logged in user. To add an SSH key for another user, you will need to open **homes** instead.
-    - Open the folder for the user that will be used to access the share.
-    - If there is already a folder named **.ssh**, double click that folder to open it. Otherwise, click **Create** at the top, then click **Create folder** in the drop down, and name the new folder **.ssh** (the leading period is required), and finally double click the newly created **.ssh** folder to open it.
-      - ***Important***: Must click **Create folder** and not **Create shared folder**. The former does what we need, creating a directory within the currently open directory. The latter is to create a new higher-level shared network folder.
-    - If there is already a file named **authorized_keys**, do the following:
-      - Double-click the **authorized_keys** file to download it.
-      - Using a text editor, add a new line to the bottom of the document containing the contents of your public SSH key file, usually named id_ed25519.pub. The line should start with **ssh-ed25519 AAAA...**.
-      - Save the document with the line added.
-      - Back in **File Station**, right click **authorized_keys**, click **rename**, and rename the file to **authorized_keys.backup**.
-      - Click **Upload** in the top, then click **Upload - Skip**, and browse to and select the edited **authorized_keys** file, and click **Open**.
-      - Ensure the file uploads correctly and is named **authorized_keys**.
-    - If there is not already a file named **authorized_keys**, do the following:
-      - Using a text editor, create a new file, and copy the contents of your public SSH key file, usually named id_ed25519.pub, to this new file. The line should start with **ssh-ed25519 AAAA...**.  Save the new file as **authorized_keys**.
-      - Back in **File Station**, click **Upload** at the top, then click **Upload - Skip**, and browse to and select the newly created **authorized_keys** file, and click **Open**.
-      - Ensure the file uploads correctly and is named **authorized_keys**.
+- Debian-based Linux (Ubuntu, Debian, Raspberry Pi OS)
+- Architecture: ARM64 or AMD64
+- Git installed
+- At least one storage backend prepared (SFTP, B2, or S3)
 
-  #### B2 - [BackBlaze](https://www.backblaze.com/)
-  - **Account**:
-    - [Create an account](https://www.backblaze.com/sign-up/cloud-storage) or [Sign In](https://secure.backblaze.com/user_signin.htm) to **[BackBlaze](https://www.backblaze.com/)**.
-    - Select **My Settings** under **Account** in the left-hand menu.
-    - Check the box for **B2 Cloud Storage** under **Enabled Products**.
-    - Click **OK**.
-  - **Bucket**:
-    - Select **Buckets** under **B2 Cloud Storage** in the left-hand menu.
-    - Select **Create a Bucket**.
-    - Give your bucket a **Bucket Unique Name**.
-    - Files in Bucket are: **Private**.
-    - Default Encryption: **Enable**.
-    - Object Lock: **Disable**.
-    - Select **Create a Bucket** at the bottom when ready.
-    - Lifecycle Settings should be default: **Keep all versions of the file (default)**
-  - **Application Key**:
-    - Select **Application Keys** under **Account** in the left-hand menu.
-    - Select **Add a New Application Key**.
-    - Give your key a **Name of Key**.
-    - For **Allow access to Bucket(s)**, select the bucket you created above.
-    - For **Type of Access**, select **Read and Write**.
-    - Check the box to **Allow List All Bucket Names**.
-    - Leave **File name prefix** and **Duration (seconds)** blank.
-    - Select **Create New Key** at the bottom when ready.
-    - Make note of your **keyID** and **applicationKey**. The Application Key will only be displayed once.
+### Installation Steps
 
-  #### S3
-  - There are many different S3 providers, so no specific instructions can meaningfully be provided here.
-  - In general, you will need to obtain the following parameters:
-    - Bucket Name (unique)
-    - Endpoint (ex: amazon.com or hel1.your-objectstorage.com)
-    - Region (optional, depending on service. ex: us-east-1)
-    - ID (S3 Access ID with read/write access to the bucket)
-    - Secret (S3 Secret Key with read/write access to the bucket)
-</details>
+1. Navigate to desired parent directory:
+   ```bash
+   cd ~
+   ```
 
-<details>
-  <summary><h3>Notification Set Up (optional)</h3></summary>
+2. Clone repository:
+   ```bash
+   git clone --branch v0.5.0 https://github.com/SisyphusMD/archiver.git
+   cd archiver
+   ```
 
-  #### [Pushover](https://pushover.net)
-  - [Create an account](https://pushover.net/signup) or [Sign In](https://pushover.net/login) to **[Pushover](https://pushover.net)**.
-  - Make note of **Your User Key**, located at the top-right corner of the Pushover Dashboard after logging in.
-  - In order to receive notifications, you will need to **[Add a Phone, Tablet, or Desktop](https://pushover.net/clients)** to your account.
-  - From the Pushover Dashboard, scroll to the bottom and select **[Create an Application/API Token](https://pushover.net/apps/build)**.
-  - Give your application a **Name**, and optionally a **Description**, **URL**, and/or **Icon**.
-  - Check the box to agree to the **Terms and Conditions**, and click **Create Application**.
-  - Make note of the **API Token/Key**, located at the top of the page after creating the Application.
-</details>
+3. Run setup script:
+   ```bash
+   ./archiver.sh setup
+   ```
 
-<details>
-  <summary><h3>Installation</h3></summary>
+4. Follow prompts to:
+   - Install dependencies (expect, openssh-client, openssl, wget, cron)
+   - Download Duplicacy binary
+   - Generate RSA encryption keys
+   - Generate SSH keys (for SFTP backends)
+   - Configure directories to backup
+   - Configure storage targets
+   - Set up notifications (optional)
+   - Schedule via cron (optional)
 
-  #### Git Installation
+5. **IMPORTANT**: Back up your bundle file
+   ```bash
+   archiver bundle export
+   ```
+   Save the generated `bundle/bundle.tar.enc` file and remember the password. You need this to restore configuration or migrate to Docker.
 
-  - Check if git is already installed
-  ```bash
-  git --version
-  ```
+### Basic Usage
 
-  - Install git if not installed
-  ```bash
-  sudo apt update
-  ```
-  ```bash
-  sudo apt install git -y
-  ```
+- **Start backup**: `archiver start`
+- **View logs**: `archiver logs`
+- **Check status**: `archiver status`
+- **Stop backup**: `archiver stop`
+- **Create bundle**: `archiver bundle export`
+- **Import bundle**: `archiver bundle import`
+- **Restore data**: `archiver restore`
 
-  #### Archiver Script Installation
+---
 
-  - ##### Navigate to the desired parent directory for the project.
-    - For example, if installing in home dir:
-    ```bash
-    cd ~
-    ```
+## Docker Installation
 
-  - ##### Clone the GitHub repository
-  ```bash
-  git clone https://github.com/SisyphusMD/archiver.git
-  ```
+Run Archiver in a container on any platform.
 
-  - ##### Run the setup script
-  ```bash
-  ./archiver.sh setup
-  ```
+### Prerequisites
 
-  - ##### Follow the instructions in the automated setup script to:
-    - Install required package dependencies for the setup script.
-      - If any missing dependencies are found, you will be prompted to allow their installation.
-    - Download the appropriate Duplicacy binary for your system.
-      - If the Duplicacy binary cannot be found, you will be prompted to allow its installation.
-    - Generate the required RSA keypair for Duplicacy storage encryption.
-      - If RSA key files are not found, you will be prompted to generate them.
-      - See [here](https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662) for manual generation details.
-    - Generate SSH key files required for SFTP storage backends.
-      - If SSH key files are not found, you will be prompted to generate them.
-      - To generate manually, run this from the archiver directory:
-        ```bash
-        mkdir -p keys && ssh-keygen -t ed25519 -f keys/id_ed25519" -N "" -C "archiver"
-        ```
-        - Do **NOT** provide a passphrase when prompted.
-    - Build your configuration file.
-      - If your configuration file is not found, you will be prompted to build it.
-      - An example configuration file is provided in the examples directory, if you prefer to configure manually.
-    - Schedule Archiver to run automatically via cron.
-      - See this [Cronitor Guide](https://cronitor.io/guides/cron-jobs) for details on scheduling via cron.
+- Docker or Docker Compose installed
 
-  - ##### Optionally, prepare custom service-backup-settings.sh and restore-service.sh files for any of your services and place in their respective service directories. Examples of these files can be found in the examples directory.
+### Step 1: Generate Bundle File
 
-  - ##### ***IMPORTANT:*** You **MUST** keep backups of your keys directory and all its contents, as well as your config.sh file. These will be needed to restore backups. If you can't restore your backups, why make them in the first place?
-    - Don't attempt to just back up your keys and config file using this script. If you did that, and you lost them, you may not be able to get them back, given you don't have them anymore to access their backups.
-</details>
+Run setup interactively in a container to generate your configuration bundle:
+
+```bash
+docker run -it --rm \
+  -v ./archiver-bundle:/opt/archiver/bundle \
+  ghcr.io/sisyphusmd/archiver:0.5.0 setup
+```
+
+This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
+
+### Step 2: Configure Docker Compose
+
+Create `compose.yaml`:
+
+```yaml
+services:
+  archiver:
+    image: ghcr.io/sisyphusmd/archiver:0.5.0
+    container_name: archiver
+    restart: unless-stopped
+    hostname: backup-server
+
+    environment:
+      BUNDLE_PASSWORD: "your-bundle-password-here"
+      CRON_SCHEDULE: "0 3 * * *"  # Daily at 3am, or omit for manual mode
+
+    volumes:
+      # Encrypted config/keys bundle
+      - ./archiver-bundle/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro
+
+      # Optional: persistent logs
+      - ./archiver-logs:/opt/archiver/logs
+
+      # Required: directories to backup (must match config.sh paths)
+      - /path/to/host/services:/data/services:ro
+```
+
+Update paths and password, then start:
+
+```bash
+docker compose up -d
+docker logs -f archiver
+```
+
+### Docker Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc |
+| `CRON_SCHEDULE` | No | Cron expression for automatic backups (empty = manual mode) |
+
+### Docker Manual Commands
+
+Run backups manually when `CRON_SCHEDULE` is not set:
+
+```bash
+# Start backup
+docker exec archiver archiver start
+
+# View status
+docker exec archiver archiver status
+
+# Stop backup
+docker exec archiver archiver stop
+
+# Restore data
+docker exec -it archiver archiver restore
+```
+
+### Image Tags
+
+- `0.5.0` - Specific version (recommended)
+- `0.5` - Minor version (receives patches automatically)
+- `0` - Major version (receives minor/patch updates)
+
+---
+
+## Storage Backend Setup
+
+Prepare at least one storage location before running setup.
+
+### SFTP - Synology NAS
 
 <details>
-  <summary><h3>Restoring</h3></summary>
+  <summary>Click to expand Synology setup instructions</summary>
 
-  #### Restoring Archiver
+#### Enable SFTP
 
-  - Navigate to the desired parent directory for the project, and clone the GitHub repository as noted in the **Installation** steps.
-  ```bash
-  cd ~
-  ```
-  ```bash
-  git clone https://github.com/SisyphusMD/archiver.git
-  ```
-  - If you have a prior export file 'export-YYYYMMDD-HHMMSS.tar.enc', place it in the archiver repo directory before running the setup script. Otherwise, do the following:
+1. Login to Synology DSM Web UI (usually `http://<nas-ip>:5000`)
+2. Open **Control Panel** → **File Services** → **FTP** tab
+3. Enable **SFTP service** (not FTP/FTPS)
+4. Default port **22** is fine
+5. Click **Apply**
 
-    - Copy your prior keys directory (including your SSH and RSA key files) into the archiver directory. This should include **id_ed25519**, **id_ed25519.pub**, **private.pem**, and **public.pem**.
+#### Create User
 
-    - Copy your prior **config.sh** into the project directory.
+1. **Control Panel** → **User & Group** → **Create**
+2. Set **Name** and **Password**
+3. Assign to appropriate **Groups**
+4. Grant shared folder permissions
+5. Under **Application Permissions**, allow **SFTP**
+6. Complete and click **Done**
 
-  - Run the setup script to install dependencies and the Duplicacy binary, and restore cron scheduling, but otherwise you can skip the portions that create new SSH keys, RSA keys, and config file.
-  ```bash
-  ./archiver.sh setup
-  ```
-  - If needed, a password protected backup of your new config file and keys will be placed in an 'exports' directory. You MUST save a backup of this export file separately, and remember the password created.
+#### Create Shared Folder
 
-  #### Restoring Services
+1. **Control Panel** → **Shared Folder** → **Create**
+2. Name the folder and configure settings
+3. Don't enable **WriteOnce** (incompatible with backups)
+4. If using BTRFS, enable **data checksum**
+5. Grant **Read/Write** access to backup user
 
-  - Run the restore script once for each service you need to restore.
-  ```bash
-  archiver restore
-  ```
+#### Add SSH Key
+
+Generate SSH key first (setup script can do this), then:
+
+1. **Control Panel** → **User & Group** → **Advanced**
+2. Enable **user home service**
+3. Open **File Station** → **homes** folder → your user folder
+4. Create `.ssh` folder if it doesn't exist
+5. Upload or create `authorized_keys` file containing your public key (`ssh-ed25519 AAAA...`)
+
 </details>
+
+### B2 - BackBlaze
 
 <details>
-  <summary><h3>Usage</h3></summary>
+  <summary>Click to expand BackBlaze B2 setup instructions</summary>
 
-  - If you completed the cron setup step while installing, Archiver will run automatically following the schedule you set.
-    - Depending on the size of your directories and your network speeds, the first run may take a long time.
-    - Archiver utilizes a LOCKFILE mechanism to ensure that multiple instances do not run concurrently.
+#### Account Setup
 
-  - To manually start a backup, run the following:
-    ```bash
-    archiver start
-    ```
-  - To watch the logs of the actively running Archiver backup:
-    ```bash
-    archiver logs
-    ```
-  - To check on the Archiver backup status:
-    ```bash
-    archiver status
-    ```
-  - To stop/cancel an actively running Archiver backup, run the following from your archiver directory:
-    ```bash
-    archiver stop
-    ```
-  - To export a password-protected backup of your config.sh and key files:
-    ```bash
-    archiver export
-    ```
-  - To import a previously created export file, place the export file in the archiver repo directory and run:
-    ```bash
-    archiver import
-    ```
+1. [Create account](https://www.backblaze.com/sign-up/cloud-storage) or [sign in](https://secure.backblaze.com/user_signin.htm)
+2. **My Settings** → Enable **B2 Cloud Storage**
+
+#### Create Bucket
+
+1. **Buckets** → **Create a Bucket**
+2. Choose unique **Bucket Name**
+3. Files: **Private**
+4. Encryption: **Enable**
+5. Object Lock: **Disable**
+6. Lifecycle: **Keep all versions** (default)
+
+#### Application Key
+
+1. **Application Keys** → **Add New**
+2. Name the key
+3. Allow access to your bucket
+4. Type: **Read and Write**
+5. Enable **List All Bucket Names**
+6. Click **Create New Key**
+7. Save the **keyID** and **applicationKey** (shown only once)
+
 </details>
+
+### S3-Compatible Storage
 
 <details>
-  <summary><h3>Available Arguments</h3></summary>
+  <summary>Click to expand S3 setup instructions</summary>
 
-  - The 'archiver' command will accept the following arguments:
-    - start
-    - stop
-    - restart
-    - pause
-    - resume
-    - logs
-    - status
-    - help
-    - export (creates a password protected backup of your config file and keys)
-    - import (imports data from prior export backup of config file and keys)
-    - setup (although the first run will require './archiver.sh setup')
-    - uninstall (coming soon)
-  
-  - The 'start', 'restart', and 'resume' arguments can be combined with 'logs'.
+S3 providers vary, but you'll need:
 
-  - The 'start' and 'restart' arguments can also be combined with:
-    - 'prune' to override your configuration setup and rotate your backups during one run only
-    - 'retain' to override your configuration setup and do **NOT** rotate your backups during one run only
+- **Bucket Name** (globally unique)
+- **Endpoint** (e.g., `s3.amazonaws.com` or `s3.us-east-1.wasabisys.com`)
+- **Region** (optional, provider-specific, e.g., `us-east-1`)
+- **Access Key ID** (with read/write permissions)
+- **Secret Access Key**
+
+Create these through your S3 provider's console (AWS, Wasabi, Backblaze S3 API, etc.)
 
 </details>
+
+### Notifications (Optional)
+
+<details>
+  <summary>Click to expand Pushover setup instructions</summary>
+
+#### Pushover Setup
+
+1. [Create account](https://pushover.net/signup) or [sign in](https://pushover.net/login)
+2. Note your **User Key** from the dashboard
+3. [Add a device](https://pushover.net/clients) to receive notifications
+4. [Create an Application/API Token](https://pushover.net/apps/build)
+5. Name your app and agree to terms
+6. Save the **API Token/Key**
+
+You'll enter the **User Key** and **API Token** during setup.
+
+</details>
+
+---
+
+## Restoration
+
+### Restoring Archiver Configuration
+
+If you need to set up Archiver on a new machine:
+
+1. Clone repository:
+   ```bash
+   cd ~
+   git clone --branch v0.5.0 https://github.com/SisyphusMD/archiver.git
+   cd archiver
+   ```
+
+2. Place your `bundle.tar.enc` file in the archiver directory
+
+3. Run setup:
+   ```bash
+   ./archiver.sh setup
+   ```
+   The setup script will detect and import your bundle file.
+
+### Restoring Backed Up Data
+
+To restore files from a backup:
+
+```bash
+archiver restore
+```
+
+Follow the interactive prompts to:
+1. Select storage backend
+2. Choose snapshot ID
+3. Specify local directory for restoration
+4. Select revision to restore
+
+If a `restore-service.sh` script exists in the restored directory, you'll be prompted to run it.
+
+---
+
+## Configuration
+
+The `config.sh` file defines what to backup and where:
+
+### Service Directories
+
+Directories to backup. Use `*` for subdirectories:
+
+```bash
+SERVICE_DIRECTORIES=(
+  "/srv/*/"          # Each subdirectory as separate repository
+  "/home/user/data/" # Single repository
+)
+```
+
+### Storage Targets
+
+Define multiple storage locations (SFTP, B2, S3):
+
+```bash
+# Primary storage (required)
+STORAGE_TARGET_1_NAME="backblaze"
+STORAGE_TARGET_1_TYPE="b2"
+STORAGE_TARGET_1_B2_BUCKETNAME="my-bucket"
+STORAGE_TARGET_1_B2_ID="keyID"
+STORAGE_TARGET_1_B2_KEY="applicationKey"
+
+# Secondary storage (optional)
+STORAGE_TARGET_2_NAME="nas"
+STORAGE_TARGET_2_TYPE="sftp"
+STORAGE_TARGET_2_SFTP_URL="192.168.1.100"
+STORAGE_TARGET_2_SFTP_PORT="22"
+STORAGE_TARGET_2_SFTP_USER="backup"
+STORAGE_TARGET_2_SFTP_PATH="/volume1/backups"
+STORAGE_TARGET_2_SFTP_KEY_FILE="/path/to/keys/id_ed25519"
+```
+
+### Secrets
+
+```bash
+STORAGE_PASSWORD="encryption-password-for-duplicacy-storage"
+RSA_PASSPHRASE="passphrase-for-rsa-private-key"
+```
+
+### Backup Rotation
+
+```bash
+ROTATE_BACKUPS="true"
+PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
+```
+
+This keeps:
+- All backups from last 1 day (1:1)
+- Daily backups for 7 days (7:7)
+- Weekly backups for 30 days (30:30)
+- Monthly backups for 180 days (0:180)
+
+---
+
+## Advanced Usage
+
+### Custom Service Scripts
+
+Create `service-backup-settings.sh` in any service directory:
+
+```bash
+#!/bin/bash
+
+# Custom file filters
+DUPLICACY_FILTERS_PATTERNS=(
+  "+*.txt"
+  "-*.tmp"
+  "+*"
+)
+
+# Run before backup
+service_specific_pre_backup_function() {
+  echo "Stopping service..."
+  systemctl stop myservice
+}
+
+# Run after backup
+service_specific_post_backup_function() {
+  echo "Starting service..."
+  systemctl start myservice
+}
+```
+
+### Custom Restore Scripts
+
+Create `restore-service.sh` in any service directory:
+
+```bash
+#!/bin/bash
+# Runs after restoration completes
+
+echo "Restoring database..."
+mysql -u root < backup.sql
+
+echo "Setting permissions..."
+chown -R www-data:www-data /var/www
+
+echo "Starting service..."
+systemctl start myservice
+```
+
+### Cron Scheduling
+
+During setup or manually:
+
+```bash
+# Daily at 3am
+(crontab -l 2>/dev/null; echo "0 3 * * * archiver start") | crontab -
+
+# Every 6 hours
+(crontab -l 2>/dev/null; echo "0 */6 * * * archiver start") | crontab -
+
+# Weekly on Sunday at 2am
+(crontab -l 2>/dev/null; echo "0 2 * * 0 archiver start") | crontab -
+```
+
+### Command Reference
+
+```bash
+archiver start          # Run backup now
+archiver start logs     # Run backup and follow logs
+archiver start prune    # Run backup and force prune (ignore config)
+archiver start retain   # Run backup without pruning (ignore config)
+archiver stop           # Stop running backup
+archiver restart        # Stop then start backup
+archiver pause          # Pause backup (experimental)
+archiver resume         # Resume paused backup (experimental)
+archiver logs           # Follow backup logs
+archiver status         # Check if backup is running
+archiver bundle export  # Create encrypted config/keys bundle
+archiver bundle import  # Import from encrypted bundle
+archiver restore        # Restore data from backup
+archiver healthcheck    # Check system health
+archiver setup          # Run initial setup
+archiver help           # Show help
+```
+

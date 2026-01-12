@@ -412,6 +412,9 @@ duplicacy_copy_backup() {
       storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
       storage_name="${!storage_name_var}"
 
+      # Set SERVICE to storage name for logging context
+      SERVICE="${storage_name}"
+
       # Run the Duplicacy copy backup
       log_message "INFO" "Running Duplicacy copy backup to '${storage_name}' storage."
 
@@ -425,6 +428,7 @@ duplicacy_copy_backup() {
         log_message "INFO" "The Duplicacy copy backup to '${storage_name}' storage completed successfully."
       fi
 
+      # duplicacy_wrap_up will set and unset SERVICE for its operations
       duplicacy_wrap_up "${storage_name}"
     done
   fi
@@ -435,6 +439,9 @@ duplicacy_wrap_up() {
   local storage_name
 
   storage_name="${1}"
+
+  # Set SERVICE to storage name for logging context
+  SERVICE="${storage_name}"
 
   # Full Check the Duplicacy storage
   "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
@@ -459,4 +466,7 @@ duplicacy_wrap_up() {
       log_message "INFO" "Duplicacy storage '${storage_name}' prune completed successfully."
     fi
   fi
+
+  # Unset SERVICE after wrap-up operations complete
+  unset SERVICE
 }
