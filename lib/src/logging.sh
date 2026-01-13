@@ -52,7 +52,9 @@ rotate_logs() {
   log_message "INFO" "Created log file '${new_log_file}'."
 
   # Update or create the symlink to point to the new log file
-  ln -sf "${new_log_file}" "${LOG_DIR}/archiver.log" || \
+  # Use relative path so symlink works both inside container and on host when volume is mounted
+  local relative_log_path="$(basename "${OLD_LOG_DIR}")/$(basename "${new_log_file}")"
+  ln -sf "${relative_log_path}" "${LOG_DIR}/archiver.log" || \
     handle_error "Could not update/create symlink for 'archiver.log' to '${new_log_file}'."
   log_message "INFO" "Updated/created symlink for 'archiver.log' to '${new_log_file}'."
 

@@ -53,6 +53,10 @@ Normal operation with existing bundle file:
 - `/opt/archiver/logs` (optional) - Persistent logs directory
 - User-defined service directories (required) - Must match paths in config.sh
 
+## Docker Usage
+
+For comprehensive Docker usage instructions including manual commands, backup operations, log viewing, and restore procedures, see the **Docker Manual Commands** section in the [README.md](README.md#docker-manual-commands).
+
 ## GitHub Container Registry Setup
 
 To publish images to GHCR, follow these steps:

@@ -67,6 +67,8 @@ OUTPUT_ENC="${OUTPUT_TAR}.enc"
 
 # If bundle.tar.enc already exists, move it to bundle.tar.enc.old
 if [ -f "${OUTPUT_ENC}" ]; then
+  # Remove any existing .old file first
+  [ -f "${OUTPUT_ENC}.old" ] && rm -f "${OUTPUT_ENC}.old"
   mv "${OUTPUT_ENC}" "${OUTPUT_ENC}.old"
   echo "Existing bundle backed up as bundle.tar.enc.old"
 fi
@@ -87,3 +89,15 @@ chmod -R 600 "${BUNDLE_DIR}"/*
 
 echo "Config and keys have been bundled as '${OUTPUT_ENC}'."
 echo "Please keep a copy of this bundle file in a safe location."
+echo
+
+# Display SSH public key if it exists (useful for adding to SFTP servers)
+SSH_PUB_KEY="${ARCHIVER_DIR}/keys/id_ed25519.pub"
+if [ -f "${SSH_PUB_KEY}" ]; then
+  echo "=========================================="
+  echo "SSH Public Key (for SFTP server access):"
+  echo "=========================================="
+  cat "${SSH_PUB_KEY}"
+  echo
+  echo "Copy this key to your SFTP server's authorized_keys file if using SFTP storage."
+fi

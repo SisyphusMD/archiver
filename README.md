@@ -160,21 +160,132 @@ docker logs -f archiver
 
 ### Docker Manual Commands
 
-Run backups manually when `CRON_SCHEDULE` is not set:
+#### Automated vs Manual Operation
+
+The container can run in two modes:
+
+1. **Automated mode** (with `CRON_SCHEDULE` set): Backups run automatically on schedule
+2. **Manual mode** (without `CRON_SCHEDULE` or set to empty string): Container stays idle, waiting for manual commands
+
+#### Viewing Logs
+
+The **recommended method** to view logs is via Docker's native logging:
 
 ```bash
-# Start backup
-docker exec archiver archiver start
+# View live container logs (recommended)
+docker logs -f archiver
 
-# View status
+# View recent logs
+docker logs --tail 100 archiver
+
+# View logs since a specific time
+docker logs --since 1h archiver
+```
+
+Alternatively, view logs from within the container or from mounted volumes:
+
+```bash
+# Use archiver's built-in log viewer
+docker exec -it archiver archiver logs
+
+# Or tail log files directly
+docker exec archiver tail -f /opt/archiver/logs/archiver.log
+
+# From mounted volume on host (if logs volume is mounted)
+tail -f /path/to/host/logs/archiver.log
+```
+
+#### Checking Status Before Manual Operations
+
+**Best practice**: Check if a backup is already running before starting manual commands:
+
+```bash
+# Check current status (recommended first step)
 docker exec archiver archiver status
 
-# Stop backup
+# Check system health
+docker exec archiver archiver healthcheck
+```
+
+#### Running Manual Backups
+
+**Note**: Manual backups are only needed if `CRON_SCHEDULE` is not set. With automated mode, backups run on schedule.
+
+```bash
+# Start a backup immediately
+docker exec archiver archiver start
+
+# Start a backup and view logs
+docker exec -it archiver archiver start logs
+
+# Force pruning/rotation on next backup
+docker exec archiver archiver start prune
+
+# Skip pruning/rotation on next backup
+docker exec archiver archiver start retain
+```
+
+#### Managing Running Backups
+
+```bash
+# Pause a running backup
+docker exec archiver archiver pause
+
+# Resume a paused backup
+docker exec archiver archiver resume
+
+# Stop a running backup
 docker exec archiver archiver stop
 
-# Restore data
+# Restart a backup
+docker exec archiver archiver restart
+```
+
+#### Bundle Management
+
+```bash
+# Export bundle (create new bundle from current config)
+docker exec -it archiver archiver bundle export
+
+# Import bundle (typically done automatically at startup)
+docker exec -it archiver archiver bundle import
+```
+
+#### Restoring Data
+
+##### Interactive Restore with Existing Container
+
+**Before restoring**, ensure you have a volume mount for the restore destination directory. The restore script will interactively prompt you for:
+- Which storage target to restore from
+- Snapshot ID to restore
+- Local directory path (where to restore the files)
+- Which revision to restore
+
+```bash
+# Check status first (ensure no backup is running)
+docker exec archiver archiver status
+
+# Run interactive restore
 docker exec -it archiver archiver restore
 ```
+
+The restore destination can be any path accessible within the container. If you need to restore to a new location not currently mounted, add a volume mount and restart the container first.
+
+##### One-Off Restore with Temporary Container
+
+For a one-time restore without modifying your running container, use a temporary container:
+
+```bash
+# One-off restore (container exits after completion)
+docker run --rm -it \
+  -e BUNDLE_PASSWORD="your-bundle-password-here" \
+  -v /path/to/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro \
+  -v /path/to/restore/destination:/mnt/restore \
+  ghcr.io/sisyphusmd/archiver:0.5.0 \
+  archiver restore
+```
+
+When prompted for the local directory path during restore, enter the container path (e.g., `/mnt/restore`). The restored files will appear on your host at `/path/to/restore/destination`.
 
 ### Image Tags
 
