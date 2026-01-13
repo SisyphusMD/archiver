@@ -43,6 +43,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             # Tag with semantic version on tag push (e.g., v0.5.0 -> 0.5.0, 0.5, 0)
             type=semver,pattern={{version}}
