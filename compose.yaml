@@ -16,9 +16,14 @@ services:
       #   "0 2 * * 0"     - Weekly on Sunday at 2am
       CRON_SCHEDULE: "0 3 * * *"
 
+      # OPTIONAL: Timezone for cron scheduling
+      # Examples: "America/New_York", "Europe/London", "Asia/Tokyo"
+      # Default: UTC
+      TZ: "UTC"
+
     volumes:
-      # REQUIRED: Mount your encrypted bundle file (read-only)
-      - /path/to/your/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro
+      # REQUIRED: Mount your encrypted bundle file
+      - /path/to/your/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc
 
       # OPTIONAL: Mount logs directory for persistence
       - /path/to/logs:/opt/archiver/logs
@@ -27,19 +32,10 @@ services:
       # These paths must match what's configured in your config.sh file
       # Example: If config.sh has SERVICE_DIRECTORIES=("/data/services")
       # then you need to mount your host directory to /data/services in the container
-      - /path/to/host/services:/data/services:ro
+      - /path/to/host/services:/data/services
 
       # Add more service directories as needed based on your config.sh
-      # - /path/to/other/data:/other/data:ro
+      # - /path/to/other/data:/other/data
 
     # Optional: Set container hostname (used in backup snapshot IDs)
     hostname: backup-server
-
-    # Optional: Add network configuration if backing up to network storage
-    # networks:
-    #   - backup_network
-
-# Optional: Define networks
-# networks:
-#   backup_network:
-#     driver: bridge

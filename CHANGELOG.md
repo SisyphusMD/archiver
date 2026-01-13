@@ -42,6 +42,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Platform detection provides helpful Docker guidance for non-Linux systems
 - Cron instructions now show correct commands for user crontab
 
+### Migration Notes
+
+#### Migrating from v0.4.x to v0.5.0 (Bundle Terminology)
+
+The export/import functionality has been renamed to use "bundle" terminology:
+
+1. **Export file location changed**: `exports/` directory is now `bundle/`
+2. **Commands renamed**:
+   - `archiver export` → `archiver bundle export`
+   - `archiver import` → `archiver bundle import`
+3. **Bundle file naming**: Files are now always named `bundle.tar.enc` (previous versions saved as `.old`, no timestamps)
+4. **Environment variable**: For Docker, `EXPORT_PASSWORD` is now `BUNDLE_PASSWORD`
+
+**Action Required for existing export files**:
+- Rename your `exports/` directory to `bundle/`
+- Rename your export file to `bundle.tar.enc`
+- Use the new `archiver bundle export` and `archiver bundle import` commands going forward
+
+#### Migrating from Traditional Installation to Docker
+
+Docker installation is now the recommended deployment method. Traditional installation will be **deprecated in v0.7.0**.
+
+**Steps to migrate**:
+
+1. **Export your configuration** (from your current traditional install):
+   ```bash
+   archiver bundle export
+   ```
+   This creates `bundle/bundle.tar.enc` with your config and keys encrypted.
+
+2. **Save your bundle password**: Remember the password you used to encrypt the bundle - you'll need it for Docker.
+
+3. **Set up Docker Compose**:
+   ```yaml
+   services:
+     archiver:
+       container_name: archiver
+       image: ghcr.io/sisyphusmd/archiver:0.5.0
+       restart: unless-stopped
+       environment:
+         TZ: "UTC" # Examples: "America/New_York", "Europe/London", "Asia/Tokyo"
+         BUNDLE_PASSWORD: "your-bundle-password-here"
+         CRON_SCHEDULE: "0 3 * * *"  # Optional - backup will wait for manual invocation if not set
+       volumes:
+         - /path/to/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc
+         - /path/to/logs:/opt/archiver/logs # Optional - for log persistence
+         - /path/to/service_directories:/path/to/service_directories # Container path must match SERVICE_DIRECTORIES in your config.sh
+       hostname: backup-server # Optional - used in backup snapshot IDs
+   ```
+
+4. **Important**: Volume paths inside the container must match the `SERVICE_DIRECTORIES` paths in your `config.sh`. If your config has `/home/user/data`, mount it to the same path: `-/home/user/data:/home/user/data`
+
+5. **Start the container**:
+   ```bash
+   docker compose up -d
+   ```
+
+6. **Verify**: Check logs with `docker logs -f archiver`
+
+**Note**: You can run both traditional and Docker installations side-by-side during migration for testing.
+
 ## [0.4.1] - 2025-06-07
 ### Fixed
 - Added missing restore function for S3 storage backend.
