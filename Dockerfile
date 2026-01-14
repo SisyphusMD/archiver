@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set versions
-ENV DUPLICACY_VERSION=3.2.3
+ENV DUPLICACY_VERSION=3.2.5
 ENV DOCKER_CLI_VERSION=5:29.1.4-1
 
 # Install Docker CLI

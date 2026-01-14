@@ -21,7 +21,7 @@
 #   ensuring that each service can be backed up according to its specific requirements. #
 #                                                                                       #
 # Available Tools in Archiver Container:                                                #
-# - Archiver: duplicacy (v3.2.3), archiver                                              #
+# - Archiver: duplicacy (v3.2.5), archiver                                              #
 # - Docker: docker (CLI v29.1.4)                                                        #
 # - Database: sqlite3                                                                   #
 # - Network: curl, wget, ssh, openssh-client                                            #
