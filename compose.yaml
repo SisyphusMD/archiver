@@ -1,6 +1,6 @@
 services:
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:0.6.0
+    image: ghcr.io/sisyphusmd/archiver:0.6.1
     container_name: archiver
     restart: unless-stopped
 
@@ -36,6 +36,11 @@ services:
 
       # Add more service directories as needed based on your config.sh
       # - /path/to/other/data:/other/data
+
+      # OPTIONAL: Docker socket (only if service scripts need to control other containers)
+      # Security Warning: Grants container root-level access to Docker daemon
+      # Only enable if your backup scripts need to run docker exec, docker compose, etc.
+      # - /var/run/docker.sock:/var/run/docker.sock
 
     # Optional: Set container hostname (used in backup snapshot IDs)
     hostname: backup-server

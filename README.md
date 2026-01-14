@@ -20,7 +20,7 @@ Run interactive setup in a container to generate your bundle file:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.6.0 setup
+  ghcr.io/sisyphusmd/archiver:0.6.1 setup
 ```
 Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker Installation](#docker-installation) for details.
 
@@ -60,7 +60,7 @@ For direct installation on Linux systems.
 
 2. Clone repository:
    ```bash
-   git clone --branch v0.6.0 https://github.com/SisyphusMD/archiver.git
+   git clone --branch v0.6.1 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 
@@ -112,7 +112,7 @@ Run setup interactively in a container to generate your configuration bundle:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.6.0 setup
+  ghcr.io/sisyphusmd/archiver:0.6.1 setup
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
@@ -124,7 +124,7 @@ Create `compose.yaml`:
 ```yaml
 services:
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:0.6.0
+    image: ghcr.io/sisyphusmd/archiver:0.6.1
     container_name: archiver
     restart: unless-stopped
     hostname: backup-server
@@ -142,6 +142,10 @@ services:
 
       # Required: directories to backup (must match config.sh paths)
       - /path/to/host/services:/data/services:ro
+
+      # Optional: Docker socket (required if service scripts need to control other containers)
+      # Security note: Grants container access to Docker daemon - use only if needed
+      # - /var/run/docker.sock:/var/run/docker.sock
 ```
 
 Update paths and password, then start:
@@ -150,6 +154,32 @@ Update paths and password, then start:
 docker compose up -d
 docker logs -f archiver
 ```
+
+### Docker Socket Access (Advanced)
+
+If your service-specific backup scripts need to control other Docker containers (e.g., putting a database in maintenance mode, creating database dumps via `docker exec`), you must mount the Docker socket:
+
+```yaml
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock
+```
+
+**Security Warning**: Mounting the Docker socket grants the archiver container root-level access to the Docker daemon. This means the container can:
+- Start, stop, or delete any container on the host
+- Access data from any container
+- Potentially compromise the host system
+
+**Only mount the Docker socket if:**
+- Your backup scripts genuinely need to control other containers
+- You trust the archiver code and your service-specific backup scripts
+- You understand and accept the security implications
+
+**Examples of when you need it:**
+- Running `docker exec` to create database dumps before backup
+- Putting services in maintenance mode during backups
+- Stopping/starting containers as part of the backup process
+
+**Alternative**: If possible, design your backup strategy to avoid needing Docker socket access (e.g., use volume mounts to access data directly, use database backup tools inside the archiver container).
 
 ### Docker Environment Variables
 
@@ -281,7 +311,7 @@ docker run --rm -it \
   -e BUNDLE_PASSWORD="your-bundle-password-here" \
   -v /path/to/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.6.0 \
+  ghcr.io/sisyphusmd/archiver:0.6.1 \
   archiver restore
 ```
 
@@ -453,7 +483,7 @@ If you need to set up Archiver on a new machine:
 1. Clone repository:
    ```bash
    cd ~
-   git clone --branch v0.6.0 https://github.com/SisyphusMD/archiver.git
+   git clone --branch v0.6.1 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-01-13
+
+### Added
+- **Docker CLI Support**: Docker CLI now included in container image
+  - Enables service-specific backup scripts to control other Docker containers
+  - Version-locked to Docker CLI 29.1.4-1 for reproducible builds
+  - Required for backup scripts that need to exec commands in other containers or manage container state
+
+### Documentation
+- Added requirement to mount Docker socket (`/var/run/docker.sock`) for service scripts that need Docker access
+- Added security warning about Docker socket access implications
+
 ## [0.6.0] - 2026-01-13
 
 ### Added

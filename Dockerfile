@@ -1,7 +1,7 @@
 # Multi-architecture Dockerfile for Archiver
 # Supports: linux/amd64, linux/arm64
 
-FROM debian:bookworm-slim
+FROM debian:trixie-20260112-slim
 
 # Set build argument for target architecture
 ARG TARGETARCH
@@ -15,10 +15,22 @@ RUN apt-get update && apt-get install -y \
     cron \
     curl \
     ca-certificates \
+    gnupg \
+    lsb-release \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Duplicacy version
+# Set versions
 ENV DUPLICACY_VERSION=3.2.3
+ENV DOCKER_CLI_VERSION=5:29.1.4-1
+
+# Install Docker CLI
+RUN install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    chmod a+r /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y docker-ce-cli=${DOCKER_CLI_VERSION}~debian.13~trixie && \
+    rm -rf /var/lib/apt/lists/*
 
 # Download and install Duplicacy based on architecture
 RUN ARCH_SUFFIX="" && \
