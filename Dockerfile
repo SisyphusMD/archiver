@@ -19,6 +19,9 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     sqlite3 \
     procps \
+    nano \
+    vim \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # Set versions

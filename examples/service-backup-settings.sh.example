@@ -24,9 +24,10 @@
 # - Archiver: duplicacy (v3.2.5), archiver                                              #
 # - Docker: docker (CLI v29.1.4)                                                        #
 # - Database: sqlite3                                                                   #
-# - Network: curl, wget, ssh, openssh-client                                            #
+# - Network: curl, wget, ssh, openssh-client, ping                                      #
 # - Security: openssl, gpg                                                              #
-# - Utilities: expect, cron                                                             #
+# - Editors: nano, vim                                                                  #
+# - Utilities: expect, cron, procps (ps, pkill, pgrep)                                  #
 # - Shell: bash, standard POSIX utilities (find, grep, awk, sed, etc.)                  #
 #                                                                                       #
 # Note: To use docker commands, you must mount the Docker socket in compose.yaml:       #

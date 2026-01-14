@@ -20,7 +20,7 @@ Run interactive setup in a container to generate your bundle file:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.6.4 setup
+  ghcr.io/sisyphusmd/archiver:0.6.5 setup
 ```
 Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker Installation](#docker-installation) for details.
 
@@ -60,7 +60,7 @@ For direct installation on Linux systems.
 
 2. Clone repository:
    ```bash
-   git clone --branch v0.6.4 https://github.com/SisyphusMD/archiver.git
+   git clone --branch v0.6.5 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 
@@ -112,7 +112,7 @@ Run setup interactively in a container to generate your configuration bundle:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.6.4 setup
+  ghcr.io/sisyphusmd/archiver:0.6.5 setup
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
@@ -124,7 +124,7 @@ Create `compose.yaml`:
 ```yaml
 services:
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:0.6.4
+    image: ghcr.io/sisyphusmd/archiver:0.6.5
     container_name: archiver
     restart: unless-stopped
     hostname: backup-server
@@ -152,7 +152,7 @@ Update paths and password, then start:
 
 ```bash
 docker compose up -d
-docker logs -f archiver
+docker exec -it archiver archiver logs
 ```
 
 ### Docker Socket Access (Advanced)
@@ -199,26 +199,20 @@ The container can run in two modes:
 
 #### Viewing Logs
 
-The **recommended method** to view logs is via Docker's native logging:
+The **recommended method** to view logs is using the built-in archiver command:
 
 ```bash
-# View live container logs (recommended)
-docker logs -f archiver
-
-# View recent logs
-docker logs --tail 100 archiver
-
-# View logs since a specific time
-docker logs --since 1h archiver
+# View logs with built-in viewer (recommended)
+docker exec -it archiver archiver logs
 ```
 
-Alternatively, view logs from within the container or from mounted volumes:
+Alternative methods:
 
 ```bash
-# Use archiver's built-in log viewer
-docker exec -it archiver archiver logs
+# View live logs from Docker (shows only new logs from when command starts)
+docker logs -f archiver
 
-# Or tail log files directly
+# Tail log files directly
 docker exec archiver tail -f /opt/archiver/logs/archiver.log
 
 # From mounted volume on host (if logs volume is mounted)
@@ -311,7 +305,7 @@ docker run --rm -it \
   -e BUNDLE_PASSWORD="your-bundle-password-here" \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.6.4 \
+  ghcr.io/sisyphusmd/archiver:0.6.5 \
   archiver restore
 ```
 
@@ -483,7 +477,7 @@ If you need to set up Archiver on a new machine:
 1. Clone repository:
    ```bash
    cd ~
-   git clone --branch v0.6.4 https://github.com/SisyphusMD/archiver.git
+   git clone --branch v0.6.5 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 
