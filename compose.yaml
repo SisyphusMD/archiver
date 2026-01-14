@@ -1,6 +1,6 @@
 services:
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:0.5.1
+    image: ghcr.io/sisyphusmd/archiver:0.6.0
     container_name: archiver
     restart: unless-stopped
 

@@ -8,6 +8,19 @@ BUNDLE_FILE="/opt/archiver/bundle/bundle.tar.enc"
 BUNDLE_OUTPUT_DIR="/opt/archiver/bundle"
 LOG_FILE="/opt/archiver/logs/archiver.log"
 
+# Signal handler for graceful shutdown
+handle_shutdown() {
+  echo "Received shutdown signal, attempting graceful stop..."
+
+  # Stop any running backup (handles all cases gracefully)
+  /opt/archiver/archiver.sh stop 2>&1 || true
+
+  exit 0
+}
+
+# Set up signal trap for SIGTERM (sent by docker stop)
+trap 'handle_shutdown' SIGTERM
+
 echo "==================================="
 echo "Archiver Container Starting"
 echo "==================================="

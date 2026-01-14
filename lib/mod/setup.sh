@@ -500,6 +500,19 @@ create_config_file() {
         done
       }
 
+      # Function to prompt for local disk storage details
+      prompt_local_storage() {
+        local_path=""
+
+        while [ -z "${local_path}" ]; do
+          echo    # Move to a new line
+          read -rp "Local Path (Full path to local directory for backups - example: /mnt/backup/storage): " local_path
+          if [ -z "${local_path}" ]; then
+            echo " - Error: Local Path is required."
+          fi
+        done
+      }
+
       # Start writing the config file
       cat <<EOL > "${ARCHIVER_DIR}/config.sh"
 #########################################################################################
@@ -562,8 +575,11 @@ EOL
 
         while true; do
           echo    # Move to a new line
-          read -rp "Storage Type (Currently support sftp, b2, and s3): " type
-          if [[ "${type}" == "sftp" ]]; then
+          read -rp "Storage Type (Currently support local, sftp, b2, and s3): " type
+          if [[ "${type}" == "local" ]]; then
+            prompt_local_storage
+            break
+          elif [[ "${type}" == "sftp" ]]; then
             prompt_sftp_storage
             break
           elif [[ "${type}" == "b2" ]]; then
@@ -573,7 +589,7 @@ EOL
             prompt_s3_storage
             break
           else
-            echo "Unsupported storage type. Please enter either 'sftp', 'b2', or 's3'."
+            echo "Unsupported storage type. Please enter either 'local', 'sftp', 'b2', or 's3'."
           fi
         done
 
@@ -584,7 +600,12 @@ EOL
           printf 'STORAGE_TARGET_%s_TYPE="%s"\n' "${i}" "${type}"
         } >> "${ARCHIVER_DIR}/config.sh"
 
-        if [[ $type == "sftp" ]]; then
+        if [[ $type == "local" ]]; then
+          {
+            printf 'STORAGE_TARGET_%s_LOCAL_PATH="%s"\n' "${i}" "${local_path}"
+            printf '\n'
+          } >> "${ARCHIVER_DIR}/config.sh"
+        elif [[ $type == "sftp" ]]; then
           {
             printf 'STORAGE_TARGET_%s_SFTP_URL="%s"\n' "${i}" "${sftp_url}"
             printf 'STORAGE_TARGET_%s_SFTP_PORT="%s"\n' "${i}" "${sftp_port}"
@@ -624,33 +645,38 @@ EOL
       cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
 # Storage targets must be numbered sequentially, starting with 1, following the naming
 #   scheme STORAGE_TARGET_X_OPTION="config", with all options for the same storage
-#   using the same X number, as in the below examples. SFTP and BackBlaze storage
+#   using the same X number, as in the below examples. Local, SFTP, BackBlaze B2, and S3 storage
 #   targets are currently supported. Require at least one storage target.
 
-# Example SFTP Storage Target
+# Example Local Disk Storage Target
   # STORAGE_TARGET_1_NAME="name" # You can call this whatever you want, but it must be unique.
-  # STORAGE_TARGET_1_TYPE="sftp" # Currently support sftp, b2, and s3. For sftp, require URL, PORT, USER, PATH, and KEY_FILE as below.
-  # STORAGE_TARGET_1_SFTP_URL="192.168.1.1" # The IP address or FQDN of the sftp host.
-  # STORAGE_TARGET_1_SFTP_PORT="22" # The sftp port of the sftp host. Default is 22.
-  # STORAGE_TARGET_1_SFTP_USER="user" # User with sftp privileges on sftp host.
-  # STORAGE_TARGET_1_SFTP_PATH="remote/path" # Absolute path to remote backup directory. For synology, this starts with the name of the shared folder.
-  # STORAGE_TARGET_1_SFTP_KEY_FILE="/path/to/id_ed25519" # Full path to private ssh key file.
+  # STORAGE_TARGET_1_TYPE="local" # Currently support local, sftp, b2, and s3. For local, require LOCAL_PATH as below.
+  # STORAGE_TARGET_1_LOCAL_PATH="/mnt/backup/storage" # Full path to local directory for backups.
+
+# Example SFTP Storage Target
+  # STORAGE_TARGET_2_NAME="name" # You can call this whatever you want, but it must be unique.
+  # STORAGE_TARGET_2_TYPE="sftp" # Currently support local, sftp, b2, and s3. For sftp, require URL, PORT, USER, PATH, and KEY_FILE as below.
+  # STORAGE_TARGET_2_SFTP_URL="192.168.1.1" # The IP address or FQDN of the sftp host.
+  # STORAGE_TARGET_2_SFTP_PORT="22" # The sftp port of the sftp host. Default is 22.
+  # STORAGE_TARGET_2_SFTP_USER="user" # User with sftp privileges on sftp host.
+  # STORAGE_TARGET_2_SFTP_PATH="remote/path" # Absolute path to remote backup directory. For synology, this starts with the name of the shared folder.
+  # STORAGE_TARGET_2_SFTP_KEY_FILE="/path/to/id_ed25519" # Full path to private ssh key file.
 
 # Example B2 Storage Target
-  # STORAGE_TARGET_2_NAME="name" # You can call this whatever you want, but it must be unique.
-  # STORAGE_TARGET_2_TYPE="b2" # Currently support sftp, b2, and s3. For b2, require BUCKETNAME, ID, and KEY as below.
-  # STORAGE_TARGET_2_B2_BUCKETNAME="bucketName" # BackBlaze bucket name. Must be globally unique.
-  # STORAGE_TARGET_2_B2_ID="keyID" # BackBlaze keyID with read/write access to the above bucket.
-  # STORAGE_TARGET_2_B2_KEY="applicationKey" # BackBlaze applicationKey with read/write access to the above bucket.
+  # STORAGE_TARGET_3_NAME="name" # You can call this whatever you want, but it must be unique.
+  # STORAGE_TARGET_3_TYPE="b2" # Currently support local, sftp, b2, and s3. For b2, require BUCKETNAME, ID, and KEY as below.
+  # STORAGE_TARGET_3_B2_BUCKETNAME="bucketName" # BackBlaze bucket name. Must be globally unique.
+  # STORAGE_TARGET_3_B2_ID="keyID" # BackBlaze keyID with read/write access to the above bucket.
+  # STORAGE_TARGET_3_B2_KEY="applicationKey" # BackBlaze applicationKey with read/write access to the above bucket.
 
 # Example S3 Storage Target
-  # STORAGE_TARGET_3_NAME="name" # You can call this whatever you want, but it must be unique.
-  # STORAGE_TARGET_3_TYPE="s3" # Currently support sftp, b2, and s3. For s3, require BUCKETNAME, ENDPOINT, ID, and SECRET as below.
-  # STORAGE_TARGET_3_S3_BUCKETNAME="bucketName" # S3 bucket name. Must be globally unique.
-  # STORAGE_TARGET_3_S3_ENDPOINT="endpoint" # S3 endpoint (ex: amazon.com or hel1.your-objectstorage.com).
-  # STORAGE_TARGET_3_S3_REGION="none" # S3 region (optional, depending on service. ex: us-east-1)
-  # STORAGE_TARGET_3_S3_ID="id" # S3 Access ID with read/write access to the bucket.
-  # STORAGE_TARGET_3_S3_SECRET="secret" # S3 Secret Key with read/write access to the bucket.
+  # STORAGE_TARGET_4_NAME="name" # You can call this whatever you want, but it must be unique.
+  # STORAGE_TARGET_4_TYPE="s3" # Currently support local, sftp, b2, and s3. For s3, require BUCKETNAME, ENDPOINT, ID, and SECRET as below.
+  # STORAGE_TARGET_4_S3_BUCKETNAME="bucketName" # S3 bucket name. Must be globally unique.
+  # STORAGE_TARGET_4_S3_ENDPOINT="endpoint" # S3 endpoint (ex: amazon.com or hel1.your-objectstorage.com).
+  # STORAGE_TARGET_4_S3_REGION="none" # S3 region (optional, depending on service. ex: us-east-1)
+  # STORAGE_TARGET_4_S3_ID="id" # S3 Access ID with read/write access to the bucket.
+  # STORAGE_TARGET_4_S3_SECRET="secret" # S3 Secret Key with read/write access to the bucket.
 
 EOL
 

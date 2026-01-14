@@ -2,7 +2,7 @@
 
 <p>
   <img src="lib/logos/72x72.png" alt="Logo" align="left" style="margin-right: 10px;">
-  Automated encrypted backups with deduplication to SFTP, BackBlaze B2, and S3 storage. Leverages <a href="https://github.com/gilbertchen/duplicacy">Duplicacy</a> to follow the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 Backup Strategy</a> while removing the complexity of manual configuration.
+  Automated encrypted backups with deduplication to local disk, SFTP, BackBlaze B2, and S3 storage. Leverages <a href="https://github.com/gilbertchen/duplicacy">Duplicacy</a> to follow the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 Backup Strategy</a> while removing the complexity of manual configuration.
 </p>
 
 ## What is Archiver?
@@ -11,7 +11,7 @@ Archiver automates backing up directories to multiple remote storage locations w
 
 Each directory gets backed up independently, with optional pre/post-backup scripts for service-specific needs (like database dumps). Backups are encrypted at rest and deduplicated across all your directories to save storage space.
 
-Supports SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage. Run it natively on Linux or via Docker on any platform.
+Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage. Run it natively on Linux or via Docker on any platform.
 
 ## Quick Start
 
@@ -20,19 +20,19 @@ Run interactive setup in a container to generate your bundle file:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.5.1 setup
+  ghcr.io/sisyphusmd/archiver:0.6.0 setup
 ```
 Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker Installation](#docker-installation) for details.
 
 ### Direct Installation (Linux only)
-1. Prepare storage backend ([SFTP](#sftp---synology-nas), [B2](#b2---backblaze), or [S3](#s3-compatible-storage))
+1. Prepare storage backend ([Local Disk](#local-disk), [SFTP](#sftp---synology-nas), [B2](#b2---backblaze), or [S3](#s3-compatible-storage))
 2. Clone repository and run `./archiver.sh setup`
 3. See [Traditional Installation](#traditional-installation) for details
 
 ## Features
 
 - **Encrypted & Deduplicated**: Block-level deduplication minimizes storage, RSA encryption secures data
-- **Multiple Backends**: SFTP, BackBlaze B2, S3-compatible storage
+- **Multiple Backends**: Local disk, SFTP, BackBlaze B2, S3-compatible storage
 - **Automated Rotation**: Configurable retention policies (keep daily, weekly, monthly snapshots)
 - **Service Integration**: Pre/post-backup scripts, custom restore procedures
 - **Notifications**: Pushover alerts for successes and failures
@@ -49,7 +49,7 @@ For direct installation on Linux systems.
 - Debian-based Linux (Ubuntu, Debian, Raspberry Pi OS)
 - Architecture: ARM64 or AMD64
 - Git installed
-- At least one storage backend prepared (SFTP, B2, or S3)
+- At least one storage backend prepared (local disk, SFTP, B2, or S3)
 
 ### Installation Steps
 
@@ -60,7 +60,7 @@ For direct installation on Linux systems.
 
 2. Clone repository:
    ```bash
-   git clone --branch v0.5.1 https://github.com/SisyphusMD/archiver.git
+   git clone --branch v0.6.0 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 
@@ -112,7 +112,7 @@ Run setup interactively in a container to generate your configuration bundle:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.5.1 setup
+  ghcr.io/sisyphusmd/archiver:0.6.0 setup
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
@@ -124,7 +124,7 @@ Create `compose.yaml`:
 ```yaml
 services:
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:0.5.1
+    image: ghcr.io/sisyphusmd/archiver:0.6.0
     container_name: archiver
     restart: unless-stopped
     hostname: backup-server
@@ -281,7 +281,7 @@ docker run --rm -it \
   -e BUNDLE_PASSWORD="your-bundle-password-here" \
   -v /path/to/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.5.1 \
+  ghcr.io/sisyphusmd/archiver:0.6.0 \
   archiver restore
 ```
 
@@ -298,6 +298,41 @@ When prompted for the local directory path during restore, enter the container p
 ## Storage Backend Setup
 
 Prepare at least one storage location before running setup.
+
+### Local Disk
+
+<details>
+  <summary>Click to expand local disk setup instructions</summary>
+
+Local disk storage is the simplest and fastest option, ideal as your primary backup target. Backups can then be copied from local storage to remote locations (SFTP, B2, S3) for off-site redundancy.
+
+#### Requirements
+
+- A local directory path (e.g., `/mnt/backup/storage`)
+- Sufficient disk space for your backups
+- Proper read/write permissions
+
+#### Setup
+
+1. Create the backup directory:
+   ```bash
+   sudo mkdir -p /mnt/backup/storage
+   ```
+
+2. Set appropriate permissions:
+   ```bash
+   sudo chown -R $USER:$USER /mnt/backup/storage
+   sudo chmod 755 /mnt/backup/storage
+   ```
+
+3. Verify the directory is accessible:
+   ```bash
+   ls -la /mnt/backup/storage
+   ```
+
+**Tip:** For the 3-2-1 backup strategy, use local disk as your primary storage target for fast backups, then configure additional remote storage targets to copy backups off-site automatically.
+
+</details>
 
 ### SFTP - Synology NAS
 
@@ -418,7 +453,7 @@ If you need to set up Archiver on a new machine:
 1. Clone repository:
    ```bash
    cd ~
-   git clone --branch v0.5.1 https://github.com/SisyphusMD/archiver.git
+   git clone --branch v0.6.0 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 
@@ -465,7 +500,7 @@ SERVICE_DIRECTORIES=(
 
 ### Storage Targets
 
-Define multiple storage locations (SFTP, B2, S3):
+Define multiple storage locations (local disk, SFTP, B2, S3):
 
 ```bash
 # Primary storage (required)

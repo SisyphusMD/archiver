@@ -68,7 +68,20 @@ duplicacy_primary_backup() {
   rm -f "${DUPLICACY_PREFERENCES_FILE}" || handle_error "Error removing preferences file for the '${SERVICE}' service."
 
   # Initialize Duplicacy primary storage
-  if [[ "${backup_type}" == "sftp" ]]; then
+  if [[ "${backup_type}" == "local" ]]; then
+    # Initialize local disk storage
+    log_message "INFO" "Initializing Primary Duplicacy Storage for '${SERVICE}' service."
+
+    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+      -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+      "${STORAGE_TARGET_1_LOCAL_PATH}" 2>&1 | \
+      log_output
+    exit_status="${PIPESTATUS[0]}"
+    if [ "${exit_status}" -ne 0 ]; then
+      handle_error "Primary Duplicacy Storage initialization for the '${SERVICE}' service failed."
+    fi
+
+  elif [[ "${backup_type}" == "sftp" ]]; then
     local duplicacy_ssh_key_file_var
 
     duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
@@ -209,8 +222,8 @@ duplicacy_primary_backup() {
 
   # Run the Duplicacy backup to the Primary Storage
   log_message "INFO" "Running Duplicacy primary storage backup to '${STORAGE_TARGET_1_NAME}' storage for the '${SERVICE}' service."
-  
-  "${DUPLICACY_BIN}" backup -storage "${STORAGE_TARGET_1_NAME}" 2>&1 | log_output
+
+  "${DUPLICACY_BIN}" backup -storage "${STORAGE_TARGET_1_NAME}" -stats -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Duplicacy primary storage backup to '${STORAGE_TARGET_1_NAME}' storage for the '${SERVICE}' service failed."
@@ -245,7 +258,24 @@ duplicacy_add_backup() {
       cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}."
 
       # Initialize Duplicacy secondary storage
-      if [[ "${backup_type}" == "sftp" ]]; then
+      if [[ "${backup_type}" == "local" ]]; then
+        # Add local disk Duplicacy Storage if not already added
+        local config_local_path_var
+
+        config_local_path_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
+
+        # Add local disk Duplicacy Storage
+        log_message "INFO" "Adding local disk Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
+        "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
+          "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+          "${!config_local_path_var}" 2>&1 | \
+          log_output
+        exit_status="${PIPESTATUS[0]}"
+        if [ "${exit_status}" -ne 0 ]; then
+          handle_error "Adding local disk Duplicacy Storage '${storage_name}' for the '${SERVICE}' service failed."
+        fi
+
+      elif [[ "${backup_type}" == "sftp" ]]; then
         # Add SFTP Duplicacy Storage if not already added
         local config_sftp_url_var
         local config_sftp_port_var
@@ -264,7 +294,7 @@ duplicacy_add_backup() {
         export "${duplicacy_ssh_key_file_var}"="${!config_sftp_key_file_var}" # Export SSH key file for sftp duplicacy storage so Duplicacy binary can see variable
 
         # Add SFTP Duplicacy Storage
-        log_message "INFO" "Adding SFTP Duplicacy Storage '${storage_name} for the '${SERVICE}' service."
+        log_message "INFO" "Adding SFTP Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
         "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
           "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
           "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" 2>&1 | \
@@ -419,7 +449,7 @@ duplicacy_copy_backup() {
       log_message "INFO" "Running Duplicacy copy backup to '${storage_name}' storage."
 
       "${DUPLICACY_BIN}" copy -from "${STORAGE_TARGET_1_NAME}" -to "${storage_name}" \
-        -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 2>&1 | log_output
+        -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" -threads "${DUPLICACY_THREADS}" -download-threads "${DUPLICACY_THREADS}" 2>&1 | log_output
       exit_status="${PIPESTATUS[0]}"
 
       if [ "${exit_status}" -ne 0 ]; then
@@ -444,7 +474,7 @@ duplicacy_wrap_up() {
   SERVICE="${storage_name}"
 
   # Full Check the Duplicacy storage
-  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect 2>&1 | log_output
+  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect -stats -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
   exit_status="${PIPESTATUS[0]}"
   if [[ "${exit_status}" -ne 0 ]]; then
     handle_error "Running the Duplicacy full '${storage_name}' storage check failed."
@@ -458,7 +488,7 @@ duplicacy_wrap_up() {
     PRUNE_KEEP_ARRAY=()
     read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
 
-    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" 2>&1 | log_output
+    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [[ "${exit_status}" -ne 0 ]]; then
       handle_error "Running Duplicacy storage '${storage_name}' prune failed. Review the Duplicacy logs for details."

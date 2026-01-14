@@ -2,6 +2,9 @@
 
 source "${ARCHIVER_DIR}/config.sh"
 
+# Set DUPLICACY_THREADS with default if not set in config.sh
+DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
+
 expand_service_directories() {
   local expanded_service_directories=()
 
@@ -63,7 +66,14 @@ verify_target_settings() {
       exit 1
     fi
 
-    if [[ "${storage_type}" == "sftp" ]]; then
+    if [[ "${storage_type}" == "local" ]]; then
+      local config_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
+      if [[ -z "${!config_var}" ]]; then
+        handle_error "Missing LOCAL_PATH configuration for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+        exit 1
+      fi
+
+    elif [[ "${storage_type}" == "sftp" ]]; then
       local config_vars=("SFTP_URL" "SFTP_PORT" "SFTP_USER" "SFTP_PATH" "SFTP_KEY_FILE")
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"

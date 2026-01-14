@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-01-13
+
+### Added
+- **Local Disk Storage Backend**: Support for local disk as a storage target alongside SFTP, B2, and S3
+  - Ideal as primary backup target with fast local backups
+  - Can be combined with remote storage for off-site redundancy
+- **Performance Optimization**: Configurable thread count for duplicacy operations
+  - New `DUPLICACY_THREADS` configuration variable (default: 4)
+  - Parallel upload/download threads for faster backups
+  - Applied to backup, copy, restore, check, and prune operations
+- **Interactive Restore Options**: Advanced restore configuration wizard
+  - Hash-based file detection option
+  - Overwrite existing files option
+  - Delete files not in snapshot option
+  - Ignore ownership option
+  - Continue on errors option
+  - Customizable thread count for restore operations
+- **Graceful Container Shutdown**: Docker containers handle SIGTERM properly
+  - Running backups are stopped gracefully on `docker stop`
+  - Prevents data corruption from forced termination
+
+### Improved
+- Restore operations now have configurable performance and behavior options
+- Backup operations complete faster with parallel threading
+- Docker container lifecycle management with proper signal handling
+
 ## [0.5.1] - 2026-01-13
 
 ### Added

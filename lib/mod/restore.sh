@@ -175,7 +175,17 @@ initialize_duplicacy() {
 
   export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}" # Export Duplicacy storage password so Duplicacy binary can see variable
 
-  if [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "sftp" ]]; then
+  if [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "local" ]]; then
+    local config_local_path_var
+
+    config_local_path_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
+
+    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
+      "${!config_local_path_var}" || \
+      handle_error "Duplicacy Local Storage initialization failed."
+
+  elif [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "sftp" ]]; then
     local config_sftp_url_var
     local config_sftp_port_var
     local config_sftp_user_var
@@ -289,8 +299,72 @@ choose_revision() {
   echo "Chosen revision: ${REVISION}"
 }
 
+configure_restore_options() {
+  # Ask if user wants to customize restore options
+  echo    # Move to a new line
+  read -p "Customize restore options (advanced)? (y/N): " -n 1 -r
+  echo    # Move to a new line
+
+  RESTORE_FLAGS=""
+  RESTORE_THREADS="${DUPLICACY_THREADS}"
+
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
+    # Ask about hash-based detection
+    read -p "Detect file differences by hash (slower but more thorough)? (y/N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      RESTORE_FLAGS="${RESTORE_FLAGS} -hash"
+    fi
+
+    # Ask about overwriting files
+    read -p "Overwrite existing files in the restore directory? (y/N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      RESTORE_FLAGS="${RESTORE_FLAGS} -overwrite"
+    fi
+
+    # Ask about deleting extra files
+    read -p "Delete files not in the snapshot? (WARNING: Removes extra files) (y/N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      RESTORE_FLAGS="${RESTORE_FLAGS} -delete"
+    fi
+
+    # Ask about ignoring ownership
+    read -p "Ignore original file ownership (useful when restoring to different machine)? (y/N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      RESTORE_FLAGS="${RESTORE_FLAGS} -ignore-owner"
+    fi
+
+    # Ask about persistence on errors
+    read -p "Continue even if errors occur? (y/N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      RESTORE_FLAGS="${RESTORE_FLAGS} -persist"
+    fi
+
+    # Ask about thread count
+    read -p "Override download thread count (current: ${DUPLICACY_THREADS})? (y/N): " -n 1 -r
+    echo    # Move to a new line
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+      read -rp "Enter thread count: " RESTORE_THREADS
+      if [ -z "${RESTORE_THREADS}" ]; then
+        RESTORE_THREADS="${DUPLICACY_THREADS}"
+      fi
+    fi
+  fi
+
+  if [ -n "${RESTORE_FLAGS}" ]; then
+    echo "Additional restore flags:${RESTORE_FLAGS}"
+  fi
+  if [ "${RESTORE_THREADS}" != "${DUPLICACY_THREADS}" ]; then
+    echo "Download threads: ${RESTORE_THREADS}"
+  fi
+}
+
 restore_repository() {
-  duplicacy restore -r "${REVISION}" -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}"
+  duplicacy restore -r "${REVISION}" -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" -stats -threads "${RESTORE_THREADS}" "${RESTORE_FLAGS}"
   # Fix ownership of restored files to match the invoking user
   if [ -n "${INVOKING_UID}" ] && [ -n "${INVOKING_GID}" ]; then
     chown -R "${INVOKING_UID}":"${INVOKING_GID}" "${LOCAL_DIR}"
@@ -317,6 +391,7 @@ main() {
   local_restore_selections
   initialize_duplicacy
   choose_revision
+  configure_restore_options
   restore_repository
   service_specific_restore_script
 }
