@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     lsb-release \
     sqlite3 \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Set versions

@@ -20,7 +20,7 @@ Run interactive setup in a container to generate your bundle file:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.6.3 setup
+  ghcr.io/sisyphusmd/archiver:0.6.4 setup
 ```
 Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker Installation](#docker-installation) for details.
 
@@ -60,7 +60,7 @@ For direct installation on Linux systems.
 
 2. Clone repository:
    ```bash
-   git clone --branch v0.6.3 https://github.com/SisyphusMD/archiver.git
+   git clone --branch v0.6.4 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 
@@ -112,7 +112,7 @@ Run setup interactively in a container to generate your configuration bundle:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.6.3 setup
+  ghcr.io/sisyphusmd/archiver:0.6.4 setup
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
@@ -124,7 +124,7 @@ Create `compose.yaml`:
 ```yaml
 services:
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:0.6.3
+    image: ghcr.io/sisyphusmd/archiver:0.6.4
     container_name: archiver
     restart: unless-stopped
     hostname: backup-server
@@ -134,8 +134,8 @@ services:
       CRON_SCHEDULE: "0 3 * * *"  # Daily at 3am, or omit for manual mode
 
     volumes:
-      # Encrypted config/keys bundle
-      - ./archiver-bundle/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro
+      # Encrypted config/keys bundle directory (contains bundle.tar.enc)
+      - ./archiver-bundle:/opt/archiver/bundle
 
       # Optional: persistent logs
       - ./archiver-logs:/opt/archiver/logs
@@ -309,9 +309,9 @@ For a one-time restore without modifying your running container, use a temporary
 # One-off restore (container exits after completion)
 docker run --rm -it \
   -e BUNDLE_PASSWORD="your-bundle-password-here" \
-  -v /path/to/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro \
+  -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.6.3 \
+  ghcr.io/sisyphusmd/archiver:0.6.4 \
   archiver restore
 ```
 
@@ -483,7 +483,7 @@ If you need to set up Archiver on a new machine:
 1. Clone repository:
    ```bash
    cd ~
-   git clone --branch v0.6.3 https://github.com/SisyphusMD/archiver.git
+   git clone --branch v0.6.4 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 

@@ -137,7 +137,7 @@ docker run --rm -it \
 docker run --rm -it \
   -e BUNDLE_PASSWORD="your-password" \
   -e CRON_SCHEDULE="" \
-  -v ./test-bundle/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro \
+  -v ./test-bundle:/opt/archiver/bundle \
   archiver:test
 ```
 

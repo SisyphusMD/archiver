@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-01-14
+
+### Fixed
+- **Docker Container Issues**:
+  - Added `procps` package to Docker image to provide `pkill` and `pgrep` commands
+  - Fixes "command not found" errors when stopping backup processes
+  - Resolves container shutdown hangs caused by orphaned processes
+  - Improved graceful shutdown by explicitly terminating log tailer process
+- **Bundle Export**: Fixed bundle backup verification to prevent data loss
+  - Now verifies the backup file exists before continuing with export
+  - Exits with error if backup operation fails instead of proceeding
+- **Docker Logs**: Changed log tailer to show only new logs (`tail -n 0`)
+  - Prevents `docker logs` from hanging with large log files (100k+ lines)
+  - Improves performance for long-running backups with extensive logging
+
+### Changed
+- **Docker Volume Mount**: Updated documentation to mount bundle directory instead of single file
+  - Resolves "Device or resource busy" errors during bundle export
+  - Allows proper file operations within mounted directory
+
 ## [0.6.3] - 2026-01-13
 
 ### Changed

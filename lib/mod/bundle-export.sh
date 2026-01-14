@@ -69,8 +69,18 @@ OUTPUT_ENC="${OUTPUT_TAR}.enc"
 if [ -f "${OUTPUT_ENC}" ]; then
   # Remove any existing .old file first
   [ -f "${OUTPUT_ENC}.old" ] && rm -f "${OUTPUT_ENC}.old"
+
+  # Attempt to move the existing bundle to .old
   mv "${OUTPUT_ENC}" "${OUTPUT_ENC}.old"
-  echo "Existing bundle backed up as bundle.tar.enc.old"
+
+  # Verify the backup was successful before continuing
+  if [ -f "${OUTPUT_ENC}.old" ] && [ ! -f "${OUTPUT_ENC}" ]; then
+    echo "Existing bundle backed up as bundle.tar.enc.old"
+  else
+    echo "Error: Failed to backup existing bundle file"
+    echo "The file may be locked or in use. Please ensure no other processes are accessing it."
+    exit 1
+  fi
 fi
 
 # Change to the ARCHIVER_DIR directory and create the tarball

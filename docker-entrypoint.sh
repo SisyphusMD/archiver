@@ -15,6 +15,11 @@ handle_shutdown() {
   # Stop any running backup (handles all cases gracefully)
   /opt/archiver/archiver.sh stop 2>&1 || true
 
+  # Kill the log tailer if it exists
+  if [ -n "$LOG_TAILER_PID" ] && kill -0 "$LOG_TAILER_PID" 2>/dev/null; then
+    kill "$LOG_TAILER_PID" 2>/dev/null || true
+  fi
+
   exit 0
 }
 
@@ -51,8 +56,8 @@ fi
 # Check if bundle file exists
 if [ ! -f "$BUNDLE_FILE" ]; then
     echo "ERROR: Bundle file not found at $BUNDLE_FILE"
-    echo "Please mount your bundle.tar.enc file to /opt/archiver/bundle/bundle.tar.enc"
-    echo "Example: docker run -v /path/to/bundle.tar.enc:/opt/archiver/bundle/bundle.tar.enc:ro ..."
+    echo "Please mount your bundle directory to /opt/archiver/bundle"
+    echo "Example: docker run -v /path/to/bundle/dir:/opt/archiver/bundle ..."
     exit 1
 fi
 
@@ -102,8 +107,8 @@ if [ -d "/opt/archiver/logs" ]; then
             echo ""
         fi
         echo "--- Archiver Logs ---"
-        # -F follows by name (handles log rotation), -n +1 shows all lines from start
-        tail -F -n +1 "$LOG_FILE" 2>/dev/null
+        # -F follows by name (handles log rotation), -n 0 shows only new lines from now
+        tail -F -n 0 "$LOG_FILE" 2>/dev/null
     ) &
     LOG_TAILER_PID=$!
 fi
