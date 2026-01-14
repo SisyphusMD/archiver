@@ -40,6 +40,19 @@
 #   directory listed in the SERVICE_REPOSITORIES variable in the config.sh file.        #
 # - It allows for service-specific restore scripts to be defined and run after file     #
 #   restoration, in order to return the service to its prior working state.             #
+#                                                                                       #
+# Available Tools in Archiver Container:                                                #
+# - Archiver: duplicacy (v3.2.3), archiver                                              #
+# - Docker: docker (CLI v29.1.4)                                                        #
+# - Database: sqlite3                                                                   #
+# - Network: curl, wget, ssh, openssh-client                                            #
+# - Security: openssl, gpg                                                              #
+# - Utilities: expect, cron                                                             #
+# - Shell: bash, standard POSIX utilities (find, grep, awk, sed, etc.)                  #
+#                                                                                       #
+# Note: To use docker commands, you must mount the Docker socket in compose.yaml:       #
+#   volumes:                                                                            #
+#     - /var/run/docker.sock:/var/run/docker.sock                                       #
 #########################################################################################
 
 # All of the below functions are 100% optional. You can use any of these, or none. You

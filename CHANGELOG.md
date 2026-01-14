@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-01-13
+
+### Added
+- **SQLite3 Support**: sqlite3 package now included in container image
+  - Enables database operations and backups directly from service scripts
+  - Useful for services using SQLite databases
+
+### Documentation
+- Added comprehensive list of available tools and packages in example service scripts
+- Documents all available tools: duplicacy, docker, sqlite3, curl, wget, ssh, openssl, etc.
+- Clarifies Docker socket requirement for docker commands
+
 ## [0.6.1] - 2026-01-13
 
 ### Added
