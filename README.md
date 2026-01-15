@@ -498,7 +498,7 @@ archiver help           # Show help
 
 ## Licensing
 
-Archiver is licensed under [GNU AGPL-3.0](LICENSE).
+Archiver is free and open-source software licensed under [GNU AGPL-3.0](LICENSE).
 
 Archiver uses the [Duplicacy CLI v3.2.5](https://github.com/gilbertchen/duplicacy/tree/v3.2.5) binary as an external tool. Duplicacy is licensed separately under [its own terms](https://github.com/gilbertchen/duplicacy/blob/v3.2.5/LICENSE.md):
 
