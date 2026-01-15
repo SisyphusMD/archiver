@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-01-15
+
+### BREAKING CHANGES
+- **Docker-Only Deployment**: Direct installation on host systems is no longer supported
+  - All commands now require Docker environment
+  - Removed traditional installation instructions from README
+  - Removed `setup` and `uninstall` commands from archiver CLI
+
+### Changed
+- **Initialization**: Renamed `setup` command to `init` for bundle creation
+  - Use `docker run ... init` to create initial configuration bundle
+  - Init script simplified and streamlined for Docker-only use
+- **Bundle Export**: Added password reuse feature
+  - Automatically offers to reuse BUNDLE_PASSWORD environment variable
+  - Default behavior is to reuse (press Enter or Y)
+  - Can choose to set new password with 'n'
+- **Documentation**:
+  - Removed DOCKER.md (all deployment is Docker now)
+  - Updated README for Docker-only workflow
+  - Simplified init script header comments
+
+### Removed
+- Traditional/direct installation support
+- Installation functions (install_packages, install_duplicacy, archiver_in_path, schedule_with_cron)
+- Platform detection and sudo escalation logic
+- User ownership management (Docker runs as root)
+- `setup` and `uninstall` CLI commands
+
 ## [0.6.5] - 2026-01-14
 
 ### Added
