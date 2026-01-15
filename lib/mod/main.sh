@@ -13,26 +13,11 @@ START_TIME="$(date +%s)"
 DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')"
 
-# Define unique identifier for the script (e.g., script's full path)
-MAIN_SCRIPT_PATH="$(realpath "$0")"
-LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
+# Lockfile for preventing concurrent runs
+LOCKFILE="/var/lock/archiver-main.lock"
 
-# Determine archiver repo directory path by traversing up the directory tree until we find 'archiver.sh' or reach the root
-CURRENT_DIR="$(dirname "${MAIN_SCRIPT_PATH}")"
-ARCHIVER_DIR=""
-while [ "${CURRENT_DIR}" != "/" ]; do
-  if [ -f "${CURRENT_DIR}/archiver.sh" ]; then
-    ARCHIVER_DIR="${CURRENT_DIR}"
-    break
-  fi
-  CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
-done
-
-# Check if we found the file
-if [ -z "${ARCHIVER_DIR}" ]; then
-  echo "Error: archiver.sh not found in any parent directory."
-  exit 1
-fi
+# Archiver directory
+ARCHIVER_DIR="/opt/archiver"
 
 # Define lib, src, mod, log, logo directories
 LOG_DIR="${ARCHIVER_DIR}/logs"

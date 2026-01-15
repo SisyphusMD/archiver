@@ -1,22 +1,7 @@
 #!/bin/bash
 
-# Determine archiver repo directory path by traversing up the directory tree until we find 'archiver.sh' or reach the root
-EXPORT_SCRIPT_PATH="$(realpath "$0")"
-CURRENT_DIR="$(dirname "${EXPORT_SCRIPT_PATH}")"
-ARCHIVER_DIR=""
-while [ "${CURRENT_DIR}" != "/" ]; do
-  if [ -f "${CURRENT_DIR}/archiver.sh" ]; then
-    ARCHIVER_DIR="${CURRENT_DIR}"
-    break
-  fi
-  CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
-done
-
-# Check if we found the file
-if [ -z "${ARCHIVER_DIR}" ]; then
-  echo "Error: archiver.sh not found in any parent directory."
-  exit 1
-fi
+# Archiver directory
+ARCHIVER_DIR="/opt/archiver"
 
 # Define bundle directory
 BUNDLE_DIR="${ARCHIVER_DIR}/bundle"

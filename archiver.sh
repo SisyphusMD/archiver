@@ -84,9 +84,8 @@ case "${command}" in
     ;;
 esac
 
-# Define the path to the Archiver script
-ARCHIVER_SCRIPT="$(realpath "${0}")"
-ARCHIVER_DIR="$(dirname "${ARCHIVER_SCRIPT}")"
+# Archiver directory
+ARCHIVER_DIR="/opt/archiver"
 # Define mod directory
 MOD_DIR="${ARCHIVER_DIR}/lib/mod"
 # Define paths to various scripts
