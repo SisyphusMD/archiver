@@ -1,38 +1,16 @@
 #########################################################################################
 # service-backup-settings.sh                                                            #
-#   This file is intended to be sourced by the Archiver script to define optional       #
-#   duplicacy filters and backup functions for pre- and post-backup tasks specific to   #
-#   the service.                                                                        #
+#                                                                                       #
+# Optional file for service-specific backup configuration.                              #
+# Place in any service directory to customize its backup behavior.                      #
 #                                                                                       #
 # Usage:                                                                                #
-#   Copy this file as "service-backup-settings.sh" into the backup directory, and add   #
-#   any needed filter patterns and pre- and post-backup functions.                      #
+# - Define file filters to include/exclude specific files                               #
+# - Add pre-backup tasks (stop services, dump databases, etc.)                          #
+# - Add post-backup tasks (restart services, cleanup, etc.).                            #
 #                                                                                       #
-# Note:                                                                                 #
-#   This script should not be executed directly. Instead, it will be sourced by the     #
-#   Archiver script.                                                                    #
-#                                                                                       #
-# Instructions:                                                                         #
-# - This configuration file is optional. Default values will be used by the Archiver    #
-#   script if this file can not be found.                                               #
-# - To use this file, it must be named "service-backup-settings.sh" and placed in the   #
-#   backup directory listed in the SERVICE_REPOSITORIES variable in the config.sh file. #
-# - It allows for service-specific backup configurations and tasks to be defined,       #
-#   ensuring that each service can be backed up according to its specific requirements. #
-#                                                                                       #
-# Available Tools in Archiver Container:                                                #
-# - Archiver: duplicacy (v3.2.5), archiver                                              #
-# - Docker: docker (CLI v29.1.4)                                                        #
-# - Database: sqlite3                                                                   #
-# - Network: curl, wget, ssh, openssh-client, ping                                      #
-# - Security: openssl, gpg                                                              #
-# - Editors: nano, vim                                                                  #
-# - Utilities: expect, cron, procps (ps, pkill, pgrep)                                  #
-# - Shell: bash, standard POSIX utilities (find, grep, awk, sed, etc.)                  #
-#                                                                                       #
-# Note: To use docker commands, you must mount the Docker socket in compose.yaml:       #
-#   volumes:                                                                            #
-#     - /var/run/docker.sock:/var/run/docker.sock                                       #
+# Available tools: duplicacy, docker, sqlite3, curl, wget, ssh, openssl, gpg, vim       #
+# Note: Docker commands require mounting /var/run/docker.sock in compose.yaml           #
 #########################################################################################
 
 # Set include/exclude patterns for Duplicacy filter.

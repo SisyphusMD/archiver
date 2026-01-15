@@ -1,59 +1,17 @@
 #!/bin/bash
-# The above line is called a "shebang", and is required to be at the top to define this
-#   file as a bash script.
 #########################################################################################
 # restore-service.sh                                                                    #
-#   This file is intended to be invoked as the last step of the Archiver restore.sh     #
-#   script. It can run any custom bash commands to automate tasks such as bringing up   #
-#   a service, restoring database dumps, creating docker networks, or anything you can  #
-#   script in bash.                                                                     #
 #                                                                                       #
-#   Archiver's restore.sh script will return the file contents of the directory to      #
-#   their backed up state. Some services require commands be run to restore the service #
-#   to its prior functioning state. One example would be a directory containing the     #
-#   configuration files for a docker compose project.                                   #
-#                                                                                       #
-#   In this simple example, the script brings up docker services defined in a compose   #
-#   file. This restore-service.sh script would work well if the directory being backed  #
-#   up contained all necessary files for a docker compose project, and if bringing up   #
-#   that docker compose project were sufficient to return the service to its prior      # 
-#   operating state.                                                                    #
-#                                                                                       #
-#   Many of your directories may not need to use a 'restore-service.sh' file at all,    #
-#   particularly those containing only data without services running from that data.    #
+# Optional script to run after restoring files from backup.                             #
+# Use this to restore services to working state (start containers, import dbs, etc.).   #
 #                                                                                       #
 # Usage:                                                                                #
-#   In any service directory that requires certain commands be run in order to restore  #
-#   to its prior operating state, create a file titled 'restore-service.sh', containing #
-#   any custom bash script that can run from that environment. This restore-service.sh  #
-#   should be included in the directory backup, so that it is available to run after    #
-#   repository restore process completes.                                               #
+# - Name this file "restore-service.sh" and place in service directory                  #
+# - Include it in your backup so it's available after restore                           #
+# - Archiver will prompt to run it after restoration completes                          #
 #                                                                                       #
-# Note:                                                                                 #
-#   This script should not be executed directly. Instead, it will invoked as the last   #
-#   step of the Archiver restore.sh script.                                             #
-#                                                                                       #
-# Instructions:                                                                         #
-# - This configuration file is optional. Not all service directories need to run custom #
-#   scripts following their restoration.                                                #
-# - To use this file, it must be named 'restore-service.sh' and placed in the service   #
-#   directory listed in the SERVICE_REPOSITORIES variable in the config.sh file.        #
-# - It allows for service-specific restore scripts to be defined and run after file     #
-#   restoration, in order to return the service to its prior working state.             #
-#                                                                                       #
-# Available Tools in Archiver Container:                                                #
-# - Archiver: duplicacy (v3.2.5), archiver                                              #
-# - Docker: docker (CLI v29.1.4)                                                        #
-# - Database: sqlite3                                                                   #
-# - Network: curl, wget, ssh, openssh-client, ping                                      #
-# - Security: openssl, gpg                                                              #
-# - Editors: nano, vim                                                                  #
-# - Utilities: expect, cron, procps (ps, pkill, pgrep)                                  #
-# - Shell: bash, standard POSIX utilities (find, grep, awk, sed, etc.)                  #
-#                                                                                       #
-# Note: To use docker commands, you must mount the Docker socket in compose.yaml:       #
-#   volumes:                                                                            #
-#     - /var/run/docker.sock:/var/run/docker.sock                                       #
+# Available tools: duplicacy, docker, sqlite3, curl, wget, ssh, openssl, gpg, vim       #
+# Note: Docker commands require mounting /var/run/docker.sock in compose.yaml           #
 #########################################################################################
 
 # All of the below functions are 100% optional. You can use any of these, or none. You

@@ -1,21 +1,12 @@
 #########################################################################################
-# Archiver User Configuration                                                           #
-#########################################################################################
-# config.sh                                                                             #
-#   This file is intended to be sourced by the Archiver script to define user           #
-#   configurable variables.                                                             #
+# Archiver Configuration                                                                #
 #                                                                                       #
-# Usage:                                                                                #
-#   Include this file as "config.sh" in the archiver directory                          #
+# This file defines what directories to backup and where to store them.                 #
+# Created during init and bundled with your encryption keys.                            #
 #                                                                                       #
-# Note:                                                                                 #
-#   This script should not be executed directly. Instead, it will be sourced by the     #
-#   Archiver script.                                                                    #
-#                                                                                       #
-# Instructions:                                                                         #
-# - User must provide at least one service directory and one storage target.            #
-# - User must provide the STORAGE_PASSWORD and RSA_PASSPHRASE to be used by Archiver.   #
-# - User can optionally provide notification and backup rotation configurations.        #
+# Requirements:                                                                         #
+# - At least one service directory and one storage target                               #
+# - STORAGE_PASSWORD and RSA_PASSPHRASE                                                 #
 #########################################################################################
 
 # ------------------ #
@@ -28,7 +19,7 @@
   # SERVICE_DIRECTORIES=(
   #   "/srv/*/" # Will backup each subdirectory within /srv/ - multiple individual repositories.
   #   "/mnt/*/" # Will backup each subdirectory within /mnt/ - multiple individual repositories.
-  #   "/home/cody/" # Will backup the /home/cody/ directory - one individual repository.
+  #   "/home/user/" # Will backup the /home/user/ directory - one individual repository.
   # )
 
 # Storage targets must be numbered sequentially, starting with 1, following the naming
