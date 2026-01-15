@@ -30,156 +30,13 @@ set -e # Exit immediately if a command exits with a non-zero status
 # ---------------------
 # Archiver directory
 ARCHIVER_DIR="/opt/archiver"
-
-ARCHIVER_SCRIPT_PATH="${ARCHIVER_DIR}/archiver.sh"
-DUPLICACY_VERSION="3.2.3"
 DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/keys"
-REQUIRED_PACKAGES=(
-  "expect"
-  "openssh-client"
-  "openssl"
-  "wget"
-)
-
 BUNDLE_IMPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/bundle-import.sh"
 BUNDLE_EXPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/bundle-export.sh"
 BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
 
-# Determine environment
-ENVIRONMENT_OS="$(uname -s)"
-ENVIRONMENT_ARCHITECTURE="$(uname -m)"
-DUPLICACY_OS="$(echo "${ENVIRONMENT_OS}" | tr '[:upper:]' '[:lower:]')"
-DUPLICACY_ARCHITECTURE="unknown"
-if [[ "${ENVIRONMENT_ARCHITECTURE}" == "aarch64" || "${ENVIRONMENT_ARCHITECTURE}" == "arm64" ]]; then
-  DUPLICACY_ARCHITECTURE="arm64"
-elif [[ "${ENVIRONMENT_ARCHITECTURE}" == "x86_64" || "${ENVIRONMENT_ARCHITECTURE}" == "amd64" ]]; then
-  DUPLICACY_ARCHITECTURE="x64"
-fi
-
-# Exit if the operating system is not Linux or architecture is not recognized
-if [ "${DUPLICACY_OS}" != "linux" ] || [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
-  echo "================================================================" >&2
-  echo "ERROR: Unsupported platform for direct installation" >&2
-  echo "================================================================" >&2
-  echo "" >&2
-  echo "Detected: ${ENVIRONMENT_OS} (${ENVIRONMENT_ARCHITECTURE})" >&2
-  echo "Required: Linux (arm64 or x86_64)" >&2
-  echo "" >&2
-  echo "To use Archiver on non-Linux systems:" >&2
-  echo "1. Set up Archiver on a Linux machine or VM first" >&2
-  echo "2. Run 'archiver bundle export' to create bundle.tar.enc" >&2
-  echo "3. Use Docker with your bundle file on any platform" >&2
-  echo "" >&2
-  echo "See DOCKER.md or README Docker Installation section for details." >&2
-  echo "================================================================" >&2
-  exit 1
-fi
-
-DUPLICACY_BIN_FILE_DIR="/opt/duplicacy"
-DUPLICACY_BIN_FILE_NAME="duplicacy_${DUPLICACY_OS}_${DUPLICACY_ARCHITECTURE}_${DUPLICACY_VERSION}"
-DUPLICACY_BIN_FILE_PATH="${DUPLICACY_BIN_FILE_DIR}/${DUPLICACY_BIN_FILE_NAME}"
-DUPLICACY_BIN_LINK_DIR="/usr/local/bin"
-DUPLICACY_BIN_LINK_NAME="duplicacy"
-DUPLICACY_BIN_LINK_PATH="${DUPLICACY_BIN_LINK_DIR}/${DUPLICACY_BIN_LINK_NAME}"
-DUPLICACY_BIN_URL="https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/${DUPLICACY_BIN_FILE_NAME}"
-
 RSA_PASSPHRASE=""
 
-# Place archiver in PATH
-archiver_in_path() {
-  local symlink_path
-  symlink_path="/usr/local/bin/archiver"
-
-  if [ ! -L "${symlink_path}" ]; then
-    sudo ln -s "${ARCHIVER_SCRIPT_PATH}" "${symlink_path}"
-    echo " - Added 'archiver' to PATH."
-  else
-    local existing_target
-    existing_target="$(readlink -f "${symlink_path}")"
-
-    if [ "${existing_target}" != "${ARCHIVER_SCRIPT_PATH}" ]; then
-      echo    # Move to a new line
-      echo "Another archiver symlink exists but points to a different script: '${existing_target}'."
-      read -p "Would you like to update it to point to '${ARCHIVER_SCRIPT_PATH}'? (y/N): " -n 1 -r
-      echo    # Move to a new line
-
-      if [[ $REPLY =~ ^[Yy]$ ]]; then
-        sudo rm "${symlink_path}"
-        sudo ln -s "${ARCHIVER_SCRIPT_PATH}" "${symlink_path}"
-        echo " - Symlink has been updated: ${symlink_path} -> ${ARCHIVER_SCRIPT_PATH}"
-      else
-        echo " - Symlink not updated."
-      fi
-    else
-      echo " - Symlink in PATH already points to '${ARCHIVER_SCRIPT_PATH}' correctly."
-    fi
-  fi
-}
-
-# Ensure necessary packages are installed
-install_packages() {
-  local missing_packages
-
-  missing_packages=()
-
-  echo " - Checking for missing required packages..."
-
-  # Check for each required package
-  for package in "${REQUIRED_PACKAGES[@]}"; do
-    if ! dpkg -l | grep -q "^ii  $package "; then
-      missing_packages+=("$package")
-    fi
-  done
-
-  # If there are no missing packages, exit the function
-  if [ ${#missing_packages[@]} -eq 0 ]; then
-    echo " - All required packages are already installed."
-    return
-  fi
-
-  # List missing packages and prompt user for installation
-  echo " - The following required packages are missing: ${missing_packages[*]}"
-  echo    # Move to a new line
-  echo    # Move to a new line
-  read -p "Would you like to install the missing packages? (y/N): " -n 1 -r
-  echo    # Move to a new line
-
-  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo " - Exiting the script. Please install the required packages manually."
-    exit 1
-  fi
-
-  # Update apt and install missing packages
-  echo " - Updating package list and installing missing packages..."
-  apt update
-  apt install -y "${missing_packages[@]}"
-  echo " - Missing packages installed successfully."
-}
-
-install_duplicacy() {
-  # Check if duplicacy is available and install if not
-  if ! command -v duplicacy &> /dev/null; then
-    echo    # Move to a new line
-    echo    # Move to a new line
-    echo "Duplicacy binary is required for Archiver, but it is not installed."
-    echo    # Move to a new line
-    read -p "Would you like to install the Duplicacy binary for use with Archiver? (y|N): " -n 1 -r
-    echo    # Move to a new line
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-      echo " - Installing Duplicacy binary..."
-      mkdir -p "${DUPLICACY_BIN_FILE_DIR}"
-      wget -O "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_URL}"
-      chmod 755 "${DUPLICACY_BIN_FILE_PATH}"
-      mkdir -p "${DUPLICACY_BIN_LINK_DIR}"
-      ln -sf "${DUPLICACY_BIN_FILE_PATH}" "${DUPLICACY_BIN_LINK_PATH}"
-      echo " - Duplicacy binary installed successfully."
-    else
-      echo " - Duplicacy binary not installed. Please ensure Duplicacy binary is installed before attempting to run the main script."
-    fi
-  else
-    echo " - Skipping Duplicacy binary installation: Duplicacy binary is already installed."
-  fi
-}
 
 import_if_missing() {
   if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ] || \
@@ -781,61 +638,8 @@ create_new_bundle() {
   fi
 }
 
-schedule_with_cron() {
-  # Skip cron scheduling in Docker environment
-  if [ -f "/.dockerenv" ] || grep -q 'docker\|lxc' /proc/1/cgroup 2>/dev/null; then
-    echo    # Move to a new line
-    echo " - Cron scheduling skipped (Docker environment detected)."
-    echo " - Use the CRON_SCHEDULE environment variable when running your container."
-    echo " - Example: docker run -e CRON_SCHEDULE=\"0 3 * * *\" ..."
-    return
-  fi
-
-  echo    # Move to a new line
-  echo    # Move to a new line
-  read -p "Would you like to schedule the backup with cron? (y|N): " -n 1 -r
-  echo    # Move to a new line
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    local cron_schedule
-    while [ -z "${cron_schedule}" ]; do
-      echo    # Move to a new line
-      echo "See guide for cron scheduling here: https://cronitor.io/guides/cron-jobs"
-      read -rp "Cron Schedule (default to daily at 3am '0 3 * * *'): " cron_schedule
-      if [ -z "${cron_schedule}" ]; then
-        echo " - No schedule entered. Using default '0 3 * * *'."
-        cron_schedule="0 3 * * *"
-      fi
-    done
-    # Get existing crontab, add new entry, and install it
-    if [ -n "${SUDO_USER}" ]; then
-      # Use SUDO_USER to add to the correct user's crontab
-      (crontab -u "${SUDO_USER}" -l 2>/dev/null; echo "${cron_schedule} archiver start") | crontab -u "${SUDO_USER}" -
-      echo " - Backup scheduled with cron (user: ${SUDO_USER})."
-    else
-      # Running as root directly (e.g., in Docker) - add to root's crontab
-      (crontab -l 2>/dev/null; echo "${cron_schedule} archiver start") | crontab -
-      echo " - Backup scheduled with cron (user: root)."
-    fi
-    echo " - You can edit the schedule with this command:"
-    echo "--------------------------------------------"
-    echo "crontab -e"
-    echo "--------------------------------------------"
-  else
-    echo " - Backup not scheduled with cron."
-    echo " - You can always schedule it later with this command (daily at 3am in below example):"
-    echo "--------------------------------------------"
-    echo "(crontab -l 2>/dev/null; echo \"0 3 * * * archiver start\") | crontab -"
-    echo "--------------------------------------------"
-  fi
-}
 
 main() {
-  archiver_in_path
-
-  install_packages
-
-  install_duplicacy
-
   import_if_missing
 
   create_keys_dir
@@ -848,22 +652,14 @@ main() {
 
   create_new_bundle
 
-  schedule_with_cron
-
   sleep 2
 
   echo    # Move to a new line
   echo    # Move to a new line
-  echo " - Setup script completed."
+  echo " - Init script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your keys directory."
-  echo " - This script attempts to create a password protected bundle file."
-  echo " - Please save a backup of that file, or run 'archiver bundle export' if missing."
-  echo "Usage:"
-  echo " - To manually start the Archiver backup, use 'archiver start'."
-  echo " - To watch the logs of the actively running Archiver backup, use 'archiver logs'."
-  echo " - To check on the Archiver backup status, use 'archiver status'."
-  echo " - To manually stop the Archiver backup early, use 'archiver stop'."
-  echo " - To start the Archiver restore script, use 'archiver restore'."
+  echo " - This script has created a password protected bundle file."
+  echo " - Keep this bundle file safe - you'll need it to run Archiver in Docker."
 }
 
 main
