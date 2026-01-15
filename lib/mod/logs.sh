@@ -16,12 +16,6 @@ LOGO_DIR="${LIB_DIR}/logos"
 MAIN_SCRIPT_PATH="${MOD_DIR}/main.sh"
 LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
-fi
-
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
   case "${1}" in

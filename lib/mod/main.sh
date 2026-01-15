@@ -109,12 +109,6 @@ cleanup() {
 # Trap signals to ensure cleanup is performed
 trap cleanup EXIT
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
-fi
-
 # Store argument in case of prune or retain
 ROTATION_OVERRIDE="${1}"
 
