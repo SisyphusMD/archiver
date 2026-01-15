@@ -11,23 +11,17 @@ Archiver automates backing up directories to multiple remote storage locations w
 
 Each directory gets backed up independently, with optional pre/post-backup scripts for service-specific needs (like database dumps). Backups are encrypted at rest and deduplicated across all your directories to save storage space.
 
-Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage. Run it natively on Linux or via Docker on any platform.
+Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage. Docker-only deployment for easy setup on any platform.
 
 ## Quick Start
 
-### Docker (any platform)
-Run interactive setup in a container to generate your bundle file:
+Run interactive initialization in a container to generate your bundle file:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.6.5 setup
+  ghcr.io/sisyphusmd/archiver:v0.7.0 init
 ```
 Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker Installation](#docker-installation) for details.
-
-### Direct Installation (Linux only)
-1. Prepare storage backend ([Local Disk](#local-disk), [SFTP](#sftp---synology-nas), [B2](#b2---backblaze), or [S3](#s3-compatible-storage))
-2. Clone repository and run `./archiver.sh setup`
-3. See [Traditional Installation](#traditional-installation) for details
 
 ## Features
 
@@ -40,62 +34,6 @@ Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker In
 
 ---
 
-## Traditional Installation
-
-For direct installation on Linux systems.
-
-### Prerequisites
-
-- Debian-based Linux (Ubuntu, Debian, Raspberry Pi OS)
-- Architecture: ARM64 or AMD64
-- Git installed
-- At least one storage backend prepared (local disk, SFTP, B2, or S3)
-
-### Installation Steps
-
-1. Navigate to desired parent directory:
-   ```bash
-   cd ~
-   ```
-
-2. Clone repository:
-   ```bash
-   git clone --branch v0.6.5 https://github.com/SisyphusMD/archiver.git
-   cd archiver
-   ```
-
-3. Run setup script:
-   ```bash
-   ./archiver.sh setup
-   ```
-
-4. Follow prompts to:
-   - Install dependencies (expect, openssh-client, openssl, wget, cron)
-   - Download Duplicacy binary
-   - Generate RSA encryption keys
-   - Generate SSH keys (for SFTP backends)
-   - Configure directories to backup
-   - Configure storage targets
-   - Set up notifications (optional)
-   - Schedule via cron (optional)
-
-5. **IMPORTANT**: Back up your bundle file
-   ```bash
-   archiver bundle export
-   ```
-   Save the generated `bundle/bundle.tar.enc` file and remember the password. You need this to restore configuration or migrate to Docker.
-
-### Basic Usage
-
-- **Start backup**: `archiver start`
-- **View logs**: `archiver logs`
-- **Check status**: `archiver status`
-- **Stop backup**: `archiver stop`
-- **Create bundle**: `archiver bundle export`
-- **Import bundle**: `archiver bundle import`
-- **Restore data**: `archiver restore`
-
----
 
 ## Docker Installation
 
@@ -107,12 +45,12 @@ Run Archiver in a container on any platform.
 
 ### Step 1: Generate Bundle File
 
-Run setup interactively in a container to generate your configuration bundle:
+Run initialization interactively in a container to generate your configuration bundle:
 
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.6.5 setup
+  ghcr.io/sisyphusmd/archiver:v0.7.0 init
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
