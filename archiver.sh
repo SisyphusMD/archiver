@@ -7,9 +7,9 @@ source "/opt/archiver/lib/require-docker.sh"
 START_TIME="$(date +%s)"
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|bundle|uninstall|restore|healthcheck|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|healthcheck|help} [logs|prune|retain]"
   echo "Note:"
-  echo "  stop|pause|logs|status|setup|uninstall|restore|healthcheck|help cannot have further arguments."
+  echo "  stop|pause|logs|status|restore|healthcheck|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
   echo "  bundle requires a subcommand: export or import"
@@ -58,7 +58,7 @@ case "${command}" in
       usage
     fi
     ;;
-  stop|pause|logs|status|setup|uninstall|restore|healthcheck|help)
+  stop|pause|logs|status|restore|healthcheck|help)
     if [[ $# -gt 0 ]]; then
       echo "'${command}' cannot have further arguments."
       usage
@@ -89,7 +89,6 @@ MOD_DIR="${ARCHIVER_DIR}/lib/mod"
 MAIN_SCRIPT="${MOD_DIR}/main.sh"
 LOGS_SCRIPT="${MOD_DIR}/logs.sh"
 STOP_SCRIPT="${MOD_DIR}/stop.sh"
-SETUP_SCRIPT="${MOD_DIR}/.init.sh"
 STATUS_SCRIPT="${MOD_DIR}/status.sh"
 RESTORE_SCRIPT="${MOD_DIR}/restore.sh"
 BUNDLE_EXPORT_SCRIPT="${MOD_DIR}/bundle-export.sh"
@@ -123,11 +122,6 @@ fi
 # Archiver stop logic
 if [[ "${command}" == "stop" ]]; then
   "${STOP_SCRIPT}"
-fi
-
-# Archiver setup logic
-if [[ "${command}" == "setup" ]]; then
-  "${SETUP_SCRIPT}"
 fi
 
 # Archiver restore logic
@@ -186,11 +180,6 @@ fi
 # Archiver healthcheck logic
 if [[ "${command}" == "healthcheck" ]]; then
   "${HEALTHCHECK_SCRIPT}"
-fi
-
-# Archiver uninstall logic
-if [[ "${command}" == "uninstall" ]]; then
-  echo "Uninstall function coming soon."
 fi
 
 exit 0
