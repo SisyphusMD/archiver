@@ -1,13 +1,8 @@
 #!/bin/bash
 #
 # Archiver Health Check Script
-# Performs comprehensive health checks for monitoring systems
 #
-# Exit codes:
-#   0 - Healthy
-#   1 - Unhealthy
 
-# Archiver directory
 ARCHIVER_DIR="/opt/archiver"
 
 ERRORS=0

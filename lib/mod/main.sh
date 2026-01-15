@@ -1,14 +1,8 @@
 #!/bin/bash
 #
-# Archiver Main Script
-# Performs Duplicacy backup operations on services located in specified directories
+# Archiver Main Backup Script
 #
-# Usage instructions: This script is intended to be run by archiver.sh, rather than invoking directly.
 
-# ---------------------
-# Initial Setup
-# ---------------------
-# Time Variables
 START_TIME="$(date +%s)"
 DATE="$(date +'%Y-%m-%d')"
 DATETIME="$(date +'%Y-%m-%d_%H%M%S')"

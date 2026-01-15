@@ -7,7 +7,7 @@
 set -e
 
 # Require Docker environment
-source "/opt/archiver/lib/require-docker.sh"
+source "/opt/archiver/lib/src/require-docker.sh"
 
 # Configuration Section
 # ---------------------
