@@ -30,34 +30,40 @@ echo "==================================="
 echo "Archiver Container Starting"
 echo "==================================="
 
-# Check if running in setup mode
-if [ "$1" = "setup" ]; then
-    echo "Running in SETUP mode"
+# Check if running in init mode
+if [ "$1" = "init" ]; then
+    echo "Running in INIT mode"
     echo ""
-    echo "This will guide you through the initial configuration of Archiver."
-    echo "Make sure you have a volume mounted at /opt/archiver/bundle to save the generated bundle file."
+    echo "This will guide you through creating your Archiver configuration bundle."
+    echo "Make sure you have a volume mounted at /opt/archiver/bundle to save the bundle file."
     echo ""
 
-    # Ensure bundle output directory exists and is writable
+    # Check if bundle already exists
+    if [ -f "$BUNDLE_FILE" ]; then
+        echo "WARNING: Bundle file already exists at $BUNDLE_FILE"
+        echo "Continuing will create keys and config, then export a new bundle."
+        echo ""
+    fi
+
+    # Ensure bundle output directory exists
     mkdir -p "$BUNDLE_OUTPUT_DIR"
 
-    # Run setup script interactively
+    # Run initialization script
     cd /opt/archiver
-    exec ./archiver.sh setup
+    exec /opt/archiver/lib/mod/.init.sh
 fi
 
-# Normal runtime mode - validate required environment variables
+# Runtime mode requires bundle and password
 if [ -z "$BUNDLE_PASSWORD" ]; then
     echo "ERROR: BUNDLE_PASSWORD environment variable is required"
     echo "Please set it to the password used to encrypt your bundle.tar.enc file"
     exit 1
 fi
 
-# Check if bundle file exists
 if [ ! -f "$BUNDLE_FILE" ]; then
     echo "ERROR: Bundle file not found at $BUNDLE_FILE"
     echo "Please mount your bundle directory to /opt/archiver/bundle"
-    echo "Example: docker run -v /path/to/bundle/dir:/opt/archiver/bundle ..."
+    echo "Example: docker run -v /path/to/bundle:/opt/archiver/bundle ..."
     exit 1
 fi
 
