@@ -10,20 +10,33 @@ echo "This script will create a bundle file containing your config.sh and keys d
 echo "The bundle will be encrypted and protected by a password you provide below."
 echo "You must remember this password and keep a copy of the bundle file."
 
-# Prompt for password twice and compare
-while true; do
-    echo "Enter password to encrypt the bundle:"
-    read -rs PASSWORD
+# Check if BUNDLE_PASSWORD environment variable is set and offer to reuse it
+if [ -n "${BUNDLE_PASSWORD}" ]; then
+    echo ""
+    read -p "Reuse existing BUNDLE_PASSWORD environment variable? (Y/n): " -n 1 -r
     echo
-    echo "Re-enter password to confirm:"
-    read -rs PASSWORD_CONFIRM
-    echo
-    if [ "${PASSWORD}" == "${PASSWORD_CONFIRM}" ]; then
-        break
-    else
-        echo "Passwords do not match. Please try again."
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        PASSWORD="${BUNDLE_PASSWORD}"
+        echo "Using existing password."
     fi
-done
+fi
+
+# If PASSWORD not set (no env var or user declined), prompt for new password
+if [ -z "${PASSWORD}" ]; then
+    while true; do
+        echo "Enter password to encrypt the bundle:"
+        read -rs PASSWORD
+        echo
+        echo "Re-enter password to confirm:"
+        read -rs PASSWORD_CONFIRM
+        echo
+        if [ "${PASSWORD}" == "${PASSWORD_CONFIRM}" ]; then
+            break
+        else
+            echo "Passwords do not match. Please try again."
+        fi
+    done
+fi
 
 # Setup bundle directory
 mkdir -p "${BUNDLE_DIR}"
