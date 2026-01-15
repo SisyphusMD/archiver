@@ -494,3 +494,18 @@ archiver healthcheck    # Check system health
 archiver help           # Show help
 ```
 
+---
+
+## Duplicacy Licensing
+
+Archiver uses the [Duplicacy CLI v3.2.5](https://github.com/gilbertchen/duplicacy/tree/v3.2.5), which is:
+
+- **Free for personal use** and **commercial trials**
+- **Requires a CLI license** for non-trial commercial use ($50/computer/year from [duplicacy.com](https://duplicacy.com/buy.html))
+
+**What counts as commercial use?** Backing up files related to employment or for-profit activities.
+
+**Note:** Restore and management operations (restore, check, copy, prune) never require a license. Only the `backup` command requires a license for commercial use.
+
+For full license terms, see the [Duplicacy LICENSE](https://github.com/gilbertchen/duplicacy/blob/v3.2.5/LICENSE.md). If you're using Archiver commercially, please purchase a Duplicacy CLI license to support the project that makes this tool possible
+
