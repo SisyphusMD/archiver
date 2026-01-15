@@ -2,17 +2,6 @@
 
 # Archiver directory
 ARCHIVER_DIR="/opt/archiver"
-
-# Get the UID and GID of the user who invoked the script
-# In Docker, this might be root, which is fine
-if [ -n "${SUDO_USER}" ]; then
-  CALLER_UID=$(id -u "${SUDO_USER}")
-  CALLER_GID=$(id -g "${SUDO_USER}")
-else
-  CALLER_UID=$(id -u)
-  CALLER_GID=$(id -g)
-fi
-
 BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
 
 # Check if running in non-interactive mode (Docker)
@@ -89,14 +78,12 @@ fi
 mv "${TEMP_DIR}/config.sh" "${ARCHIVER_DIR}/config.sh"
 mkdir -p "${ARCHIVER_DIR}/keys"
 mv "${TEMP_DIR}/keys"/* "${ARCHIVER_DIR}/keys/"
-# Set permissions and ownership
-chown -R "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/keys"
+# Set permissions
 chmod 700 "${ARCHIVER_DIR}/keys"
 chmod 600 "${ARCHIVER_DIR}/keys/private.pem"
 chmod 644 "${ARCHIVER_DIR}/keys/public.pem"
 chmod 600 "${ARCHIVER_DIR}/keys/id_ed25519"
 chmod 644 "${ARCHIVER_DIR}/keys/id_ed25519.pub"
-chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"
 chmod 600 "${ARCHIVER_DIR}/config.sh"
 
 # Clean up temporary directory
@@ -107,10 +94,8 @@ if [ "${ARCHIVER_NON_INTERACTIVE}" != "1" ]; then
   # Move bundle file to bundle directory
   # Setup bundle directory
   mkdir -p "${BUNDLE_DIR}"
-  chown -R "${CALLER_UID}:${CALLER_GID}" "${BUNDLE_DIR}"
   chmod -R 700 "${BUNDLE_DIR}"
   # Set permissions of imported file and move to bundle directory
-  chown "${CALLER_UID}:${CALLER_GID}" "${SELECTED_FILE}"
   chmod 600 "${SELECTED_FILE}"
   mv "${SELECTED_FILE}" "${BUNDLE_DIR}"
 fi

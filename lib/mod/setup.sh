@@ -55,17 +55,6 @@ if [[ "${ENVIRONMENT_ARCHITECTURE}" == "aarch64" || "${ENVIRONMENT_ARCHITECTURE}
 elif [[ "${ENVIRONMENT_ARCHITECTURE}" == "x86_64" || "${ENVIRONMENT_ARCHITECTURE}" == "amd64" ]]; then
   DUPLICACY_ARCHITECTURE="x64"
 fi
-# Get the UID and GID of the user who invoked the script
-if [ -n "${SUDO_USER}" ]; then
-  CALLER_UID=$(id -u "${SUDO_USER}")
-  CALLER_GID=$(id -g "${SUDO_USER}")
-  CALLER_HOME=$(getent passwd "${SUDO_USER}" | cut -d: -f6)
-else
-  # Running as root directly (e.g., in Docker)
-  CALLER_UID=$(id -u)
-  CALLER_GID=$(id -g)
-  CALLER_HOME="${HOME}"
-fi
 
 # Exit if the operating system is not Linux or architecture is not recognized
 if [ "${DUPLICACY_OS}" != "linux" ] || [ "${DUPLICACY_ARCHITECTURE}" = "unknown" ]; then
@@ -210,7 +199,6 @@ import_if_missing() {
 create_keys_dir() {
   if [[ ! -d "${DUPLICACY_KEYS_DIR}" ]]; then
     mkdir -p "${DUPLICACY_KEYS_DIR}"
-    chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
     chmod 700 "${DUPLICACY_KEYS_DIR}"
   fi
 }
@@ -263,7 +251,6 @@ send "${RSA_PASSPHRASE}\r"
 expect eof
 EOF
 
-      chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
       chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
@@ -289,7 +276,6 @@ generate_ssh_keypair() {
       backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519"
       backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
       ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver"
-      chown -R "${CALLER_UID}:${CALLER_GID}" "${DUPLICACY_KEYS_DIR}"
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/id_ed25519"
       chmod 644 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
@@ -769,7 +755,6 @@ ROTATE_BACKUPS="${rotate_backups}" # Default: "true". Set to 'true' to enable ro
 PRUNE_KEEP="${prune_keep}" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
 EOL
 
-      chown "${CALLER_UID}:${CALLER_GID}" "${ARCHIVER_DIR}/config.sh"
       chmod 600 "${ARCHIVER_DIR}/config.sh"
       echo " - Configuration file created at ${ARCHIVER_DIR}/config.sh"
     else

@@ -132,10 +132,6 @@ local_restore_selections() {
 initialize_duplicacy() {
   if [ ! -d "${LOCAL_DIR}" ]; then
     mkdir -p -m 0755 "${LOCAL_DIR}"
-    # If variables available, use them for ownership
-    if [ -n "${INVOKING_UID}" ] && [ -n "${INVOKING_GID}" ]; then
-      chown "${INVOKING_UID}":"${INVOKING_GID}" "${LOCAL_DIR}"
-    fi
   fi
   
   cd "${LOCAL_DIR}" || handle_error "Failed to change directory to '${LOCAL_DIR}'."
@@ -342,10 +338,6 @@ configure_restore_options() {
 
 restore_repository() {
   duplicacy restore -r "${REVISION}" -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" -stats -threads "${RESTORE_THREADS}" "${RESTORE_FLAGS}"
-  # Fix ownership of restored files to match the invoking user
-  if [ -n "${INVOKING_UID}" ] && [ -n "${INVOKING_GID}" ]; then
-    chown -R "${INVOKING_UID}":"${INVOKING_GID}" "${LOCAL_DIR}"
-  fi
   echo "Repository restored."
 }
 

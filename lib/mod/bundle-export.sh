@@ -25,19 +25,8 @@ while true; do
     fi
 done
 
-# Get the UID and GID of the user who invoked the script
-if [ -n "${SUDO_USER}" ]; then
-  CALLER_UID=$(id -u "${SUDO_USER}")
-  CALLER_GID=$(id -g "${SUDO_USER}")
-else
-  # Running as root directly (e.g., in Docker)
-  CALLER_UID=$(id -u)
-  CALLER_GID=$(id -g)
-fi
-
 # Setup bundle directory
 mkdir -p "${BUNDLE_DIR}"
-chown -R "${CALLER_UID}:${CALLER_GID}" "${BUNDLE_DIR}"
 chmod 700 "${BUNDLE_DIR}"
 
 # Define the output file names (always bundle.tar / bundle.tar.enc)
@@ -73,7 +62,6 @@ openssl enc -aes-256-cbc -pbkdf2 -salt -in "${OUTPUT_TAR}" -out "${OUTPUT_ENC}" 
 rm "${OUTPUT_TAR}"
 
 # Set file permissions
-chown -R "${CALLER_UID}:${CALLER_GID}" "${BUNDLE_DIR}"
 chmod -R 600 "${BUNDLE_DIR}"/*
 
 echo "Config and keys have been bundled as '${OUTPUT_ENC}'."
