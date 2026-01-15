@@ -496,9 +496,11 @@ archiver help           # Show help
 
 ---
 
-## Duplicacy Licensing
+## Licensing
 
-Archiver uses the [Duplicacy CLI v3.2.5](https://github.com/gilbertchen/duplicacy/tree/v3.2.5), which is:
+Archiver is licensed under [GNU AGPL-3.0](LICENSE).
+
+Archiver uses the [Duplicacy CLI v3.2.5](https://github.com/gilbertchen/duplicacy/tree/v3.2.5) binary as an external tool. Duplicacy is licensed separately under [its own terms](https://github.com/gilbertchen/duplicacy/blob/v3.2.5/LICENSE.md):
 
 - **Free for personal use** and **commercial trials**
 - **Requires a CLI license** for non-trial commercial use ($50/computer/year from [duplicacy.com](https://duplicacy.com/buy.html))
@@ -507,5 +509,5 @@ Archiver uses the [Duplicacy CLI v3.2.5](https://github.com/gilbertchen/duplicac
 
 **Note:** Restore and management operations (restore, check, copy, prune) never require a license. Only the `backup` command requires a license for commercial use.
 
-For full license terms, see the [Duplicacy LICENSE](https://github.com/gilbertchen/duplicacy/blob/v3.2.5/LICENSE.md). If you're using Archiver commercially, please purchase a Duplicacy CLI license to support the project that makes this tool possible
+If you're using Archiver commercially, please purchase a Duplicacy CLI license to support the project that makes this tool possible
 
