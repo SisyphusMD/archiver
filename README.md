@@ -69,20 +69,13 @@ services:
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"
       CRON_SCHEDULE: "0 3 * * *"  # Daily at 3am, or omit for manual mode
+      TZ: "UTC"  # Timezone for cron scheduling
 
     volumes:
-      # Encrypted config/keys bundle directory (contains bundle.tar.enc)
-      - ./archiver-bundle:/opt/archiver/bundle
-
-      # Optional: persistent logs
-      - ./archiver-logs:/opt/archiver/logs
-
-      # Required: directories to backup (must match config.sh paths)
-      - /path/to/host/services:/data/services:ro
-
-      # Optional: Docker socket (required if service scripts need to control other containers)
-      # Security note: Grants container access to Docker daemon - use only if needed
-      # - /var/run/docker.sock:/var/run/docker.sock
+      - ./archiver-bundle:/opt/archiver/bundle  # Bundle file (required)
+      - ./archiver-logs:/opt/archiver/logs  # Persistent logs (optional)
+      - /path/to/host/services:/data/services:ro  # Data to backup (must match config.sh)
+      # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
 ```
 
 Update paths and password, then start:
@@ -109,6 +102,7 @@ volumes:
 |----------|----------|-------------|
 | `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc |
 | `CRON_SCHEDULE` | No | Cron expression for automatic backups (empty = manual mode) |
+| `TZ` | No | Timezone for cron scheduling (default: UTC) |
 
 ### Manual Commands
 
@@ -182,15 +176,15 @@ When prompted for the local directory path during restore, enter the container p
 
 ### Image Tags
 
-- `0.5.0` - Specific version (recommended)
-- `0.5` - Minor version (receives patches automatically)
-- `0` - Major version (receives minor/patch updates)
+- `v0.7.0` - Specific version (recommended)
+- `v0.7` - Minor version (receives patches automatically)
+- `v0` - Major version (receives minor/patch updates)
 
 ---
 
 ## Storage Backend Setup
 
-Prepare at least one storage location before running setup.
+Prepare at least one storage location before running init.
 
 ### Local Disk
 
@@ -259,7 +253,7 @@ Local disk storage is the simplest and fastest option, ideal as your primary bac
 
 #### Add SSH Key
 
-Generate SSH key first (setup script can do this), then:
+Generate SSH key first (init script can do this), then:
 
 1. **Control Panel** → **User & Group** → **Advanced**
 2. Enable **user home service**
@@ -331,48 +325,9 @@ Create these through your S3 provider's console (AWS, Wasabi, Backblaze S3 API, 
 5. Name your app and agree to terms
 6. Save the **API Token/Key**
 
-You'll enter the **User Key** and **API Token** during setup.
+You'll enter the **User Key** and **API Token** during init.
 
 </details>
-
----
-
-## Restoration
-
-### Restoring Archiver Configuration
-
-If you need to set up Archiver on a new machine:
-
-1. Clone repository:
-   ```bash
-   cd ~
-   git clone --branch vv0.7.0 https://github.com/SisyphusMD/archiver.git
-   cd archiver
-   ```
-
-2. Place your `bundle.tar.enc` file in the archiver directory
-
-3. Run setup:
-   ```bash
-   ./archiver.sh setup
-   ```
-   The setup script will detect and import your bundle file.
-
-### Restoring Backed Up Data
-
-To restore files from a backup:
-
-```bash
-archiver restore
-```
-
-Follow the interactive prompts to:
-1. Select storage backend
-2. Choose snapshot ID
-3. Specify local directory for restoration
-4. Select revision to restore
-
-If a `restore-service.sh` script exists in the restored directory, you'll be prompted to run it.
 
 ---
 
@@ -482,21 +437,6 @@ echo "Starting service..."
 systemctl start myservice
 ```
 
-### Cron Scheduling
-
-During setup or manually:
-
-```bash
-# Daily at 3am
-(crontab -l 2>/dev/null; echo "0 3 * * * archiver start") | crontab -
-
-# Every 6 hours
-(crontab -l 2>/dev/null; echo "0 */6 * * * archiver start") | crontab -
-
-# Weekly on Sunday at 2am
-(crontab -l 2>/dev/null; echo "0 2 * * 0 archiver start") | crontab -
-```
-
 ### Command Reference
 
 ```bash
@@ -514,7 +454,6 @@ archiver bundle export  # Create encrypted config/keys bundle
 archiver bundle import  # Import from encrypted bundle
 archiver restore        # Restore data from backup
 archiver healthcheck    # Check system health
-archiver setup          # Run initial setup
 archiver help           # Show help
 ```
 
