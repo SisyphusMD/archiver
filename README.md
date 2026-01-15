@@ -60,22 +60,26 @@ Create `compose.yaml`:
 
 ```yaml
 services:
+
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:v0.7.0
+
     container_name: archiver
+    image: ghcr.io/sisyphusmd/archiver:v0.7.0
     restart: unless-stopped
-    hostname: backup-server
+
+    hostname: backup-server       # used for backup service label (optional)
 
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"
-      CRON_SCHEDULE: "0 3 * * *"  # Daily at 3am, or omit for manual mode
-      TZ: "UTC"  # Timezone for cron scheduling
+      CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
+      TZ: "UTC"                   # Timezone for cron scheduling
 
     volumes:
-      - ./archiver-bundle:/opt/archiver/bundle  # Bundle file (required)
-      - ./archiver-logs:/opt/archiver/logs  # Persistent logs (optional)
-      - /path/to/host/services:/data/services:ro  # Data to backup (must match config.sh)
+      - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
+      - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
+      - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match config.sh)
       # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
+      # - /path/to/host/restore-dir:/mnt/restore-dir # Restore location (will be prompted)
 ```
 
 Update paths and password, then start:
@@ -113,6 +117,7 @@ View logs:
 docker exec -it archiver archiver logs
 ```
 
+Check status:
 ```bash
 docker exec archiver archiver status
 docker exec archiver archiver healthcheck
@@ -123,9 +128,10 @@ Start backup:
 docker exec archiver archiver start
 docker exec archiver archiver start logs    # with log viewing
 docker exec archiver archiver start prune   # force rotation
+docker exec archiver archiver start retain  # force retention
 ```
 
-Manage backups:
+Manage active backups:
 ```bash
 docker exec archiver archiver pause
 docker exec archiver archiver resume
@@ -352,11 +358,9 @@ Define multiple storage locations (local disk, SFTP, B2, S3):
 
 ```bash
 # Primary storage (required)
-STORAGE_TARGET_1_NAME="backblaze"
-STORAGE_TARGET_1_TYPE="b2"
-STORAGE_TARGET_1_B2_BUCKETNAME="my-bucket"
-STORAGE_TARGET_1_B2_ID="keyID"
-STORAGE_TARGET_1_B2_KEY="applicationKey"
+STORAGE_TARGET_1_NAME="local"
+STORAGE_TARGET_1_TYPE="local"
+STORAGE_TARGET_1_LOCAL_PATH="/mnt/backup/storage"
 
 # Secondary storage (optional)
 STORAGE_TARGET_2_NAME="nas"
@@ -366,6 +370,22 @@ STORAGE_TARGET_2_SFTP_PORT="22"
 STORAGE_TARGET_2_SFTP_USER="backup"
 STORAGE_TARGET_2_SFTP_PATH="/volume1/backups"
 STORAGE_TARGET_2_SFTP_KEY_FILE="/path/to/keys/id_ed25519"
+
+# Tertiary storage (optional)
+STORAGE_TARGET_3_NAME="backblaze"
+STORAGE_TARGET_3_TYPE="b2"
+STORAGE_TARGET_3_B2_BUCKETNAME="my-bucket"
+STORAGE_TARGET_3_B2_ID="keyID"
+STORAGE_TARGET_3_B2_KEY="applicationKey"
+
+# Quarternary storage (optional)
+STORAGE_TARGET_4_NAME="hetzner"
+STORAGE_TARGET_4_TYPE="s3"
+STORAGE_TARGET_4_S3_BUCKETNAME="my-bucket"
+STORAGE_TARGET_4_S3_ENDPOINT="endpoint"
+STORAGE_TARGET_4_S3_REGION="none"
+STORAGE_TARGET_4_S3_ID="id"
+STORAGE_TARGET_4_S3_SECRET="secret"
 ```
 
 ### Secrets
@@ -387,6 +407,23 @@ This keeps:
 - Daily backups for 7 days (7:7)
 - Weekly backups for 30 days (30:30)
 - Monthly backups for 180 days (0:180)
+
+### Performance
+
+```bash
+DUPLICACY_THREADS="10"
+```
+
+Number of parallel upload/download threads for duplicacy operations. (Default: 4)
+
+
+### Notifications
+
+```bash
+NOTIFICATION_SERVICE="Pushover"
+PUSHOVER_USER_KEY="userKey"
+PUSHOVER_API_TOKEN="apiToken"
+```
 
 ---
 
@@ -421,20 +458,20 @@ service_specific_post_backup_function() {
 
 ### Custom Restore Scripts
 
-Create `restore-service.sh` in any service directory:
+Create `restore-service.sh` in any service directory to run post-restore tasks:
 
 ```bash
 #!/bin/bash
 # Runs after restoration completes
 
-echo "Restoring database..."
-mysql -u root < backup.sql
+echo "Importing database..."
+docker exec postgres-container psql -U user -d dbname -f /backup/dump.sql
 
 echo "Setting permissions..."
-chown -R www-data:www-data /var/www
+chown -R 1000:1000 /mnt/restored-data
 
-echo "Starting service..."
-systemctl start myservice
+echo "Starting services..."
+docker compose up -d
 ```
 
 ### Command Reference

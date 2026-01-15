@@ -1,17 +1,21 @@
 services:
+
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:v0.7.0
+
     container_name: archiver
+    image: ghcr.io/sisyphusmd/archiver:v0.7.0
     restart: unless-stopped
-    hostname: backup-server
+
+    hostname: backup-server       # used for backup service label (optional)
 
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"
-      CRON_SCHEDULE: "0 3 * * *"  # Daily at 3am, or omit for manual mode
-      TZ: "UTC"  # Timezone for cron scheduling
+      CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
+      TZ: "UTC"                   # Timezone for cron scheduling
 
     volumes:
-      - ./archiver-bundle:/opt/archiver/bundle  # Bundle file (required)
-      - ./archiver-logs:/opt/archiver/logs  # Persistent logs (optional)
-      - /path/to/host/services:/data/services:ro  # Data to backup (must match config.sh)
+      - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
+      - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
+      - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match config.sh)
       # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
+      # - /path/to/host/restore-dir:/mnt/restore-dir # Restore location (will be prompted)
