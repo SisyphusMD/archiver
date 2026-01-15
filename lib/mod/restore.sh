@@ -2,14 +2,6 @@
 
 set -e # Exit immediately if a command exits with a non-zero status
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  export INVOKING_UID="$(id -u)"
-  export INVOKING_GID="$(id -g)"
-  exec sudo -E "$0" "$@"
-fi
-
 # Creating this function for requirements of sourced functions
 log_message() {
   echo "$@"

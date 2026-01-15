@@ -26,12 +26,6 @@
 
 set -e # Exit immediately if a command exits with a non-zero status
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
-fi
-
 # Configuration Section
 # ---------------------
 # Archiver directory

@@ -6,12 +6,6 @@ ARCHIVER_DIR="/opt/archiver"
 # Define bundle directory
 BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
-fi
-
 echo "This script will create a bundle file containing your config.sh and keys directory."
 echo "The bundle will be encrypted and protected by a password you provide below."
 echo "You must remember this password and keep a copy of the bundle file."

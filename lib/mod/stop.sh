@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
-fi
-
 # Archiver directory
 ARCHIVER_DIR="/opt/archiver"
 

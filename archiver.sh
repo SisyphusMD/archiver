@@ -3,12 +3,6 @@
 # Record the start time before calling main.sh
 START_TIME="$(date +%s)"
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
-fi
-
 usage() {
   echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|bundle|uninstall|restore|healthcheck|help} [logs|prune|retain]"
   echo "Note:"
