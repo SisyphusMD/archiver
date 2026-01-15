@@ -7,11 +7,11 @@
 
 ## What is Archiver?
 
-Archiver automates backing up directories to multiple remote storage locations with encryption and deduplication. Configure once, then backups run automatically via cron or Docker scheduling.
+Archiver automates backing up directories to multiple remote storage locations with encryption and deduplication. Configure once, then backups run automatically on a schedule.
 
 Each directory gets backed up independently, with optional pre/post-backup scripts for service-specific needs (like database dumps). Backups are encrypted at rest and deduplicated across all your directories to save storage space.
 
-Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage. Docker-only deployment for easy setup on any platform.
+Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage.
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
   ghcr.io/sisyphusmd/archiver:v0.7.0 init
 ```
-Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker Installation](#docker-installation) for details.
+Then use the generated `bundle.tar.enc` file with Docker Compose. See [Installation](#installation) for details.
 
 ## Features
 
@@ -35,17 +35,16 @@ Then use the generated `bundle.tar.enc` file with Docker Compose. See [Docker In
 ---
 
 
-## Docker Installation
-
-Run Archiver in a container on any platform.
+## Installation
 
 ### Prerequisites
 
-- Docker or Docker Compose installed
+- [Docker](https://docs.docker.com/get-docker/) installed
+- [Docker Compose](https://docs.docker.com/compose/install/) (optional, for easier management)
 
 ### Step 1: Generate Bundle File
 
-Run initialization interactively in a container to generate your configuration bundle:
+Run initialization interactively to generate your configuration bundle:
 
 ```bash
 docker run -it --rm \
@@ -55,14 +54,14 @@ docker run -it --rm \
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
 
-### Step 2: Configure Docker Compose
+### Step 2: Configure
 
 Create `compose.yaml`:
 
 ```yaml
 services:
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:0.6.5
+    image: ghcr.io/sisyphusmd/archiver:v0.7.0
     container_name: archiver
     restart: unless-stopped
     hostname: backup-server
@@ -93,123 +92,55 @@ docker compose up -d
 docker exec -it archiver archiver logs
 ```
 
-### Docker Socket Access (Advanced)
+### Docker Socket (Advanced)
 
-If your service-specific backup scripts need to control other Docker containers (e.g., putting a database in maintenance mode, creating database dumps via `docker exec`), you must mount the Docker socket:
+If your backup scripts need to control other containers (e.g., `docker exec` for database dumps), mount the socket:
 
 ```yaml
 volumes:
   - /var/run/docker.sock:/var/run/docker.sock
 ```
 
-**Security Warning**: Mounting the Docker socket grants the archiver container root-level access to the Docker daemon. This means the container can:
-- Start, stop, or delete any container on the host
-- Access data from any container
-- Potentially compromise the host system
+**Security Warning**: This grants root-level access to the Docker daemon. The container can start/stop/delete any container or access any data. Only use if necessary.
 
-**Only mount the Docker socket if:**
-- Your backup scripts genuinely need to control other containers
-- You trust the archiver code and your service-specific backup scripts
-- You understand and accept the security implications
-
-**Examples of when you need it:**
-- Running `docker exec` to create database dumps before backup
-- Putting services in maintenance mode during backups
-- Stopping/starting containers as part of the backup process
-
-**Alternative**: If possible, design your backup strategy to avoid needing Docker socket access (e.g., use volume mounts to access data directly, use database backup tools inside the archiver container).
-
-### Docker Environment Variables
+### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc |
 | `CRON_SCHEDULE` | No | Cron expression for automatic backups (empty = manual mode) |
 
-### Docker Manual Commands
+### Manual Commands
 
-#### Automated vs Manual Operation
+With `CRON_SCHEDULE` set, backups run automatically. Without it, run commands manually.
 
-The container can run in two modes:
-
-1. **Automated mode** (with `CRON_SCHEDULE` set): Backups run automatically on schedule
-2. **Manual mode** (without `CRON_SCHEDULE` or set to empty string): Container stays idle, waiting for manual commands
-
-#### Viewing Logs
-
-The **recommended method** to view logs is using the built-in archiver command:
-
+View logs:
 ```bash
-# View logs with built-in viewer (recommended)
 docker exec -it archiver archiver logs
 ```
 
-Alternative methods:
-
 ```bash
-# View live logs from Docker (shows only new logs from when command starts)
-docker logs -f archiver
-
-# Tail log files directly
-docker exec archiver tail -f /opt/archiver/logs/archiver.log
-
-# From mounted volume on host (if logs volume is mounted)
-tail -f /path/to/host/logs/archiver.log
-```
-
-#### Checking Status Before Manual Operations
-
-**Best practice**: Check if a backup is already running before starting manual commands:
-
-```bash
-# Check current status (recommended first step)
 docker exec archiver archiver status
-
-# Check system health
 docker exec archiver archiver healthcheck
 ```
 
-#### Running Manual Backups
-
-**Note**: Manual backups are only needed if `CRON_SCHEDULE` is not set. With automated mode, backups run on schedule.
-
+Start backup:
 ```bash
-# Start a backup immediately
 docker exec archiver archiver start
-
-# Start a backup and view logs
-docker exec -it archiver archiver start logs
-
-# Force pruning/rotation on next backup
-docker exec archiver archiver start prune
-
-# Skip pruning/rotation on next backup
-docker exec archiver archiver start retain
+docker exec archiver archiver start logs    # with log viewing
+docker exec archiver archiver start prune   # force rotation
 ```
 
-#### Managing Running Backups
-
+Manage backups:
 ```bash
-# Pause a running backup
 docker exec archiver archiver pause
-
-# Resume a paused backup
 docker exec archiver archiver resume
-
-# Stop a running backup
 docker exec archiver archiver stop
-
-# Restart a backup
-docker exec archiver archiver restart
 ```
 
-#### Bundle Management
-
+Export/import bundle:
 ```bash
-# Export bundle (create new bundle from current config)
 docker exec -it archiver archiver bundle export
-
-# Import bundle (typically done automatically at startup)
 docker exec -it archiver archiver bundle import
 ```
 
@@ -243,7 +174,7 @@ docker run --rm -it \
   -e BUNDLE_PASSWORD="your-bundle-password-here" \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.6.5 \
+  ghcr.io/sisyphusmd/archiver:v0.7.0 \
   archiver restore
 ```
 
@@ -415,7 +346,7 @@ If you need to set up Archiver on a new machine:
 1. Clone repository:
    ```bash
    cd ~
-   git clone --branch v0.6.5 https://github.com/SisyphusMD/archiver.git
+   git clone --branch vv0.7.0 https://github.com/SisyphusMD/archiver.git
    cd archiver
    ```
 
