@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Require Docker environment
+source "/opt/archiver/lib/require-docker.sh"
+
 # Record the start time before calling main.sh
 START_TIME="$(date +%s)"
 

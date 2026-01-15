@@ -1,30 +1,13 @@
 #!/bin/bash
-# ==============================================================================
-# Installation Script for Archiver Service
-# ==============================================================================
-# This script automates the installation and initial setup required for running
-# the Archiver service. It ensures that all necessary dependencies are
-# installed and configurations are applied.
 #
-# Usage:
-#   sudo ./setup.sh
+# Archiver Initialization Script
+# Creates configuration bundle for Docker deployment
 #
-# Pre-requisites:
-# - The script must be run as root or with sudo privileges.
-# - Internet connection for downloading necessary packages.
-# - Compatible with linux-based systems.
-#
-# The script will:
-# - Update the system package list.
-# - Install required software packages and dependencies.
-# - Configure system parameters and environment variables.
-# - Download and set up any necessary scripts or binaries for the service.
-#
-# Please ensure you have read and understood the service's documentation
-# before proceeding with the installation.
-# ==============================================================================
 
-set -e # Exit immediately if a command exits with a non-zero status
+set -e
+
+# Require Docker environment
+source "/opt/archiver/lib/require-docker.sh"
 
 # Configuration Section
 # ---------------------
