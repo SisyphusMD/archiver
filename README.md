@@ -445,14 +445,14 @@ DUPLICACY_FILTERS_PATTERNS=(
 
 # Run before backup
 service_specific_pre_backup_function() {
-  echo "Stopping service..."
-  systemctl stop myservice
+  echo "Dumping database..."
+  docker exec postgres-container pg_dump -U user dbname > backup.sql
 }
 
 # Run after backup
 service_specific_post_backup_function() {
-  echo "Starting service..."
-  systemctl start myservice
+  echo "Cleaning up..."
+  rm -f backup.sql
 }
 ```
 
