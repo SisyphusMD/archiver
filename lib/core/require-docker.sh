@@ -1,5 +1,7 @@
 #!/bin/bash
 
+REQUIRE_DOCKER_SH_SOURCED=true
+
 # Check if running in Docker
 if [ ! -f "/.dockerenv" ]; then
   echo "ERROR: Only Docker deployment is supported" >&2

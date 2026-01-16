@@ -1,6 +1,11 @@
 #!/bin/bash
 
-source "/opt/archiver/lib/core/common.sh"
+# Source common.sh (must use regular source for the first file)
+if [[ -z "${COMMON_SH_SOURCED}" ]]; then
+  source "/opt/archiver/lib/core/common.sh"
+fi
+
+BUNDLE_IMPORT_SH_SOURCED=true
 
 # Check if running in non-interactive mode (Docker)
 if [ "${ARCHIVER_NON_INTERACTIVE}" = "1" ]; then

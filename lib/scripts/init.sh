@@ -6,9 +6,13 @@
 
 set -e
 
-# Require Docker environment
-source "/opt/archiver/lib/core/require-docker.sh"
-source "/opt/archiver/lib/core/common.sh"
+# Source common.sh (must use regular source for the first file)
+if [[ -z "${COMMON_SH_SOURCED}" ]]; then
+  source "/opt/archiver/lib/core/common.sh"
+fi
+source_if_not_sourced "${REQUIRE_DOCKER_CORE}"
+
+INIT_SH_SOURCED=true
 
 RSA_PASSPHRASE=""
 

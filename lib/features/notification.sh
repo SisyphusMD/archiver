@@ -1,8 +1,13 @@
 #!/bin/bash
 
-source "/opt/archiver/lib/core/common.sh"
-source "/opt/archiver/lib/core/logging.sh"
-source "/opt/archiver/lib/core/config.sh"
+# Source common.sh (must use regular source for the first file)
+if [[ -z "${COMMON_SH_SOURCED}" ]]; then
+  source "/opt/archiver/lib/core/common.sh"
+fi
+source_if_not_sourced "${LOGGING_CORE}"
+source_if_not_sourced "${CONFIG_CORE}"
+
+NOTIFICATION_SH_SOURCED=true
 
 send_pushover_notification() {
   local title="${1}"

@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# Require Docker environment
-source "/opt/archiver/lib/core/require-docker.sh"
+# Source common.sh (must use regular source for the first file)
+if [[ -z "${COMMON_SH_SOURCED}" ]]; then
+  source "/opt/archiver/lib/core/common.sh"
+fi
+source_if_not_sourced "${REQUIRE_DOCKER_CORE}"
 
 usage() {
   echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|healthcheck|help} [logs|prune|retain]"

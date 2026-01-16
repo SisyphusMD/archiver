@@ -1,7 +1,13 @@
 #!/bin/bash
 
-source "/opt/archiver/lib/core/common.sh"
-source "/opt/archiver/lib/core/error.sh"
+# Source common.sh (must use regular source for the first file)
+if [[ -z "${COMMON_SH_SOURCED}" ]]; then
+  source "/opt/archiver/lib/core/common.sh"
+fi
+source_if_not_sourced "${ERROR_CORE}"
+source_if_not_sourced "${NOTIFICATION_FEATURE}"
+
+LOGGING_SH_SOURCED=true
 
 log_message() {
   local log_level="${1}"
@@ -14,14 +20,17 @@ log_message() {
   service_name="${SERVICE:-archiver}"
   target_log_file="${LOG_DIR}/archiver.log"
 
+  # Write to log file, call handle_error on failure (protected by RECURSIVE_CALL guard)
   echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}" >> "${target_log_file}" || \
-    handle_error "Failed to log message for ${service_name} service to ${target_log_file}."
+    handle_error "Failed to log message for ${service_name} service to ${target_log_file}. Check if the log file is writable and disk space is available."
 
+  # Display WARNING and ERROR messages to console
   if [[ "${log_level}" == "WARNING" || "${log_level}" == "ERROR" ]]; then
     echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
   fi
 
-  if [[ "${log_level}" == "ERROR" ]] && type notify &>/dev/null; then
+  # Send notification for ERROR messages
+  if [[ "${log_level}" == "ERROR" ]]; then
     notify "Archiver Error" "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
   fi
 }
