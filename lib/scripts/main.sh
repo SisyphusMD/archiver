@@ -50,6 +50,7 @@ process_service() {
 
   cd "${service_dir}" || { handle_error "Failed to change to '${service_dir}'. Continuing."; return 1; }
 
+  SERVICE_DIR="${service_dir}"
   SERVICE="$(basename "${PWD}")"
   log_message "INFO" "Processing '${SERVICE}' service."
 
