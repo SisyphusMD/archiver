@@ -1,10 +1,6 @@
 #!/bin/bash
 
-# Archiver directory
-ARCHIVER_DIR="/opt/archiver"
-
-# Define bundle directory
-BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
+source "/opt/archiver/lib/core/common.sh"
 
 echo "This script will create a bundle file containing your config.sh and keys directory."
 echo "The bundle will be encrypted and protected by a password you provide below."
@@ -82,12 +78,11 @@ echo "Please keep a copy of this bundle file in a safe location."
 echo
 
 # Display SSH public key if it exists (useful for adding to SFTP servers)
-SSH_PUB_KEY="${ARCHIVER_DIR}/keys/id_ed25519.pub"
-if [ -f "${SSH_PUB_KEY}" ]; then
+if [ -f "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" ]; then
   echo "=========================================="
   echo "SSH Public Key (for SFTP server access):"
   echo "=========================================="
-  cat "${SSH_PUB_KEY}"
+  cat "${DUPLICACY_SSH_PUBLIC_KEY_FILE}"
   echo
   echo "Copy this key to your SFTP server's authorized_keys file if using SFTP storage."
 fi

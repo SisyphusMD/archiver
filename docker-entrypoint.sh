@@ -4,9 +4,11 @@ set -e
 # Docker entrypoint script for Archiver
 # Handles import of encrypted config/keys and optional cron setup
 
+source "/opt/archiver/lib/core/common.sh"
+
 BUNDLE_FILE="/opt/archiver/bundle/bundle.tar.enc"
 BUNDLE_OUTPUT_DIR="/opt/archiver/bundle"
-LOG_FILE="/opt/archiver/logs/archiver.log"
+LOG_FILE="${LOG_DIR}/archiver.log"
 
 # Signal handler for graceful shutdown
 handle_shutdown() {
@@ -50,7 +52,7 @@ if [ "$1" = "init" ]; then
 
     # Run initialization script
     cd /opt/archiver
-    exec /opt/archiver/lib/mod/.init.sh
+    exec /opt/archiver/lib/scripts/init.sh
 fi
 
 # Runtime mode requires bundle and password
@@ -76,7 +78,7 @@ export ARCHIVER_BUNDLE_PASSWORD="$BUNDLE_PASSWORD"
 export ARCHIVER_BUNDLE_FILE="$BUNDLE_FILE"
 
 cd /opt/archiver
-if ! /opt/archiver/lib/mod/bundle-import.sh; then
+if ! /opt/archiver/lib/scripts/bundle-import.sh; then
     echo "ERROR: Failed to import configuration"
     echo "Please verify your BUNDLE_PASSWORD is correct"
     exit 1
@@ -85,12 +87,12 @@ fi
 echo "Configuration imported successfully"
 
 # Verify critical files exist after import
-if [ ! -f "/opt/archiver/config.sh" ]; then
+if [ ! -f "${CONFIG_FILE}" ]; then
     echo "ERROR: config.sh not found after import"
     exit 1
 fi
 
-if [ ! -f "/opt/archiver/keys/private.pem" ]; then
+if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
     echo "ERROR: RSA keys not found after import"
     exit 1
 fi
@@ -100,21 +102,21 @@ echo "All required files present"
 # Start log tailer in background to forward logs to stdout
 # This allows 'docker logs -f' to work
 # Use tail -F to follow the symlink through log rotations
-if [ -d "/opt/archiver/logs" ]; then
+if [ -d "${LOG_DIR}" ]; then
     (
         # Wait for log file to be created (may take a moment if cron is used)
-        while [ ! -f "$LOG_FILE" ]; do
+        while [ ! -f "${LOG_FILE}" ]; do
             sleep 1
         done
 
         # Display logo
-        if [ -f "/opt/archiver/lib/logos/logo.ascii" ]; then
-            cat /opt/archiver/lib/logos/logo.ascii
+        if [ -f "${LOGO_DIR}/logo.ascii" ]; then
+            cat "${LOGO_DIR}/logo.ascii"
             echo ""
         fi
         echo "--- Archiver Logs ---"
         # -F follows by name (handles log rotation), -n 0 shows only new lines from now
-        tail -F -n 0 "$LOG_FILE" 2>/dev/null
+        tail -F -n 0 "${LOG_FILE}" 2>/dev/null
     ) &
     LOG_TAILER_PID=$!
 fi

@@ -1,57 +1,15 @@
 #!/bin/bash
 
-set -e # Exit immediately if a command exits with a non-zero status
+source "/opt/archiver/lib/core/common.sh"
+source "/opt/archiver/lib/core/error.sh"
+source "/opt/archiver/lib/core/config.sh"
 
-# Creating this function for requirements of sourced functions
+# Simple log_message for user output (restore is interactive)
 log_message() {
   echo "$@"
 }
 
-handle_error() {
-  log_message "Error: ${1}"
-  exit 1
-}
-
-# Configuration Section
-# ---------------------
-# Archiver directory
-ARCHIVER_DIR="/opt/archiver"
-
-KEYS_DIR="${ARCHIVER_DIR}/keys"
-DUPLICACY_RSA_PUBLIC_KEY_FILE="${KEYS_DIR}/public.pem" # Path to RSA public key file for Duplicacy
-DUPLICACY_RSA_PRIVATE_KEY_FILE="${KEYS_DIR}/private.pem" # Path to RSA private key file for Duplicacy
-DUPLICACY_SSH_PUBLIC_KEY_FILE="${KEYS_DIR}/id_ed25519.pub" # Path to SSH public key file for Duplicacy
-DUPLICACY_SSH_PRIVATE_KEY_FILE="${KEYS_DIR}/id_ed25519" # Path to SSH private key file for Duplicacy
-
-# Check if duplicacy is available and exit if not
-if ! command -v duplicacy &> /dev/null; then
-  handle_error "Unable to find the Duplicacy binary in the PATH. This script requires the Duplicacy binary to function. Please install it before running this script."
-fi
-
-# Check if config.sh file is available, and exit if not
-if [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
-  handle_error "Unable to find your config.sh file. This script requires your backed up config.sh file from the archiver directory. Please restore it before running this script."
-fi
-
-if [ ! -f "${KEYS_DIR}/private.pem" ] || [ ! -f "${KEYS_DIR}/public.pem" ]; then
-  handle_error "Unable to find your RSA key files. This script requires your backed up RSA private.pem and public.pem files from the keys directory. Please restore those before running this script."
-fi
-
-# ---------------------
-# Configuration Check
-# ---------------------
-source "${ARCHIVER_DIR}/lib/src/set-config.sh"
-# imports functions:
-#   - verify_config
-#   - expand_service_directories
-#   - count_storage_targets
-#   - verify_target_settings
-#   - check_required_secrets
-#   - check_notification_config
-#   - check_backup_rotation_settings
-# exports variables:
-#   - STORAGE_TARGET_COUNT
-#   - others I haven't documented yet
+# Verify configuration
 count_storage_targets
 verify_target_settings
 check_required_secrets

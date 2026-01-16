@@ -1,10 +1,9 @@
 #!/bin/bash
 
-# Define primary Duplicacy-related configuration variables.
-DUPLICACY_BIN="duplicacy" # Path to Duplicacy binary. Maybe a bad idea, but assuming duplicacy is in PATH. Previously used "/usr/local/bin/duplicacy".
-DUPLICACY_KEY_DIR="${ARCHIVER_DIR}/keys" # Path to Duplicacy key directory
-DUPLICACY_RSA_PUBLIC_KEY_FILE="${DUPLICACY_KEY_DIR}/public.pem" # Path to RSA public key file for Duplicacy
-DUPLICACY_RSA_PRIVATE_KEY_FILE="${DUPLICACY_KEY_DIR}/private.pem" # Path to RSA private key file for Duplicacy
+source "/opt/archiver/lib/core/common.sh"
+source "/opt/archiver/lib/core/logging.sh"
+
+DUPLICACY_BIN="duplicacy"
 
 set_duplicacy_variables() {
   DUPLICACY_REPO_DIR="${SERVICE_DIR}/.duplicacy" # Directory for various Duplicacy repos
@@ -14,12 +13,7 @@ set_duplicacy_variables() {
 }
 
 duplicacy_binary_check() {
-  if ! command -v "${DUPLICACY_BIN}" &> /dev/null; then
-    handle_error "Duplicacy binary not installed. Please install Duplicacy binary before running main script."
-    exit 1
-  else
-    log_message "INFO" "Duplicacy binary is installed. Proceeding with backup script." 
-  fi
+  log_message "INFO" "Proceeding with backup script."
 }
 
 duplicacy_verify() {

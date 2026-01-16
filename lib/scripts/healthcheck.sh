@@ -1,14 +1,11 @@
 #!/bin/bash
-#
-# Archiver Health Check Script
-#
 
-ARCHIVER_DIR="/opt/archiver"
+source "/opt/archiver/lib/core/common.sh"
+source "/opt/archiver/lib/core/lockfile.sh"
 
 ERRORS=0
 WARNINGS=0
 
-# Helper functions
 error() {
   echo "ERROR: $1"
   ERRORS=$((ERRORS + 1))
@@ -24,51 +21,43 @@ info() {
 }
 
 # Health Check 1: Configuration exists
-if [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
+if [ ! -f "${CONFIG_FILE}" ]; then
   error "Configuration file not found (config.sh)"
 else
   info "Configuration file exists"
 fi
 
-# Health Check 2: Required binaries are accessible
-if ! command -v duplicacy >/dev/null 2>&1; then
-  error "Duplicacy binary not found in PATH"
-else
-  info "Duplicacy binary accessible"
-fi
-
-# Health Check 3: Required keys exist
-if [ ! -f "${ARCHIVER_DIR}/keys/private.pem" ]; then
+# Health Check 2: Required keys exist
+if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
   error "RSA private key not found"
 else
   info "RSA private key exists"
 fi
 
-if [ ! -f "${ARCHIVER_DIR}/keys/id_ed25519" ]; then
+if [ ! -f "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" ]; then
   warn "SSH private key not found (OK if not using SFTP)"
 else
   info "SSH private key exists"
 fi
 
 # Health Check 4: Log file exists and is recent
-LOG_FILE="${ARCHIVER_DIR}/logs/archiver.log"
-if [ ! -f "${LOG_FILE}" ]; then
+if [ ! -f "${LOG_DIR}/archiver.log" ]; then
   warn "Log file not found (may not have run yet)"
 else
   # Check if log file has been modified in the last 48 hours
   # This is reasonable for daily backups with some margin
-  if [ -n "$(find "${LOG_FILE}" -mmin -2880 2>/dev/null)" ]; then
+  if [ -n "$(find "${LOG_DIR}/archiver.log" -mmin -2880 2>/dev/null)" ]; then
     info "Log file is recent (modified within 48 hours)"
   else
     warn "Log file is stale (not modified in 48 hours)"
   fi
 
   # Check for recent errors in last 100 lines
-  if [ -f "${LOG_FILE}" ]; then
-    ERROR_COUNT=$(tail -100 "${LOG_FILE}" 2>/dev/null | grep -c "\[ERROR\]" || true)
+  if [ -f "${LOG_DIR}/archiver.log" ]; then
+    ERROR_COUNT=$(tail -100 "${LOG_DIR}/archiver.log" 2>/dev/null | grep -c "\[ERROR\]" || true)
     if [ "${ERROR_COUNT}" -gt 0 ]; then
       # Check if backup completed despite errors (transient errors are OK)
-      if tail -100 "${LOG_FILE}" 2>/dev/null | grep -q "Archiver script completed"; then
+      if tail -100 "${LOG_DIR}/archiver.log" 2>/dev/null | grep -q "Archiver script completed"; then
         warn "Found ${ERROR_COUNT} errors in recent logs, but backup completed"
       else
         error "Found ${ERROR_COUNT} errors in recent logs without completion"
@@ -97,7 +86,6 @@ else
 fi
 
 # Health Check 6: Verify disk space for logs
-LOG_DIR="${ARCHIVER_DIR}/logs"
 if [ -d "${LOG_DIR}" ]; then
   # Get available disk space in MB
   AVAILABLE_MB=$(df -BM "${LOG_DIR}" | awk 'NR==2 {print $4}' | sed 's/M//')

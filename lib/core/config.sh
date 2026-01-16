@@ -1,35 +1,30 @@
 #!/bin/bash
 
+source "/opt/archiver/lib/core/common.sh"
+source "/opt/archiver/lib/core/logging.sh"
 source "${ARCHIVER_DIR}/config.sh"
 
-# Set DUPLICACY_THREADS with default if not set in config.sh
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
 expand_service_directories() {
   local expanded_service_directories=()
 
-  # Ensure SERVICE_DIRECTORIES is defined and not empty
   if [[ -z "${SERVICE_DIRECTORIES[*]}" ]]; then
     handle_error "SERVICE_DIRECTORIES is not defined or is empty. Please set the SERVICE_DIRECTORIES array."
     exit 1
   fi
 
-  # Populate user-defined service directories into the expanded_service_directories array
   for pattern in "${SERVICE_DIRECTORIES[@]}"; do
-    # Directly list directories for specific paths or wildcard patterns
-    for dir in ${pattern}; do  # Important: Don't quote ${pattern} to allow glob expansion
+    for dir in ${pattern}; do
       if [[ -d "${dir}" ]]; then
-        # Add the directory to the array, removing the trailing slash
         expanded_service_directories+=("${dir%/}")
       fi
     done
   done
 
-  # Export the expanded directories to be accessible globally if needed
   export EXPANDED_SERVICE_DIRECTORIES=("${expanded_service_directories[@]}")
 }
 
-# Function to check the number of storage targets and to exit if none
 count_storage_targets() {
   local count=0
 
@@ -52,7 +47,6 @@ count_storage_targets() {
   fi
 }
 
-# Function to verify the required target storage setting variables are set, and to exit if not.
 verify_target_settings() {
   for i in $(seq 1 "${STORAGE_TARGET_COUNT}"); do
     local storage_id="${i}"
@@ -110,7 +104,6 @@ verify_target_settings() {
   done
 }
 
-# Function to check if required secrets are set
 check_required_secrets() {
   local secrets=("STORAGE_PASSWORD" "RSA_PASSPHRASE")
 
@@ -124,9 +117,7 @@ check_required_secrets() {
   log_message "INFO" "All required secrets are set."
 }
 
-# Function to check optional notification configuration
 check_notification_config() {
-  # Ensure NOTIFICATION_SERVICE is case-insensitive
   local notification_service_lower
   notification_service_lower=$(echo "${NOTIFICATION_SERVICE}" | tr '[:upper:]' '[:lower:]')
 
@@ -145,25 +136,20 @@ check_notification_config() {
     PUSHOVER_API_TOKEN=""
   fi
 
-  # Export the variables if they need to be used outside the function
   export NOTIFICATION_SERVICE
   export PUSHOVER_USER_KEY
   export PUSHOVER_API_TOKEN
 }
 
-# Function to check and set default values for backup rotation
 check_backup_rotation_settings() {
-  # Check if ROTATE_BACKUPS is set, if not, assign the default value "true"
   if [[ -z "${ROTATE_BACKUPS}" ]]; then
     ROTATE_BACKUPS="true"
   fi
 
-  # Check if PRUNE_KEEP is set, if not, assign the default value
   if [ -z "${PRUNE_KEEP}" ]; then
     PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
   fi
 
-  # Override prune decision for this run only
   if [[ "${ROTATION_OVERRIDE}" == "prune" ]]; then
     log_message "INFO" "Prune flag set, will perform backup rotation on this run."
     ROTATE_BACKUPS="true"
@@ -172,15 +158,12 @@ check_backup_rotation_settings() {
     ROTATE_BACKUPS="false"
   fi
 
-  # Export the variables if they need to be used outside the function
   export ROTATE_BACKUPS
   export PRUNE_KEEP
 
-  # Log the values being used for backup rotation
   log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}"
 }
 
-# Function to verify the entire configuration
 verify_config(){
   expand_service_directories
   count_storage_targets

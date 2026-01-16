@@ -1,10 +1,7 @@
 #!/bin/bash
 
 # Require Docker environment
-source "/opt/archiver/lib/src/require-docker.sh"
-
-# Record the start time before calling main.sh
-START_TIME="$(date +%s)"
+source "/opt/archiver/lib/core/require-docker.sh"
 
 usage() {
   echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|healthcheck|help} [logs|prune|retain]"
@@ -16,10 +13,9 @@ usage() {
   exit 1
 }
 
-# Work through arguments
-
-logs="false"
-args=()
+# Initialize variables for parsing command arguments
+logs="false"  # Flag to track if logs should be displayed
+args=()       # Array to hold additional command arguments (prune/retain)
 
 if [[ $# -lt 1 ]]; then
   echo "No arguments provided."
@@ -81,19 +77,7 @@ case "${command}" in
     ;;
 esac
 
-# Archiver directory
-ARCHIVER_DIR="/opt/archiver"
-# Define mod directory
-MOD_DIR="${ARCHIVER_DIR}/lib/mod"
-# Define paths to various scripts
-MAIN_SCRIPT="${MOD_DIR}/main.sh"
-LOGS_SCRIPT="${MOD_DIR}/logs.sh"
-STOP_SCRIPT="${MOD_DIR}/stop.sh"
-STATUS_SCRIPT="${MOD_DIR}/status.sh"
-RESTORE_SCRIPT="${MOD_DIR}/restore.sh"
-BUNDLE_EXPORT_SCRIPT="${MOD_DIR}/bundle-export.sh"
-BUNDLE_IMPORT_SCRIPT="${MOD_DIR}/bundle-import.sh"
-HEALTHCHECK_SCRIPT="${MOD_DIR}/healthcheck.sh"
+source "/opt/archiver/lib/core/common.sh"
 
 start_archiver() {
   if [[ -n "${1}" ]]; then
@@ -136,7 +120,7 @@ fi
 
 # Archiver pause logic
 if [[ "${command}" == "pause" ]]; then
-  "${STATUS_SCRIPT}" "${command}"
+  "${PAUSE_SCRIPT}"
 fi
 
 # Archiver resume logic
@@ -145,7 +129,7 @@ if [[ "${command}" == "resume" ]]; then
     logs="true"
     START_TIME=0
   fi
-  "${STATUS_SCRIPT}" "${command}"
+  "${RESUME_SCRIPT}"
 fi
 
 # Archiver restart logic
@@ -159,7 +143,7 @@ fi
 
 # Archiver logs logic
 if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
-  "${LOGS_SCRIPT}" "time" "${START_TIME}"
+  "${LOGS_SCRIPT}"
 fi
 
 # Archiver help logic

@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# Archiver directory
-ARCHIVER_DIR="/opt/archiver"
-BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
+source "/opt/archiver/lib/core/common.sh"
 
 # Check if running in non-interactive mode (Docker)
 if [ "${ARCHIVER_NON_INTERACTIVE}" = "1" ]; then
@@ -66,25 +64,25 @@ fi
 rm -f "${TEMP_TAR}"
 
 # Backup existing config.sh and keys directory if they exist
-if [ -f "${ARCHIVER_DIR}/config.sh" ]; then
-  mv "${ARCHIVER_DIR}/config.sh" "${ARCHIVER_DIR}/config.sh.bckp"
+if [ -f "${CONFIG_FILE}" ]; then
+  mv "${CONFIG_FILE}" "${CONFIG_FILE}.bckp"
 fi
 
-if [ -d "${ARCHIVER_DIR}/keys" ]; then
-  mv "${ARCHIVER_DIR}/keys" "${ARCHIVER_DIR}/keys.bckp"
+if [ -d "${KEYS_DIR}" ]; then
+  mv "${KEYS_DIR}" "${KEYS_DIR}.bckp"
 fi
 
 # Move the extracted files to their original locations
-mv "${TEMP_DIR}/config.sh" "${ARCHIVER_DIR}/config.sh"
-mkdir -p "${ARCHIVER_DIR}/keys"
-mv "${TEMP_DIR}/keys"/* "${ARCHIVER_DIR}/keys/"
+mv "${TEMP_DIR}/config.sh" "${CONFIG_FILE}"
+mkdir -p "${KEYS_DIR}"
+mv "${TEMP_DIR}/keys"/* "${KEYS_DIR}/"
 # Set permissions
-chmod 700 "${ARCHIVER_DIR}/keys"
-chmod 600 "${ARCHIVER_DIR}/keys/private.pem"
-chmod 644 "${ARCHIVER_DIR}/keys/public.pem"
-chmod 600 "${ARCHIVER_DIR}/keys/id_ed25519"
-chmod 644 "${ARCHIVER_DIR}/keys/id_ed25519.pub"
-chmod 600 "${ARCHIVER_DIR}/config.sh"
+chmod 700 "${KEYS_DIR}"
+chmod 600 "${DUPLICACY_RSA_PRIVATE_KEY_FILE}"
+chmod 644 "${DUPLICACY_RSA_PUBLIC_KEY_FILE}"
+chmod 600 "${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
+chmod 644 "${DUPLICACY_SSH_PUBLIC_KEY_FILE}"
+chmod 600 "${CONFIG_FILE}"
 
 # Clean up temporary directory
 rm -rf "${TEMP_DIR}"

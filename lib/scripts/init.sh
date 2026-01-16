@@ -7,24 +7,16 @@
 set -e
 
 # Require Docker environment
-source "/opt/archiver/lib/src/require-docker.sh"
-
-# Configuration Section
-# ---------------------
-# Archiver directory
-ARCHIVER_DIR="/opt/archiver"
-DUPLICACY_KEYS_DIR="${ARCHIVER_DIR}/keys"
-BUNDLE_IMPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/bundle-import.sh"
-BUNDLE_EXPORT_SCRIPT="${ARCHIVER_DIR}/lib/mod/bundle-export.sh"
-BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
+source "/opt/archiver/lib/core/require-docker.sh"
+source "/opt/archiver/lib/core/common.sh"
 
 RSA_PASSPHRASE=""
 
 
 import_if_missing() {
-  if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ] || \
-    [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ] ||\
-    [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
+  if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" ] || \
+    [ ! -f "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" ] ||\
+    [ ! -f "${CONFIG_FILE}" ]; then
 
       # Check for bundle file
       if [ -f "${ARCHIVER_DIR}/bundle.tar.enc" ] || [ -f "${BUNDLE_DIR}/bundle.tar.enc" ]; then
@@ -132,14 +124,14 @@ generate_ssh_keypair() {
 }
 
 create_config_file() {
-  if [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
+  if [ ! -f "${CONFIG_FILE}" ]; then
     echo    # Move to a new line
     echo    # Move to a new line
     read -p "Would you like to generate your config.sh file now? (y|N): " -n 1 -r
     echo    # Move to a new line
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo " - Creating config.sh file..."
-      backup_existing_file "${ARCHIVER_DIR}/config.sh"
+      backup_existing_file "${CONFIG_FILE}"
 
       # Prompt user for SERVICE_DIRECTORIES
       echo    # Move to a new line
@@ -319,7 +311,7 @@ create_config_file() {
       }
 
       # Start writing the config file
-      cat <<EOL > "${ARCHIVER_DIR}/config.sh"
+      cat <<EOL > "${CONFIG_FILE}"
 #########################################################################################
 # Archiver User Configuration                                                           #
 #########################################################################################
@@ -403,13 +395,13 @@ EOL
         {
           printf 'STORAGE_TARGET_%s_NAME="%s"\n' "${i}" "${name}"
           printf 'STORAGE_TARGET_%s_TYPE="%s"\n' "${i}" "${type}"
-        } >> "${ARCHIVER_DIR}/config.sh"
+        } >> "${CONFIG_FILE}"
 
         if [[ $type == "local" ]]; then
           {
             printf 'STORAGE_TARGET_%s_LOCAL_PATH="%s"\n' "${i}" "${local_path}"
             printf '\n'
-          } >> "${ARCHIVER_DIR}/config.sh"
+          } >> "${CONFIG_FILE}"
         elif [[ $type == "sftp" ]]; then
           {
             printf 'STORAGE_TARGET_%s_SFTP_URL="%s"\n' "${i}" "${sftp_url}"
@@ -418,14 +410,14 @@ EOL
             printf 'STORAGE_TARGET_%s_SFTP_PATH="%s"\n' "${i}" "${sftp_path}"
             printf 'STORAGE_TARGET_%s_SFTP_KEY_FILE="%s"\n' "${i}" "${sftp_key_file}"
             printf '\n'
-          } >> "${ARCHIVER_DIR}/config.sh"
+          } >> "${CONFIG_FILE}"
         elif [[ $type == "b2" ]]; then
           {
             printf 'STORAGE_TARGET_%s_B2_BUCKETNAME="%s"\n' "${i}" "${b2_bucketname}"
             printf 'STORAGE_TARGET_%s_B2_ID="%s"\n' "${i}" "${b2_id}"
             printf 'STORAGE_TARGET_%s_B2_KEY="%s"\n' "${i}" "${b2_key}"
             printf '\n'
-          } >> "${ARCHIVER_DIR}/config.sh"
+          } >> "${CONFIG_FILE}"
         elif [[ $type == "s3" ]]; then
           {
             printf 'STORAGE_TARGET_%s_S3_BUCKETNAME="%s"\n' "${i}" "${s3_bucketname}"
@@ -434,7 +426,7 @@ EOL
             printf 'STORAGE_TARGET_%s_S3_ID="%s"\n' "${i}" "${s3_id}"
             printf 'STORAGE_TARGET_%s_S3_SECRET="%s"\n' "${i}" "${s3_secret}"
             printf '\n'
-          } >> "${ARCHIVER_DIR}/config.sh"
+          } >> "${CONFIG_FILE}"
         fi
 
         ((i++))
@@ -447,7 +439,7 @@ EOL
       done
 
       # Write more of the config file
-      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+      cat <<EOL >> "${CONFIG_FILE}"
 # Storage targets must be numbered sequentially, starting with 1, following the naming
 #   scheme STORAGE_TARGET_X_OPTION="config", with all options for the same storage
 #   using the same X number, as in the below examples. Local, SFTP, BackBlaze B2, and S3 storage
@@ -491,7 +483,7 @@ EOL
         printf 'STORAGE_PASSWORD="%s" # Password for Duplicacy storage (required)\n' "${storage_password}"
         printf 'RSA_PASSPHRASE="%s" # Passphrase for RSA private key (required)\n' "${RSA_PASSPHRASE}"
         printf '\n\n'
-      } >> "${ARCHIVER_DIR}/config.sh"
+      } >> "${CONFIG_FILE}"
 
       echo    # Move to a new line
       read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
@@ -537,7 +529,7 @@ EOL
         printf 'PUSHOVER_USER_KEY="%s" # Pushover user key (not email address), viewable when logged into Pushover dashboard\n' "${pushover_user_key}"
         printf 'PUSHOVER_API_TOKEN="%s" # Pushover application API token/key\n' "${pushover_api_token}"
         printf '\n'
-      } >> "${ARCHIVER_DIR}/config.sh"
+      } >> "${CONFIG_FILE}"
 
       echo    # Move to a new line
       echo "By default, Archiver runs a Duplicacy prune operation at the end of every run to rotate backups."
@@ -589,14 +581,14 @@ EOL
       fi
 
       # Write rest of the config file
-      cat <<EOL >> "${ARCHIVER_DIR}/config.sh"
+      cat <<EOL >> "${CONFIG_FILE}"
 # Backup Rotation
 ROTATE_BACKUPS="${rotate_backups}" # Default: "true". Set to 'true' to enable rotating out older backups.
 PRUNE_KEEP="${prune_keep}" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
 EOL
 
-      chmod 600 "${ARCHIVER_DIR}/config.sh"
-      echo " - Configuration file created at ${ARCHIVER_DIR}/config.sh"
+      chmod 600 "${CONFIG_FILE}"
+      echo " - Configuration file created at ${CONFIG_FILE}"
     else
       echo " - Configuration file generation skipped."
       echo " - If you would like to create your config.sh file manually, you can"

@@ -1,34 +1,7 @@
 #!/bin/bash
 
-# Initialize variables
-START_TIME=0
-
-# Archiver directory
-ARCHIVER_DIR="/opt/archiver"
-
-# Define lib, src, mod, log, logo directories
-LOG_DIR="${ARCHIVER_DIR}/logs"
-LIB_DIR="${ARCHIVER_DIR}/lib"
-MOD_DIR="${LIB_DIR}/mod"
-LOGO_DIR="${LIB_DIR}/logos"
-
-# Define unique identifier for the main script (e.g., main script's full path)
-MAIN_SCRIPT_PATH="${MOD_DIR}/main.sh"
-LOCKFILE="/var/lock/archiver-$(echo "${MAIN_SCRIPT_PATH}" | md5sum | cut -d' ' -f1).lock"
-
-# Parse command-line arguments
-while [[ $# -gt 0 ]]; do
-  case "${1}" in
-    time)
-      if [[ -n "${2}" ]]; then
-        START_TIME="${2}"
-        shift 2
-      else
-        START_TIME=0
-      fi
-      ;;
-  esac
-done
+source "/opt/archiver/lib/core/common.sh"
+source "/opt/archiver/lib/core/lockfile.sh"
 
 tail_logs() {
   local log_file
@@ -64,16 +37,22 @@ tail_logs() {
 }
 
 wait_for_logs() {
+  local start_time
+  local file_time
+
+  start_time=$(get_backup_start_time)
+  [ -z "${start_time}" ] && start_time=0
+
   # Wait for the log directory to be created
   while [ ! -d "${LOG_DIR}" ]; do
     sleep 0.1
   done
 
-  # Wait for the log file symlink to be present and updated after the specified start time
+  # Wait for the log file symlink to be present and updated after the backup start time
   while true; do
     if [ -f "${LOG_DIR}/archiver.log" ]; then
       file_time="$(stat -c %Y "${LOG_DIR}/archiver.log")"
-      if [ "${file_time}" -ge "${START_TIME}" ]; then
+      if [ "${file_time}" -ge "${start_time}" ]; then
         break
       fi
     fi
@@ -81,20 +60,18 @@ wait_for_logs() {
   done
 }
 
-# Retry mechanism
+# Wait for backup to start and follow logs
 retry=20
 while [ ${retry} -gt 0 ]; do
   if [ -e "${LOCKFILE}" ]; then
-    LOCK_INFO="$(cat "${LOCKFILE}")"
-    LOCK_PID="$(echo "${LOCK_INFO}" | cut -d' ' -f1)"
-    LOCK_SCRIPT="$(echo "${LOCK_INFO}" | cut -d' ' -f2)"
+    lock_pid=$(get_lock_pid)
 
-    if [ -n "${LOCK_PID}" ] && [ "${LOCK_SCRIPT}" = "${MAIN_SCRIPT_PATH}" ] && kill -0 "${LOCK_PID}" 2>/dev/null; then
-      # Other instance of main script is running; view logs directly
+    if [ -n "${lock_pid}" ] && kill -0 "${lock_pid}" 2>/dev/null; then
+      # Backup is running; follow logs
       tail_logs
       exit 0
     else
-      # Lock file exists but main script is not running; wait for logs to be created/updated
+      # Lockfile exists but process not running; wait for logs to be created
       wait_for_logs
       tail_logs
       exit 0
