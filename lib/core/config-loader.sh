@@ -1,13 +1,13 @@
 #!/bin/bash
 
+CONFIG_LOADER_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOGGING_CORE}"
 source "${CONFIG_FILE}"
-
-CONFIG_LOADER_SH_SOURCED=true
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
 expand_service_directories() {

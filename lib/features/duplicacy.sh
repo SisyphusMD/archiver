@@ -1,12 +1,12 @@
 #!/bin/bash
 
+DUPLICACY_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOGGING_CORE}"
-
-DUPLICACY_SH_SOURCED=true
 DUPLICACY_BIN="duplicacy"
 
 set_duplicacy_variables() {

@@ -1,7 +1,6 @@
 #!/bin/bash
 # Common paths and constants
 
-# Guard to prevent circular sourcing
 COMMON_SH_SOURCED=true
 
 # Function to safely source scripts only once

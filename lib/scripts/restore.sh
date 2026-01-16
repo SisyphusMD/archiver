@@ -1,13 +1,13 @@
 #!/bin/bash
 
+RESTORE_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${ERROR_CORE}"
 source_if_not_sourced "${CONFIG_LOADER_CORE}"
-
-RESTORE_SH_SOURCED=true
 
 # Simple log_message for user output (restore is interactive)
 log_message() {

@@ -1,12 +1,12 @@
 #!/bin/bash
 
+ERROR_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOGGING_CORE}"
-
-ERROR_SH_SOURCED=true
 ERROR_COUNT=0
 
 handle_error() {

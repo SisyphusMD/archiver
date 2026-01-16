@@ -1,5 +1,7 @@
 #!/bin/bash
 
+ARCHIVER_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"

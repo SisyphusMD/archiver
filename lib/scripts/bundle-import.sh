@@ -1,11 +1,11 @@
 #!/bin/bash
 
+BUNDLE_IMPORT_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
-
-BUNDLE_IMPORT_SH_SOURCED=true
 
 # Check if existing config or keys will be overwritten and warn user
 HAS_CONFIG=false

@@ -3,6 +3,8 @@
 # Archiver Main Backup Script
 #
 
+MAIN_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
@@ -11,8 +13,6 @@ source_if_not_sourced "${LOCKFILE_CORE}"
 source_if_not_sourced "${CONFIG_LOADER_CORE}"
 source_if_not_sourced "${NOTIFICATION_FEATURE}"
 source_if_not_sourced "${DUPLICACY_FEATURE}"
-
-MAIN_SH_SOURCED=true
 
 # Cleanup on exit
 cleanup() {

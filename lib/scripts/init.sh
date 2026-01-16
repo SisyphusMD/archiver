@@ -4,6 +4,8 @@
 # Creates configuration bundle for Docker deployment
 #
 
+INIT_SH_SOURCED=true
+
 set -e
 
 # Source common.sh (must use regular source for the first file)
@@ -11,8 +13,6 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${REQUIRE_DOCKER_CORE}"
-
-INIT_SH_SOURCED=true
 
 RSA_PASSPHRASE=""
 

@@ -1,11 +1,11 @@
 #!/bin/bash
 
+BUNDLE_EXPORT_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
-
-BUNDLE_EXPORT_SH_SOURCED=true
 
 echo "This script will create a bundle file containing your config.sh and keys directory."
 echo "The bundle will be encrypted and protected by a password you provide below."

@@ -1,13 +1,13 @@
 #!/bin/bash
 
+NOTIFICATION_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOGGING_CORE}"
 source_if_not_sourced "${CONFIG_LOADER_CORE}"
-
-NOTIFICATION_SH_SOURCED=true
 
 send_pushover_notification() {
   local title="${1}"

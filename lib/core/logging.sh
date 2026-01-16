@@ -1,13 +1,13 @@
 #!/bin/bash
 
+LOGGING_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${ERROR_CORE}"
 source_if_not_sourced "${NOTIFICATION_FEATURE}"
-
-LOGGING_SH_SOURCED=true
 
 log_message() {
   local log_level="${1}"

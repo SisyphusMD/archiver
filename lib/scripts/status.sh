@@ -1,12 +1,12 @@
 #!/bin/bash
 
+STATUS_SH_SOURCED=true
+
 # Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOCKFILE_CORE}"
-
-STATUS_SH_SOURCED=true
 
 # Check if backup is running
 if ! is_lock_valid; then
