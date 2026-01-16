@@ -5,7 +5,7 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${ERROR_CORE}"
-source_if_not_sourced "${CONFIG_CORE}"
+source_if_not_sourced "${CONFIG_LOADER_CORE}"
 
 RESTORE_SH_SOURCED=true
 

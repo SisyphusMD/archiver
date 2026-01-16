@@ -43,7 +43,7 @@ DUPLICACY_SSH_PUBLIC_KEY_FILE="${KEYS_DIR}/id_ed25519.pub"
 DUPLICACY_SSH_PRIVATE_KEY_FILE="${KEYS_DIR}/id_ed25519"
 
 # Core paths
-CONFIG_CORE="${CORE_DIR}/config.sh"
+CONFIG_LOADER_CORE="${CORE_DIR}/config-loader.sh"
 ERROR_CORE="${CORE_DIR}/error.sh"
 LOCKFILE_CORE="${CORE_DIR}/lockfile.sh"
 LOGGING_CORE="${CORE_DIR}/logging.sh"

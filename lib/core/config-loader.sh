@@ -7,7 +7,7 @@ fi
 source_if_not_sourced "${LOGGING_CORE}"
 source "${CONFIG_FILE}"
 
-CONFIG_SH_SOURCED=true
+CONFIG_LOADER_SH_SOURCED=true
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
 expand_service_directories() {
