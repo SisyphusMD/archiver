@@ -71,9 +71,8 @@ fi
 
 echo "Bundle file found: $BUNDLE_FILE"
 
-# Import the encrypted config and keys non-interactively
+# Import the encrypted config and keys
 echo "Decrypting and importing configuration..."
-export ARCHIVER_NON_INTERACTIVE=1
 export ARCHIVER_BUNDLE_PASSWORD="$BUNDLE_PASSWORD"
 export ARCHIVER_BUNDLE_FILE="$BUNDLE_FILE"
 
