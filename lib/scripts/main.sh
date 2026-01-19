@@ -74,10 +74,33 @@ process_service() {
 
   log_message "INFO" "Starting backup for '${SERVICE}'."
 
+  # Pre-backup hook
+  update_lock_stage "service:${service_dir}" "pre-backup"
   service_specific_pre_backup_function
-  duplicacy_primary_backup || { handle_error "Backup failed for '${SERVICE}'."; return 1; }
+
+  # Backup (skip if stop requested)
+  if ! is_stop_requested; then
+    update_lock_stage "service:${service_dir}" "backup"
+    duplicacy_primary_backup || { handle_error "Backup failed for '${SERVICE}'."; return 1; }
+  fi
+
+  # Post-backup hook (always run after pre-backup)
+  update_lock_stage "service:${service_dir}" "post-backup"
   service_specific_post_backup_function
-  duplicacy_add_backup || { handle_error "Add backup failed for '${SERVICE}'."; return 1; }
+  if ! is_stop_requested; then
+    duplicacy_add_backup || { handle_error "Add backup failed for '${SERVICE}'."; return 1; }
+  fi
+
+  # Transition back to duplicacy backup stage after service completes
+  update_lock_stage "duplicacy" "backup"
+
+  # If stop was requested, call stop script to handle kill + notifications
+  if is_stop_requested; then
+    log_message "INFO" "Stop requested. Service cleanup complete, invoking stop handler."
+    "${STOP_SCRIPT}"
+    # Should not reach here, but exit just in case
+    exit 0
+  fi
 
   unset SERVICE
   return 0
@@ -95,13 +118,18 @@ send_completion_notification() {
   elapsed_time=$((end_time - start_time))
   total_time_taken=$(format_duration "${elapsed_time}")
 
-  local timestamp
   local message
-  timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
-  message="[${timestamp}] [${HOSTNAME}] Archiver completed in ${total_time_taken} with ${ERROR_COUNT} error(s)."
+
+  if [ "${ERROR_COUNT}" -eq 0 ]; then
+    message="Completed successfully in ${total_time_taken}."
+  elif [ "${ERROR_COUNT}" -eq 1 ]; then
+    message="Completed in ${total_time_taken} with 1 error."
+  else
+    message="Completed in ${total_time_taken} with ${ERROR_COUNT} errors."
+  fi
 
   echo "${message}"
-  notify "Archiver Script Completed" "${message}"
+  notify "Backup Complete" "${message}"
 }
 
 # Main backup orchestration
@@ -114,6 +142,9 @@ main() {
       last_working_dir="${service_dir}"
     fi
   done
+
+  # Transition to post-backup stage (copy, prune, wrap-up)
+  update_lock_stage "duplicacy" "post-backup"
 
   # Run prune from the final service directory
   # Per https://forum.duplicacy.com/t/prune-command-details/1005 only one repository should run prune

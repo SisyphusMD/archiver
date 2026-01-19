@@ -124,9 +124,10 @@ fi
 if [ -n "$CRON_SCHEDULE" ]; then
     echo "Setting up cron with schedule: $CRON_SCHEDULE"
 
-    # Create cron job with PATH set
+    # Create cron job with PATH and TZ set
     cat > /etc/cron.d/archiver << EOF
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+TZ=${TZ:-UTC}
 $CRON_SCHEDULE /usr/local/bin/archiver start >> /proc/1/fd/1 2>&1
 EOF
     chmod 0644 /etc/cron.d/archiver

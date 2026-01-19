@@ -31,7 +31,7 @@ log_message() {
 
   # Send notification for ERROR messages
   if [[ "${log_level}" == "ERROR" ]]; then
-    notify "Archiver Error" "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
+    notify "Backup Error" "[${service_name}] ${message}"
   fi
 }
 

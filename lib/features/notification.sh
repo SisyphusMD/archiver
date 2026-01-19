@@ -31,10 +31,16 @@ send_pushover_notification() {
 notify() {
   local title="${1}"
   local message="${2}"
+  local timestamp
+  local formatted_message
 
   [ -z "${NOTIFICATION_SERVICE}" ] && return 0
 
+  # Prepend hostname and timestamp to message
+  timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
+  formatted_message="[${HOSTNAME}] [${timestamp}] ${message}"
+
   if [ "$(echo "${NOTIFICATION_SERVICE}" | tr '[:upper:]' '[:lower:]')" == "pushover" ]; then
-    send_pushover_notification "${title}" "${message}"
+    send_pushover_notification "${title}" "${formatted_message}"
   fi
 }

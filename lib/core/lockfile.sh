@@ -8,9 +8,37 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
 fi
 source_if_not_sourced "${LOGGING_CORE}"
 LOCKFILE="/var/lock/archiver-main.lock"
+STOP_FLAG="/var/lock/archiver-stop-requested"
 
 get_lock_pid() {
-  head -n 1 "${LOCKFILE}" 2>/dev/null
+  head -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f1
+}
+
+get_lock_context() {
+  head -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f2
+}
+
+get_lock_stage() {
+  head -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f3
+}
+
+update_lock_stage() {
+  local context="${1}"
+  local stage="${2}"
+  local pid
+  local temp_file
+
+  pid=$(get_lock_pid)
+  temp_file="${LOCKFILE}.tmp"
+
+  # Write new first line with updated stage
+  echo "${pid} ${context} ${stage}" > "${temp_file}"
+
+  # Append the rest of the file (history lines)
+  tail -n +2 "${LOCKFILE}" 2>/dev/null >> "${temp_file}"
+
+  # Atomic replace
+  mv "${temp_file}" "${LOCKFILE}"
 }
 
 get_current_state() {
@@ -99,7 +127,8 @@ acquire_lock() {
     fi
   fi
 
-  echo "$$" > "${LOCKFILE}"
+  # Initialize lockfile: PID context stage
+  echo "$$ duplicacy pre-backup" > "${LOCKFILE}"
   record_state_change "running"
   return 0
 }
@@ -139,4 +168,13 @@ log_lockfile_summary() {
 
 release_lock() {
   rm -f "${LOCKFILE}"
+  rm -f "${STOP_FLAG}"
+}
+
+is_stop_requested() {
+  [ -f "${STOP_FLAG}" ]
+}
+
+request_stop() {
+  touch "${STOP_FLAG}"
 }

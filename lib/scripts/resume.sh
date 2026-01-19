@@ -39,6 +39,6 @@ echo "Backup resumed. Was paused for: ${PAUSE_TIME_READABLE}."
 log_message "INFO" "Backup resumed. Was paused for: ${PAUSE_TIME_READABLE}"
 
 # Send notification
-notify "Backup Resumed" "Backup resumed. Was paused for: ${PAUSE_TIME_READABLE}."
+notify "Backup Resumed" "Continuing after ${PAUSE_TIME_READABLE} pause."
 
 exit 0

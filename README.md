@@ -2,7 +2,7 @@
 
 <p>
   <img src="lib/logos/72x72.png" alt="Logo" align="left" style="margin-right: 10px;">
-  Automated encrypted backups with deduplication to local disk, SFTP, BackBlaze B2, and S3 storage. Leverages <a href="https://github.com/gilbertchen/duplicacy">Duplicacy</a> to follow the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 Backup Strategy</a> while removing the complexity of manual configuration.
+  Automated encrypted backups with deduplication to local disk, SFTP, BackBlaze B2, and S3 storage. Leverages <a href="https://github.com/gilbertchen/duplicacy/tree/v3.2.5">Duplicacy CLI v3.2.5</a> to follow the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 Backup Strategy</a> while removing the complexity of manual configuration.
 </p>
 
 ## What is Archiver?
@@ -66,13 +66,14 @@ services:
     container_name: archiver
     image: ghcr.io/sisyphusmd/archiver:v0.7.0
     restart: unless-stopped
+    stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
     hostname: backup-server       # used for backup service label (optional)
 
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
-      TZ: "UTC"                   # Timezone for cron scheduling
+      TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
 
     volumes:
       - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
@@ -100,6 +101,15 @@ volumes:
 
 **Security Warning**: This grants root-level access to the Docker daemon. The container can start/stop/delete any container or access any data. Only use if necessary.
 
+### Graceful Shutdown
+
+The `stop_grace_period: 2m` setting allows the container time to complete cleanup when stopped. When `docker compose down` or `docker stop` is called, Archiver will:
+- Complete any running pre-backup hooks
+- Run post-backup hooks to restore services (e.g., restart databases, remove snapshots)
+- Terminate gracefully
+
+If your post-backup hooks take longer than 2 minutes, increase this value accordingly.
+
 ### Environment Variables
 
 | Variable | Required | Description |
@@ -115,6 +125,7 @@ With `CRON_SCHEDULE` set, backups run automatically. Without it, run commands ma
 View logs:
 ```bash
 docker exec -it archiver archiver logs
+docker logs --tail 20 -f archiver
 ```
 
 Check status:
@@ -477,21 +488,22 @@ docker compose up -d
 ### Command Reference
 
 ```bash
-archiver start          # Run backup now
-archiver start logs     # Run backup and follow logs
-archiver start prune    # Run backup and force prune (ignore config)
-archiver start retain   # Run backup without pruning (ignore config)
-archiver stop           # Stop running backup
-archiver restart        # Stop then start backup
-archiver pause          # Pause backup (experimental)
-archiver resume         # Resume paused backup (experimental)
-archiver logs           # Follow backup logs
-archiver status         # Check if backup is running
-archiver bundle export  # Create encrypted config/keys bundle
-archiver bundle import  # Import from encrypted bundle
-archiver restore        # Restore data from backup
-archiver healthcheck    # Check system health
-archiver help           # Show help
+archiver start             # Run backup now
+archiver start logs        # Run backup and follow logs
+archiver start prune       # Run backup and force prune (ignore config)
+archiver start retain      # Run backup without pruning (ignore config)
+archiver stop              # Stop backup gracefully (completes cleanup)
+archiver stop --immediate  # Stop backup immediately (skip cleanup)
+archiver restart           # Stop then start backup
+archiver pause             # Pause backup (experimental)
+archiver resume            # Resume paused backup (experimental)
+archiver logs              # Follow backup logs
+archiver status            # Check if backup is running
+archiver bundle export     # Create encrypted config/keys bundle
+archiver bundle import     # Import from encrypted bundle
+archiver restore           # Restore data from backup
+archiver healthcheck       # Check system health
+archiver help              # Show help
 ```
 
 ---

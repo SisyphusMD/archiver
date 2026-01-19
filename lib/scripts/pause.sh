@@ -38,6 +38,6 @@ echo "Backup paused. Active runtime: ${ELAPSED_TIME_READABLE}."
 log_message "INFO" "Backup paused. Active runtime: ${ELAPSED_TIME_READABLE}"
 
 # Send notification
-notify "Backup Paused" "Backup paused. Active runtime: ${ELAPSED_TIME_READABLE}."
+notify "Backup Paused" "Paused after ${ELAPSED_TIME_READABLE} of active runtime."
 
 exit 0
