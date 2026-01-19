@@ -5,13 +5,14 @@ services:
     container_name: archiver
     image: ghcr.io/sisyphusmd/archiver:v0.7.0
     restart: unless-stopped
+    stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
     hostname: backup-server       # used for backup service label (optional)
 
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
-      TZ: "UTC"                   # Timezone for cron scheduling
+      TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
 
     volumes:
       - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
