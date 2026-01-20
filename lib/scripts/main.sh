@@ -150,7 +150,11 @@ main() {
   # Per https://forum.duplicacy.com/t/prune-command-details/1005 only one repository should run prune
   cd "${last_working_dir}" || handle_error "Failed to change to '${last_working_dir}' for prune."
 
-  duplicacy_wrap_up "${STORAGE_TARGET_1_NAME}" || handle_error "Wrap-up failed."
+  # Sanitize primary storage name for use in duplicacy commands
+  local primary_storage_name
+  primary_storage_name="$(sanitize_storage_name "${STORAGE_TARGET_1_NAME}")"
+
+  duplicacy_wrap_up "${primary_storage_name}" || handle_error "Wrap-up failed."
   duplicacy_copy_backup
 
   record_state_change "completed"

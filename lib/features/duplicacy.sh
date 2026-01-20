@@ -52,7 +52,7 @@ duplicacy_primary_backup() {
   local duplicacy_storage_password_var
   local backup_type
 
-  storage_name="${STORAGE_TARGET_1_NAME}"
+  storage_name="$(sanitize_storage_name "${STORAGE_TARGET_1_NAME}")"
   storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
   duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
   backup_type="${STORAGE_TARGET_1_TYPE}"
@@ -221,7 +221,7 @@ duplicacy_primary_backup() {
   # Run the Duplicacy backup to the Primary Storage
   log_message "INFO" "Running Duplicacy primary storage backup to '${STORAGE_TARGET_1_NAME}' storage for the '${SERVICE}' service."
 
-  "${DUPLICACY_BIN}" backup -storage "${STORAGE_TARGET_1_NAME}" -stats -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
+  "${DUPLICACY_BIN}" backup -storage "${storage_name}" -stats -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Duplicacy primary storage backup to '${STORAGE_TARGET_1_NAME}' storage for the '${SERVICE}' service failed."
@@ -232,6 +232,10 @@ duplicacy_primary_backup() {
 
 duplicacy_add_backup() {
   if [[ "${STORAGE_TARGET_COUNT}" -gt 1 ]]; then
+    # Sanitize primary storage name for use in duplicacy commands
+    local primary_storage_name
+    primary_storage_name="$(sanitize_storage_name "${STORAGE_TARGET_1_NAME}")"
+
     for i in $(seq 2 "${STORAGE_TARGET_COUNT}"); do
       local exit_status
       local storage_id
@@ -246,7 +250,7 @@ duplicacy_add_backup() {
       backup_type_var="STORAGE_TARGET_${storage_id}_TYPE"
       backup_type="${!backup_type_var}"
       storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
-      storage_name="${!storage_name_var}"
+      storage_name="$(sanitize_storage_name "${!storage_name_var}")"
       storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
       duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
 
@@ -264,7 +268,7 @@ duplicacy_add_backup() {
 
         # Add local disk Duplicacy Storage
         log_message "INFO" "Adding local disk Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
-        "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
+        "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
           "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
           "${!config_local_path_var}" 2>&1 | \
           log_output
@@ -293,7 +297,7 @@ duplicacy_add_backup() {
 
         # Add SFTP Duplicacy Storage
         log_message "INFO" "Adding SFTP Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
-        "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
+        "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
           "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
           "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" 2>&1 | \
           log_output
@@ -328,7 +332,7 @@ duplicacy_add_backup() {
 
         # Add BackBlaze Duplicacy Storage
         log_message "INFO" "Adding BackBlaze Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
-        "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
+        "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
           "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
           "b2://${!config_b2_bucketname_var}" 2>&1 | \
           log_output
@@ -380,7 +384,7 @@ duplicacy_add_backup() {
 
         # Add S3 Duplicacy Storage
         log_message "INFO" "Adding S3 Duplicacy Storage '${storage_name}' for the '${SERVICE}' service."
-        "${DUPLICACY_BIN}" add -e -copy "${STORAGE_TARGET_1_NAME}" -bit-identical -key \
+        "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
           "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
           "s3://${s3_region}@${!config_s3_endpoint_var}/${!config_s3_bucketname_var}" 2>&1 | \
           log_output
@@ -430,6 +434,10 @@ duplicacy_add_backup() {
 
 duplicacy_copy_backup() {
   if [[ "${STORAGE_TARGET_COUNT}" -gt 1 ]]; then
+    # Sanitize primary storage name for use in duplicacy commands
+    local primary_storage_name
+    primary_storage_name="$(sanitize_storage_name "${STORAGE_TARGET_1_NAME}")"
+
     for i in $(seq 2 "${STORAGE_TARGET_COUNT}"); do
       local exit_status
       local storage_id
@@ -438,7 +446,7 @@ duplicacy_copy_backup() {
 
       storage_id="${i}"
       storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
-      storage_name="${!storage_name_var}"
+      storage_name="$(sanitize_storage_name "${!storage_name_var}")"
 
       # Set SERVICE to storage name for logging context
       SERVICE="${storage_name}"
@@ -446,7 +454,7 @@ duplicacy_copy_backup() {
       # Run the Duplicacy copy backup
       log_message "INFO" "Running Duplicacy copy backup to '${storage_name}' storage."
 
-      "${DUPLICACY_BIN}" copy -from "${STORAGE_TARGET_1_NAME}" -to "${storage_name}" \
+      "${DUPLICACY_BIN}" copy -from "${primary_storage_name}" -to "${storage_name}" \
         -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" -threads "${DUPLICACY_THREADS}" -download-threads "${DUPLICACY_THREADS}" 2>&1 | log_output
       exit_status="${PIPESTATUS[0]}"
 

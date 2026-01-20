@@ -64,3 +64,26 @@ RESTORE_SCRIPT="${SCRIPTS_DIR}/restore.sh"
 RESUME_SCRIPT="${SCRIPTS_DIR}/resume.sh"
 STATUS_SCRIPT="${SCRIPTS_DIR}/status.sh"
 STOP_SCRIPT="${SCRIPTS_DIR}/stop.sh"
+
+# Source logging early so it's available for sanitize_storage_name
+if [[ -z "${LOGGING_SH_SOURCED}" ]]; then
+  source "${LOGGING_CORE}"
+fi
+
+# Sanitize storage name for use in Bash variable names and Duplicacy commands
+# Replaces non-alphanumeric/underscore characters with underscores
+# Prepends underscore if name starts with a digit
+# Logs a warning if the name was changed
+sanitize_storage_name() {
+  local name="${1}"
+  local sanitized
+  sanitized="$(printf "%s" "${name}" | tr -c '[:alnum:]_' '_' | sed 's/^[0-9]/_&/')"
+
+  # Warn if sanitization changed the name
+  if [[ "${name}" != "${sanitized}" ]]; then
+    echo "WARNING: Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables." >&2
+    log_message "WARN" "Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables."
+  fi
+
+  printf "%s" "${sanitized}"
+}

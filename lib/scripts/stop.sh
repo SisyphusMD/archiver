@@ -60,11 +60,16 @@ if [ "$IMMEDIATE_MODE" = true ] || [[ "${LOCK_CONTEXT}" == "duplicacy" ]]; then
   terminate_process "${LOCK_PID}"
   send_stopped_notification
   exit 0
-# Service stage: set flag, resume, and wait for cleanup
+# Service stage: set flag, resume if paused, and wait for cleanup
 elif [[ "${LOCK_CONTEXT}" =~ ^service: ]]; then
   log_message "INFO" "Setting stop flag for service cleanup"
   request_stop
-  "${RESUME_SCRIPT}"
+
+  # Only resume if backup is actually paused
+  if is_paused; then
+    "${RESUME_SCRIPT}"
+  fi
+
   echo "Stop flag set. Service will complete cleanup and terminate."
   exit 0
 fi

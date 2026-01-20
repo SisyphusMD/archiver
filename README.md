@@ -367,6 +367,8 @@ SERVICE_DIRECTORIES=(
 
 Define multiple storage locations (local disk, SFTP, B2, S3):
 
+> **Note:** Storage names should only contain letters, numbers, and underscores. Other characters will be automatically sanitized (e.g., `my-storage` → `my_storage`).
+
 ```bash
 # Primary storage (required)
 STORAGE_TARGET_1_NAME="local"
