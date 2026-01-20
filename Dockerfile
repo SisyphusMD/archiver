@@ -22,11 +22,9 @@ RUN apt-get update && apt-get install -y \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
-# Set versions
 ENV DUPLICACY_VERSION=3.2.5
 ENV DOCKER_CLI_VERSION=5:29.1.4-1
 
-# Install Docker CLI
 RUN install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
     chmod a+r /etc/apt/keyrings/docker.gpg && \
@@ -35,7 +33,6 @@ RUN install -m 0755 -d /etc/apt/keyrings && \
     apt-get install -y docker-ce-cli=${DOCKER_CLI_VERSION}~debian.13~trixie && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install Duplicacy based on architecture
 RUN ARCH_SUFFIX="" && \
     if [ "$TARGETARCH" = "amd64" ]; then \
         ARCH_SUFFIX="x64"; \
@@ -48,29 +45,23 @@ RUN ARCH_SUFFIX="" && \
     -O /usr/local/bin/duplicacy && \
     chmod +x /usr/local/bin/duplicacy
 
-# Create application directory
 WORKDIR /opt/archiver
 
-# Copy application files
 COPY archiver.sh ./
 COPY lib/ ./lib/
 COPY examples/ ./examples/
 
-# Create required directories
 RUN mkdir -p /opt/archiver/logs \
     /opt/archiver/keys \
     /opt/archiver/exports \
     /opt/archiver/import
 
-# Make archiver.sh executable and create symlink
 RUN chmod +x /opt/archiver/archiver.sh && \
     ln -s /opt/archiver/archiver.sh /usr/local/bin/archiver
 
-# Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Environment variables with defaults
 ENV BUNDLE_PASSWORD="" \
     CRON_SCHEDULE=""
 
