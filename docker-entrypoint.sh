@@ -3,14 +3,13 @@ set -e
 
 source "/opt/archiver/lib/core/common.sh"
 
-BUNDLE_FILE="/opt/archiver/bundle/bundle.tar.enc"
-BUNDLE_OUTPUT_DIR="/opt/archiver/bundle"
+BUNDLE_FILE="${BUNDLE_DIR}/bundle.tar.enc"
 LOG_FILE="${LOG_DIR}/archiver.log"
 
 handle_shutdown() {
   echo "Received shutdown signal, attempting graceful stop..."
 
-  /opt/archiver/archiver.sh stop 2>&1 || true
+  "${ARCHIVER_DIR}/archiver.sh" stop 2>&1 || true
 
   if [ -n "$LOG_TAILER_PID" ] && kill -0 "$LOG_TAILER_PID" 2>/dev/null; then
     kill "$LOG_TAILER_PID" 2>/dev/null || true
@@ -29,7 +28,7 @@ if [ "$1" = "init" ]; then
     echo "Running in INIT mode"
     echo ""
     echo "This will guide you through creating your Archiver configuration bundle."
-    echo "Make sure you have a volume mounted at /opt/archiver/bundle to save the bundle file."
+    echo "Make sure you have a volume mounted at ${BUNDLE_DIR} to save the bundle file."
     echo ""
 
     if [ -f "$BUNDLE_FILE" ]; then
@@ -38,10 +37,10 @@ if [ "$1" = "init" ]; then
         echo ""
     fi
 
-    mkdir -p "$BUNDLE_OUTPUT_DIR"
+    mkdir -p "${BUNDLE_DIR}"
 
-    cd /opt/archiver
-    exec /opt/archiver/lib/scripts/init.sh
+    cd "${ARCHIVER_DIR}"
+    exec "${SCRIPTS_DIR}/init.sh"
 fi
 
 if [ -z "$BUNDLE_PASSWORD" ]; then
@@ -52,8 +51,8 @@ fi
 
 if [ ! -f "$BUNDLE_FILE" ]; then
     echo "ERROR: Bundle file not found at $BUNDLE_FILE"
-    echo "Please mount your bundle directory to /opt/archiver/bundle"
-    echo "Example: docker run -v /path/to/bundle:/opt/archiver/bundle ..."
+    echo "Please mount your bundle directory to ${BUNDLE_DIR}"
+    echo "Example: docker run -v /path/to/bundle:${BUNDLE_DIR} ..."
     exit 1
 fi
 
@@ -63,8 +62,8 @@ echo "Decrypting and importing configuration..."
 export ARCHIVER_BUNDLE_PASSWORD="$BUNDLE_PASSWORD"
 export ARCHIVER_BUNDLE_FILE="$BUNDLE_FILE"
 
-cd /opt/archiver
-if ! /opt/archiver/lib/scripts/bundle-import.sh; then
+cd "${ARCHIVER_DIR}"
+if ! "${BUNDLE_IMPORT_SCRIPT}"; then
     echo "ERROR: Failed to import configuration"
     echo "Please verify your BUNDLE_PASSWORD is correct"
     exit 1
@@ -80,7 +79,7 @@ if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
     exit 1
 fi
 
-echo "Configuration imported successfully - all required files present"
+echo "Configuration imported successfully"
 
 # Start log tailer in background to forward logs to stdout
 # This allows 'docker logs -f' to work
@@ -108,7 +107,7 @@ if [ -n "$CRON_SCHEDULE" ]; then
     cat > /etc/cron.d/archiver << EOF
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 TZ=${TZ:-UTC}
-$CRON_SCHEDULE /usr/local/bin/archiver start >> /proc/1/fd/1 2>&1
+$CRON_SCHEDULE ${ARCHIVER_DIR}/archiver.sh start >> /proc/1/fd/1 2>&1
 EOF
     chmod 0644 /etc/cron.d/archiver
 

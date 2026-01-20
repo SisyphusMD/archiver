@@ -57,22 +57,3 @@ RESUME_SCRIPT="${SCRIPTS_DIR}/resume.sh"
 STATUS_SCRIPT="${SCRIPTS_DIR}/status.sh"
 STOP_SCRIPT="${SCRIPTS_DIR}/stop.sh"
 
-# Source logging early for use in sanitize_storage_name
-if [[ -z "${LOGGING_SH_SOURCED}" ]]; then
-  source "${LOGGING_CORE}"
-fi
-
-# Converts storage names to valid Bash variable format
-# Replaces special chars with underscores, prepends _ if starts with digit
-sanitize_storage_name() {
-  local name="${1}"
-  local sanitized
-  sanitized="$(printf "%s" "${name}" | tr -c '[:alnum:]_' '_' | sed 's/^[0-9]/_&/')"
-
-  if [[ "${name}" != "${sanitized}" ]]; then
-    echo "WARNING: Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables." >&2
-    log_message "WARN" "Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables."
-  fi
-
-  printf "%s" "${sanitized}"
-}

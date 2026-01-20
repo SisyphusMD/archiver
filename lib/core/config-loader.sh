@@ -10,6 +10,21 @@ source_if_not_sourced "${LOGGING_CORE}"
 source "${CONFIG_FILE}"
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
+# Converts storage names to valid Bash variable format
+# Replaces special chars with underscores, prepends _ if starts with digit
+sanitize_storage_name() {
+  local name="${1}"
+  local sanitized
+  sanitized="$(printf "%s" "${name}" | tr -c '[:alnum:]_' '_' | sed 's/^[0-9]/_&/')"
+
+  if [[ "${name}" != "${sanitized}" ]]; then
+    echo "WARNING: Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables." >&2
+    log_message "WARN" "Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables."
+  fi
+
+  printf "%s" "${sanitized}"
+}
+
 # Expands glob patterns in SERVICE_DIRECTORIES (e.g., /srv/*/ -> /srv/app1/ /srv/app2/)
 expand_service_directories() {
   local expanded_service_directories=()
