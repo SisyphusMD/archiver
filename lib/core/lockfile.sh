@@ -2,7 +2,6 @@
 
 LOCKFILE_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -31,13 +30,8 @@ update_lock_stage() {
   pid=$(get_lock_pid)
   temp_file="${LOCKFILE}.tmp"
 
-  # Write new first line with updated stage
   echo "${pid} ${context} ${stage}" > "${temp_file}"
-
-  # Append the rest of the file (history lines)
   tail -n +2 "${LOCKFILE}" 2>/dev/null >> "${temp_file}"
-
-  # Atomic replace
   mv "${temp_file}" "${LOCKFILE}"
 }
 
@@ -127,7 +121,6 @@ acquire_lock() {
     fi
   fi
 
-  # Initialize lockfile: PID context stage
   echo "$$ duplicacy pre-backup" > "${LOCKFILE}"
   record_state_change "running"
   return 0

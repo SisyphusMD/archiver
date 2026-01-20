@@ -2,7 +2,6 @@
 
 LOGGING_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -20,21 +19,19 @@ log_message() {
   service_name="${SERVICE:-archiver}"
   target_log_file="${LOG_DIR}/archiver.log"
 
-  # Write to log file, call handle_error on failure (protected by RECURSIVE_CALL guard)
   echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}" >> "${target_log_file}" || \
     handle_error "Failed to log message for ${service_name} service to ${target_log_file}. Check if the log file is writable and disk space is available."
 
-  # Display WARNING and ERROR messages to console
   if [[ "${log_level}" == "WARNING" || "${log_level}" == "ERROR" ]]; then
     echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}"
   fi
 
-  # Send notification for ERROR messages
   if [[ "${log_level}" == "ERROR" ]]; then
     notify "Backup Error" "[${service_name}] ${message}"
   fi
 }
 
+# Pipes stdin to log_message line by line
 log_output() {
   local log_level="${1:-INFO}"
 
@@ -43,6 +40,7 @@ log_output() {
   done
 }
 
+# Creates timestamped log file, symlinks archiver.log to it, deletes logs >7 days old
 rotate_logs() {
   local new_log_file
   local datetime
@@ -66,11 +64,13 @@ rotate_logs() {
   log_message "INFO" "Deleted 'archiver' log files older than 7 days."
 }
 
+# Converts unix timestamp to human-readable format
 format_timestamp() {
   local timestamp="${1}"
   date -d "@${timestamp}" +'%Y-%m-%d %H:%M:%S'
 }
 
+# Converts seconds to readable duration (e.g., "2 days, 3 hours, and 15 minutes")
 format_duration() {
   local seconds="${1}"
   local days=$((seconds / 86400))

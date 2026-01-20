@@ -1,26 +1,23 @@
 #!/bin/bash
-# Common paths and constants
+# Common paths, constants, and utility functions
 
 COMMON_SH_SOURCED=true
 
-# Function to safely source scripts only once
+# Prevents double-sourcing of scripts using guard variables
 source_if_not_sourced() {
   local script_path="${1}"
   local script_name
   local guard_var_name
 
-  # Extract script name and convert to guard variable name
-  # e.g., "/opt/archiver/lib/core/logging.sh" -> "LOGGING_SH_SOURCED"
   script_name="$(basename "${script_path}")"
   guard_var_name="$(echo "${script_name}" | tr '[:lower:].-' '[:upper:]__')_SOURCED"
 
-  # Check if already sourced
   if [[ -z "${!guard_var_name}" ]]; then
     source "${script_path}"
   fi
 }
 
-# Directory paths
+# Paths
 ARCHIVER_DIR="/opt/archiver"
 LIB_DIR="${ARCHIVER_DIR}/lib"
 CORE_DIR="${LIB_DIR}/core"
@@ -32,27 +29,22 @@ OLD_LOG_DIR="${LOG_DIR}/prior_logs"
 KEYS_DIR="${ARCHIVER_DIR}/keys"
 BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
 
-# Configuration file
 CONFIG_FILE="${ARCHIVER_DIR}/config.sh"
 
-# Key file paths
 DUPLICACY_RSA_PUBLIC_KEY_FILE="${KEYS_DIR}/public.pem"
 DUPLICACY_RSA_PRIVATE_KEY_FILE="${KEYS_DIR}/private.pem"
 DUPLICACY_SSH_PUBLIC_KEY_FILE="${KEYS_DIR}/id_ed25519.pub"
 DUPLICACY_SSH_PRIVATE_KEY_FILE="${KEYS_DIR}/id_ed25519"
 
-# Core paths
 CONFIG_LOADER_CORE="${CORE_DIR}/config-loader.sh"
 ERROR_CORE="${CORE_DIR}/error.sh"
 LOCKFILE_CORE="${CORE_DIR}/lockfile.sh"
 LOGGING_CORE="${CORE_DIR}/logging.sh"
 REQUIRE_DOCKER_CORE="${CORE_DIR}/require-docker.sh"
 
-# Feature paths
 DUPLICACY_FEATURE="${FEATURES_DIR}/duplicacy.sh"
 NOTIFICATION_FEATURE="${FEATURES_DIR}/notification.sh"
 
-# Script paths
 BUNDLE_EXPORT_SCRIPT="${SCRIPTS_DIR}/bundle-export.sh"
 BUNDLE_IMPORT_SCRIPT="${SCRIPTS_DIR}/bundle-import.sh"
 HEALTHCHECK_SCRIPT="${SCRIPTS_DIR}/healthcheck.sh"
@@ -65,21 +57,18 @@ RESUME_SCRIPT="${SCRIPTS_DIR}/resume.sh"
 STATUS_SCRIPT="${SCRIPTS_DIR}/status.sh"
 STOP_SCRIPT="${SCRIPTS_DIR}/stop.sh"
 
-# Source logging early so it's available for sanitize_storage_name
+# Source logging early for use in sanitize_storage_name
 if [[ -z "${LOGGING_SH_SOURCED}" ]]; then
   source "${LOGGING_CORE}"
 fi
 
-# Sanitize storage name for use in Bash variable names and Duplicacy commands
-# Replaces non-alphanumeric/underscore characters with underscores
-# Prepends underscore if name starts with a digit
-# Logs a warning if the name was changed
+# Converts storage names to valid Bash variable format
+# Replaces special chars with underscores, prepends _ if starts with digit
 sanitize_storage_name() {
   local name="${1}"
   local sanitized
   sanitized="$(printf "%s" "${name}" | tr -c '[:alnum:]_' '_' | sed 's/^[0-9]/_&/')"
 
-  # Warn if sanitization changed the name
   if [[ "${name}" != "${sanitized}" ]]; then
     echo "WARNING: Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables." >&2
     log_message "WARN" "Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables."

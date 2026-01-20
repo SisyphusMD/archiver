@@ -1,8 +1,8 @@
 #!/bin/bash
+# Main CLI entrypoint for Archiver commands
 
 ARCHIVER_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -18,9 +18,8 @@ usage() {
   exit 1
 }
 
-# Initialize variables for parsing command arguments
-logs="false"  # Flag to track if logs should be displayed
-args=()       # Array to hold additional command arguments (prune/retain)
+logs="false"
+args=()
 
 if [[ $# -lt 1 ]]; then
   echo "No arguments provided."
@@ -30,6 +29,7 @@ fi
 command="${1}"
 shift
 
+# Validate command arguments
 case "${command}" in
   start|restart)
     if [[ $# -gt 0 ]]; then
@@ -85,6 +85,7 @@ esac
 source "/opt/archiver/lib/core/common.sh"
 
 start_archiver() {
+  # Parse optional flags: logs, prune, retain
   if [[ -n "${1}" ]]; then
     if [[ "${1}" == "logs" ]]; then
       logs="true"
@@ -98,37 +99,33 @@ start_archiver() {
       fi
     fi
   fi
-  # Start Archiver in a new session using setsid
-  setsid nohup "${MAIN_SCRIPT}" "${args[@]}" &>/dev/null & # setsid + nohup was required to fix bug related to duplicacy exported env vars when user ran script with --view-logs, then closed that running log view
+
+  # setsid + nohup prevents issues with exported env vars when log view is closed
+  setsid nohup "${MAIN_SCRIPT}" "${args[@]}" &>/dev/null &
   echo "Archiver main script called in the background."
 }
 
-# Archiver Start Logic
+# Route commands to their respective scripts
 if [[ "${command}" == "start" ]]; then
   start_archiver "${@}"
 fi
 
-# Archiver stop logic
 if [[ "${command}" == "stop" ]]; then
   "${STOP_SCRIPT}"
 fi
 
-# Archiver restore logic
 if [[ "${command}" == "restore" ]]; then
   "${RESTORE_SCRIPT}"
 fi
 
-# Archiver status logic
 if [[ "${command}" == "status" ]]; then
   "${STATUS_SCRIPT}"
 fi
 
-# Archiver pause logic
 if [[ "${command}" == "pause" ]]; then
   "${PAUSE_SCRIPT}"
 fi
 
-# Archiver resume logic
 if [[ "${command}" == "resume" ]]; then
   if [[ -n "${1}" ]]; then
     logs="true"
@@ -137,26 +134,19 @@ if [[ "${command}" == "resume" ]]; then
   "${RESUME_SCRIPT}"
 fi
 
-# Archiver restart logic
 if [[ "${command}" == "restart" ]]; then
-  # First stop
   "${STOP_SCRIPT}"
-
-  # Then start again with arguments as needed
   start_archiver "${@}"
 fi
 
-# Archiver logs logic
 if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
   "${LOGS_SCRIPT}"
 fi
 
-# Archiver help logic
 if [[ "${command}" == "help" ]]; then
   usage
 fi
 
-# Archiver bundle logic
 if [[ "${command}" == "bundle" ]]; then
   subcommand="${1}"
   if [[ "${subcommand}" == "export" ]]; then
@@ -166,7 +156,6 @@ if [[ "${command}" == "bundle" ]]; then
   fi
 fi
 
-# Archiver healthcheck logic
 if [[ "${command}" == "healthcheck" ]]; then
   "${HEALTHCHECK_SCRIPT}"
 fi

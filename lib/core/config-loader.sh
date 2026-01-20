@@ -1,8 +1,8 @@
 #!/bin/bash
+# Loads and validates user configuration from config.sh
 
 CONFIG_LOADER_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -10,6 +10,7 @@ source_if_not_sourced "${LOGGING_CORE}"
 source "${CONFIG_FILE}"
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
+# Expands glob patterns in SERVICE_DIRECTORIES (e.g., /srv/*/ -> /srv/app1/ /srv/app2/)
 expand_service_directories() {
   local expanded_service_directories=()
 
