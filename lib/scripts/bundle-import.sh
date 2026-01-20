@@ -2,12 +2,10 @@
 
 BUNDLE_IMPORT_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 
-# Check if existing config or keys will be overwritten and warn user
 HAS_CONFIG=false
 HAS_KEYS=false
 [ -f "${CONFIG_FILE}" ] && HAS_CONFIG=true
@@ -33,7 +31,6 @@ if [ "${HAS_CONFIG}" = true ] || [ "${HAS_KEYS}" = true ]; then
   echo ""
 fi
 
-# Verify required environment variables
 if [ -z "${ARCHIVER_BUNDLE_PASSWORD}" ]; then
   echo "Error: ARCHIVER_BUNDLE_PASSWORD environment variable is required"
   exit 1
@@ -47,10 +44,8 @@ fi
 SELECTED_FILE="${ARCHIVER_BUNDLE_FILE}"
 PASSWORD="${ARCHIVER_BUNDLE_PASSWORD}"
 
-# Define temporary output tar file
 TEMP_TAR="${SELECTED_FILE%.enc}"
 
-# Decrypt the selected bundle file
 openssl enc -d -aes-256-cbc -pbkdf2 -in "${SELECTED_FILE}" -out "${TEMP_TAR}" -k "${PASSWORD}"
 if [ $? -ne 0 ]; then
   echo "Error: Decryption failed. Please check your password and try again."
@@ -58,7 +53,6 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Extract the decrypted tarball to a temporary directory
 TEMP_DIR="${ARCHIVER_DIR}/temp_import"
 mkdir -p "${TEMP_DIR}"
 tar -xf "${TEMP_TAR}" -C "${TEMP_DIR}"
@@ -69,14 +63,11 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Remove the decrypted tarball
 rm -f "${TEMP_TAR}"
 
-# Move the extracted files to their original locations
 mv "${TEMP_DIR}/config.sh" "${CONFIG_FILE}"
 mkdir -p "${KEYS_DIR}"
 mv "${TEMP_DIR}/keys"/* "${KEYS_DIR}/"
-# Set permissions
 chmod 700 "${KEYS_DIR}"
 chmod 600 "${DUPLICACY_RSA_PRIVATE_KEY_FILE}"
 chmod 644 "${DUPLICACY_RSA_PUBLIC_KEY_FILE}"
@@ -84,7 +75,6 @@ chmod 600 "${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
 chmod 644 "${DUPLICACY_SSH_PUBLIC_KEY_FILE}"
 chmod 600 "${CONFIG_FILE}"
 
-# Clean up temporary directory
 rm -rf "${TEMP_DIR}"
 
 echo "Import completed successfully."

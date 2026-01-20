@@ -1,14 +1,10 @@
 #!/bin/bash
-#
-# Archiver Initialization Script
-# Creates configuration bundle for Docker deployment
-#
+# Interactive setup for creating config.sh, keys, and bundles
 
 INIT_SH_SOURCED=true
 
 set -e
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -70,7 +66,6 @@ generate_rsa_keypair() {
         fi
       done
 
-      # Running expect scripts to handle the prompts
       expect <<EOF
 spawn openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
 expect "Enter PEM pass phrase:"
@@ -314,7 +309,6 @@ create_config_file() {
         done
       }
 
-      # Start writing the config file
       cat <<EOL > "${CONFIG_FILE}"
 #########################################################################################
 # Archiver User Configuration                                                           #
@@ -394,7 +388,6 @@ EOL
           fi
         done
 
-        # Write storage target details to config file
         # Use printf to handle special characters in user input (like $ in passwords)
         {
           printf 'STORAGE_TARGET_%s_NAME="%s"\n' "${i}" "${name}"
@@ -481,7 +474,6 @@ EOL
 
 EOL
 
-      # Write secrets to config file using printf to handle special characters
       {
         printf '# Secrets for all Duplicacy storage targets\n'
         printf 'STORAGE_PASSWORD="%s" # Password for Duplicacy storage (required)\n' "${storage_password}"
@@ -522,8 +514,6 @@ EOL
         pushover_api_token=""
       fi
 
-      # Write notification config to file
-      # Use printf for API tokens/keys to handle special characters
       {
         printf '# ------------------ #\n'
         printf '# OPTIONAL VARIABLES #\n'

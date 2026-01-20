@@ -1,11 +1,8 @@
 #!/bin/bash
-#
-# Archiver Main Backup Script
-#
+# Main backup orchestration script
 
 MAIN_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -14,7 +11,6 @@ source_if_not_sourced "${CONFIG_LOADER_CORE}"
 source_if_not_sourced "${NOTIFICATION_FEATURE}"
 source_if_not_sourced "${DUPLICACY_FEATURE}"
 
-# Cleanup on exit
 cleanup() {
   if [ "${early_exit}" != true ]; then
     log_lockfile_summary
@@ -25,14 +21,11 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Initialize script
 initialize() {
   local lock_status
 
-  # Store prune/retain argument
   ROTATION_OVERRIDE="${1}"
 
-  # Acquire lock and handle result
   acquire_lock
   lock_status=$?
 
@@ -49,7 +42,6 @@ initialize() {
   verify_config
 }
 
-# Process a single service backup
 process_service() {
   local service_dir="${1}"
 
@@ -66,7 +58,6 @@ process_service() {
   service_specific_pre_backup_function() { :; }
   service_specific_post_backup_function() { :; }
 
-  # Source service-specific settings if available
   if [ -f "${service_dir}/service-backup-settings.sh" ]; then
     source "${service_dir}/service-backup-settings.sh" || \
       log_message "WARNING" "Failed to import service-backup-settings.sh for '${SERVICE}'."
@@ -74,24 +65,21 @@ process_service() {
 
   log_message "INFO" "Starting backup for '${SERVICE}'."
 
-  # Pre-backup hook
   update_lock_stage "service:${service_dir}" "pre-backup"
   service_specific_pre_backup_function
 
-  # Backup (skip if stop requested)
   if ! is_stop_requested; then
     update_lock_stage "service:${service_dir}" "backup"
     duplicacy_primary_backup || { handle_error "Backup failed for '${SERVICE}'."; return 1; }
   fi
 
-  # Post-backup hook (always run after pre-backup)
+  # Always run post-backup hook after pre-backup
   update_lock_stage "service:${service_dir}" "post-backup"
   service_specific_post_backup_function
   if ! is_stop_requested; then
     duplicacy_add_backup || { handle_error "Add backup failed for '${SERVICE}'."; return 1; }
   fi
 
-  # Transition back to duplicacy backup stage after service completes
   update_lock_stage "duplicacy" "backup"
 
   # If stop was requested, call stop script to handle kill + notifications
@@ -106,7 +94,6 @@ process_service() {
   return 0
 }
 
-# Send completion notification
 send_completion_notification() {
   local start_time
   local end_time
@@ -132,25 +119,21 @@ send_completion_notification() {
   notify "Backup Complete" "${message}"
 }
 
-# Main backup orchestration
 main() {
   local last_working_dir=""
 
-  # Process each service directory
   for service_dir in "${EXPANDED_SERVICE_DIRECTORIES[@]}"; do
     if process_service "${service_dir}"; then
       last_working_dir="${service_dir}"
     fi
   done
 
-  # Transition to post-backup stage (copy, prune, wrap-up)
   update_lock_stage "duplicacy" "post-backup"
 
   # Run prune from the final service directory
   # Per https://forum.duplicacy.com/t/prune-command-details/1005 only one repository should run prune
   cd "${last_working_dir}" || handle_error "Failed to change to '${last_working_dir}' for prune."
 
-  # Sanitize primary storage name for use in duplicacy commands
   local primary_storage_name
   primary_storage_name="$(sanitize_storage_name "${STORAGE_TARGET_1_NAME}")"
 
@@ -161,6 +144,5 @@ main() {
   send_completion_notification
 }
 
-# Entry point
 initialize "${1}"
 main

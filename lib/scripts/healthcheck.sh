@@ -2,7 +2,6 @@
 
 HEALTHCHECK_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -24,14 +23,12 @@ info() {
   echo "OK: $1"
 }
 
-# Health Check 1: Configuration exists
 if [ ! -f "${CONFIG_FILE}" ]; then
   error "Configuration file not found (config.sh)"
 else
   info "Configuration file exists"
 fi
 
-# Health Check 2: Required keys exist
 if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
   error "RSA private key not found"
 else
@@ -44,7 +41,6 @@ else
   info "SSH private key exists"
 fi
 
-# Health Check 4: Log file exists and is recent
 if [ ! -f "${LOG_DIR}/archiver.log" ]; then
   warn "Log file not found (may not have run yet)"
 else
@@ -56,7 +52,6 @@ else
     warn "Log file is stale (not modified in 48 hours)"
   fi
 
-  # Check for recent errors in last 100 lines
   if [ -f "${LOG_DIR}/archiver.log" ]; then
     ERROR_COUNT=$(tail -100 "${LOG_DIR}/archiver.log" 2>/dev/null | grep -c "\[ERROR\]" || true)
     if [ "${ERROR_COUNT}" -gt 0 ]; then
@@ -72,7 +67,6 @@ else
   fi
 fi
 
-# Health Check 5: Check for stale lockfile (indicates stuck backup)
 LOCKFILE_PATTERN="/var/lock/archiver-*.lock"
 if ls ${LOCKFILE_PATTERN} >/dev/null 2>&1; then
   for lockfile in ${LOCKFILE_PATTERN}; do
@@ -89,9 +83,7 @@ else
   info "No active backup (no lockfile)"
 fi
 
-# Health Check 6: Verify disk space for logs
 if [ -d "${LOG_DIR}" ]; then
-  # Get available disk space in MB
   AVAILABLE_MB=$(df -BM "${LOG_DIR}" | awk 'NR==2 {print $4}' | sed 's/M//')
   if [ "${AVAILABLE_MB}" -lt 100 ]; then
     error "Low disk space for logs (${AVAILABLE_MB}MB available)"
@@ -100,7 +92,6 @@ if [ -d "${LOG_DIR}" ]; then
   fi
 fi
 
-# Summary
 echo ""
 echo "=== Health Check Summary ==="
 echo "Errors:   ${ERRORS}"

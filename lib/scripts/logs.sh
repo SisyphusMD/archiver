@@ -2,7 +2,6 @@
 
 LOGS_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -19,9 +18,7 @@ tail_logs() {
   tail_pid=$!
 
   while sleep 0.1; do
-    # Check if lockfile still exists (backup still running)
     if [ ! -e "${LOCKFILE}" ]; then
-      # Lockfile removed - backup completed
       # Give tail a moment to catch up with final log lines
       sleep 1
       kill "${tail_pid}" 2>/dev/null
@@ -48,12 +45,10 @@ wait_for_logs() {
   start_time=$(get_backup_start_time)
   [ -z "${start_time}" ] && start_time=0
 
-  # Wait for the log directory to be created
   while [ ! -d "${LOG_DIR}" ]; do
     sleep 0.1
   done
 
-  # Wait for the log file symlink to be present and updated after the backup start time
   while true; do
     if [ -f "${LOG_DIR}/archiver.log" ]; then
       file_time="$(stat -c %Y "${LOG_DIR}/archiver.log")"
@@ -65,14 +60,12 @@ wait_for_logs() {
   done
 }
 
-# Wait for backup to start and follow logs
 retry=20
 while [ ${retry} -gt 0 ]; do
   if [ -e "${LOCKFILE}" ]; then
     lock_pid=$(get_lock_pid)
 
     if [ -n "${lock_pid}" ] && kill -0 "${lock_pid}" 2>/dev/null; then
-      # Backup is running; follow logs
       tail_logs
       exit 0
     else

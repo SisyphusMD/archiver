@@ -3,10 +3,8 @@
 
 FROM debian:trixie-20260112-slim
 
-# Set build argument for target architecture
 ARG TARGETARCH
 
-# Install required packages
 RUN apt-get update && apt-get install -y \
     expect \
     openssh-client \

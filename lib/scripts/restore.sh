@@ -2,7 +2,6 @@
 
 RESTORE_SH_SOURCED=true
 
-# Source common.sh (must use regular source for the first file)
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -14,12 +13,10 @@ log_message() {
   echo "$@"
 }
 
-# Verify configuration
 count_storage_targets
 verify_target_settings
 check_required_secrets
 
-# Global variables to store the selected storage target info
 SELECTED_STORAGE_TARGET_ID=""
 SELECTED_STORAGE_TARGET_NAME=""
 SELECTED_STORAGE_TARGET_TYPE=""
@@ -27,11 +24,9 @@ SNAPSHOT_ID=""
 LOCAL_DIR=""
 REVISION=""
 
-# Function to list and prompt user for storage target selection
 select_storage_target() {
   local storage_targets=()
-    
-  # Read all storage targets
+
   for i in $(seq 1 "${STORAGE_TARGET_COUNT}"); do
     local storage_id="${i}"
     local storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
@@ -40,13 +35,11 @@ select_storage_target() {
     storage_targets+=("${storage_id}) ${storage_name}")
   done
 
-  # Display the storage targets to the user
   echo "Which of the following storage targets would you like to restore from?"
   for target in "${storage_targets[@]}"; do
     echo " - ${target}"
   done
 
-  # Prompt user for selection
   local choice
   while true; do
     read -rp "Enter the number of your choice: " choice
@@ -56,8 +49,7 @@ select_storage_target() {
       echo "Invalid choice. Please enter a valid number between 1 and ${STORAGE_TARGET_COUNT}."
     fi
   done
-    
-  # Store the selected storage target ID in a global variable
+
   SELECTED_STORAGE_TARGET_ID="${choice}"
   local selected_storage_name_var="STORAGE_TARGET_${choice}_NAME"
   SELECTED_STORAGE_TARGET_NAME="${!selected_storage_name_var}"
