@@ -29,61 +29,6 @@ fi
 command="${1}"
 shift
 
-# Validate command arguments
-case "${command}" in
-  start|restart)
-    if [[ $# -gt 0 ]]; then
-      case "${1}" in
-        logs)
-          if [[ $# -gt 2 || ( $# -eq 2 && ! ( "${2}" == "prune" || "${2}" == "retain" ) ) ]]; then
-            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
-            usage
-          fi
-          ;;
-        prune|retain)
-          if [[ $# -gt 2 || ( $# -eq 2 && "${2}" != "logs" ) ]]; then
-            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
-            usage
-          fi
-          ;;
-        *)
-          echo "'${*:1}' is not valid for 'archiver ${command}'."
-          usage
-          ;;
-      esac
-    fi
-    ;;
-  resume)
-    if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "logs" ) ]]; then
-      echo "'${*:1}' is not valid for 'archiver ${command}'."
-      usage
-    fi
-    ;;
-  stop|pause|logs|status|restore|healthcheck|help)
-    if [[ $# -gt 0 ]]; then
-      echo "'${command}' cannot have further arguments."
-      usage
-    fi
-    ;;
-  bundle)
-    if [[ $# -ne 1 ]]; then
-      echo "'bundle' requires exactly one subcommand: export or import"
-      usage
-    fi
-    if [[ "${1}" != "export" && "${1}" != "import" ]]; then
-      echo "Unknown bundle subcommand: ${1}"
-      echo "Valid subcommands: export, import"
-      usage
-    fi
-    ;;
-  *)
-    echo "Unknown command: ${command}"
-    usage
-    ;;
-esac
-
-source "/opt/archiver/lib/core/common.sh"
-
 start_archiver() {
   # Parse optional flags: logs, prune, retain
   if [[ -n "${1}" ]]; then
@@ -106,57 +51,112 @@ start_archiver() {
 }
 
 # Route commands to their respective scripts
-if [[ "${command}" == "start" ]]; then
-  start_archiver "${@}"
-fi
+case "${command}" in
+  start|restart)
+    if [[ $# -gt 0 ]]; then
+      case "${1}" in
+        logs)
+          if [[ $# -gt 2 || ( $# -eq 2 && ! ( "${2}" == "prune" || "${2}" == "retain" ) ) ]]; then
+            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
+            usage
+          fi
+          ;;
+        prune|retain)
+          if [[ $# -gt 2 || ( $# -eq 2 && "${2}" != "logs" ) ]]; then
+            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
+            usage
+          fi
+          ;;
+        *)
+          echo "'${*:1}' is not valid for 'archiver ${command}'."
+          usage
+          ;;
+      esac
+    fi
+    if [[ "${command}" == "restart" ]]; then
+      "${STOP_SCRIPT}"
+    fi
+    start_archiver "${@}"
+    ;;
+  stop)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${STOP_SCRIPT}"
+    ;;
+  pause)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${PAUSE_SCRIPT}"
+    ;;
+  resume)
+    if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "logs" ) ]]; then
+      echo "'${*:1}' is not valid for 'archiver ${command}'."
+      usage
+    fi
+    if [[ -n "${1}" ]]; then
+      logs="true"
+    fi
+    "${RESUME_SCRIPT}"
+    ;;
+  logs)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${LOGS_SCRIPT}"
+    ;;
+  status)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${STATUS_SCRIPT}"
+    ;;
+  restore)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${RESTORE_SCRIPT}"
+    ;;
+  healthcheck)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${HEALTHCHECK_SCRIPT}"
+    ;;
+  bundle)
+    if [[ $# -ne 1 ]]; then
+      echo "'bundle' requires exactly one subcommand: export or import"
+      usage
+    fi
+    subcommand="${1}"
+    if [[ "${subcommand}" == "export" ]]; then
+      "${BUNDLE_EXPORT_SCRIPT}"
+    elif [[ "${subcommand}" == "import" ]]; then
+      "${BUNDLE_IMPORT_SCRIPT}"
+    else
+      echo "Unknown bundle subcommand: ${subcommand}"
+      echo "Valid subcommands: export, import"
+      usage
+    fi
+    ;;
+  help)
+    usage
+    ;;
+  *)
+    echo "Unknown command: ${command}"
+    usage
+    ;;
+esac
 
-if [[ "${command}" == "stop" ]]; then
-  "${STOP_SCRIPT}"
-fi
-
-if [[ "${command}" == "restore" ]]; then
-  "${RESTORE_SCRIPT}"
-fi
-
-if [[ "${command}" == "status" ]]; then
-  "${STATUS_SCRIPT}"
-fi
-
-if [[ "${command}" == "pause" ]]; then
-  "${PAUSE_SCRIPT}"
-fi
-
-if [[ "${command}" == "resume" ]]; then
-  if [[ -n "${1}" ]]; then
-    logs="true"
-  fi
-  "${RESUME_SCRIPT}"
-fi
-
-if [[ "${command}" == "restart" ]]; then
-  "${STOP_SCRIPT}"
-  start_archiver "${@}"
-fi
-
-if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
+if [[ "${logs}" == "true" ]]; then
   "${LOGS_SCRIPT}"
-fi
-
-if [[ "${command}" == "help" ]]; then
-  usage
-fi
-
-if [[ "${command}" == "bundle" ]]; then
-  subcommand="${1}"
-  if [[ "${subcommand}" == "export" ]]; then
-    "${BUNDLE_EXPORT_SCRIPT}"
-  elif [[ "${subcommand}" == "import" ]]; then
-    "${BUNDLE_IMPORT_SCRIPT}"
-  fi
-fi
-
-if [[ "${command}" == "healthcheck" ]]; then
-  "${HEALTHCHECK_SCRIPT}"
 fi
 
 exit 0
