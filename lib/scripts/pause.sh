@@ -21,7 +21,7 @@ if is_paused; then
 fi
 
 echo "Pausing backup..."
-log_message "INFO" "Pausing backup process (PID: ${LOCK_PID})"
+log_message "INFO" "Pausing backup process (PID: '${LOCK_PID}')."
 
 pkill -STOP -P "${LOCK_PID}"
 record_state_change "paused"
@@ -30,7 +30,7 @@ ELAPSED_SECONDS=$(calculate_elapsed_time)
 ELAPSED_TIME_READABLE=$(format_duration "${ELAPSED_SECONDS}")
 
 echo "Backup paused. Active runtime: ${ELAPSED_TIME_READABLE}."
-log_message "INFO" "Backup paused. Active runtime: ${ELAPSED_TIME_READABLE}"
+log_message "INFO" "Backup paused. Active runtime: '${ELAPSED_TIME_READABLE}'."
 
 notify "Backup Paused" "Paused after ${ELAPSED_TIME_READABLE} of active runtime."
 

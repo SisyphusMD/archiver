@@ -15,7 +15,7 @@ cleanup() {
   if [ "${early_exit}" != true ]; then
     log_lockfile_summary
     release_lock
-    log_message "INFO" "Archiver main script exited."
+    log_message "INFO" "Main backup script exited."
   fi
 }
 
@@ -37,7 +37,7 @@ initialize() {
   fi
 
   rotate_logs
-  log_message "INFO" "${MAIN_SCRIPT} script started."
+  log_message "INFO" "Main backup script started."
   duplicacy_binary_check
   verify_config
 }
@@ -60,24 +60,24 @@ process_service() {
 
   if [ -f "${service_dir}/service-backup-settings.sh" ]; then
     source "${service_dir}/service-backup-settings.sh" || \
-      log_message "WARNING" "Failed to import service-backup-settings.sh for '${SERVICE}'."
+      log_message "WARNING" "Failed to import service-backup-settings.sh for '${SERVICE}' service."
   fi
 
-  log_message "INFO" "Starting backup for '${SERVICE}'."
+  log_message "INFO" "Starting backup for '${SERVICE}' service."
 
   update_lock_stage "service:${service_dir}" "pre-backup"
   service_specific_pre_backup_function
 
   if ! is_stop_requested; then
     update_lock_stage "service:${service_dir}" "backup"
-    duplicacy_primary_backup || { handle_error "Backup failed for '${SERVICE}'."; return 1; }
+    duplicacy_primary_backup || { handle_error "Backup failed for '${SERVICE}' service."; return 1; }
   fi
 
   # Always run post-backup hook after pre-backup
   update_lock_stage "service:${service_dir}" "post-backup"
   service_specific_post_backup_function
   if ! is_stop_requested; then
-    duplicacy_add_backup || { handle_error "Add backup failed for '${SERVICE}'."; return 1; }
+    duplicacy_add_backup || { handle_error "Add backup failed for '${SERVICE}' service."; return 1; }
   fi
 
   update_lock_stage "duplicacy" "backup"

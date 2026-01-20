@@ -47,7 +47,7 @@ count_storage_targets() {
     handle_error "No Storage Targets specified. Please edit config.sh and specify at least one storage target."
     exit 1
   else
-    log_message "INFO" "$count backup targets configured."
+    log_message "INFO" "'${count}' backup targets configured."
     export STORAGE_TARGET_COUNT=$count
   fi
 }
@@ -166,7 +166,7 @@ check_backup_rotation_settings() {
   export ROTATE_BACKUPS
   export PRUNE_KEEP
 
-  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}"
+  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS='${ROTATE_BACKUPS}', PRUNE_KEEP='${PRUNE_KEEP}'."
 }
 
 verify_config(){

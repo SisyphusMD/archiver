@@ -16,7 +16,7 @@ send_stopped_notification() {
   elapsed_time_readable=$(format_duration "${elapsed_seconds}")
 
   echo "Backup stopped. Active runtime: ${elapsed_time_readable}."
-  log_message "INFO" "Backup stopped. Active runtime: ${elapsed_time_readable}"
+  log_message "INFO" "Backup stopped. Active runtime: '${elapsed_time_readable}'."
   notify "Backup Stopped" "Interrupted after ${elapsed_time_readable} of active runtime."
 }
 
@@ -48,14 +48,14 @@ LOCK_CONTEXT=$(get_lock_context)
 LOCK_STAGE=$(get_lock_stage)
 
 echo "Stopping backup (PID: ${LOCK_PID}, context: ${LOCK_CONTEXT}, stage: ${LOCK_STAGE})..."
-log_message "INFO" "Stop requested (PID: ${LOCK_PID}, context: ${LOCK_CONTEXT}, stage: ${LOCK_STAGE})"
+log_message "INFO" "Stop requested (PID: '${LOCK_PID}', context: '${LOCK_CONTEXT}', stage: '${LOCK_STAGE}')."
 
 if [ "$IMMEDIATE_MODE" = true ] || [[ "${LOCK_CONTEXT}" == "duplicacy" ]]; then
   terminate_process "${LOCK_PID}"
   send_stopped_notification
   exit 0
 elif [[ "${LOCK_CONTEXT}" =~ ^service: ]]; then
-  log_message "INFO" "Setting stop flag for service cleanup"
+  log_message "INFO" "Setting stop flag for service cleanup."
   request_stop
 
   # Only resume if backup is actually paused

@@ -52,16 +52,16 @@ rotate_logs() {
   new_log_file="${OLD_LOG_DIR}/archiver-${datetime}.log"
 
   touch "${new_log_file}" || handle_error "Could not create log file '${new_log_file}'."
-  log_message "INFO" "Created log file '${new_log_file}'."
+  log_message "INFO" "Log file created: '${new_log_file}'."
 
   relative_log_path="$(basename "${OLD_LOG_DIR}")/$(basename "${new_log_file}")"
   ln -sf "${relative_log_path}" "${LOG_DIR}/archiver.log" || \
     handle_error "Could not update/create symlink for 'archiver.log' to '${new_log_file}'."
-  log_message "INFO" "Updated/created symlink for 'archiver.log' to '${new_log_file}'."
+  log_message "INFO" "Symlink 'archiver.log' updated to point to '${new_log_file}'."
 
   find "${OLD_LOG_DIR}" -name "*.log" -type f -mtime +7 -exec rm -f {} \; || \
     handle_error "Failed to delete old 'archiver' log files."
-  log_message "INFO" "Deleted 'archiver' log files older than 7 days."
+  log_message "INFO" "Old log files deleted (>7 days)."
 }
 
 # Converts unix timestamp to human-readable format
