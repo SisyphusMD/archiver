@@ -189,12 +189,7 @@ duplicacy_primary_backup() {
   fi
   log_message "INFO" "Primary storage verified for '${SERVICE}' service."
 
-  log_message "INFO" "Configuring Duplicacy filters for '${SERVICE}' service."
-  rm -f "${DUPLICACY_FILTERS_FILE}" || handle_error "Error removing filters file for the '${SERVICE}' service."
-  touch "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to create the Duplicacy filters file for the '${SERVICE}' service."
-  for line in "${DUPLICACY_FILTERS_PATTERNS[@]}"; do
-    echo "${line}" >> "${DUPLICACY_FILTERS_FILE}" || handle_error "Unable to modify the Duplicacy filters file for the '${SERVICE}' service."
-  done
+  duplicacy_filters
 
   log_message "INFO" "Starting backup to '${STORAGE_TARGET_1_NAME}' for '${SERVICE}' service."
 

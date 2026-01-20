@@ -77,4 +77,14 @@ chmod 600 "${CONFIG_FILE}"
 
 rm -rf "${TEMP_DIR}"
 
+if [ ! -f "${CONFIG_FILE}" ]; then
+  echo "Error: Configuration file was not created during import."
+  exit 1
+fi
+
+if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" ]; then
+  echo "Error: Key files were not created during import."
+  exit 1
+fi
+
 echo "Import completed successfully."

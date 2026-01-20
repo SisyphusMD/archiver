@@ -70,8 +70,6 @@ if ! /opt/archiver/lib/scripts/bundle-import.sh; then
     exit 1
 fi
 
-echo "Configuration imported successfully"
-
 if [ ! -f "${CONFIG_FILE}" ]; then
     echo "ERROR: config.sh not found after import"
     exit 1
@@ -82,7 +80,7 @@ if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
     exit 1
 fi
 
-echo "All required files present"
+echo "Configuration imported successfully - all required files present"
 
 # Start log tailer in background to forward logs to stdout
 # This allows 'docker logs -f' to work

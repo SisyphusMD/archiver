@@ -23,8 +23,9 @@ send_pushover_notification() {
 
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Failed to send pushover notification. Check Pushover variables in the secrets file."
+  else
+    log_message "INFO" "Pushover notification sent successfully."
   fi
-  log_message "INFO" "Pushover notification sent successfully."
 }
 
 notify() {

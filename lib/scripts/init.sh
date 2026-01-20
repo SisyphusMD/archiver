@@ -46,10 +46,10 @@ backup_existing_file() {
 
 generate_rsa_keypair() {
   if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
-    echo    # Move to a new line
-    echo    # Move to a new line
+    echo
+    echo
     read -p "Would you like to generate an RSA key pair for Duplicacy encryption? (y|N): " -n 1 -r
-    echo    # Move to a new line
+    echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo " - Generating RSA key pair for Duplicacy encryption..."
 
@@ -58,9 +58,9 @@ generate_rsa_keypair() {
 
       while [ -z "${RSA_PASSPHRASE}" ]; do
         # Please provide an RSA Passphrase to use with this new RSA key pair
-        echo    # Move to a new line
+        echo
         read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
-        echo    # Move to a new line
+        echo
         if [ -z "${RSA_PASSPHRASE}" ]; then
           echo "Error: RSA Passphrase is required."
         fi
@@ -85,7 +85,13 @@ EOF
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
       chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
-      echo " - RSA key pair generated successfully."
+
+      if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
+        echo "Error: RSA key pair generation failed. Key files were not created."
+        exit 1
+      else
+        echo " - RSA key pair generated successfully."
+      fi
     else
       echo " - RSA key pair not generated."
       echo " - Please provide your own, and copy them to ${DUPLICACY_KEYS_DIR}/private.pem and ${DUPLICACY_KEYS_DIR}/public.pem"
@@ -98,10 +104,10 @@ EOF
 
 generate_ssh_keypair() {
   if [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ]; then
-    echo    # Move to a new line
-    echo    # Move to a new line
+    echo
+    echo
     read -p "Would you like to generate an SSH key pair for Duplicacy SFTP storage? (y|N): " -n 1 -r
-    echo    # Move to a new line
+    echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo " - Generating SSH key pair for Duplicacy SFTP storage..."
       backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519"
@@ -110,7 +116,13 @@ generate_ssh_keypair() {
       chmod 700 "${DUPLICACY_KEYS_DIR}"
       chmod 600 "${DUPLICACY_KEYS_DIR}/id_ed25519"
       chmod 644 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
-      echo " - SSH key pair generated successfully."
+
+      if [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ]; then
+        echo "Error: SSH key pair generation failed. Key files were not created."
+        exit 1
+      else
+        echo " - SSH key pair generated successfully."
+      fi
     else
       echo " - SSH key pair not generated."
       echo " - Please provide your own, and copy them to ${DUPLICACY_KEYS_DIR}/id_ed25519 and ${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
@@ -124,25 +136,25 @@ generate_ssh_keypair() {
 
 create_config_file() {
   if [ ! -f "${CONFIG_FILE}" ]; then
-    echo    # Move to a new line
-    echo    # Move to a new line
+    echo
+    echo
     read -p "Would you like to generate your config.sh file now? (y|N): " -n 1 -r
-    echo    # Move to a new line
+    echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo " - Creating config.sh file..."
       backup_existing_file "${CONFIG_FILE}"
 
       # Prompt user for SERVICE_DIRECTORIES
-      echo    # Move to a new line
+      echo
       echo "Please provide a list of directories on your device to be backed up. Must provide the"
       echo "  full paths. Can use * to indicate each individual subdirectory within the parent"
       echo "  directory. Each directory will be backed up as an individual duplicacy repository."
 
       while [ -z "${service_directories_input}" ]; do
-        echo    # Move to a new line
+        echo
         echo "Enter the service directories you would like to backup (comma-separated, e.g., /srv/*/,/mnt/*/,${CALLER_HOME}/):"
         read -r service_directories_input
-        echo    # Move to a new line
+        echo
         if [ -z "${service_directories_input}" ]; then
           echo " - Error: At least one service directory is required."
         fi
@@ -154,18 +166,18 @@ create_config_file() {
       echo "Create this storage password and rsa passphrase if this is a new install, or provide prior details if restoring:"
 
       while [ -z "${storage_password}" ]; do
-        echo    # Move to a new line
+        echo
         read -rsp "Storage Password (required): " storage_password
-        echo    # Move to a new line
+        echo
         if [ -z "${storage_password}" ]; then
           echo " - Error: Storage Password is required."
         fi
       done
 
       while [ -z "${RSA_PASSPHRASE}" ]; do
-        echo    # Move to a new line
+        echo
         read -rsp "RSA Passphrase (required): " RSA_PASSPHRASE
-        echo    # Move to a new line
+        echo
         if [ -z "${RSA_PASSPHRASE}" ]; then
           echo " - Error: RSA Passphrase is required."
         fi
@@ -179,7 +191,7 @@ create_config_file() {
         sftp_path=""
 
         while [ -z "${sftp_url}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "SFTP URL (The IP address or FQDN of the sftp host - example: 192.168.1.1): " sftp_url
           if [ -z "${sftp_url}" ]; then
             echo " - Error: SFTP URL is required."
@@ -187,7 +199,7 @@ create_config_file() {
         done
 
         while [ -z "${sftp_port}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "SFTP Port (The sftp port of the sftp host - default is 22): " sftp_port
           if [ -z "${sftp_port}" ]; then
             echo " - No port entered. Using default port 22."
@@ -196,7 +208,7 @@ create_config_file() {
         done
 
         while [ -z "${sftp_user}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "SFTP User (User with sftp privileges on sftp host): " sftp_user
           if [ -z "${sftp_user}" ]; then
             echo " - Error: SFTP User is required."
@@ -204,7 +216,7 @@ create_config_file() {
         done
 
         while [ -z "${sftp_path}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "SFTP Path (Absolute path to remote backup directory - example: remote/path): " sftp_path
           if [ -z "${sftp_path}" ]; then
             echo " - Error: SFTP Path is required."
@@ -222,7 +234,7 @@ create_config_file() {
         b2_key=""
 
         while [ -z "${b2_bucketname}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "B2 Bucket Name (BackBlaze bucket name - must be globally unique): " b2_bucketname
           if [ -z "${b2_bucketname}" ]; then
             echo " - Error: B2 Bucket Name is required."
@@ -230,7 +242,7 @@ create_config_file() {
         done
 
         while [ -z "${b2_id}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "B2 keyID (BackBlaze keyID with read/write access to the bucket): " b2_id
           if [ -z "${b2_id}" ]; then
             echo " - Error: B2 keyID is required."
@@ -238,11 +250,11 @@ create_config_file() {
         done
 
         while [ -z "${b2_key}" ]; do
-          echo    # Move to a new line
+          echo
           read -rsp "B2 applicationKey (BackBlaze applicationKey with read/write access to the bucket): " b2_key
-          echo    # Move to a new line
+          echo
           if [ -z "${b2_key}" ]; then
-            echo " - Error: B2 keyID is required."
+            echo " - Error: B2 Application Key is required."
           fi
         done
       }
@@ -255,7 +267,7 @@ create_config_file() {
         s3_secret=""
 
         while [ -z "${s3_bucketname}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "S3 Bucket Name (Not the entire url, just the unique name of the bucket): " s3_bucketname
           if [ -z "${s3_bucketname}" ]; then
             echo " - Error: S3 Bucket Name is required."
@@ -263,7 +275,7 @@ create_config_file() {
         done
 
         while [ -z "${s3_endpoint}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "S3 Endpoint (ex: amazon.com or hel1.your-objectstorage.com): " s3_endpoint
           if [ -z "${s3_endpoint}" ]; then
             echo " - Error: S3 Endpoint is required."
@@ -271,7 +283,7 @@ create_config_file() {
         done
 
         while [ -z "${s3_region}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "S3 Region (optional, ex: us-east-1, or leave empty for 'none'): " s3_region
           if [ -z "${s3_region}" ]; then
             s3_region="none"
@@ -279,7 +291,7 @@ create_config_file() {
         done
 
         while [ -z "${s3_id}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "S3 ID (S3 Access ID with read/write access to the bucket): " s3_id
           if [ -z "${s3_id}" ]; then
             echo " - Error: S3 ID is required."
@@ -287,9 +299,9 @@ create_config_file() {
         done
 
         while [ -z "${s3_secret}" ]; do
-          echo    # Move to a new line
+          echo
           read -rsp "S3 Secret (S3 Secret Key with read/write access to the bucket): " s3_secret
-          echo    # Move to a new line
+          echo
           if [ -z "${s3_secret}" ]; then
             echo " - Error: S3 Secret is required."
           fi
@@ -301,7 +313,7 @@ create_config_file() {
         local_path=""
 
         while [ -z "${local_path}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "Local Path (Full path to local directory for backups - example: /mnt/backup/storage): " local_path
           if [ -z "${local_path}" ]; then
             echo " - Error: Local Path is required."
@@ -350,18 +362,18 @@ $(for dir in "${service_directories[@]}"; do echo "  \"${dir}\""; done)
 EOL
 
       # Prompt user for storage targets
-      echo    # Move to a new line
+      echo
       echo "Add primary storage target. (Configuration of first storage target is required)"
       i=1
       while true; do
-        echo    # Move to a new line
+        echo
         echo "Enter details for STORAGE_TARGET_$i:"
 
         name=""
         type=""
 
         while [ -z "${name}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "Storage Name (You can call this whatever you want, but it must be unique): " name
           if [ -z "${name}" ]; then
             echo "Error: Storage Name is required."
@@ -369,7 +381,7 @@ EOL
         done
 
         while true; do
-          echo    # Move to a new line
+          echo
           read -rp "Storage Type (Currently support local, sftp, b2, and s3): " type
           if [[ "${type}" == "local" ]]; then
             prompt_local_storage
@@ -427,9 +439,9 @@ EOL
         fi
 
         ((i++))
-        echo    # Move to a new line
+        echo
         read -p "Would you like to add another storage target? (y|N): " -n 1 -r
-        echo    # Move to a new line
+        echo
         if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
           break
         fi
@@ -481,17 +493,17 @@ EOL
         printf '\n\n'
       } >> "${CONFIG_FILE}"
 
-      echo    # Move to a new line
+      echo
       read -p "Would you like to setup Pushover notifications? (y|N):" -n 1 -r
-      echo    # Move to a new line
+      echo
       if [[ $REPLY =~ ^[Yy]$ ]]; then
         # Prompt user for Pushover Notifications details
-        echo    # Move to a new line
+        echo
         echo "Enter Pushover notification details:"
         notification_service="Pushover"
 
         while [ -z "${pushover_user_key}" ]; do
-          echo    # Move to a new line
+          echo
           read -rp "Pushover User Key: " pushover_user_key
           if [ -z "${pushover_user_key}" ]; then
             echo "Error: Pushover User Key is required."
@@ -499,9 +511,9 @@ EOL
         done
 
         while [ -z "${pushover_api_token}" ]; do
-          echo    # Move to a new line
+          echo
           read -rsp "Pushover API Token: " pushover_api_token
-          echo    # Move to a new line
+          echo
           if [ -z "${pushover_api_token}" ]; then
             echo "Error: Pushover API Token is required."
           fi
@@ -525,20 +537,20 @@ EOL
         printf '\n'
       } >> "${CONFIG_FILE}"
 
-      echo    # Move to a new line
+      echo
       echo "By default, Archiver runs a Duplicacy prune operation at the end of every run to rotate backups."
       read -p "Would you like to disable rotating backups? (y|N):" -n 1 -r
-      echo    # Move to a new line
+      echo
       if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo    # Move to a new line
+        echo
         rotate_backups="false"
         prune_keep=""
         echo "Backup rotations disabled. You can change this by editing your config.sh."
       else
         rotate_backups="true"
         echo "Backup rotations enabled. You can change this by editing your config.sh."
-        echo    # Move to a new line
-        echo    # Move to a new line
+        echo
+        echo
         echo "By default, Archiver's backup rotation schedule is as follows:"
         echo "  - Keep all backups made in the past 1 day."
         echo "  - Keep 1 backup per 1 day for backups older than 1 day."
@@ -551,13 +563,13 @@ EOL
         echo "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
         echo "----------------"
         echo "See https://forum.duplicacy.com/t/prune-command-details/1005 for details."
-        echo    # Move to a new line
+        echo
         read -p "Would you like to change from the default backup rotation schedule? (y|N):" -n 1 -r
-        echo    # Move to a new line
+        echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-          echo    # Move to a new line
+          echo
           read -rp "Desired backup rotation schedule (press <return> for default): " prune_keep
-          echo    # Move to a new line
+          echo
           if [ -z "${prune_keep}" ]; then
             prune_keep="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
             echo " - No backup rotation schedule entered."
@@ -597,11 +609,11 @@ EOL
 create_new_bundle() {
   # Check if bundle file exists
   if [ ! -f "${BUNDLE_DIR}/bundle.tar.enc" ]; then
-    echo    # Move to a new line
+    echo
     echo "Creating encrypted bundle file..."
     "${BUNDLE_EXPORT_SCRIPT}"
   else
-    echo    # Move to a new line
+    echo
     echo " - Bundle file already exists: ${BUNDLE_DIR}/bundle.tar.enc"
     echo " - Run 'archiver bundle export' to update it (old version will be saved as .old)"
   fi
@@ -623,8 +635,8 @@ main() {
 
   sleep 2
 
-  echo    # Move to a new line
-  echo    # Move to a new line
+  echo
+  echo
   echo " - Init script completed."
   echo "IMPORTANT: You MUST keep a separate backup of your config.sh file and your keys directory."
   echo " - This script has created a password protected bundle file."

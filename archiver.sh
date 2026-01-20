@@ -129,7 +129,6 @@ fi
 if [[ "${command}" == "resume" ]]; then
   if [[ -n "${1}" ]]; then
     logs="true"
-    START_TIME=0
   fi
   "${RESUME_SCRIPT}"
 fi
