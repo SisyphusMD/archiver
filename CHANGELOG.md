@@ -38,6 +38,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Scripts: User-facing commands (main, pause, resume, stop, restore, etc.)
 - **Bundle Import**: Simplified to prompt for confirmation when overwriting existing config/keys
 - **Documentation**: Streamlined README, simplified example files, added Duplicacy licensing information
+- **Code Quality**: Enhanced error handling and maintainability
+  - Verify file creation before claiming success in bundle-import, init, and docker-entrypoint
+  - Verify notification send success before logging completion
+  - Remove unused variables and eliminate duplicate code
+  - Fix grammatical errors in error messages and comments
+  - Standardize code comments across all core files for consistency
+  - Standardize logging messages for clarity and consistency
+- **Command Router**: Consolidated command validation and routing into single case statement
+  - More efficient command processing
+  - Eliminated duplicate case statements and redundant file sourcing
+- **Storage Name Sanitization**: Automatic sanitization of storage names for Bash variable compatibility
+  - Storage names with hyphens automatically converted to underscores for internal variable names
+  - Prevents Bash variable naming errors while preserving user-friendly display names
 
 ### Changed
 - **Initialization**: Renamed `setup` command to `init` for bundle creation
