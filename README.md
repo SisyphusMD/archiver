@@ -19,7 +19,7 @@ Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible 
 
 If you're currently running Archiver v0.6.5 or earlier directly on your host system, see the [Legacy to Docker Migration Guide](docs/guides/migration/legacy-to-docker.md) for step-by-step upgrade instructions.
 
-**New users**: Continue with Installation below.
+**New users**: Continue reading below to get started.
 
 ## Features
 
@@ -32,191 +32,16 @@ If you're currently running Archiver v0.6.5 or earlier directly on your host sys
 
 ---
 
-
-## Installation
-
-### Prerequisites
+## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) installed
 - [Docker Compose](https://docs.docker.com/compose/install/) (optional, for easier management)
-
-### Step 1: Generate Bundle File
-
-**Skip this step if you already have a bundle file** (e.g., `bundle.tar.enc` or `export-*.tar.enc` from a previous installation).
-
-For new installations, run initialization interactively to generate your configuration bundle:
-
-```bash
-docker run -it --rm \
-  -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:v0.7.0 init
-```
-
-This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
-
-### Step 2: Configure
-
-Create `compose.yaml`:
-
-```yaml
-services:
-
-  archiver:
-
-    container_name: archiver
-    image: ghcr.io/sisyphusmd/archiver:v0.7.0
-    restart: unless-stopped
-    stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
-
-    hostname: backup-server       # used for backup service label (optional)
-
-    environment:
-      BUNDLE_PASSWORD: "your-bundle-password-here"
-      CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
-      TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
-
-    volumes:
-      - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
-      - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
-      - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match config.sh)
-      # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
-      # - /path/to/host/restore-dir:/mnt/restore-dir # Restore location (will be prompted)
-```
-
-Update paths and password, then start:
-
-```bash
-docker compose up -d
-docker exec -it archiver archiver logs
-```
-
-### Docker Socket (Advanced)
-
-If your backup scripts need to control other containers (e.g., `docker exec` for database dumps), mount the socket:
-
-```yaml
-volumes:
-  - /var/run/docker.sock:/var/run/docker.sock
-```
-
-**Security Warning**: This grants root-level access to the Docker daemon. The container can start/stop/delete any container or access any data. Only use if necessary.
-
-### Graceful Shutdown
-
-The `stop_grace_period: 2m` setting allows the container time to complete cleanup when stopped. When `docker compose down` or `docker stop` is called, Archiver will:
-- Complete any running pre-backup hooks
-- Run post-backup hooks to restore services (e.g., restart databases, remove snapshots)
-- Terminate gracefully
-
-If your post-backup hooks take longer than 2 minutes, increase this value accordingly.
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc |
-| `CRON_SCHEDULE` | No | Cron expression for automatic backups (empty = manual mode) |
-| `TZ` | No | Timezone for cron scheduling (default: UTC) |
-
-### Manual Commands
-
-With `CRON_SCHEDULE` set, backups run automatically. Without it, run commands manually.
-
-View logs:
-```bash
-docker exec -it archiver archiver logs
-docker logs --tail 20 -f archiver
-```
-
-Check status:
-```bash
-docker exec archiver archiver status
-docker exec archiver archiver healthcheck
-```
-
-Start backup:
-```bash
-docker exec archiver archiver start
-docker exec archiver archiver start logs    # with log viewing
-docker exec archiver archiver start prune   # force rotation
-docker exec archiver archiver start retain  # force retention
-```
-
-Manage active backups:
-```bash
-docker exec archiver archiver pause
-docker exec archiver archiver resume
-docker exec archiver archiver stop
-```
-
-Export/import bundle:
-```bash
-docker exec -it archiver archiver bundle export
-docker exec -it archiver archiver bundle import
-```
-
-#### Restoring Data
-
-##### Interactive Restore with Existing Container
-
-**Before restoring**, ensure you have a volume mount for the restore destination directory. The restore script will interactively prompt you for:
-- Which storage target to restore from
-- Snapshot ID to restore
-- Local directory path (where to restore the files)
-- Which revision to restore
-
-```bash
-# Check status first (ensure no backup is running)
-docker exec archiver archiver status
-
-# Run interactive restore
-docker exec -it archiver archiver restore
-```
-
-The restore destination can be any path accessible within the container. If you need to restore to a new location not currently mounted, add a volume mount and restart the container first.
-
-##### One-Off Restore with Temporary Container
-
-For a one-time restore without modifying your running container, use a temporary container:
-
-```bash
-# One-off restore (container exits after completion)
-docker run --rm -it \
-  -e BUNDLE_PASSWORD="your-bundle-password-here" \
-  -v /path/to/bundle/dir:/opt/archiver/bundle \
-  -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:v0.7.0 \
-  archiver restore
-```
-
-When prompted for the local directory path during restore, enter the container path (e.g., `/mnt/restore`). The restored files will appear on your host at `/path/to/restore/destination`.
-
-### Image Tags
-
-- `v0.7.0` - Specific version (recommended)
-- `v0.7` - Minor version (receives patches automatically)
-- `v0` - Major version (receives minor/patch updates)
-
----
-
-## Documentation
-
-### Migration and Setup Guides
-
-- **[Legacy to Docker Migration](docs/guides/migration/legacy-to-docker.md)** - Migrating from v0.3.2-v0.6.5 to Docker-only v0.7.0
-- **[Uninstalling Legacy Installation](docs/guides/maintenance/uninstall-legacy.md)** - Removing traditional installation after migration
-
-### Configuration Guides
-
-- **[Editing Configuration](docs/guides/configuration/editing-config.md)** - How to edit config in Docker environment
-- **[Local Storage Setup](docs/guides/configuration/local-storage-setup.md)** - Adding local disk as primary backup target
-- **[SSH Key Management](docs/guides/configuration/ssh-key-management.md)** - Creating and managing SSH keys for SFTP
 
 ---
 
 ## Storage Backend Setup
 
-Prepare at least one storage location before running init.
+Prepare at least one storage location before running init. Expand the sections below for setup instructions.
 
 ### Local Disk
 
@@ -363,9 +188,97 @@ You'll enter the **User Key** and **API Token** during init.
 
 ---
 
+## Installation
+
+### Step 1: Generate Bundle File
+
+**Skip this step if you already have a bundle file** (e.g., `bundle.tar.enc` or `export-*.tar.enc` from a previous installation).
+
+For new installations, run initialization interactively to generate your configuration bundle:
+
+```bash
+docker run -it --rm \
+  -v ./archiver-bundle:/opt/archiver/bundle \
+  ghcr.io/sisyphusmd/archiver:v0.7.0 init
+```
+
+This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
+
+### Step 2: Configure Docker Compose
+
+Create `compose.yaml`:
+
+```yaml
+services:
+
+  archiver:
+
+    container_name: archiver
+    image: ghcr.io/sisyphusmd/archiver:v0.7.0
+    restart: unless-stopped
+    stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
+
+    hostname: backup-server       # used for backup service label (optional)
+
+    environment:
+      BUNDLE_PASSWORD: "your-bundle-password-here"
+      CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
+      TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
+
+    volumes:
+      - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
+      - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
+      - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match config.sh)
+      # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
+      # - /path/to/host/restore-dir:/mnt/restore-dir # Restore location (will be prompted)
+```
+
+Update paths and password, then start:
+
+```bash
+docker compose up -d
+docker exec -it archiver archiver logs
+```
+
+### Docker Socket (Advanced)
+
+If your backup scripts need to control other containers (e.g., `docker exec` for database dumps), mount the socket:
+
+```yaml
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock
+```
+
+**Security Warning**: This grants root-level access to the Docker daemon. The container can start/stop/delete any container or access any data. Only use if necessary.
+
+### Graceful Shutdown
+
+The `stop_grace_period: 2m` setting allows the container time to complete cleanup when stopped. When `docker compose down` or `docker stop` is called, Archiver will:
+- Complete any running pre-backup hooks
+- Run post-backup hooks to restore services (e.g., restart databases, remove snapshots)
+- Terminate gracefully
+
+If your post-backup hooks take longer than 2 minutes, increase this value accordingly.
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc |
+| `CRON_SCHEDULE` | No | Cron expression for automatic backups (empty = manual mode) |
+| `TZ` | No | Timezone for cron scheduling (default: UTC) |
+
+### Image Tags
+
+- `v0.7.0` - Specific version (recommended)
+- `v0.7` - Minor version (receives patches automatically)
+- `v0` - Major version (receives minor/patch updates)
+
+---
+
 ## Configuration
 
-The `config.sh` file defines what to backup and where:
+The `config.sh` file defines what to backup and where. See [Editing Configuration](docs/guides/configuration/editing-config.md) for how to modify it in Docker.
 
 ### Service Directories
 
@@ -455,7 +368,113 @@ PUSHOVER_API_TOKEN="apiToken"
 
 ---
 
-## Advanced Usage
+<details>
+<summary><h2>Manual Commands</h2></summary>
+
+With `CRON_SCHEDULE` set, backups run automatically. Without it, run commands manually.
+
+### View logs
+
+```bash
+docker exec -it archiver archiver logs
+docker logs --tail 20 -f archiver
+```
+
+### Check status
+
+```bash
+docker exec archiver archiver status
+docker exec archiver archiver healthcheck
+```
+
+### Start backup
+
+```bash
+docker exec archiver archiver start
+docker exec archiver archiver start logs    # with log viewing
+docker exec archiver archiver start prune   # force rotation
+docker exec archiver archiver start retain  # force retention
+```
+
+### Manage active backups
+
+```bash
+docker exec archiver archiver pause
+docker exec archiver archiver resume
+docker exec archiver archiver stop
+```
+
+### Export/import bundle
+
+```bash
+docker exec -it archiver archiver bundle export
+docker exec -it archiver archiver bundle import
+```
+
+### Full Command Reference
+
+```bash
+archiver start             # Run backup now
+archiver start logs        # Run backup and follow logs
+archiver start prune       # Run backup and force prune (ignore config)
+archiver start retain      # Run backup without pruning (ignore config)
+archiver stop              # Stop backup gracefully (completes cleanup)
+archiver stop --immediate  # Stop backup immediately (skip cleanup)
+archiver restart           # Stop then start backup
+archiver pause             # Pause backup (experimental)
+archiver resume            # Resume paused backup (experimental)
+archiver logs              # Follow backup logs
+archiver status            # Check if backup is running
+archiver bundle export     # Create encrypted config/keys bundle
+archiver bundle import     # Import from encrypted bundle
+archiver restore           # Restore data from backup
+archiver healthcheck       # Check system health
+archiver help              # Show help
+```
+
+</details>
+
+<details>
+<summary><h2>Restoring Data</h2></summary>
+
+### Interactive Restore with Existing Container
+
+**Before restoring**, ensure you have a volume mount for the restore destination directory. The restore script will interactively prompt you for:
+- Which storage target to restore from
+- Snapshot ID to restore
+- Local directory path (where to restore the files)
+- Which revision to restore
+
+```bash
+# Check status first (ensure no backup is running)
+docker exec archiver archiver status
+
+# Run interactive restore
+docker exec -it archiver archiver restore
+```
+
+The restore destination can be any path accessible within the container. If you need to restore to a new location not currently mounted, add a volume mount and restart the container first.
+
+### One-Off Restore with Temporary Container
+
+For a one-time restore without modifying your running container, use a temporary container:
+
+```bash
+# One-off restore (container exits after completion)
+docker run --rm -it \
+  -e BUNDLE_PASSWORD="your-bundle-password-here" \
+  -v /path/to/bundle/dir:/opt/archiver/bundle \
+  -v /path/to/restore/destination:/mnt/restore \
+  ghcr.io/sisyphusmd/archiver:v0.7.0 \
+  archiver restore
+```
+
+When prompted for the local directory path during restore, enter the container path (e.g., `/mnt/restore`). The restored files will appear on your host at `/path/to/restore/destination`.
+
+</details>
+
+<details>
+<summary><h2>Advanced Usage</h2></summary>
 
 ### Custom Service Scripts
 
@@ -502,26 +521,23 @@ echo "Starting services..."
 docker compose up -d
 ```
 
-### Command Reference
+</details>
 
-```bash
-archiver start             # Run backup now
-archiver start logs        # Run backup and follow logs
-archiver start prune       # Run backup and force prune (ignore config)
-archiver start retain      # Run backup without pruning (ignore config)
-archiver stop              # Stop backup gracefully (completes cleanup)
-archiver stop --immediate  # Stop backup immediately (skip cleanup)
-archiver restart           # Stop then start backup
-archiver pause             # Pause backup (experimental)
-archiver resume            # Resume paused backup (experimental)
-archiver logs              # Follow backup logs
-archiver status            # Check if backup is running
-archiver bundle export     # Create encrypted config/keys bundle
-archiver bundle import     # Import from encrypted bundle
-archiver restore           # Restore data from backup
-archiver healthcheck       # Check system health
-archiver help              # Show help
-```
+<details>
+<summary><h2>Documentation</h2></summary>
+
+### Migration and Setup Guides
+
+- [Legacy to Docker Migration](docs/guides/migration/legacy-to-docker.md) - Migrating from v0.3.2-v0.6.5 to Docker-only v0.7.0
+- [Uninstalling Legacy Installation](docs/guides/maintenance/uninstall-legacy.md) - Removing legacy installation after migration
+
+### Configuration Guides
+
+- [Editing Configuration](docs/guides/configuration/editing-config.md) - How to edit config in Docker environment
+- [Local Storage Setup](docs/guides/configuration/local-storage-setup.md) - Adding local disk as primary backup target
+- [SSH Key Management](docs/guides/configuration/ssh-key-management.md) - Creating and managing SSH keys for SFTP
+
+</details>
 
 ---
 
