@@ -417,7 +417,6 @@ EOL
             printf 'STORAGE_TARGET_%s_SFTP_PORT="%s"\n' "${i}" "${sftp_port}"
             printf 'STORAGE_TARGET_%s_SFTP_USER="%s"\n' "${i}" "${sftp_user}"
             printf 'STORAGE_TARGET_%s_SFTP_PATH="%s"\n' "${i}" "${sftp_path}"
-            printf 'STORAGE_TARGET_%s_SFTP_KEY_FILE="%s"\n' "${i}" "${sftp_key_file}"
             printf '\n'
           } >> "${CONFIG_FILE}"
         elif [[ $type == "b2" ]]; then
@@ -461,12 +460,11 @@ EOL
 
 # Example SFTP Storage Target
   # STORAGE_TARGET_2_NAME="name" # You can call this whatever you want, but it must be unique.
-  # STORAGE_TARGET_2_TYPE="sftp" # Currently support local, sftp, b2, and s3. For sftp, require URL, PORT, USER, PATH, and KEY_FILE as below.
+  # STORAGE_TARGET_2_TYPE="sftp" # Currently support local, sftp, b2, and s3. For sftp, require URL, PORT, USER, and PATH as below.
   # STORAGE_TARGET_2_SFTP_URL="192.168.1.1" # The IP address or FQDN of the sftp host.
   # STORAGE_TARGET_2_SFTP_PORT="22" # The sftp port of the sftp host. Default is 22.
   # STORAGE_TARGET_2_SFTP_USER="user" # User with sftp privileges on sftp host.
   # STORAGE_TARGET_2_SFTP_PATH="remote/path" # Absolute path to remote backup directory. For synology, this starts with the name of the shared folder.
-  # STORAGE_TARGET_2_SFTP_KEY_FILE="/path/to/id_ed25519" # Full path to private ssh key file.
 
 # Example B2 Storage Target
   # STORAGE_TARGET_3_NAME="name" # You can call this whatever you want, but it must be unique.

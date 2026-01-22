@@ -76,15 +76,9 @@ ssh -i /opt/archiver/keys/id_ed25519 -o StrictHostKeyChecking=accept-new user@sf
 exit
 ```
 
-### Step 5: Update Configuration
+### Step 5: Verify Configuration
 
-Edit your configuration to use the new key:
-
-```bash
-nano /opt/archiver/config.sh
-```
-
-Update or add the SFTP storage configuration:
+Your SFTP storage configuration should look like this:
 
 ```bash
 STORAGE_TARGET_X_NAME="nas"
@@ -93,8 +87,9 @@ STORAGE_TARGET_X_SFTP_URL="192.168.1.100"
 STORAGE_TARGET_X_SFTP_PORT="22"
 STORAGE_TARGET_X_SFTP_USER="backup-user"
 STORAGE_TARGET_X_SFTP_PATH="backups"
-STORAGE_TARGET_X_SFTP_KEY_FILE="/opt/archiver/keys/id_ed25519"
 ```
+
+**Note:** As of v0.7.0, the `STORAGE_TARGET_X_SFTP_KEY_FILE` configuration variable has been removed. The SSH key path is now hardcoded to `/opt/archiver/keys/id_ed25519` for consistency in Docker environments.
 
 Save and export the configuration:
 

@@ -88,7 +88,7 @@ verify_target_settings() {
       fi
 
     elif [[ "${storage_type}" == "sftp" ]]; then
-      local config_vars=("SFTP_URL" "SFTP_PORT" "SFTP_USER" "SFTP_PATH" "SFTP_KEY_FILE")
+      local config_vars=("SFTP_URL" "SFTP_PORT" "SFTP_USER" "SFTP_PATH")
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then

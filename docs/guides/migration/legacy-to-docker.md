@@ -194,6 +194,8 @@ The container will automatically:
 3. Set up the cron schedule (if configured)
 4. Start running backups on schedule
 
+**Note for SFTP users:** As of v0.7.0, the `STORAGE_TARGET_X_SFTP_KEY_FILE` configuration variable has been removed. The SSH key path is now hardcoded to `/opt/archiver/keys/id_ed25519`. If your config.sh contains this variable, it will be ignored (no action needed on your part).
+
 ### Step 4: Verify the Migration
 
 Run a test backup manually:

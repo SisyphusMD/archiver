@@ -118,24 +118,22 @@ initialize_duplicacy() {
     local config_sftp_port_var
     local config_sftp_user_var
     local config_sftp_path_var
-    local config_sftp_key_file_var
     local duplicacy_ssh_key_file_var
 
     config_sftp_url_var="STORAGE_TARGET_${storage_id}_SFTP_URL"
     config_sftp_port_var="STORAGE_TARGET_${storage_id}_SFTP_PORT"
     config_sftp_user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
     config_sftp_path_var="STORAGE_TARGET_${storage_id}_SFTP_PATH"
-    config_sftp_key_file_var="STORAGE_TARGET_${storage_id}_SFTP_KEY_FILE"
     duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
 
-    export "${duplicacy_ssh_key_file_var}"="${!config_sftp_key_file_var}" # Export Duplicacy storage SSH key file so Duplicacy binary can see variable
+    export "${duplicacy_ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}" # Export Duplicacy storage SSH key file so Duplicacy binary can see variable
 
     duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
       -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
       "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" || \
       handle_error "Duplicacy SFTP Storage initialization failed."
-    
-    duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" || \
+
+    duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" || \
       handle_error "Setting the Duplicacy SFTP key file failed."
 
   elif [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "b2" ]]; then

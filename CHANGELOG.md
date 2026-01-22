@@ -28,6 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - Streamlined documentation for Docker-only workflow
+- **SFTP SSH Key Path**: Hardcoded to `/opt/archiver/keys/id_ed25519` for Docker consistency
+  - Removed `STORAGE_TARGET_X_SFTP_KEY_FILE` configuration variable
+  - Migrating users: Old variable in config.sh will be safely ignored
 
 ### Removed
 - Legacy/direct installation support and related commands

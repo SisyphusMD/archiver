@@ -77,7 +77,7 @@ duplicacy_primary_backup() {
     duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
 
     # Export SSH key file so Duplicacy binary can see variable
-    export "${duplicacy_ssh_key_file_var}"="${STORAGE_TARGET_1_SFTP_KEY_FILE}"
+    export "${duplicacy_ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
     log_message "INFO" "Initializing primary storage for ${SERVICE} service."
 
     "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
@@ -89,7 +89,7 @@ duplicacy_primary_backup() {
       handle_error "Primary storage initialization failed for ${SERVICE} service."
     fi
 
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${STORAGE_TARGET_1_SFTP_KEY_FILE}" 2>&1 | log_output
+    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
       handle_error "Failed to set SSH key file for ${SERVICE} service. Verify the SSH key file path and permissions."
@@ -277,18 +277,16 @@ duplicacy_add_backup() {
         local config_sftp_port_var
         local config_sftp_user_var
         local config_sftp_path_var
-        local config_sftp_key_file_var
         local duplicacy_ssh_key_file_var
 
         config_sftp_url_var="STORAGE_TARGET_${storage_id}_SFTP_URL"
         config_sftp_port_var="STORAGE_TARGET_${storage_id}_SFTP_PORT"
         config_sftp_user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
         config_sftp_path_var="STORAGE_TARGET_${storage_id}_SFTP_PATH"
-        config_sftp_key_file_var="STORAGE_TARGET_${storage_id}_SFTP_KEY_FILE"
         duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
 
         # Export SSH key file so Duplicacy binary can see variable
-        export "${duplicacy_ssh_key_file_var}"="${!config_sftp_key_file_var}"
+        export "${duplicacy_ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
 
         log_message "INFO" "Adding SFTP storage ${storage_name} for ${SERVICE} service."
         "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
@@ -300,7 +298,7 @@ duplicacy_add_backup() {
           handle_error "Failed to add SFTP storage ${storage_name} for ${SERVICE} service."
         fi
 
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" 2>&1 | log_output
+        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 2>&1 | log_output
         exit_status="${PIPESTATUS[0]}"
         if [ "${exit_status}" -ne 0 ]; then
           handle_error "Failed to set SSH key file for SFTP storage ${storage_name} for ${SERVICE} service. Verify the SSH key file path and permissions."
