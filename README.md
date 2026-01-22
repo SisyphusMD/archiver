@@ -13,6 +13,14 @@ Each directory gets backed up independently, with optional pre/post-backup scrip
 
 Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage.
 
+## ⚠️ Breaking Changes in v0.7.0
+
+**Direct installation on host systems is no longer supported.** All deployments must now use Docker.
+
+If you're currently running Archiver v0.6.5 or earlier directly on your host system, see the [Legacy to Docker Migration Guide](docs/guides/migration/legacy-to-docker.md) for step-by-step upgrade instructions.
+
+**New users**: Continue with Quick Start below.
+
 ## Quick Start
 
 Run interactive initialization in a container to generate your bundle file:
@@ -196,6 +204,21 @@ When prompted for the local directory path during restore, enter the container p
 - `v0.7.0` - Specific version (recommended)
 - `v0.7` - Minor version (receives patches automatically)
 - `v0` - Major version (receives minor/patch updates)
+
+---
+
+## Documentation
+
+### Migration and Setup Guides
+
+- **[Legacy to Docker Migration](docs/guides/migration/legacy-to-docker.md)** - Migrating from v0.3.2-v0.6.5 to Docker-only v0.7.0
+- **[Uninstalling Legacy Installation](docs/guides/maintenance/uninstall-legacy.md)** - Removing traditional installation after migration
+
+### Configuration Guides
+
+- **[Editing Configuration](docs/guides/configuration/editing-config.md)** - How to edit config in Docker environment
+- **[Local Storage Setup](docs/guides/configuration/local-storage-setup.md)** - Adding local disk as primary backup target
+- **[SSH Key Management](docs/guides/configuration/ssh-key-management.md)** - Creating and managing SSH keys for SFTP
 
 ---
 

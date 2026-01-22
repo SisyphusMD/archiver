@@ -18,8 +18,8 @@ sanitize_storage_name() {
   sanitized="$(printf "%s" "${name}" | tr -c '[:alnum:]_' '_' | sed 's/^[0-9]/_&/')"
 
   if [[ "${name}" != "${sanitized}" ]]; then
-    echo "WARNING: Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables." >&2
-    log_message "WARN" "Storage name '${name}' was sanitized to '${sanitized}' for use in Duplicacy commands and environment variables."
+    echo "WARNING: Storage name ${name} was sanitized to ${sanitized} for use in Duplicacy commands and environment variables." >&2
+    log_message "WARN" "Storage name ${name} was sanitized to ${sanitized} for use in Duplicacy commands and environment variables."
   fi
 
   printf "%s" "${sanitized}"
@@ -62,7 +62,7 @@ count_storage_targets() {
     handle_error "No Storage Targets specified. Please edit config.sh and specify at least one storage target."
     exit 1
   else
-    log_message "INFO" "'${count}' backup targets configured."
+    log_message "INFO" "${count} backup targets configured."
     export STORAGE_TARGET_COUNT=$count
   fi
 }
@@ -83,7 +83,7 @@ verify_target_settings() {
     if [[ "${storage_type}" == "local" ]]; then
       local config_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
       if [[ -z "${!config_var}" ]]; then
-        handle_error "Missing LOCAL_PATH configuration for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+        handle_error "Missing LOCAL_PATH configuration for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
         exit 1
       fi
 
@@ -92,7 +92,7 @@ verify_target_settings() {
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then
-          handle_error "Missing SFTP configuration setting '${var}' for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          handle_error "Missing SFTP configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
           exit 1
         fi
       done
@@ -102,7 +102,7 @@ verify_target_settings() {
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then
-          handle_error "Missing B2 configuration setting '${var}' for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          handle_error "Missing B2 configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
           exit 1
         fi
       done
@@ -112,13 +112,13 @@ verify_target_settings() {
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then
-          handle_error "Missing S3 configuration setting '${var}' for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          handle_error "Missing S3 configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
           exit 1
         fi
       done
 
     else
-      handle_error "The storage type '${storage_type}' is not supported. Please check your '${storage_type_var}' configuration."
+      handle_error "The storage type ${storage_type} is not supported. Please check your ${storage_type_var} configuration."
       exit 1
     fi
   done
@@ -129,7 +129,7 @@ check_required_secrets() {
 
   for secret in "${secrets[@]}"; do
     if [[ -z "${!secret}" ]]; then
-      handle_error "The required secret '${secret}' is not set. Please edit config.sh and specify a value for '${secret}'."
+      handle_error "The required secret ${secret} is not set. Please edit config.sh and specify a value for ${secret}."
       exit 1
     fi
   done
@@ -145,11 +145,11 @@ check_notification_config() {
     local settings=("PUSHOVER_USER_KEY" "PUSHOVER_API_TOKEN")
     for setting in "${settings[@]}"; do
       if [[ -z "${!setting}" ]]; then
-        handle_error "Notification service is set to '${NOTIFICATION_SERVICE}', but the necessary setting '${setting}' is not set. Please edit config.sh and specify a value for '${setting}'."
+        handle_error "Notification service is set to ${NOTIFICATION_SERVICE}, but the necessary setting ${setting} is not set. Please edit config.sh and specify a value for ${setting}."
         exit 1
       fi
     done
-    log_message "INFO" "All required '${NOTIFICATION_SERVICE}' settings are set."
+    log_message "INFO" "All required ${NOTIFICATION_SERVICE} settings are set."
   else
     NOTIFICATION_SERVICE="None"
     PUSHOVER_USER_KEY=""
@@ -181,7 +181,7 @@ check_backup_rotation_settings() {
   export ROTATE_BACKUPS
   export PRUNE_KEEP
 
-  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS='${ROTATE_BACKUPS}', PRUNE_KEEP='${PRUNE_KEEP}'."
+  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}."
 }
 
 verify_config(){

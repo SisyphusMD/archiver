@@ -6,75 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [0.7.0] - 2026-01-15
 
-### BREAKING CHANGES
-- **Docker-Only Deployment**: Direct installation on host systems is no longer supported
-  - All commands now require Docker environment
-  - Removed traditional installation instructions from README
-  - Removed `setup` and `uninstall` commands from archiver CLI
+### ⚠️ BREAKING CHANGES
+- **Docker-Only Deployment**: Direct installation on host systems is no longer supported. See [migration guide](docs/guides/migration/legacy-to-docker.md).
 
 ### Added
-- **Graceful Stop with Stage-Aware Cleanup**: Stop command now respects backup stage
-  - During service hooks (pre/post-backup): Completes current hook before stopping
-  - During duplicacy operations: Stops immediately
+- **Graceful Stop**: Stop command respects backup stage, completing service cleanup before termination
   - New `archiver stop --immediate` flag for emergency termination
-  - Lockfile now tracks context (service/duplicacy) and stage (pre-backup/backup/post-backup)
-- **Docker Compose Graceful Shutdown**: Added `stop_grace_period: 2m` to docker-compose examples
-  - Allows time for post-backup cleanup when stopping containers
-  - Ensures services are properly restored (databases restarted, snapshots removed, etc.)
-- **Pause/Resume Tracking**: Enhanced lockfile to track pause duration and active runtime
-- **Source Guard Mechanism**: Prevents circular dependencies in script sourcing
+  - Sends summary notification with runtime and error count
+- **Docker Compose Graceful Shutdown**: Added `stop_grace_period: 2m` to ensure proper service cleanup when stopping containers
+- **Migration Documentation**: Comprehensive guides for migrating legacy installations (v0.3.2+) to Docker v0.7.0
+  - Legacy to Docker migration guide
+  - Configuration editing in Docker
+  - Local storage setup
+  - SSH key management
 
 ### Improved
-- **Notification Format**: All notifications now include hostname and timestamp
-  - Format: `[hostname] [YYYY-MM-DD HH:MM:SS] message`
-  - Messages are concise and non-repetitive between title and body
-  - Error notifications include service name for context
-- **Timezone Handling**: Fixed notification timestamps to respect TZ environment variable
-  - Cron jobs now properly inherit TZ setting
-  - Notifications show local time instead of UTC
-- **Code Organization**: Restructured lib directory into core/features/scripts for better maintainability
-  - Core: Common utilities, logging, error handling, lockfile management
-  - Features: Duplicacy integration, notifications
-  - Scripts: User-facing commands (main, pause, resume, stop, restore, etc.)
-- **Bundle Import**: Simplified to prompt for confirmation when overwriting existing config/keys
-- **Documentation**: Streamlined README, simplified example files, added Duplicacy licensing information
-- **Code Quality**: Enhanced error handling and maintainability
-  - Verify file creation before claiming success in bundle-import, init, and docker-entrypoint
-  - Verify notification send success before logging completion
-  - Remove unused variables and eliminate duplicate code
-  - Fix grammatical errors in error messages and comments
-  - Standardize code comments across all core files for consistency
-  - Standardize logging messages for clarity and consistency
-- **Command Router**: Consolidated command validation and routing into single case statement
-  - More efficient command processing
-  - Eliminated duplicate case statements and redundant file sourcing
-- **Storage Name Sanitization**: Automatic sanitization of storage names for Bash variable compatibility
-  - Storage names with hyphens automatically converted to underscores for internal variable names
-  - Prevents Bash variable naming errors while preserving user-friendly display names
+- **Notifications**: Include hostname and timestamp; respect TZ environment variable
+- **Bundle Export**: Offers to reuse BUNDLE_PASSWORD environment variable
+- **Storage Names**: Automatically sanitize storage names with hyphens for Bash compatibility
+- **Code Organization**: Restructured lib directory into core/features/scripts
 
 ### Changed
-- **Initialization**: Renamed `setup` command to `init` for bundle creation
-  - Use `docker run ... init` to create initial configuration bundle
-  - Init script simplified and streamlined for Docker-only use
-- **Bundle Export**: Added password reuse feature
-  - Automatically offers to reuse BUNDLE_PASSWORD environment variable
-  - Default behavior is to reuse (press Enter or Y)
-  - Can choose to set new password with 'n'
-- **Internal File Naming**: Renamed `lib/core/config.sh` to `config-loader.sh` to avoid confusion with user config file
-- **Documentation**:
-  - Removed DOCKER.md (all deployment is Docker now)
-  - Updated README for Docker-only workflow
-  - Simplified init script header comments
-
-### Fixed
-- **SERVICE_DIR Variable**: Now properly set for duplicacy functions in main backup script
+- Streamlined documentation for Docker-only workflow
 
 ### Removed
-- Traditional/direct installation support
-- Installation functions (install_packages, install_duplicacy, archiver_in_path, schedule_with_cron)
-- Platform detection and sudo escalation logic
-- User ownership management (Docker runs as root)
-- `setup` and `uninstall` CLI commands
+- Legacy/direct installation support and related commands
 
 ## [0.6.5] - 2026-01-14
 
@@ -230,7 +186,7 @@ The export/import functionality has been renamed to use "bundle" terminology:
 
 #### Migrating from Traditional Installation to Docker
 
-Docker installation is now the recommended deployment method. Traditional installation will be **deprecated in v0.7.0**.
+Docker installation is now the recommended deployment method. Legacy installation will be **deprecated in v0.7.0**.
 
 **Steps to migrate**:
 

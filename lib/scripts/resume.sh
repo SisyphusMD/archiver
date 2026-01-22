@@ -25,14 +25,14 @@ PAUSE_DURATION=$(($(date +%s) - ${PAUSE_START}))
 PAUSE_TIME_READABLE=$(format_duration "${PAUSE_DURATION}")
 
 echo "Resuming backup..."
-log_message "INFO" "Resuming backup process (PID: '${LOCK_PID}')."
+log_message "INFO" "Resuming backup process (PID: ${LOCK_PID})."
 
 pkill -CONT -P "${LOCK_PID}"
 record_state_change "running"
 
 echo "Backup resumed. Was paused for: ${PAUSE_TIME_READABLE}."
-log_message "INFO" "Backup resumed. Was paused for: '${PAUSE_TIME_READABLE}'."
+log_message "INFO" "Backup resumed. Was paused for: ${PAUSE_TIME_READABLE}."
 
-notify "Backup Resumed" "Continuing after ${PAUSE_TIME_READABLE} pause."
+notify "Backup Resumed" "Resuming after ${PAUSE_TIME_READABLE} of pause time."
 
 exit 0

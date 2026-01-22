@@ -49,7 +49,7 @@ WORKDIR /opt/archiver
 
 COPY archiver.sh ./
 COPY lib/ ./lib/
-COPY examples/ ./examples/
+COPY docs/examples/ ./examples/
 
 RUN mkdir -p /opt/archiver/logs \
     /opt/archiver/keys \

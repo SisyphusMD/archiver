@@ -46,18 +46,18 @@ rotate_logs() {
   local datetime
   local relative_log_path
 
-  mkdir -p "${OLD_LOG_DIR}" || handle_error "Unable to create log directory '${OLD_LOG_DIR}'."
+  mkdir -p "${OLD_LOG_DIR}" || handle_error "Unable to create log directory ${OLD_LOG_DIR}."
 
   datetime="$(date +'%Y-%m-%d_%H%M%S')"
   new_log_file="${OLD_LOG_DIR}/archiver-${datetime}.log"
 
-  touch "${new_log_file}" || handle_error "Could not create log file '${new_log_file}'."
-  log_message "INFO" "Log file created: '${new_log_file}'."
+  touch "${new_log_file}" || handle_error "Could not create log file ${new_log_file}."
+  log_message "INFO" "Log file created: ${new_log_file}."
 
   relative_log_path="$(basename "${OLD_LOG_DIR}")/$(basename "${new_log_file}")"
   ln -sf "${relative_log_path}" "${LOG_DIR}/archiver.log" || \
-    handle_error "Could not update/create symlink for 'archiver.log' to '${new_log_file}'."
-  log_message "INFO" "Symlink 'archiver.log' updated to point to '${new_log_file}'."
+    handle_error "Could not update/create symlink for 'archiver.log' to ${new_log_file}."
+  log_message "INFO" "Symlink 'archiver.log' updated to point to ${new_log_file}."
 
   find "${OLD_LOG_DIR}" -name "*.log" -type f -mtime +7 -exec rm -f {} \; || \
     handle_error "Failed to delete old 'archiver' log files."
