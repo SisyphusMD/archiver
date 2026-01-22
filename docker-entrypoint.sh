@@ -32,13 +32,10 @@ echo "==================================="
 if [ "$1" = "init" ]; then
     echo "Running in INIT mode"
     echo ""
-    echo "This will guide you through creating your Archiver configuration bundle."
-    echo "Make sure you have a volume mounted at ${BUNDLE_DIR} to save the bundle file."
-    echo ""
 
     if [ -f "$BUNDLE_FILE" ]; then
         echo "WARNING: Bundle file already exists at $BUNDLE_FILE"
-        echo "Continuing will create keys and config, then export a new bundle."
+        echo "Continuing will overwrite it with a new bundle."
         echo ""
     fi
 
