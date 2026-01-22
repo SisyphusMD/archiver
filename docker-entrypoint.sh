@@ -15,6 +15,11 @@ handle_shutdown() {
     kill "$LOG_TAILER_PID" 2>/dev/null || true
   fi
 
+  # Kill cron or tail process if running
+  if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
+    kill "$MAIN_PID" 2>/dev/null || true
+  fi
+
   exit 0
 }
 
@@ -116,7 +121,9 @@ EOF
     echo "Cron configured. Backups will run on schedule: $CRON_SCHEDULE"
     echo "Starting cron daemon..."
 
-    cron -f
+    cron -f &
+    MAIN_PID=$!
+    wait $MAIN_PID
 else
     echo "No CRON_SCHEDULE set. Container will wait for manual commands."
     echo "Use 'docker exec <container> archiver start' to run backups manually"
@@ -125,5 +132,7 @@ else
 
     # Keep container alive indefinitely
     # This allows users to exec in and run commands manually
-    tail -f /dev/null
+    tail -f /dev/null &
+    MAIN_PID=$!
+    wait $MAIN_PID
 fi
