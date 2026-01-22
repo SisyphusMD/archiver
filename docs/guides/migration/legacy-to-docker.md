@@ -244,14 +244,30 @@ Verify the restored files appear on your host at `/path/to/restore/destination` 
 
 ### Step 6: Disable Old Cron Job
 
-Once you've verified backups work in Docker, disable the old cron job:
+Once you've verified backups work in Docker, disable the old cron job. The cron job may be in either root's crontab or your user's crontab.
 
+**Check root crontab:**
 ```bash
-# Edit root crontab
+# View root crontab
+sudo crontab -l
+
+# If archiver job is present, edit root crontab
 sudo crontab -e
 
-# Comment out or delete the archiver line:
+# Comment out or delete the archiver-related lines:
+# PATH=/usr/local/bin:/usr/bin:/bin
 # 0 3 * * * archiver start
+```
+
+**Check user crontab:**
+```bash
+# View your user crontab
+crontab -l
+
+# If archiver job is present, edit your user crontab
+crontab -e
+
+# Comment out or delete the archiver-related lines
 ```
 
 **Important:** Don't uninstall the legacy installation yet - keep it as a backup until you're confident.
