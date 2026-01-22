@@ -199,7 +199,7 @@ For new installations, run initialization interactively to generate your configu
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:v0.7.0 init
+  ghcr.io/sisyphusmd/archiver:0.7.0 init
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
@@ -214,14 +214,14 @@ services:
   archiver:
 
     container_name: archiver
-    image: ghcr.io/sisyphusmd/archiver:v0.7.0
+    image: ghcr.io/sisyphusmd/archiver:0.7.0
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
     hostname: backup-server       # used for backup service label (optional)
 
     environment:
-      BUNDLE_PASSWORD: "your-bundle-password-here"
+      BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
       TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
 
@@ -264,15 +264,15 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc |
+| `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc. **Note:** If your password contains `$`, you must escape it as `$$` (e.g., `my$password` → `my$$password`) |
 | `CRON_SCHEDULE` | No | Cron expression for automatic backups (empty = manual mode) |
 | `TZ` | No | Timezone for cron scheduling (default: UTC) |
 
 ### Image Tags
 
-- `v0.7.0` - Specific version (recommended)
-- `v0.7` - Minor version (receives patches automatically)
-- `v0` - Major version (receives minor/patch updates)
+- `0.7.0` - Specific version (recommended)
+- `0.7` - Minor version (receives patches automatically)
+- `0` - Major version (receives minor/patch updates)
 
 ---
 
@@ -462,10 +462,10 @@ For a one-time restore without modifying your running container, use a temporary
 ```bash
 # One-off restore (container exits after completion)
 docker run --rm -it \
-  -e BUNDLE_PASSWORD="your-bundle-password-here" \
+  -e BUNDLE_PASSWORD='your-bundle-password-here' \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:v0.7.0 \
+  ghcr.io/sisyphusmd/archiver:0.7.0 \
   archiver restore
 ```
 
