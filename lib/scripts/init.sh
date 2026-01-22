@@ -29,9 +29,9 @@ import_if_missing() {
 }
 
 create_keys_dir() {
-  if [[ ! -d "${DUPLICACY_KEYS_DIR}" ]]; then
-    mkdir -p "${DUPLICACY_KEYS_DIR}"
-    chmod 700 "${DUPLICACY_KEYS_DIR}"
+  if [[ ! -d "${KEYS_DIR}" ]]; then
+    mkdir -p "${KEYS_DIR}"
+    chmod 700 "${KEYS_DIR}"
   fi
 }
 
@@ -45,7 +45,7 @@ backup_existing_file() {
 }
 
 generate_rsa_keypair() {
-  if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
+  if [ ! -f "${KEYS_DIR}/private.pem" ] || [ ! -f "${KEYS_DIR}/public.pem" ]; then
     echo
     echo
     read -p "Would you like to generate an RSA key pair for Duplicacy encryption? (y|N): " -n 1 -r
@@ -53,8 +53,8 @@ generate_rsa_keypair() {
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo " - Generating RSA key pair for Duplicacy encryption..."
 
-      backup_existing_file "${DUPLICACY_KEYS_DIR}/private.pem"
-      backup_existing_file "${DUPLICACY_KEYS_DIR}/public.pem"
+      backup_existing_file "${KEYS_DIR}/private.pem"
+      backup_existing_file "${KEYS_DIR}/public.pem"
 
       while [ -z "${RSA_PASSPHRASE}" ]; do
         # Please provide an RSA Passphrase to use with this new RSA key pair
@@ -67,7 +67,7 @@ generate_rsa_keypair() {
       done
 
       expect <<EOF
-spawn openssl genrsa -aes256 -out "${DUPLICACY_KEYS_DIR}/private.pem" -traditional 2048
+spawn openssl genrsa -aes256 -out "${KEYS_DIR}/private.pem" -traditional 2048
 expect "Enter PEM pass phrase:"
 send "${RSA_PASSPHRASE}\r"
 expect "Verifying - Enter PEM pass phrase:"
@@ -76,17 +76,17 @@ expect eof
 EOF
 
       expect <<EOF
-spawn openssl rsa -in "${DUPLICACY_KEYS_DIR}/private.pem" --outform PEM -pubout -out "${DUPLICACY_KEYS_DIR}/public.pem"
-expect "Enter pass phrase for ${DUPLICACY_KEYS_DIR}/private.pem:"
+spawn openssl rsa -in "${KEYS_DIR}/private.pem" --outform PEM -pubout -out "${KEYS_DIR}/public.pem"
+expect "Enter pass phrase for ${KEYS_DIR}/private.pem:"
 send "${RSA_PASSPHRASE}\r"
 expect eof
 EOF
 
-      chmod 700 "${DUPLICACY_KEYS_DIR}"
-      chmod 600 "${DUPLICACY_KEYS_DIR}/private.pem"
-      chmod 644 "${DUPLICACY_KEYS_DIR}/public.pem"
+      chmod 700 "${KEYS_DIR}"
+      chmod 600 "${KEYS_DIR}/private.pem"
+      chmod 644 "${KEYS_DIR}/public.pem"
 
-      if [ ! -f "${DUPLICACY_KEYS_DIR}/private.pem" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/public.pem" ]; then
+      if [ ! -f "${KEYS_DIR}/private.pem" ] || [ ! -f "${KEYS_DIR}/public.pem" ]; then
         echo "Error: RSA key pair generation failed. Key files were not created."
         exit 1
       else
@@ -94,30 +94,30 @@ EOF
       fi
     else
       echo " - RSA key pair not generated."
-      echo " - Please provide your own, and copy them to ${DUPLICACY_KEYS_DIR}/private.pem and ${DUPLICACY_KEYS_DIR}/public.pem"
+      echo " - Please provide your own, and copy them to ${KEYS_DIR}/private.pem and ${KEYS_DIR}/public.pem"
       echo " - Details at: https://forum.duplicacy.com/t/new-feature-rsa-encryption/2662"
     fi
   else
-    echo " - Skipping RSA key pair generation: RSA key files already present in '${DUPLICACY_KEYS_DIR}'."
+    echo " - Skipping RSA key pair generation: RSA key files already present in '${KEYS_DIR}'."
   fi
 }
 
 generate_ssh_keypair() {
-  if [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ]; then
+  if [ ! -f "${KEYS_DIR}/id_ed25519" ] || [ ! -f "${KEYS_DIR}/id_ed25519.pub" ]; then
     echo
     echo
     read -p "Would you like to generate an SSH key pair for Duplicacy SFTP storage? (y|N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
       echo " - Generating SSH key pair for Duplicacy SFTP storage..."
-      backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519"
-      backup_existing_file "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
-      ssh-keygen -t ed25519 -f "${DUPLICACY_KEYS_DIR}/id_ed25519" -N "" -C "archiver"
-      chmod 700 "${DUPLICACY_KEYS_DIR}"
-      chmod 600 "${DUPLICACY_KEYS_DIR}/id_ed25519"
-      chmod 644 "${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
+      backup_existing_file "${KEYS_DIR}/id_ed25519"
+      backup_existing_file "${KEYS_DIR}/id_ed25519.pub"
+      ssh-keygen -t ed25519 -f "${KEYS_DIR}/id_ed25519" -N "" -C "archiver"
+      chmod 700 "${KEYS_DIR}"
+      chmod 600 "${KEYS_DIR}/id_ed25519"
+      chmod 644 "${KEYS_DIR}/id_ed25519.pub"
 
-      if [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519" ] || [ ! -f "${DUPLICACY_KEYS_DIR}/id_ed25519.pub" ]; then
+      if [ ! -f "${KEYS_DIR}/id_ed25519" ] || [ ! -f "${KEYS_DIR}/id_ed25519.pub" ]; then
         echo "Error: SSH key pair generation failed. Key files were not created."
         exit 1
       else
@@ -125,12 +125,12 @@ generate_ssh_keypair() {
       fi
     else
       echo " - SSH key pair not generated."
-      echo " - Please provide your own, and copy them to ${DUPLICACY_KEYS_DIR}/id_ed25519 and ${DUPLICACY_KEYS_DIR}/id_ed25519.pub"
+      echo " - Please provide your own, and copy them to ${KEYS_DIR}/id_ed25519 and ${KEYS_DIR}/id_ed25519.pub"
       echo " - Archiver only supports ed25519 key pairs with no passphrase for SFTP."
-      echo " - Can use the following command: ssh-keygen -t ed25519 -f ${DUPLICACY_KEYS_DIR}/id_ed25519 -N \"\" -C archiver"
+      echo " - Can use the following command: ssh-keygen -t ed25519 -f ${KEYS_DIR}/id_ed25519 -N \"\" -C archiver"
     fi
   else
-    echo " - Skipping SSH key pair generation: SSH key files already present in '${DUPLICACY_KEYS_DIR}'."
+    echo " - Skipping SSH key pair generation: SSH key files already present in '${KEYS_DIR}'."
   fi
 }
 
@@ -224,7 +224,7 @@ create_config_file() {
         done
         sftp_path="$(echo "${sftp_path}" | sed 's|^/*||;s|/*$||')"
 
-        sftp_key_file="${DUPLICACY_KEYS_DIR}/id_ed25519"
+        sftp_key_file="${KEYS_DIR}/id_ed25519"
       }
 
       # Function to prompt for B2 storage details
