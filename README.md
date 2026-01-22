@@ -19,17 +19,7 @@ Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible 
 
 If you're currently running Archiver v0.6.5 or earlier directly on your host system, see the [Legacy to Docker Migration Guide](docs/guides/migration/legacy-to-docker.md) for step-by-step upgrade instructions.
 
-**New users**: Continue with Quick Start below.
-
-## Quick Start
-
-Run interactive initialization in a container to generate your bundle file:
-```bash
-docker run -it --rm \
-  -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:v0.7.0 init
-```
-Then use the generated `bundle.tar.enc` file with Docker Compose. See [Installation](#installation) for details.
+**New users**: Continue with Installation below.
 
 ## Features
 
@@ -52,7 +42,9 @@ Then use the generated `bundle.tar.enc` file with Docker Compose. See [Installat
 
 ### Step 1: Generate Bundle File
 
-Run initialization interactively to generate your configuration bundle:
+**Skip this step if you already have a bundle file** (e.g., `bundle.tar.enc` or `export-*.tar.enc` from a previous installation).
+
+For new installations, run initialization interactively to generate your configuration bundle:
 
 ```bash
 docker run -it --rm \
