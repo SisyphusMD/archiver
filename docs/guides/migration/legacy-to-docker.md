@@ -184,8 +184,8 @@ cd /path/to/compose-directory
 # Start the container
 docker compose up -d
 
-# Watch the logs
-docker exec -it archiver archiver logs
+# Watch the container startup logs
+docker compose logs -f
 ```
 
 The container will automatically:

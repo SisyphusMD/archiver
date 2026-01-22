@@ -237,7 +237,6 @@ Update paths and password, then start:
 
 ```bash
 docker compose up -d
-docker exec -it archiver archiver logs
 ```
 
 ### Docker Socket (Advanced)
