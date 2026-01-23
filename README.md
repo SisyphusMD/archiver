@@ -337,15 +337,40 @@ RSA_PASSPHRASE="passphrase-for-rsa-private-key"
 ### Backup Rotation
 
 ```bash
-ROTATE_BACKUPS="true"
+ROTATE_BACKUPS="true"  # Enable automatic pruning after backups
 PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
 ```
 
-This keeps:
-- All backups from last 1 day (1:1)
-- Daily backups for 7 days (7:7)
-- Weekly backups for 30 days (30:30)
-- Monthly backups for 180 days (0:180)
+**Default retention policy** keeps:
+- All backups younger than 1 day old
+- 1 backup every 1 day for backups older than 1 day (`-keep 1:1`)
+- 1 backup every 7 days for backups older than 7 days (`-keep 7:7`)
+- 1 backup every 30 days for backups older than 30 days (`-keep 30:30`)
+- Delete all backups older than 180 days (`-keep 0:180`)
+
+**Format:** `-keep n:m` means keep 1 snapshot every `n` days if the snapshot is at least `m` days old.
+
+#### Per-Run Override
+
+You can override `ROTATE_BACKUPS` for individual backup runs:
+
+```bash
+docker exec archiver archiver start prune   # Force pruning this run
+docker exec archiver archiver start retain  # Skip pruning this run
+```
+
+#### Multi-Repository Shared Storage
+
+If multiple repositories backup to the same storage target, **only ONE should run prune** to avoid race conditions:
+
+1. Set `ROTATE_BACKUPS="false"` in all but one repository's config
+2. The designated repository will prune for all snapshot IDs using the `-all` flag
+3. Prune uses `-exhaustive` flag to remove ALL unreferenced chunks, including:
+   - Orphaned chunks from manually deleted snapshots
+   - Incomplete backup chunks from interrupted operations
+   - Unreferenced chunks from any source
+
+See the [Duplicacy prune documentation](https://forum.duplicacy.com/t/prune-command-details/1005) for more details on the two-step fossil collection algorithm.
 
 ### Performance
 

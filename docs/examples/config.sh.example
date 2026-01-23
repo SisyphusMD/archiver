@@ -73,8 +73,29 @@
   # PUSHOVER_API_TOKEN="" # Pushover application API token/key
 
 # Backup Rotation
-  # ROTATE_BACKUPS="" # Default: "true". Set to 'true' to enable rotating out older backups.
-  # PRUNE_KEEP="" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1". See https://forum.duplicacy.com/t/prune-command-details/1005 for details.
+  # ROTATE_BACKUPS="" # Default: "true". Set to 'true' to enable automatic pruning after backups.
+  #                     Set to 'false' if multiple repositories share storage (only one should prune).
+  #                     Can be overridden per-run: 'archiver start prune' or 'archiver start retain'
+  #
+  # PRUNE_KEEP="" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
+  #                 Retention policy for old revisions. Must be sorted by age (descending).
+  #                 Format: -keep n:m means keep 1 snapshot every n days if the snapshot is at least m days old
+  #                 Example breakdown:
+  #                   -keep 1:1    = Keep 1 backup every 1 day for backups older than 1 day
+  #                   -keep 7:7    = Keep 1 backup every 7 days for backups older than 7 days
+  #                   -keep 30:30  = Keep 1 backup every 30 days for backups older than 30 days
+  #                   -keep 0:180  = Delete all backups older than 180 days
+  #                 See: https://forum.duplicacy.com/t/prune-command-details/1005
+  #
+  # IMPORTANT: Prune operation behavior
+  #   - Runs with -all flag (prunes across ALL snapshot IDs in storage)
+  #   - Uses -exhaustive flag (removes ALL unreferenced chunks, including orphaned chunks
+  #     from manually deleted snapshots or incomplete backups)
+  #   - Only ONE repository should run prune per shared storage to avoid race conditions
+  #   - If multiple repositories backup to the same storage:
+  #     * Set ROTATE_BACKUPS="false" in all but one repository's config
+  #     * The designated repository will prune for all snapshot IDs
+  #   - See: https://forum.duplicacy.com/t/prune-command-details/1005
 
 # Performance
   # DUPLICACY_THREADS="" # Default: "4". Number of parallel upload/download threads for duplicacy operations.
