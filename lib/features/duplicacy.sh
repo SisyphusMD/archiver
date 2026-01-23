@@ -472,7 +472,7 @@ duplicacy_wrap_up() {
     PRUNE_KEEP_ARRAY=()
     read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
 
-    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
+    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" -exhaustive -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [[ "${exit_status}" -ne 0 ]]; then
       handle_error "Prune failed for ${storage_name} storage. Review the Duplicacy logs for details."
