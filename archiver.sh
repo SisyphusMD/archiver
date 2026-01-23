@@ -1,25 +1,22 @@
 #!/bin/bash
+# Main CLI entrypoint for Archiver commands
 
-# Record the start time before calling main.sh
-START_TIME="$(date +%s)"
+ARCHIVER_SH_SOURCED=true
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  exec sudo "$0" "$@"
+if [[ -z "${COMMON_SH_SOURCED}" ]]; then
+  source "/opt/archiver/lib/core/common.sh"
 fi
+source_if_not_sourced "${REQUIRE_DOCKER_CORE}"
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|setup|bundle|uninstall|restore|healthcheck|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|healthcheck|help} [logs|prune|retain]"
   echo "Note:"
-  echo "  stop|pause|logs|status|setup|uninstall|restore|healthcheck|help cannot have further arguments."
+  echo "  stop|pause|logs|status|restore|healthcheck|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
   echo "  bundle requires a subcommand: export or import"
   exit 1
 }
-
-# Work through arguments
 
 logs="false"
 args=()
@@ -32,6 +29,28 @@ fi
 command="${1}"
 shift
 
+start_archiver() {
+  # Parse optional flags: logs, prune, retain
+  if [[ -n "${1}" ]]; then
+    if [[ "${1}" == "logs" ]]; then
+      logs="true"
+      if [[ -n "${2}" ]]; then
+        args=("${2}")
+      fi
+    elif [[ "${1}" == "prune" ]] || [[ "${1}" == "retain" ]]; then
+      args=("${1}")
+      if [[ -n "${2}" ]]; then
+        logs="true"
+      fi
+    fi
+  fi
+
+  # setsid + nohup prevents issues with exported env vars when log view is closed
+  setsid nohup "${MAIN_SCRIPT}" "${args[@]}" &>/dev/null &
+  echo "Archiver main script called in the background."
+}
+
+# Route commands to their respective scripts
 case "${command}" in
   start|restart)
     if [[ $# -gt 0 ]]; then
@@ -54,29 +73,81 @@ case "${command}" in
           ;;
       esac
     fi
+    if [[ "${command}" == "restart" ]]; then
+      "${STOP_SCRIPT}"
+    fi
+    start_archiver "${@}"
+    ;;
+  stop)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${STOP_SCRIPT}"
+    ;;
+  pause)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${PAUSE_SCRIPT}"
     ;;
   resume)
     if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "logs" ) ]]; then
       echo "'${*:1}' is not valid for 'archiver ${command}'."
       usage
     fi
+    if [[ -n "${1}" ]]; then
+      logs="true"
+    fi
+    "${RESUME_SCRIPT}"
     ;;
-  stop|pause|logs|status|setup|uninstall|restore|healthcheck|help)
+  logs)
     if [[ $# -gt 0 ]]; then
       echo "'${command}' cannot have further arguments."
       usage
     fi
+    "${LOGS_SCRIPT}"
+    ;;
+  status)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${STATUS_SCRIPT}"
+    ;;
+  restore)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${RESTORE_SCRIPT}"
+    ;;
+  healthcheck)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    "${HEALTHCHECK_SCRIPT}"
     ;;
   bundle)
     if [[ $# -ne 1 ]]; then
       echo "'bundle' requires exactly one subcommand: export or import"
       usage
     fi
-    if [[ "${1}" != "export" && "${1}" != "import" ]]; then
-      echo "Unknown bundle subcommand: ${1}"
+    subcommand="${1}"
+    if [[ "${subcommand}" == "export" ]]; then
+      "${BUNDLE_EXPORT_SCRIPT}"
+    elif [[ "${subcommand}" == "import" ]]; then
+      "${BUNDLE_IMPORT_SCRIPT}"
+    else
+      echo "Unknown bundle subcommand: ${subcommand}"
       echo "Valid subcommands: export, import"
       usage
     fi
+    ;;
+  help)
+    usage
     ;;
   *)
     echo "Unknown command: ${command}"
@@ -84,117 +155,8 @@ case "${command}" in
     ;;
 esac
 
-# Define the path to the Archiver script
-ARCHIVER_SCRIPT="$(realpath "${0}")"
-ARCHIVER_DIR="$(dirname "${ARCHIVER_SCRIPT}")"
-# Define mod directory
-MOD_DIR="${ARCHIVER_DIR}/lib/mod"
-# Define paths to various scripts
-MAIN_SCRIPT="${MOD_DIR}/main.sh"
-LOGS_SCRIPT="${MOD_DIR}/logs.sh"
-STOP_SCRIPT="${MOD_DIR}/stop.sh"
-SETUP_SCRIPT="${MOD_DIR}/setup.sh"
-STATUS_SCRIPT="${MOD_DIR}/status.sh"
-RESTORE_SCRIPT="${MOD_DIR}/restore.sh"
-BUNDLE_EXPORT_SCRIPT="${MOD_DIR}/bundle-export.sh"
-BUNDLE_IMPORT_SCRIPT="${MOD_DIR}/bundle-import.sh"
-HEALTHCHECK_SCRIPT="${MOD_DIR}/healthcheck.sh"
-
-start_archiver() {
-  if [[ -n "${1}" ]]; then
-    if [[ "${1}" == "logs" ]]; then
-      logs="true"
-      if [[ -n "${2}" ]]; then
-        args=("${2}")
-      fi
-    elif [[ "${1}" == "prune" ]] || [[ "${1}" == "retain" ]]; then
-      args=("${1}")
-      if [[ -n "${2}" ]]; then
-        logs="true"
-      fi
-    fi
-  fi
-  # Start Archiver in a new session using setsid
-  setsid nohup "${MAIN_SCRIPT}" "${args[@]}" &>/dev/null & # setsid + nohup was required to fix bug related to duplicacy exported env vars when user ran script with --view-logs, then closed that running log view
-  echo "Archiver main script called in the background."
-}
-
-# Archiver Start Logic
-if [[ "${command}" == "start" ]]; then
-  start_archiver "${@}"
-fi
-
-# Archiver stop logic
-if [[ "${command}" == "stop" ]]; then
-  "${STOP_SCRIPT}"
-fi
-
-# Archiver setup logic
-if [[ "${command}" == "setup" ]]; then
-  "${SETUP_SCRIPT}"
-fi
-
-# Archiver restore logic
-if [[ "${command}" == "restore" ]]; then
-  "${RESTORE_SCRIPT}"
-fi
-
-# Archiver status logic
-if [[ "${command}" == "status" ]]; then
-  "${STATUS_SCRIPT}"
-fi
-
-# Archiver pause logic
-if [[ "${command}" == "pause" ]]; then
-  "${STATUS_SCRIPT}" "${command}"
-fi
-
-# Archiver resume logic
-if [[ "${command}" == "resume" ]]; then
-  if [[ -n "${1}" ]]; then
-    logs="true"
-    START_TIME=0
-  fi
-  "${STATUS_SCRIPT}" "${command}"
-fi
-
-# Archiver restart logic
-if [[ "${command}" == "restart" ]]; then
-  # First stop
-  "${STOP_SCRIPT}"
-
-  # Then start again with arguments as needed
-  start_archiver "${@}"
-fi
-
-# Archiver logs logic
-if [[ "${command}" == "logs" ]] || [[ "${logs}" == "true" ]]; then
-  "${LOGS_SCRIPT}" "time" "${START_TIME}"
-fi
-
-# Archiver help logic
-if [[ "${command}" == "help" ]]; then
-  usage
-fi
-
-# Archiver bundle logic
-if [[ "${command}" == "bundle" ]]; then
-  subcommand="${1}"
-  if [[ "${subcommand}" == "export" ]]; then
-    "${BUNDLE_EXPORT_SCRIPT}"
-  elif [[ "${subcommand}" == "import" ]]; then
-    "${BUNDLE_IMPORT_SCRIPT}"
-  fi
-fi
-
-# Archiver healthcheck logic
-if [[ "${command}" == "healthcheck" ]]; then
-  "${HEALTHCHECK_SCRIPT}"
-fi
-
-# Archiver uninstall logic
-if [[ "${command}" == "uninstall" ]]; then
-  echo "Uninstall function coming soon."
+if [[ "${logs}" == "true" ]]; then
+  "${LOGS_SCRIPT}"
 fi
 
 exit 0

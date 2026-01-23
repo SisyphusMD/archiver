@@ -1,35 +1,50 @@
 #!/bin/bash
+# Loads and validates user configuration from config.sh
 
-source "${ARCHIVER_DIR}/config.sh"
+CONFIG_LOADER_SH_SOURCED=true
 
-# Set DUPLICACY_THREADS with default if not set in config.sh
+if [[ -z "${COMMON_SH_SOURCED}" ]]; then
+  source "/opt/archiver/lib/core/common.sh"
+fi
+source_if_not_sourced "${LOGGING_CORE}"
+source "${CONFIG_FILE}"
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
+# Converts storage names to valid Bash variable format
+# Replaces special chars with underscores, prepends _ if starts with digit
+sanitize_storage_name() {
+  local name="${1}"
+  local sanitized
+  sanitized="$(printf "%s" "${name}" | tr -c '[:alnum:]_' '_' | sed 's/^[0-9]/_&/')"
+
+  if [[ "${name}" != "${sanitized}" ]]; then
+    echo "WARNING: Storage name ${name} was sanitized to ${sanitized} for use in Duplicacy commands and environment variables." >&2
+    log_message "WARN" "Storage name ${name} was sanitized to ${sanitized} for use in Duplicacy commands and environment variables."
+  fi
+
+  printf "%s" "${sanitized}"
+}
+
+# Expands glob patterns in SERVICE_DIRECTORIES (e.g., /srv/*/ -> /srv/app1/ /srv/app2/)
 expand_service_directories() {
   local expanded_service_directories=()
 
-  # Ensure SERVICE_DIRECTORIES is defined and not empty
   if [[ -z "${SERVICE_DIRECTORIES[*]}" ]]; then
     handle_error "SERVICE_DIRECTORIES is not defined or is empty. Please set the SERVICE_DIRECTORIES array."
     exit 1
   fi
 
-  # Populate user-defined service directories into the expanded_service_directories array
   for pattern in "${SERVICE_DIRECTORIES[@]}"; do
-    # Directly list directories for specific paths or wildcard patterns
-    for dir in ${pattern}; do  # Important: Don't quote ${pattern} to allow glob expansion
+    for dir in ${pattern}; do
       if [[ -d "${dir}" ]]; then
-        # Add the directory to the array, removing the trailing slash
         expanded_service_directories+=("${dir%/}")
       fi
     done
   done
 
-  # Export the expanded directories to be accessible globally if needed
   export EXPANDED_SERVICE_DIRECTORIES=("${expanded_service_directories[@]}")
 }
 
-# Function to check the number of storage targets and to exit if none
 count_storage_targets() {
   local count=0
 
@@ -47,12 +62,11 @@ count_storage_targets() {
     handle_error "No Storage Targets specified. Please edit config.sh and specify at least one storage target."
     exit 1
   else
-    log_message "INFO" "$count backup targets configured."
+    log_message "INFO" "${count} backup targets configured."
     export STORAGE_TARGET_COUNT=$count
   fi
 }
 
-# Function to verify the required target storage setting variables are set, and to exit if not.
 verify_target_settings() {
   for i in $(seq 1 "${STORAGE_TARGET_COUNT}"); do
     local storage_id="${i}"
@@ -69,16 +83,16 @@ verify_target_settings() {
     if [[ "${storage_type}" == "local" ]]; then
       local config_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
       if [[ -z "${!config_var}" ]]; then
-        handle_error "Missing LOCAL_PATH configuration for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+        handle_error "Missing LOCAL_PATH configuration for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
         exit 1
       fi
 
     elif [[ "${storage_type}" == "sftp" ]]; then
-      local config_vars=("SFTP_URL" "SFTP_PORT" "SFTP_USER" "SFTP_PATH" "SFTP_KEY_FILE")
+      local config_vars=("SFTP_URL" "SFTP_PORT" "SFTP_USER" "SFTP_PATH")
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then
-          handle_error "Missing SFTP configuration setting '${var}' for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          handle_error "Missing SFTP configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
           exit 1
         fi
       done
@@ -88,7 +102,7 @@ verify_target_settings() {
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then
-          handle_error "Missing B2 configuration setting '${var}' for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          handle_error "Missing B2 configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
           exit 1
         fi
       done
@@ -98,25 +112,24 @@ verify_target_settings() {
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then
-          handle_error "Missing S3 configuration setting '${var}' for the '${storage_name}' storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          handle_error "Missing S3 configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
           exit 1
         fi
       done
 
     else
-      handle_error "The storage type '${storage_type}' is not supported. Please check your '${storage_type_var}' configuration."
+      handle_error "The storage type ${storage_type} is not supported. Please check your ${storage_type_var} configuration."
       exit 1
     fi
   done
 }
 
-# Function to check if required secrets are set
 check_required_secrets() {
   local secrets=("STORAGE_PASSWORD" "RSA_PASSPHRASE")
 
   for secret in "${secrets[@]}"; do
     if [[ -z "${!secret}" ]]; then
-      handle_error "The required secret '${secret}' is not set. Please edit config.sh and specify a value for '${secret}'."
+      handle_error "The required secret ${secret} is not set. Please edit config.sh and specify a value for ${secret}."
       exit 1
     fi
   done
@@ -124,9 +137,7 @@ check_required_secrets() {
   log_message "INFO" "All required secrets are set."
 }
 
-# Function to check optional notification configuration
 check_notification_config() {
-  # Ensure NOTIFICATION_SERVICE is case-insensitive
   local notification_service_lower
   notification_service_lower=$(echo "${NOTIFICATION_SERVICE}" | tr '[:upper:]' '[:lower:]')
 
@@ -134,36 +145,31 @@ check_notification_config() {
     local settings=("PUSHOVER_USER_KEY" "PUSHOVER_API_TOKEN")
     for setting in "${settings[@]}"; do
       if [[ -z "${!setting}" ]]; then
-        handle_error "Notification service is set to '${NOTIFICATION_SERVICE}', but the necessary setting '${setting}' is not set. Please edit config.sh and specify a value for '${setting}'."
+        handle_error "Notification service is set to ${NOTIFICATION_SERVICE}, but the necessary setting ${setting} is not set. Please edit config.sh and specify a value for ${setting}."
         exit 1
       fi
     done
-    log_message "INFO" "All required '${NOTIFICATION_SERVICE}' settings are set."
+    log_message "INFO" "All required ${NOTIFICATION_SERVICE} settings are set."
   else
     NOTIFICATION_SERVICE="None"
     PUSHOVER_USER_KEY=""
     PUSHOVER_API_TOKEN=""
   fi
 
-  # Export the variables if they need to be used outside the function
   export NOTIFICATION_SERVICE
   export PUSHOVER_USER_KEY
   export PUSHOVER_API_TOKEN
 }
 
-# Function to check and set default values for backup rotation
 check_backup_rotation_settings() {
-  # Check if ROTATE_BACKUPS is set, if not, assign the default value "true"
   if [[ -z "${ROTATE_BACKUPS}" ]]; then
     ROTATE_BACKUPS="true"
   fi
 
-  # Check if PRUNE_KEEP is set, if not, assign the default value
   if [ -z "${PRUNE_KEEP}" ]; then
     PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
   fi
 
-  # Override prune decision for this run only
   if [[ "${ROTATION_OVERRIDE}" == "prune" ]]; then
     log_message "INFO" "Prune flag set, will perform backup rotation on this run."
     ROTATE_BACKUPS="true"
@@ -172,15 +178,12 @@ check_backup_rotation_settings() {
     ROTATE_BACKUPS="false"
   fi
 
-  # Export the variables if they need to be used outside the function
   export ROTATE_BACKUPS
   export PRUNE_KEEP
 
-  # Log the values being used for backup rotation
-  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}"
+  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}."
 }
 
-# Function to verify the entire configuration
 verify_config(){
   expand_service_directories
   count_storage_targets

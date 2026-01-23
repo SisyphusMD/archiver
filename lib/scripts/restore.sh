@@ -1,85 +1,22 @@
 #!/bin/bash
 
-set -e # Exit immediately if a command exits with a non-zero status
+RESTORE_SH_SOURCED=true
 
-# Check if the script is run with sudo
-if [ "$(id -u)" -ne 0 ]; then
-  # Escalate privileges if not sudo
-  export INVOKING_UID="$(id -u)"
-  export INVOKING_GID="$(id -g)"
-  exec sudo -E "$0" "$@"
+if [[ -z "${COMMON_SH_SOURCED}" ]]; then
+  source "/opt/archiver/lib/core/common.sh"
 fi
+source_if_not_sourced "${ERROR_CORE}"
+source_if_not_sourced "${CONFIG_LOADER_CORE}"
 
-# Creating this function for requirements of sourced functions
+# Simple log_message for user output (restore is interactive)
 log_message() {
   echo "$@"
 }
 
-handle_error() {
-  log_message "Error: ${1}"
-  exit 1
-}
-
-# Configuration Section
-# ---------------------
-# Determine archiver repo directory path by traversing up the directory tree until we find 'archiver.sh' or reach the root
-RESTORE_SCRIPT_PATH="$(realpath "$0")"
-CURRENT_DIR="$(dirname "${RESTORE_SCRIPT_PATH}")"
-ARCHIVER_DIR=""
-while [ "${CURRENT_DIR}" != "/" ]; do
-  if [ -f "${CURRENT_DIR}/archiver.sh" ]; then
-    ARCHIVER_DIR="${CURRENT_DIR}"
-    break
-  fi
-  CURRENT_DIR="$(dirname "${CURRENT_DIR}")"
-done
-
-# Check if we found the file
-if [ -z "${ARCHIVER_DIR}" ]; then
-  echo "Error: archiver.sh not found in any parent directory."
-  exit 1
-fi
-
-KEYS_DIR="${ARCHIVER_DIR}/keys"
-DUPLICACY_RSA_PUBLIC_KEY_FILE="${KEYS_DIR}/public.pem" # Path to RSA public key file for Duplicacy
-DUPLICACY_RSA_PRIVATE_KEY_FILE="${KEYS_DIR}/private.pem" # Path to RSA private key file for Duplicacy
-DUPLICACY_SSH_PUBLIC_KEY_FILE="${KEYS_DIR}/id_ed25519.pub" # Path to SSH public key file for Duplicacy
-DUPLICACY_SSH_PRIVATE_KEY_FILE="${KEYS_DIR}/id_ed25519" # Path to SSH private key file for Duplicacy
-
-# Check if duplicacy is available and exit if not
-if ! command -v duplicacy &> /dev/null; then
-  handle_error "Unable to find the Duplicacy binary in the PATH. This script requires the Duplicacy binary to function. Please install it before running this script."
-fi
-
-# Check if config.sh file is available, and exit if not
-if [ ! -f "${ARCHIVER_DIR}/config.sh" ]; then
-  handle_error "Unable to find your config.sh file. This script requires your backed up config.sh file from the archiver directory. Please restore it before running this script."
-fi
-
-if [ ! -f "${KEYS_DIR}/private.pem" ] || [ ! -f "${KEYS_DIR}/public.pem" ]; then
-  handle_error "Unable to find your RSA key files. This script requires your backed up RSA private.pem and public.pem files from the keys directory. Please restore those before running this script."
-fi
-
-# ---------------------
-# Configuration Check
-# ---------------------
-source "${ARCHIVER_DIR}/lib/src/set-config.sh"
-# imports functions:
-#   - verify_config
-#   - expand_service_directories
-#   - count_storage_targets
-#   - verify_target_settings
-#   - check_required_secrets
-#   - check_notification_config
-#   - check_backup_rotation_settings
-# exports variables:
-#   - STORAGE_TARGET_COUNT
-#   - others I haven't documented yet
 count_storage_targets
 verify_target_settings
 check_required_secrets
 
-# Global variables to store the selected storage target info
 SELECTED_STORAGE_TARGET_ID=""
 SELECTED_STORAGE_TARGET_NAME=""
 SELECTED_STORAGE_TARGET_TYPE=""
@@ -87,11 +24,9 @@ SNAPSHOT_ID=""
 LOCAL_DIR=""
 REVISION=""
 
-# Function to list and prompt user for storage target selection
 select_storage_target() {
   local storage_targets=()
-    
-  # Read all storage targets
+
   for i in $(seq 1 "${STORAGE_TARGET_COUNT}"); do
     local storage_id="${i}"
     local storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
@@ -100,13 +35,11 @@ select_storage_target() {
     storage_targets+=("${storage_id}) ${storage_name}")
   done
 
-  # Display the storage targets to the user
   echo "Which of the following storage targets would you like to restore from?"
   for target in "${storage_targets[@]}"; do
     echo " - ${target}"
   done
 
-  # Prompt user for selection
   local choice
   while true; do
     read -rp "Enter the number of your choice: " choice
@@ -116,8 +49,7 @@ select_storage_target() {
       echo "Invalid choice. Please enter a valid number between 1 and ${STORAGE_TARGET_COUNT}."
     fi
   done
-    
-  # Store the selected storage target ID in a global variable
+
   SELECTED_STORAGE_TARGET_ID="${choice}"
   local selected_storage_name_var="STORAGE_TARGET_${choice}_NAME"
   SELECTED_STORAGE_TARGET_NAME="${!selected_storage_name_var}"
@@ -155,10 +87,6 @@ local_restore_selections() {
 initialize_duplicacy() {
   if [ ! -d "${LOCAL_DIR}" ]; then
     mkdir -p -m 0755 "${LOCAL_DIR}"
-    # If variables available, use them for ownership
-    if [ -n "${INVOKING_UID}" ] && [ -n "${INVOKING_GID}" ]; then
-      chown "${INVOKING_UID}":"${INVOKING_GID}" "${LOCAL_DIR}"
-    fi
   fi
   
   cd "${LOCAL_DIR}" || handle_error "Failed to change directory to '${LOCAL_DIR}'."
@@ -190,24 +118,22 @@ initialize_duplicacy() {
     local config_sftp_port_var
     local config_sftp_user_var
     local config_sftp_path_var
-    local config_sftp_key_file_var
     local duplicacy_ssh_key_file_var
 
     config_sftp_url_var="STORAGE_TARGET_${storage_id}_SFTP_URL"
     config_sftp_port_var="STORAGE_TARGET_${storage_id}_SFTP_PORT"
     config_sftp_user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
     config_sftp_path_var="STORAGE_TARGET_${storage_id}_SFTP_PATH"
-    config_sftp_key_file_var="STORAGE_TARGET_${storage_id}_SFTP_KEY_FILE"
     duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
 
-    export "${duplicacy_ssh_key_file_var}"="${!config_sftp_key_file_var}" # Export Duplicacy storage SSH key file so Duplicacy binary can see variable
+    export "${duplicacy_ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}" # Export Duplicacy storage SSH key file so Duplicacy binary can see variable
 
     duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
       -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
       "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" || \
       handle_error "Duplicacy SFTP Storage initialization failed."
-    
-    duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${!config_sftp_key_file_var}" || \
+
+    duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" || \
       handle_error "Setting the Duplicacy SFTP key file failed."
 
   elif [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "b2" ]]; then
@@ -365,10 +291,6 @@ configure_restore_options() {
 
 restore_repository() {
   duplicacy restore -r "${REVISION}" -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" -stats -threads "${RESTORE_THREADS}" "${RESTORE_FLAGS}"
-  # Fix ownership of restored files to match the invoking user
-  if [ -n "${INVOKING_UID}" ] && [ -n "${INVOKING_GID}" ]; then
-    chown -R "${INVOKING_UID}":"${INVOKING_GID}" "${LOCAL_DIR}"
-  fi
   echo "Repository restored."
 }
 

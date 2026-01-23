@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-01-22
+
+### ⚠️ BREAKING CHANGES
+- **Docker-Only Deployment**: Direct installation on host systems is no longer supported. See [migration guide](docs/guides/migration/legacy-to-docker.md).
+
+### Added
+- **Graceful Stop**: Stop command respects backup stage, completing service cleanup before termination
+  - New `archiver stop --immediate` flag for emergency termination
+  - Sends summary notification with runtime and error count
+- **Docker Compose Graceful Shutdown**: Added `stop_grace_period: 2m` to ensure proper service cleanup when stopping containers
+- **Migration Documentation**: Comprehensive guides for migrating legacy installations (v0.3.2+) to Docker v0.7.0
+  - Legacy to Docker migration guide
+  - Configuration editing in Docker
+  - Local storage setup
+  - SSH key management
+
+### Improved
+- **Prune Operation**: Now uses `-exhaustive` flag to remove orphaned chunks from manually deleted snapshots and incomplete backups
+- **Notifications**: Include hostname and timestamp; respect TZ environment variable
+- **Bundle Export**: Offers to reuse BUNDLE_PASSWORD environment variable
+- **Storage Names**: Automatically sanitize storage names with hyphens for Bash compatibility
+- **Code Organization**: Restructured lib directory into core/features/scripts
+
+### Changed
+- Streamlined documentation for Docker-only workflow
+- **SFTP SSH Key Path**: Hardcoded to `/opt/archiver/keys/id_ed25519` for Docker consistency
+  - Removed `STORAGE_TARGET_X_SFTP_KEY_FILE` configuration variable
+  - Migrating users: Old variable in config.sh will be safely ignored
+
+### Removed
+- Legacy/direct installation support and related commands
+
 ## [0.6.5] - 2026-01-14
 
 ### Added
@@ -158,7 +190,7 @@ The export/import functionality has been renamed to use "bundle" terminology:
 
 #### Migrating from Traditional Installation to Docker
 
-Docker installation is now the recommended deployment method. Traditional installation will be **deprecated in v0.7.0**.
+Docker installation is now the recommended deployment method. Legacy installation will be **deprecated in v0.7.0**.
 
 **Steps to migrate**:
 

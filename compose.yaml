@@ -1,46 +1,22 @@
 services:
+
   archiver:
-    image: ghcr.io/sisyphusmd/archiver:0.6.5
+
     container_name: archiver
+    image: ghcr.io/sisyphusmd/archiver:0.7.0
     restart: unless-stopped
+    stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
+
+    hostname: backup-server       # used for backup service label (optional)
 
     environment:
-      # REQUIRED: Password to decrypt the bundle.tar.enc file
-      BUNDLE_PASSWORD: "your-bundle-password-here"
-
-      # OPTIONAL: Cron schedule for automatic backups
-      # If not set or empty, container will wait for manual commands
-      # Examples:
-      #   "0 3 * * *"     - Daily at 3am
-      #   "0 */6 * * *"   - Every 6 hours
-      #   "0 2 * * 0"     - Weekly on Sunday at 2am
-      CRON_SCHEDULE: "0 3 * * *"
-
-      # OPTIONAL: Timezone for cron scheduling
-      # Examples: "America/New_York", "Europe/London", "Asia/Tokyo"
-      # Default: UTC
-      TZ: "UTC"
+      BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
+      CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
+      TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
 
     volumes:
-      # REQUIRED: Mount your bundle directory (contains bundle.tar.enc)
-      - /path/to/your/bundle:/opt/archiver/bundle
-
-      # OPTIONAL: Mount logs directory for persistence
-      - /path/to/logs:/opt/archiver/logs
-
-      # REQUIRED: Mount your service directories that need to be backed up
-      # These paths must match what's configured in your config.sh file
-      # Example: If config.sh has SERVICE_DIRECTORIES=("/data/services")
-      # then you need to mount your host directory to /data/services in the container
-      - /path/to/host/services:/data/services
-
-      # Add more service directories as needed based on your config.sh
-      # - /path/to/other/data:/other/data
-
-      # OPTIONAL: Docker socket (only if service scripts need to control other containers)
-      # Security Warning: Grants container root-level access to Docker daemon
-      # Only enable if your backup scripts need to run docker exec, docker compose, etc.
-      # - /var/run/docker.sock:/var/run/docker.sock
-
-    # Optional: Set container hostname (used in backup snapshot IDs)
-    hostname: backup-server
+      - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
+      - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
+      - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match config.sh)
+      # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
+      # - /path/to/host/restore-dir:/mnt/restore-dir # Restore location (will be prompted)

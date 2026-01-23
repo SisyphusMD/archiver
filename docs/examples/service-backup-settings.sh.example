@@ -1,0 +1,48 @@
+#########################################################################################
+# service-backup-settings.sh                                                            #
+#                                                                                       #
+# Optional file for service-specific backup configuration.                              #
+# Place in any service directory to customize its backup behavior.                      #
+#                                                                                       #
+# Usage:                                                                                #
+# - Define file filters to include/exclude specific files                               #
+# - Add pre-backup tasks (stop services, dump databases, etc.)                          #
+# - Add post-backup tasks (restart services, cleanup, etc.).                            #
+#                                                                                       #
+# Available tools: duplicacy, docker, sqlite3, curl, wget, ssh, openssl, gpg, vim       #
+# Note: Docker commands require mounting /var/run/docker.sock in compose.yaml           #
+#########################################################################################
+
+# Set include/exclude patterns for Duplicacy filter.
+# By default, Archiver will include all files: "+*"
+# See https://forum.duplicacy.com/t/filters-include-exclude-patterns/1089 for details.
+# Uncomment the below to use.
+#
+# DUPLICACY_FILTERS_PATTERNS=(
+#   # For example: listing +compose.yaml, then -*, will include the compose.yaml file
+#   # in the backup, and will exclude all other files and directories.
+#   "+compose.yaml"
+#   "-*"
+# )
+
+# Define service-specific pre-backup functions.
+# This can include service shutdown, database dump, etc.
+# By default, Archiver will not run any service-specific functions before backup.
+# Uncomment the below to use.
+#
+# service_specific_pre_backup_function() {
+#   # Add pre-backup commands here.
+#   # Example: docker compose stop
+#   :; # No operation placeholder
+# }
+
+# Define service-specific post-backup functions.
+# This can include service startup, cleanup actions, etc.
+# By default, Archiver will not run any service-specific functions after backup.
+# Uncomment the below to use.
+#
+# service_specific_post_backup_function() {
+#   # Add post-backup commands here.
+#   # Example: docker compose start
+#   :; # No operation placeholder
+# }
