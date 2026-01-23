@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - SSH key management
 
 ### Improved
+- **Prune Operation**: Now uses `-exhaustive` flag to remove orphaned chunks from manually deleted snapshots and incomplete backups
 - **Notifications**: Include hostname and timestamp; respect TZ environment variable
 - **Bundle Export**: Offers to reuse BUNDLE_PASSWORD environment variable
 - **Storage Names**: Automatically sanitize storage names with hyphens for Bash compatibility
