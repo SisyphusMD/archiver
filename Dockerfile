@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y \
     nano \
     vim \
     iputils-ping \
+    systemd \
+    zfsutils-linux \
     && rm -rf /var/lib/apt/lists/*
 
 ENV DUPLICACY_VERSION=3.2.5
