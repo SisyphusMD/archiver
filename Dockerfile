@@ -5,7 +5,8 @@ FROM debian:trixie-20260112-slim
 
 ARG TARGETARCH
 
-RUN apt-get update && apt-get install -y \
+RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.list.d/contrib.list && \
+    apt-get update && apt-get install -y \
     expect \
     openssh-client \
     openssl \

@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-04-14
+
+### Added
+- **Podman Support**: Container detection now recognizes Podman (`/run/.containerenv`) in addition to Docker (`/.dockerenv`), removing the need to mount a fake `.dockerenv` file
+- **Host Management Tools**: Added `systemd` and `zfsutils-linux` packages to the container image
+  - `systemctl` — manage host services from restore scripts (requires D-Bus socket mount)
+  - `zfs` — take ZFS snapshots before restore operations (requires `/dev/zfs` mount)
+- **Security Hardening**: Added `cap_drop: ALL` with explicit `cap_add` to compose.yaml and README examples
+  - `DAC_OVERRIDE` — required for writing to directories owned by other UIDs
+  - `SETGID` — required for cron to execute scheduled jobs
+  - `no-new-privileges:true` — recommended security option
+- **Socket Documentation**: Documented mounting options for Podman socket, systemd D-Bus socket, and ZFS device node with per-socket security warnings
+
+### Changed
+- Updated available tools list in example scripts and migration guide to include `systemctl` and `zfs`
+
 ## [0.7.0] - 2026-01-22
 
 ### ⚠️ BREAKING CHANGES
