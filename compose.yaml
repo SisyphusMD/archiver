@@ -21,12 +21,14 @@ services:
       BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
       TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
+      # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
 
     volumes:
       - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
       - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
       - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match config.sh)
-      # - /var/run/docker.sock:/var/run/docker.sock            # Docker socket for scripts (optional)
-      # - /run/podman/podman.sock:/var/run/docker.sock         # Podman socket (mount as docker.sock)
-      # - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket  # Host systemd access (optional)
-      # - /path/to/host/restore-dir:/mnt/restore-dir           # Restore location (will be prompted)
+      # - /var/run/docker.sock:/var/run/docker.sock                    # Docker socket for scripts (optional)
+      # - /run/podman/podman.sock:/var/run/docker.sock               # Podman socket (mount as docker.sock)
+      # - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket    # systemctl start/stop/status
+      # - /etc/systemd/system:/etc/systemd/system                    # systemctl mask/unmask/enable/disable
+      # - /path/to/host/restore-dir:/mnt/restore-dir                 # Restore location (will be prompted)

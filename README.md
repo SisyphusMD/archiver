@@ -261,14 +261,18 @@ volumes:
 
 **Security Warning**: This grants root-level access to the Docker daemon. The container can start/stop/delete any container or access any data. Only use if necessary.
 
-If your restore scripts need to manage host services (e.g., `systemctl mask/stop/start` to orchestrate restores), mount the systemd D-Bus socket:
+If your restore scripts need to manage host services (e.g., `systemctl mask/stop/start` to orchestrate restores), mount the systemd D-Bus socket and unit directory, and set `SYSTEMCTL_FORCE_BUS=1`:
 
 ```yaml
+environment:
+  SYSTEMCTL_FORCE_BUS: "1"  # Required: forces systemctl to use D-Bus instead of private socket
+
 volumes:
-  - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+  - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket  # systemctl start/stop/status
+  - /etc/systemd/system:/etc/systemd/system                  # systemctl mask/unmask/enable/disable
 ```
 
-**Security Warning**: This grants the container full control over host systemd services. It can start, stop, mask, or restart any service on the host. Only use if your restore scripts require service orchestration.
+**Security Warning**: This grants the container full control over host systemd services. It can start, stop, mask, unmask, or restart any service on the host. Only use if your restore scripts require service orchestration.
 
 If your restore scripts use ZFS snapshots for pre-restore safety, the ZFS device node is also needed:
 
@@ -318,6 +322,7 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 | `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc. **Note:** If your password contains `$`, you must escape it as `$$` (e.g., `my$password` → `my$$password`) |
 | `CRON_SCHEDULE` | No | Cron expression for automatic backups (empty = manual mode) |
 | `TZ` | No | Timezone for cron scheduling (default: UTC) |
+| `SYSTEMCTL_FORCE_BUS` | No | Set to `1` to enable systemctl access to host services via D-Bus socket (requires socket mounts, see above) |
 
 ### Image Tags
 
