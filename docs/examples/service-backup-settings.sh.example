@@ -9,8 +9,9 @@
 # - Add pre-backup tasks (stop services, dump databases, etc.)                          #
 # - Add post-backup tasks (restart services, cleanup, etc.).                            #
 #                                                                                       #
-# Available tools: duplicacy, docker, sqlite3, curl, wget, ssh, openssl, gpg, vim       #
-# Note: Docker commands require mounting /var/run/docker.sock in compose.yaml           #
+# Available tools: duplicacy, docker, sqlite3, systemctl, zfs, curl, wget, ssh,         #
+#   openssl, gpg, vim                                                                   #
+# Note: Docker commands require mounting the Docker or Podman socket in compose.yaml    #
 #########################################################################################
 
 # Set include/exclude patterns for Duplicacy filter.

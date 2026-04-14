@@ -77,6 +77,7 @@ If you have `service-backup-settings.sh` files in your service directories, revi
 **Available tools in the container:**
 - Backup: duplicacy, docker, openssh-client, openssl
 - Databases: sqlite3
+- Host management: systemctl, zfs
 - Network: curl, wget, iputils-ping
 - Editors: nano, vim
 - Utilities: expect, procps, ca-certificates, gnupg

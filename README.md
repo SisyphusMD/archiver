@@ -239,16 +239,37 @@ Update paths and password, then start:
 docker compose up -d
 ```
 
-### Docker Socket (Advanced)
+### Container & Host Sockets (Advanced)
 
-If your backup scripts need to control other containers (e.g., `docker exec` for database dumps), mount the socket:
+If your backup scripts need to control other containers (e.g., `docker exec` for database dumps), mount the container runtime socket:
 
 ```yaml
 volumes:
+  # Docker socket
   - /var/run/docker.sock:/var/run/docker.sock
+  # Podman socket (mount as docker.sock so the docker CLI works)
+  # - /run/podman/podman.sock:/var/run/docker.sock
 ```
 
 **Security Warning**: This grants root-level access to the Docker daemon. The container can start/stop/delete any container or access any data. Only use if necessary.
+
+If your restore scripts need to manage host services (e.g., `systemctl mask/stop/start` to orchestrate restores), mount the systemd D-Bus socket:
+
+```yaml
+volumes:
+  - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+```
+
+**Security Warning**: This grants the container full control over host systemd services. It can start, stop, mask, or restart any service on the host. Only use if your restore scripts require service orchestration.
+
+If your restore scripts use ZFS snapshots for pre-restore safety, the ZFS device node is also needed:
+
+```yaml
+volumes:
+  - /dev/zfs:/dev/zfs
+```
+
+**Security Warning**: This grants the container access to all ZFS pools on the host. It can create, destroy, or modify any dataset or snapshot. Only use if your restore scripts take ZFS snapshots.
 
 ### Graceful Shutdown
 
