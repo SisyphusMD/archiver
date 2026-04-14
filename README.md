@@ -220,6 +220,14 @@ services:
 
     hostname: backup-server       # used for backup service label (optional)
 
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE              # Write to dirs owned by other UIDs
+      - SETGID                    # Required for cron (remove if not using CRON_SCHEDULE)
+    security_opt:
+      - no-new-privileges:true
+
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
@@ -270,6 +278,29 @@ volumes:
 ```
 
 **Security Warning**: This grants the container access to all ZFS pools on the host. It can create, destroy, or modify any dataset or snapshot. Only use if your restore scripts take ZFS snapshots.
+
+### Security Hardening (Advanced)
+
+We recommend dropping all capabilities and adding back only what Archiver needs. The example `compose.yaml` above includes this by default.
+
+```yaml
+services:
+  archiver:
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE # Required: write to directories owned by other UIDs
+      - SETGID       # Required if using CRON_SCHEDULE: cron needs setgid to execute jobs
+    security_opt:
+      - no-new-privileges:true  # Prevent privilege escalation
+```
+
+| Capability | When Required | Why |
+|-----------|---------------|-----|
+| `DAC_OVERRIDE` | Always (with `cap_drop: ALL`) | Archiver runs as root but writes to service data directories that may be owned by other users (e.g., UID 1000) |
+| `SETGID` | When using `CRON_SCHEDULE` | Debian's cron daemon requires `setgid` to execute scheduled jobs. Without it, cron starts but jobs silently fail to run |
+
+**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with both `DAC_OVERRIDE` and `SETGID` and is recommended for defense in depth.
 
 ### Graceful Shutdown
 

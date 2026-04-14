@@ -9,6 +9,14 @@ services:
 
     hostname: backup-server       # used for backup service label (optional)
 
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE              # Write to dirs owned by other UIDs
+      - SETGID                    # Required for cron (remove if not using CRON_SCHEDULE)
+    security_opt:
+      - no-new-privileges:true
+
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
