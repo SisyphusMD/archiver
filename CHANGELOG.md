@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-04-21
+
+### Added
+- **Non-interactive Restore Commands**: Two new subcommands for automated disaster recovery flows (e.g. Kubernetes init containers)
+  - `archiver snapshot-exists` — probes every configured storage target for `SNAPSHOT_ID` and short-circuits on the first hit; exit codes `0=exists`, `1=not found`, `2=undetermined`, `3=lock held`
+  - `archiver auto-restore` — iterates storage targets in order and restores from the first target that has the requested snapshot; env-driven (`SNAPSHOT_ID`, `LOCAL_DIR` required; `REVISION`, `STORAGE_TARGET`, `OVERWRITE`, `DELETE_EXTRA`, `HASH_COMPARE`, `IGNORE_OWNERSHIP`, `RESTORE_THREADS` optional)
+- **Shared Restore Library**: Extracted duplicacy restore plumbing (storage target resolution, repo init, revision listing, restore) into `lib/features/duplicacy-restore.sh`, shared by interactive `restore`, `snapshot-exists`, and `auto-restore`
+
+### Fixed
+- **`archiver healthcheck` Exit Code**: The dispatcher previously clobbered the healthcheck's exit status to `0`, causing Docker healthchecks based on `archiver healthcheck` to always report healthy. It now propagates the underlying exit code
+
 ## [0.7.1] - 2026-04-14
 
 ### Added

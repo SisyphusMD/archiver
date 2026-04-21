@@ -199,7 +199,7 @@ For new installations, run initialization interactively to generate your configu
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.7.0 init
+  ghcr.io/sisyphusmd/archiver:0.8.0 init
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
@@ -214,7 +214,7 @@ services:
   archiver:
 
     container_name: archiver
-    image: ghcr.io/sisyphusmd/archiver:0.7.0
+    image: ghcr.io/sisyphusmd/archiver:0.8.0
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
@@ -326,8 +326,8 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 
 ### Image Tags
 
-- `0.7.0` - Specific version (recommended)
-- `0.7` - Minor version (receives patches automatically)
+- `0.8.0` - Specific version (recommended)
+- `0.8` - Minor version (receives patches automatically)
 - `0` - Major version (receives minor/patch updates)
 
 ---
@@ -507,7 +507,9 @@ archiver logs              # Follow backup logs
 archiver status            # Check if backup is running
 archiver bundle export     # Create encrypted config/keys bundle
 archiver bundle import     # Import from encrypted bundle
-archiver restore           # Restore data from backup
+archiver restore           # Restore data from backup (interactive)
+archiver auto-restore      # Restore data from backup (non-interactive, env-driven)
+archiver snapshot-exists   # Check if a snapshot exists on any storage target
 archiver healthcheck       # Check system health
 archiver help              # Show help
 ```
@@ -545,11 +547,63 @@ docker run --rm -it \
   -e BUNDLE_PASSWORD='your-bundle-password-here' \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.7.0 \
+  ghcr.io/sisyphusmd/archiver:0.8.0 \
   archiver restore
 ```
 
 When prompted for the local directory path during restore, enter the container path (e.g., `/mnt/restore`). The restored files will appear on your host at `/path/to/restore/destination`.
+
+### Non-interactive Restore (CI / Kubernetes)
+
+For automated disaster recovery flows (e.g. Kubernetes init containers), Archiver exposes two non-interactive commands driven by environment variables. Exit codes are the machine-readable answer; stdout is informational.
+
+#### `archiver snapshot-exists`
+
+Probes every configured storage target for `SNAPSHOT_ID` and short-circuits on the first hit. Useful to gate a restore on whether a backup is actually available.
+
+| Env Var | Required | Description |
+|---------|----------|-------------|
+| `SNAPSHOT_ID` | Yes | Snapshot ID to look up |
+
+Exit codes:
+- `0` — snapshot exists on at least one target (prints `EXISTS`)
+- `1` — no target has the snapshot (prints `NOT FOUND`)
+- `2` — all targets unreachable or invalid env (prints `UNDETERMINED`)
+- `3` — an Archiver backup is in progress; check skipped
+
+#### `archiver auto-restore`
+
+Iterates storage targets in configured order and restores from the first target that has the requested snapshot. Once a restore begins, it does not fall through to another target — a failure at that point exits `1`.
+
+| Env Var | Required | Description |
+|---------|----------|-------------|
+| `SNAPSHOT_ID` | Yes | Snapshot ID to restore |
+| `LOCAL_DIR` | Yes | Destination directory inside the container |
+| `REVISION` | No | Specific revision number, or `latest` (default) |
+| `STORAGE_TARGET` | No | Pin to a single target by name or numeric id |
+| `OVERWRITE` | No | Non-empty enables `-overwrite` |
+| `DELETE_EXTRA` | No | Non-empty enables `-delete` |
+| `HASH_COMPARE` | No | Non-empty enables `-hash` |
+| `IGNORE_OWNERSHIP` | No | Non-empty enables `-ignore-owner` |
+| `RESTORE_THREADS` | No | Override download thread count (default matches `DUPLICACY_THREADS`) |
+
+Exit codes:
+- `0` — snapshot restored
+- `1` — snapshot not found on any reachable target, or the restore itself failed
+- `2` — all targets unreachable, or invalid env
+- `3` — an Archiver backup is in progress; restore skipped
+
+Example (gate-and-restore):
+
+```bash
+docker exec \
+  -e SNAPSHOT_ID=myservice \
+  archiver archiver snapshot-exists \
+  && docker exec \
+       -e SNAPSHOT_ID=myservice \
+       -e LOCAL_DIR=/mnt/restore \
+       archiver archiver auto-restore
+```
 
 </details>
 
