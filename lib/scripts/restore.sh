@@ -1,4 +1,5 @@
 #!/bin/bash
+# Interactive restore
 
 RESTORE_SH_SOURCED=true
 
@@ -7,6 +8,7 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
 fi
 source_if_not_sourced "${ERROR_CORE}"
 source_if_not_sourced "${CONFIG_LOADER_CORE}"
+source_if_not_sourced "${DUPLICACY_RESTORE_FEATURE}"
 
 # Simple log_message for user output (restore is interactive)
 log_message() {
@@ -31,7 +33,7 @@ select_storage_target() {
     local storage_id="${i}"
     local storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
     local storage_name="${!storage_name_var}"
-    
+
     storage_targets+=("${storage_id}) ${storage_name}")
   done
 
@@ -50,11 +52,8 @@ select_storage_target() {
     fi
   done
 
-  SELECTED_STORAGE_TARGET_ID="${choice}"
-  local selected_storage_name_var="STORAGE_TARGET_${choice}_NAME"
-  SELECTED_STORAGE_TARGET_NAME="${!selected_storage_name_var}"
-  local selected_storage_type_var="STORAGE_TARGET_${choice}_TYPE"
-  SELECTED_STORAGE_TARGET_TYPE="${!selected_storage_type_var}"
+  resolve_storage_target_by_id "${choice}" || \
+    handle_error "Failed to resolve storage target ${choice}."
 
   if [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "sftp" ]]; then
     if [ ! -f "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" ]; then
@@ -84,130 +83,12 @@ local_restore_selections() {
   echo "Chosen local directory path: ${LOCAL_DIR}"
 }
 
-initialize_duplicacy() {
+prepare_local_dir() {
   if [ ! -d "${LOCAL_DIR}" ]; then
     mkdir -p -m 0755 "${LOCAL_DIR}"
   fi
-  
+
   cd "${LOCAL_DIR}" || handle_error "Failed to change directory to '${LOCAL_DIR}'."
-
-  local storage_id
-  local storage_name
-  local storage_name_upper
-  local duplicacy_storage_password_var
-
-  storage_id="${SELECTED_STORAGE_TARGET_ID}"
-  storage_name="${SELECTED_STORAGE_TARGET_NAME}"
-  storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
-  duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
-
-  export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}" # Export Duplicacy storage password so Duplicacy binary can see variable
-
-  if [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "local" ]]; then
-    local config_local_path_var
-
-    config_local_path_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
-
-    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
-      "${!config_local_path_var}" || \
-      handle_error "Duplicacy Local Storage initialization failed."
-
-  elif [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "sftp" ]]; then
-    local config_sftp_url_var
-    local config_sftp_port_var
-    local config_sftp_user_var
-    local config_sftp_path_var
-    local duplicacy_ssh_key_file_var
-
-    config_sftp_url_var="STORAGE_TARGET_${storage_id}_SFTP_URL"
-    config_sftp_port_var="STORAGE_TARGET_${storage_id}_SFTP_PORT"
-    config_sftp_user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
-    config_sftp_path_var="STORAGE_TARGET_${storage_id}_SFTP_PATH"
-    duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
-
-    export "${duplicacy_ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}" # Export Duplicacy storage SSH key file so Duplicacy binary can see variable
-
-    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
-      "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" || \
-      handle_error "Duplicacy SFTP Storage initialization failed."
-
-    duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" || \
-      handle_error "Setting the Duplicacy SFTP key file failed."
-
-  elif [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "b2" ]]; then
-    local config_b2_bucketname_var
-    local config_b2_id_var
-    local config_b2_key_var
-    local duplicacy_b2_id_var
-    local duplicacy_b2_key_var
-
-    config_b2_bucketname_var="STORAGE_TARGET_${storage_id}_B2_BUCKETNAME"
-    config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
-    config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
-    duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
-    duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
-
-    export "${duplicacy_b2_id_var}"="${!config_b2_id_var}" # Export BackBlaze Key ID for backblaze storage so Duplicacy binary can see variable
-    export "${duplicacy_b2_key_var}"="${!config_b2_key_var}" # Export BackBlaze Application Key for backblaze storage so Duplicacy binary can see variable
-
-    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
-      "b2://${!config_b2_bucketname_var}" || \
-      handle_error "Duplicacy B2 Storage initialization failed."
-
-    duplicacy set -storage "${storage_name}" -key b2_id -value "${!config_b2_id_var}" || \
-      handle_error "Setting the Duplicacy B2 keyID failed."
-
-    duplicacy set -storage "${storage_name}" -key b2_key -value "${!config_b2_key_var}" || \
-      handle_error "Setting the Duplicacy B2 applicationKey failed."
-
-  elif [[ "${SELECTED_STORAGE_TARGET_TYPE}" == "s3" ]]; then
-    local config_s3_bucketname_var
-    local config_s3_endpoint_var
-    local config_s3_region_var
-    local config_s3_id_var
-    local config_s3_secret_var
-    local duplicacy_s3_id_var
-    local duplicacy_s3_secret_var
-    local s3_region
-
-    config_s3_bucketname_var="STORAGE_TARGET_${storage_id}_S3_BUCKETNAME"
-    config_s3_endpoint_var="STORAGE_TARGET_${storage_id}_S3_ENDPOINT"
-    config_s3_region_var="STORAGE_TARGET_${storage_id}_S3_REGION"
-    config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
-    config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
-    duplicacy_s3_id_var="DUPLICACY_${storage_name_upper}_S3_ID"
-    duplicacy_s3_secret_var="DUPLICACY_${storage_name_upper}_S3_SECRET"
-
-    s3_region="${!config_s3_region_var}"
-    s3_region="${s3_region:-none}"
-
-    export "${duplicacy_s3_id_var}"="${!config_s3_id_var}" # Export S3 ID so Duplicacy binary can see variable
-    export "${duplicacy_s3_secret_var}"="${!config_s3_secret_var}" # Export S3 Secret so Duplicacy binary can see variable
-
-    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
-      "s3://${s3_region}@${!config_s3_endpoint_var}/${!config_s3_bucketname_var}" || \
-      handle_error "Duplicacy S3 Storage initialization failed."
-
-    duplicacy set -storage "${storage_name}" -key s3_id -value "${!config_s3_id_var}" || \
-      handle_error "Setting the Duplicacy S3 ID failed."
-
-    duplicacy set -storage "${storage_name}" -key s3_secret -value "${!config_s3_secret_var}" || \
-      handle_error "Setting the Duplicacy S3 Secret failed."
-
-  else
-    handle_error "'${SELECTED_STORAGE_TARGET_TYPE}' is not a supported backup type. Please edit config.sh to only reference supported backup types."
-
-  fi
-
-  duplicacy set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" || \
-    handle_error "Setting the Duplicacy storage password failed."
-
-  duplicacy set -storage "${storage_name}" -key rsa_passphrase -value "${RSA_PASSPHRASE}" || \
-    handle_error "Setting the Duplicacy storage RSA Passphrase failed."
 }
 
 choose_revision() {
@@ -289,11 +170,6 @@ configure_restore_options() {
   fi
 }
 
-restore_repository() {
-  duplicacy restore -r "${REVISION}" -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" -stats -threads "${RESTORE_THREADS}" "${RESTORE_FLAGS}"
-  echo "Repository restored."
-}
-
 service_specific_restore_script() {
   if [ -f restore-service.sh ]; then
     echo    # Move to a new line
@@ -311,10 +187,12 @@ service_specific_restore_script() {
 main() {
   select_storage_target
   local_restore_selections
-  initialize_duplicacy
+  prepare_local_dir
+  duplicacy_init_for_restore
   choose_revision
   configure_restore_options
-  restore_repository
+  perform_restore
+  echo "Repository restored."
   service_specific_restore_script
 }
 

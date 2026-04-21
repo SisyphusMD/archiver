@@ -9,12 +9,13 @@ fi
 source_if_not_sourced "${REQUIRE_DOCKER_CORE}"
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|healthcheck|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|auto-restore|snapshot-exists|healthcheck|help} [logs|prune|retain]"
   echo "Note:"
-  echo "  stop|pause|logs|status|restore|healthcheck|help cannot have further arguments."
+  echo "  stop|pause|logs|status|restore|auto-restore|snapshot-exists|healthcheck|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
   echo "  bundle requires a subcommand: export or import"
+  echo "  auto-restore and snapshot-exists are non-interactive and driven by environment variables."
   exit 1
 }
 
@@ -123,12 +124,26 @@ case "${command}" in
     fi
     "${RESTORE_SCRIPT}"
     ;;
+  auto-restore)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    exec "${AUTO_RESTORE_SCRIPT}"
+    ;;
+  snapshot-exists)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    exec "${SNAPSHOT_EXISTS_SCRIPT}"
+    ;;
   healthcheck)
     if [[ $# -gt 0 ]]; then
       echo "'${command}' cannot have further arguments."
       usage
     fi
-    "${HEALTHCHECK_SCRIPT}"
+    exec "${HEALTHCHECK_SCRIPT}"
     ;;
   bundle)
     if [[ $# -ne 1 ]]; then
