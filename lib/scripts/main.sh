@@ -9,7 +9,7 @@ fi
 source_if_not_sourced "${LOCKFILE_CORE}"
 source_if_not_sourced "${CONFIG_LOADER_CORE}"
 source_if_not_sourced "${NOTIFICATION_FEATURE}"
-source_if_not_sourced "${DUPLICACY_FEATURE}"
+source_if_not_sourced "${DUPLICACY_BACKUP_FEATURE}"
 
 cleanup() {
   if [ "${early_exit}" != true ]; then

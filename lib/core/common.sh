@@ -42,7 +42,7 @@ LOCKFILE_CORE="${CORE_DIR}/lockfile.sh"
 LOGGING_CORE="${CORE_DIR}/logging.sh"
 REQUIRE_DOCKER_CORE="${CORE_DIR}/require-docker.sh"
 
-DUPLICACY_FEATURE="${FEATURES_DIR}/duplicacy.sh"
+DUPLICACY_BACKUP_FEATURE="${FEATURES_DIR}/duplicacy-backup.sh"
 DUPLICACY_RESTORE_FEATURE="${FEATURES_DIR}/duplicacy-restore.sh"
 NOTIFICATION_FEATURE="${FEATURES_DIR}/notification.sh"
 

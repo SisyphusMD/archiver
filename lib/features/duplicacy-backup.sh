@@ -1,7 +1,7 @@
 #!/bin/bash
 # Duplicacy backup operations: init, backup, add storage, copy, prune
 
-DUPLICACY_SH_SOURCED=true
+DUPLICACY_BACKUP_SH_SOURCED=true
 
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
