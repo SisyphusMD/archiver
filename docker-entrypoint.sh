@@ -25,6 +25,46 @@ handle_shutdown() {
 
 trap 'handle_shutdown' SIGTERM
 
+prepare_bundle() {
+    if [ -z "$BUNDLE_PASSWORD" ]; then
+        echo "ERROR: BUNDLE_PASSWORD environment variable is required"
+        echo "Please set it to the password used to encrypt your bundle.tar.enc file"
+        exit 1
+    fi
+
+    if [ ! -f "$BUNDLE_FILE" ]; then
+        echo "ERROR: Bundle file not found at $BUNDLE_FILE"
+        echo "Please mount your bundle directory to ${BUNDLE_DIR}"
+        echo "Example: docker run -v /path/to/bundle:${BUNDLE_DIR} ..."
+        exit 1
+    fi
+
+    echo "Bundle file found: $BUNDLE_FILE"
+
+    echo "Decrypting and importing configuration..."
+    export ARCHIVER_BUNDLE_PASSWORD="$BUNDLE_PASSWORD"
+    export ARCHIVER_BUNDLE_FILE="$BUNDLE_FILE"
+
+    cd "${ARCHIVER_DIR}"
+    if ! "${BUNDLE_IMPORT_SCRIPT}"; then
+        echo "ERROR: Failed to import configuration"
+        echo "Please verify your BUNDLE_PASSWORD is correct"
+        exit 1
+    fi
+
+    if [ ! -f "${CONFIG_FILE}" ]; then
+        echo "ERROR: config.sh not found after import"
+        exit 1
+    fi
+
+    if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
+        echo "ERROR: RSA keys not found after import"
+        exit 1
+    fi
+
+    echo "Configuration imported successfully"
+}
+
 echo "==================================="
 echo "Archiver Container Starting"
 echo "==================================="
@@ -45,43 +85,30 @@ if [ "$1" = "init" ]; then
     exec "${SCRIPTS_DIR}/init.sh"
 fi
 
-if [ -z "$BUNDLE_PASSWORD" ]; then
-    echo "ERROR: BUNDLE_PASSWORD environment variable is required"
-    echo "Please set it to the password used to encrypt your bundle.tar.enc file"
-    exit 1
+if [ "$1" = "run" ]; then
+    shift
+    if [ $# -eq 0 ]; then
+        echo "ERROR: 'run' requires a subcommand (e.g., 'run snapshot-exists')" >&2
+        exit 2
+    fi
+
+    case "$1" in
+        auto-restore|snapshot-exists|healthcheck) ;;
+        *)
+            echo "ERROR: 'run' only supports: auto-restore, snapshot-exists, healthcheck" >&2
+            echo "Received: $1" >&2
+            exit 2
+            ;;
+    esac
+
+    echo "Running in RUN mode: $*"
+    echo ""
+    prepare_bundle
+    cd "${ARCHIVER_DIR}"
+    exec "${ARCHIVER_DIR}/archiver.sh" "$@"
 fi
 
-if [ ! -f "$BUNDLE_FILE" ]; then
-    echo "ERROR: Bundle file not found at $BUNDLE_FILE"
-    echo "Please mount your bundle directory to ${BUNDLE_DIR}"
-    echo "Example: docker run -v /path/to/bundle:${BUNDLE_DIR} ..."
-    exit 1
-fi
-
-echo "Bundle file found: $BUNDLE_FILE"
-
-echo "Decrypting and importing configuration..."
-export ARCHIVER_BUNDLE_PASSWORD="$BUNDLE_PASSWORD"
-export ARCHIVER_BUNDLE_FILE="$BUNDLE_FILE"
-
-cd "${ARCHIVER_DIR}"
-if ! "${BUNDLE_IMPORT_SCRIPT}"; then
-    echo "ERROR: Failed to import configuration"
-    echo "Please verify your BUNDLE_PASSWORD is correct"
-    exit 1
-fi
-
-if [ ! -f "${CONFIG_FILE}" ]; then
-    echo "ERROR: config.sh not found after import"
-    exit 1
-fi
-
-if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
-    echo "ERROR: RSA keys not found after import"
-    exit 1
-fi
-
-echo "Configuration imported successfully"
+prepare_bundle
 
 # Start log tailer in background to forward logs to stdout
 # This allows 'docker logs -f' to work
