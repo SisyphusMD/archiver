@@ -145,6 +145,25 @@ case "${command}" in
     fi
     exec "${HEALTHCHECK_SCRIPT}"
     ;;
+  backup)
+    if [[ $# -gt 0 ]]; then
+      case "${1}" in
+        prune|retain)
+          if [[ $# -gt 1 ]]; then
+            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
+            usage
+          fi
+          args=("${1}")
+          ;;
+        *)
+          echo "'${*:1}' is not valid for 'archiver ${command}'."
+          usage
+          ;;
+      esac
+    fi
+    "${MAIN_SCRIPT}" "${args[@]}"
+    exit $?
+    ;;
   bundle)
     if [[ $# -ne 1 ]]; then
       echo "'bundle' requires exactly one subcommand: export or import"

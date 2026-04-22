@@ -93,9 +93,9 @@ if [ "$1" = "run" ]; then
     fi
 
     case "$1" in
-        auto-restore|snapshot-exists|healthcheck) ;;
+        auto-restore|snapshot-exists|healthcheck|backup) ;;
         *)
-            echo "ERROR: 'run' only supports: auto-restore, snapshot-exists, healthcheck" >&2
+            echo "ERROR: 'run' only supports: auto-restore, snapshot-exists, healthcheck, backup" >&2
             echo "Received: $1" >&2
             exit 2
             ;;
