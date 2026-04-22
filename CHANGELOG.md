@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-04-21
+
+### Added
+- **`run backup` Mode**: New synchronous backup path for external schedulers (Kubernetes `CronJob`, GitHub Actions scheduled workflows, systemd timers, etc.). `docker run ... archiver:0.8.2 run backup` decrypts the bundle, runs a backup synchronously, and exits with the backup's result code so the scheduler can report success/failure accurately. Accepts the same optional `prune` / `retain` flags as `archiver start`. This complements — and does not replace — `archiver start`, which remains async and is the right choice for the in-container cron daemon and for fire-and-forget use from a long-lived container.
+
 ## [0.8.1] - 2026-04-21
 
 ### Added

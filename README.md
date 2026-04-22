@@ -199,7 +199,7 @@ For new installations, run initialization interactively to generate your configu
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.8.1 init
+  ghcr.io/sisyphusmd/archiver:0.8.2 init
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
@@ -214,7 +214,7 @@ services:
   archiver:
 
     container_name: archiver
-    image: ghcr.io/sisyphusmd/archiver:0.8.1
+    image: ghcr.io/sisyphusmd/archiver:0.8.2
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
@@ -334,11 +334,11 @@ The entrypoint selects one of three modes based on the first container argument:
 | _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Decrypts the bundle, then either runs `cron -f` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
 | `run` | `docker run ... archiver:<tag> run <subcommand>` | Decrypts the bundle, then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
-`run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `snapshot-exists`, and `healthcheck`. Any other subcommand is rejected with exit code `2`. Long-running or async commands (`start`, `stop`, `pause`, etc.) are intentionally not supported in this mode.
+`run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `snapshot-exists`, `healthcheck`, and `backup` (a synchronous backup path intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`. The user-facing `archiver start` command remains async and is intentionally not supported here.
 
 ### Image Tags
 
-- `0.8.1` - Specific version (recommended)
+- `0.8.2` - Specific version (recommended)
 - `0.8` - Minor version (receives patches automatically)
 - `0` - Major version (receives minor/patch updates)
 
@@ -529,6 +529,71 @@ archiver help              # Show help
 </details>
 
 <details>
+<summary><h2>Scheduled Backups via External Schedulers</h2></summary>
+
+### Running a Backup from an External Scheduler (`run backup`)
+
+For most users, a long-lived container with `CRON_SCHEDULE` set is the simplest way to get scheduled backups — the in-container cron daemon fires `archiver start` on schedule, and you don't have to manage anything. Skip this section unless you specifically need to drive scheduling from *outside* the container.
+
+If your environment already owns scheduling — e.g., a Kubernetes `CronJob`, a GitHub Actions scheduled workflow, a systemd timer on the host, or any other platform that spawns a short-lived container per run and expects a meaningful exit code — use the entrypoint's `run backup` mode instead. It decrypts the bundle, runs a backup **synchronously**, and exits with the backup's result code. The container terminates when the backup finishes; your scheduler then reports success or failure based on the exit code.
+
+Exit codes:
+- `0` — backup completed
+- `1` — lock contention (another backup already in progress) or catastrophic startup failure
+- non-zero — see stderr / logs for details
+
+**Example: one-shot `docker run`**
+
+```bash
+docker run --rm \
+  -e BUNDLE_PASSWORD='your-bundle-password-here' \
+  -v /path/to/bundle/dir:/opt/archiver/bundle \
+  -v /path/to/host/backup-dir:/mnt/backup-dir \
+  ghcr.io/sisyphusmd/archiver:0.8.2 run backup
+```
+
+Accepts the same optional flags as `archiver start`: `run backup prune` forces rotation, `run backup retain` forces retention (overriding `ROTATE_BACKUPS` in `config.sh`).
+
+**Example: Kubernetes CronJob**
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: archiver
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: archiver
+              image: ghcr.io/sisyphusmd/archiver:0.8.2
+              args: ["run", "backup"]
+              env:
+                - name: BUNDLE_PASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: archiver-bundle, key: password }
+              volumeMounts:
+                - { name: bundle,     mountPath: /opt/archiver/bundle }
+                - { name: backup-dir, mountPath: /mnt/backup-dir }
+          volumes:
+            - name: bundle
+              secret: { secretName: archiver-bundle-tar }
+            - name: backup-dir
+              persistentVolumeClaim: { claimName: backup-data }
+```
+
+The Pod lives for the duration of one backup and exits. If the backup fails, the Pod exits non-zero and Kubernetes marks the Job failed — the usual CronJob semantics apply.
+
+> **Why `run backup` instead of `run start`?** `archiver start` is asynchronous — it backgrounds the backup and returns exit `0` immediately, before the backup has done any real work. That's the right behavior for the in-container cron daemon (which fires and forgets), but it would cause an external scheduler to always report "success" regardless of what actually happened. `run backup` blocks until the backup finishes so the exit code is meaningful. For this reason `start` is deliberately not whitelisted in `run` mode.
+
+</details>
+
+<details>
 <summary><h2>Restoring Data</h2></summary>
 
 ### Interactive Restore with Existing Container
@@ -559,7 +624,7 @@ docker run --rm -it \
   -e BUNDLE_PASSWORD='your-bundle-password-here' \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.8.1 \
+  ghcr.io/sisyphusmd/archiver:0.8.2 \
   archiver restore
 ```
 
@@ -627,7 +692,7 @@ docker run --rm \
   -e BUNDLE_PASSWORD='your-bundle-password-here' \
   -e SNAPSHOT_ID=myservice \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.8.1 run snapshot-exists
+  ghcr.io/sisyphusmd/archiver:0.8.2 run snapshot-exists
 
 # Restore a snapshot into a mounted destination
 docker run --rm \
@@ -637,7 +702,7 @@ docker run --rm \
   -e OVERWRITE=1 \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.8.1 run auto-restore
+  ghcr.io/sisyphusmd/archiver:0.8.2 run auto-restore
 ```
 
 In Kubernetes this is typically an init container on the workload pod: probe with `run snapshot-exists`, and if a backup exists, run `run auto-restore` to seed the data volume before the main container starts. The exit-code contract means the pod's `restartPolicy` and init-container failure handling behave as expected.

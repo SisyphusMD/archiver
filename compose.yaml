@@ -3,7 +3,7 @@ services:
   archiver:
 
     container_name: archiver
-    image: ghcr.io/sisyphusmd/archiver:0.8.1
+    image: ghcr.io/sisyphusmd/archiver:0.8.2
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
