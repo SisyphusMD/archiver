@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-04-21
+
+### Added
+- **`run` Entrypoint Mode**: New container mode for one-shot non-interactive command invocation, designed for Kubernetes Jobs / init containers and other CI flows. `docker run ... archiver:0.8.1 run <subcommand>` decrypts the bundle, execs the subcommand, and the container's exit code equals the subcommand's exit code. Whitelisted subcommands: `auto-restore`, `snapshot-exists`, `healthcheck`. Long-running or async commands (`start`, `stop`, `pause`, etc.) are intentionally rejected with exit code `2`.
+
+### Changed
+- **Internal**: Renamed `lib/features/duplicacy.sh` to `lib/features/duplicacy-backup.sh` for symmetry with `lib/features/duplicacy-restore.sh` (introduced in 0.8.0). No user-visible change.
+- **Internal**: Extracted bundle decrypt + import logic in `docker-entrypoint.sh` into a `prepare_bundle()` helper, reused by both the default daemon path and the new `run` mode. Behavior of existing `init` and daemon modes is unchanged.
+
 ## [0.8.0] - 2026-04-21
 
 ### Added
