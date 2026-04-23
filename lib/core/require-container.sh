@@ -1,6 +1,6 @@
 #!/bin/bash
 
-REQUIRE_DOCKER_SH_SOURCED=true
+REQUIRE_CONTAINER_SH_SOURCED=true
 
 # Check if running in a container (Docker or Podman)
 # Docker creates /.dockerenv, Podman creates /run/.containerenv

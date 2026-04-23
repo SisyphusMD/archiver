@@ -8,7 +8,7 @@ set -e
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
-source_if_not_sourced "${REQUIRE_DOCKER_CORE}"
+source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 
 # Generated credentials
 GENERATED_RSA_PASSPHRASE=""

@@ -40,7 +40,7 @@ CONFIG_LOADER_CORE="${CORE_DIR}/config-loader.sh"
 ERROR_CORE="${CORE_DIR}/error.sh"
 LOCKFILE_CORE="${CORE_DIR}/lockfile.sh"
 LOGGING_CORE="${CORE_DIR}/logging.sh"
-REQUIRE_DOCKER_CORE="${CORE_DIR}/require-docker.sh"
+REQUIRE_CONTAINER_CORE="${CORE_DIR}/require-container.sh"
 
 DUPLICACY_BACKUP_FEATURE="${FEATURES_DIR}/duplicacy-backup.sh"
 DUPLICACY_RESTORE_FEATURE="${FEATURES_DIR}/duplicacy-restore.sh"

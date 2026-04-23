@@ -6,7 +6,7 @@ ARCHIVER_SH_SOURCED=true
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
-source_if_not_sourced "${REQUIRE_DOCKER_CORE}"
+source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 
 usage() {
   echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|auto-restore|snapshot-exists|healthcheck|help} [logs|prune|retain]"
