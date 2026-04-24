@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2026-04-24
+
+### Changed
+- **`archiver run backup` CLI now exits `1` on per-service errors.** Previously exited 0 regardless, surfacing failures only via log output and the optional Pushover notification. This makes the CLI suitable for external schedulers that key off the exit code — e.g., Kubernetes `Job` / `CronJob` (where the `Complete` / `Failed` status condition is derived from container exit code) or CI pipelines. The long-lived container deployment (`archiver start`, with the internal cron) is unaffected: per-service iteration and notification behavior are unchanged, and the backgrounded backup cycle's exit code remains unobserved by the daemon.
+
+### Migration
+- Shell wrappers around `archiver run backup` that relied on exit 0 and chained subsequent commands: wrap with `|| true` if the old continue-on-error behavior is desired.
+- No action needed for containerized `archiver start` deployments.
+
 ## [0.8.3] - 2026-04-23
 
 ### Fixed

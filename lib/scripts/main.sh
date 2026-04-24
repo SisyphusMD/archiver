@@ -146,3 +146,14 @@ main() {
 
 initialize "${1}"
 main
+
+# Exit non-zero if any per-service errors accumulated. Mode A (`archiver start`)
+# backgrounds this script via `setsid nohup` so its exit code is discarded —
+# logs and the optional Pushover notification remain the signal there. Mode B
+# (`archiver run backup` / `archiver backup`) runs synchronously and propagates
+# this exit through `archiver.sh` to the container, so K8s Jobs / CI pipelines
+# see Failed on per-service errors.
+if [ "${ERROR_COUNT:-0}" -gt 0 ]; then
+  exit 1
+fi
+exit 0
