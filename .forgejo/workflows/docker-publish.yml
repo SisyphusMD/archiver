@@ -3,23 +3,19 @@ name: Build and Publish Docker Image
 on:
   push:
     tags:
-      - 'v*.*.*'  # Trigger on semantic version tags (e.g., v0.5.0)
+      - 'v*.*.*'
   pull_request:
     branches:
       - main
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: forgejo.bryantserver.com
+  IMAGE_NAME: sisyphusmd/archiver
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
+    runs-on: debian-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,13 +42,10 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            # Tag with semantic version on tag push (e.g., v0.5.0 -> 0.5.0, 0.5, 0)
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            # Tag with branch name (for testing)
             type=ref,event=branch
-            # Tag with PR number (for testing)
             type=ref,event=pr
 
       - name: Build and push Docker image
@@ -63,5 +56,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
