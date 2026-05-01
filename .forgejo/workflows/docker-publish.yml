@@ -97,7 +97,7 @@ jobs:
 
           HEADLINE=$(printf '%s\n' "$HEADER" | sed -nE 's/^## \[[^]]+\] - [0-9-]+ — (.+)$/\1/p')
           if [ -n "$HEADLINE" ]; then
-            NAME="${TAG} — ${HEADLINE}"
+            NAME="${TAG} - ${HEADLINE}"
           else
             NAME="${TAG}"
           fi
