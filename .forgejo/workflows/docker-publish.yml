@@ -10,7 +10,6 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: forgejo.bryantserver.com
   IMAGE_NAME: sisyphusmd/archiver
 
 jobs:
@@ -26,19 +25,29 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Log in to Forgejo Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: forgejo.bryantserver.com
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            forgejo.bryantserver.com/${{ env.IMAGE_NAME }}
+            ghcr.io/${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
           tags: |
@@ -56,5 +65,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:buildcache,mode=max
