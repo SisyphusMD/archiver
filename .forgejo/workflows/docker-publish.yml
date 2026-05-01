@@ -34,7 +34,7 @@ jobs:
         with:
           registry: forgejo.bryantserver.com
           username: cody
-          password: ${{ secrets.REGISTRY_TOKEN }}
+          password: ${{ secrets.BRYANTSERVER_REGISTRY_PAT }}
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
@@ -42,7 +42,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GHCR_PUSH_PAT }}
 
       - name: Extract metadata (tags, labels)
         id: meta
@@ -81,12 +81,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create or update Forgejo release from CHANGELOG
+      - name: Extract release info from CHANGELOG
         env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SERVER: ${{ github.server_url }}
-          REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
@@ -116,29 +114,74 @@ jobs:
             exit 1
           fi
 
-          PAYLOAD=$(jq -n \
+          jq -n \
             --arg tag "$TAG" \
             --arg name "$NAME" \
             --arg body "$BODY" \
-            '{tag_name:$tag, name:$name, body:$body, draft:false, prerelease:false}')
+            '{tag_name:$tag, name:$name, body:$body, draft:false, prerelease:false}' \
+            > /tmp/release-payload.json
 
-          HTTP=$(curl -sSL -o /tmp/existing.json -w "%{http_code}" \
+          jq --arg sha "$SHA" '. + {target_commitish:$sha}' \
+            /tmp/release-payload.json > /tmp/release-payload-github.json
+
+          echo "Release name: ${NAME}"
+
+      - name: Create or update Forgejo release
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          HTTP=$(curl -sSL -o /tmp/forgejo-existing.json -w "%{http_code}" \
             -H "Authorization: token $TOKEN" \
-            "${SERVER}/api/v1/repos/${REPO}/releases/tags/${TAG}")
-
+            "${API}/tags/${TAG}")
           if [ "$HTTP" = "200" ]; then
-            ID=$(jq -r .id /tmp/existing.json)
-            echo "Updating existing release ${ID}"
+            ID=$(jq -r .id /tmp/forgejo-existing.json)
+            echo "Updating existing Forgejo release ${ID}"
             curl -fsSL -X PATCH \
               -H "Authorization: token $TOKEN" \
               -H "Content-Type: application/json" \
-              -d "$PAYLOAD" \
-              "${SERVER}/api/v1/repos/${REPO}/releases/${ID}"
+              -d @/tmp/release-payload.json \
+              "${API}/${ID}"
           else
-            echo "Creating new release for ${TAG}"
+            echo "Creating new Forgejo release for ${TAG}"
             curl -fsSL -X POST \
               -H "Authorization: token $TOKEN" \
               -H "Content-Type: application/json" \
-              -d "$PAYLOAD" \
-              "${SERVER}/api/v1/repos/${REPO}/releases"
+              -d @/tmp/release-payload.json \
+              "${API}"
+          fi
+
+      - name: Create or update GitHub release
+        env:
+          TOKEN: ${{ secrets.GH_RELEASE_PAT }}
+          API: https://api.github.com/repos/${{ github.repository }}/releases
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          HTTP=$(curl -sSL -o /tmp/github-existing.json -w "%{http_code}" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "${API}/tags/${TAG}")
+          if [ "$HTTP" = "200" ]; then
+            ID=$(jq -r .id /tmp/github-existing.json)
+            echo "Updating existing GitHub release ${ID}"
+            curl -fsSL -X PATCH \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/release-payload-github.json \
+              "${API}/${ID}"
+          else
+            echo "Creating new GitHub release for ${TAG}"
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/release-payload-github.json \
+              "${API}"
           fi
