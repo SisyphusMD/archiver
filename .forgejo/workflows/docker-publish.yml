@@ -70,3 +70,75 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+  create-release:
+    needs: build-and-push
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create or update Forgejo release from CHANGELOG
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+
+          HEADER=$(grep -E "^## \[${VERSION}\]" CHANGELOG.md | head -n1 || true)
+          if [ -z "$HEADER" ]; then
+            echo "No CHANGELOG entry for ${VERSION}" >&2
+            exit 1
+          fi
+
+          HEADLINE=$(printf '%s\n' "$HEADER" | sed -nE 's/^## \[[^]]+\] - [0-9-]+ — (.+)$/\1/p')
+          if [ -n "$HEADLINE" ]; then
+            NAME="${TAG} — ${HEADLINE}"
+          else
+            NAME="${TAG}"
+          fi
+
+          BODY=$(awk -v v="${VERSION}" '
+            $0 ~ "^## \\[" v "\\]" { in_section=1; next }
+            in_section && /^## \[/ { exit }
+            in_section && started { print }
+            in_section && /[^[:space:]]/ && !started { started=1; print }
+          ' CHANGELOG.md)
+
+          if [ -z "$BODY" ]; then
+            echo "Empty body extracted for ${VERSION}" >&2
+            exit 1
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg tag "$TAG" \
+            --arg name "$NAME" \
+            --arg body "$BODY" \
+            '{tag_name:$tag, name:$name, body:$body, draft:false, prerelease:false}')
+
+          HTTP=$(curl -sSL -o /tmp/existing.json -w "%{http_code}" \
+            -H "Authorization: token $TOKEN" \
+            "${SERVER}/api/v1/repos/${REPO}/releases/tags/${TAG}")
+
+          if [ "$HTTP" = "200" ]; then
+            ID=$(jq -r .id /tmp/existing.json)
+            echo "Updating existing release ${ID}"
+            curl -fsSL -X PATCH \
+              -H "Authorization: token $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD" \
+              "${SERVER}/api/v1/repos/${REPO}/releases/${ID}"
+          else
+            echo "Creating new release for ${TAG}"
+            curl -fsSL -X POST \
+              -H "Authorization: token $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD" \
+              "${SERVER}/api/v1/repos/${REPO}/releases"
+          fi
