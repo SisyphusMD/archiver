@@ -244,4 +244,4 @@ docker exec archiver df -h /mnt/backups
 
 If you encounter issues:
 - View logs: `docker exec -it archiver archiver logs`
-- Report issues: https://github.com/sisyphusmd/archiver/issues
+- Report issues: https://forgejo.bryantserver.com/SisyphusMD/archiver/issues

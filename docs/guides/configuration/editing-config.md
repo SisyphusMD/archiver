@@ -99,4 +99,4 @@ If you encounter issues:
 
 - View logs: `docker exec -it archiver archiver logs`
 - Check syntax: `bash -n /opt/archiver/config.sh` (inside container)
-- Report issues: https://github.com/sisyphusmd/archiver/issues
+- Report issues: https://forgejo.bryantserver.com/SisyphusMD/archiver/issues
