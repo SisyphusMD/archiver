@@ -332,4 +332,3 @@ See: [SSH Key Management Guide](../configuration/ssh-key-management.md)
 If you encounter issues during migration:
 
 1. Check logs: `docker exec -it archiver archiver logs`
-2. Report issues: https://forgejo.bryantserver.com/SisyphusMD/archiver/issues

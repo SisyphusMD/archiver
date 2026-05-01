@@ -230,4 +230,3 @@ Then follow steps 3-6 from "Creating New SSH Keys" to add the public key to your
 
 If you encounter issues:
 - View logs: `docker exec -it archiver archiver logs`
-- Report issues: https://forgejo.bryantserver.com/SisyphusMD/archiver/issues

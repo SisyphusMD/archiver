@@ -136,5 +136,4 @@ If you need to reinstall the legacy version:
 
 If you encounter issues:
 
-- Report problems: https://forgejo.bryantserver.com/SisyphusMD/archiver/issues
 - Check Docker installation guide: See README.md
