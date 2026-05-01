@@ -237,10 +237,3 @@ Check available space on your backup volume:
 ```bash
 docker exec archiver df -h /mnt/backups
 ```
-
----
-
-## Getting Help
-
-If you encounter issues:
-- View logs: `docker exec -it archiver archiver logs`

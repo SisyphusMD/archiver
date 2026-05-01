@@ -324,11 +324,3 @@ See: [Editing Configuration in Docker](../configuration/editing-config.md)
 If you need to create new SSH keys or update existing ones for SFTP storage:
 
 See: [SSH Key Management Guide](../configuration/ssh-key-management.md)
-
----
-
-## Getting Help
-
-If you encounter issues during migration:
-
-1. Check logs: `docker exec -it archiver archiver logs`

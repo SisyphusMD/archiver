@@ -129,11 +129,3 @@ If you need to reinstall the legacy version:
 4. Run the setup script (note: setup/uninstall commands were removed in v0.7.0, so you'd need v0.6.5 or earlier)
 
 **Note:** With v0.7.0 being Docker-only, rollback would require using v0.6.5 or earlier.
-
----
-
-## Getting Help
-
-If you encounter issues:
-
-- Check Docker installation guide: See README.md
