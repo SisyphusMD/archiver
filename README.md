@@ -5,6 +5,8 @@
   Automated encrypted backups with deduplication to local disk, SFTP, BackBlaze B2, and S3 storage. Leverages <a href="https://github.com/gilbertchen/duplicacy/tree/v3.2.5">Duplicacy CLI v3.2.5</a> to follow the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 Backup Strategy</a> while removing the complexity of manual configuration.
 </p>
 
+> **Primary repository**: This project is developed at [forgejo.bryantserver.com/SisyphusMD/archiver](https://forgejo.bryantserver.com/SisyphusMD/archiver). The GitHub copy is a read-only mirror — please open issues and PRs at the primary location.
+
 ## What is Archiver?
 
 Archiver automates backing up directories to multiple remote storage locations with encryption and deduplication. Configure once, then backups run automatically on a schedule.
@@ -190,6 +192,8 @@ You'll enter the **User Key** and **API Token** during init.
 
 ## Installation
 
+> **Container image**: Examples below pull from `forgejo.bryantserver.com/sisyphusmd/archiver`. The same image is also published to `ghcr.io/sisyphusmd/archiver` if you prefer that registry — just substitute the registry hostname in any `image:` or `docker run` line.
+
 ### Step 1: Generate Bundle File
 
 **Skip this step if you already have a bundle file** (e.g., `bundle.tar.enc` or `export-*.tar.enc` from a previous installation).
@@ -199,7 +203,7 @@ For new installations, run initialization interactively to generate your configu
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.8.4 init
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.4 init
 ```
 
 This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
@@ -214,7 +218,7 @@ services:
   archiver:
 
     container_name: archiver
-    image: ghcr.io/sisyphusmd/archiver:0.8.4
+    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.8.4
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
@@ -549,7 +553,7 @@ docker run --rm \
   -e BUNDLE_PASSWORD='your-bundle-password-here' \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/host/backup-dir:/mnt/backup-dir \
-  ghcr.io/sisyphusmd/archiver:0.8.4 run backup
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.4 run backup
 ```
 
 Accepts the same optional flags as `archiver start`: `run backup prune` forces rotation, `run backup retain` forces retention (overriding `ROTATE_BACKUPS` in `config.sh`).
@@ -571,7 +575,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: archiver
-              image: ghcr.io/sisyphusmd/archiver:0.8.4
+              image: forgejo.bryantserver.com/sisyphusmd/archiver:0.8.4
               args: ["run", "backup"]
               env:
                 - name: BUNDLE_PASSWORD
@@ -624,7 +628,7 @@ docker run --rm -it \
   -e BUNDLE_PASSWORD='your-bundle-password-here' \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.8.4 \
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.4 \
   archiver restore
 ```
 
@@ -692,7 +696,7 @@ docker run --rm \
   -e BUNDLE_PASSWORD='your-bundle-password-here' \
   -e SNAPSHOT_ID=myservice \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
-  ghcr.io/sisyphusmd/archiver:0.8.4 run snapshot-exists
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.4 run snapshot-exists
 
 # Restore a snapshot into a mounted destination
 docker run --rm \
@@ -702,7 +706,7 @@ docker run --rm \
   -e OVERWRITE=1 \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  ghcr.io/sisyphusmd/archiver:0.8.4 run auto-restore
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.4 run auto-restore
 ```
 
 In Kubernetes this is typically an init container on the workload pod: probe with `run snapshot-exists`, and if a backup exists, run `run auto-restore` to seed the data volume before the main container starts. The exit-code contract means the pod's `restartPolicy` and init-container failure handling behave as expected.
