@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.5] - 2026-04-30
+
+### Changed
+- **Distribution**: Container images are now published to both `forgejo.bryantserver.com/sisyphusmd/archiver` and `ghcr.io/sisyphusmd/archiver`. Forgejo is the primary registry; `ghcr.io` remains available as a mirror. Existing image tags through 0.8.4 are unchanged on both registries.
+- **Repository**: Project source-of-truth has moved to [forgejo.bryantserver.com/SisyphusMD/archiver](https://forgejo.bryantserver.com/SisyphusMD/archiver). The GitHub repository at [github.com/SisyphusMD/archiver](https://github.com/SisyphusMD/archiver) is now a read-only push-mirror.
+- **Documentation**: README and configuration guides updated to reference the Forgejo image path as primary.
+
 ## [0.8.4] - 2026-04-24
 
 ### Changed
