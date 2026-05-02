@@ -30,14 +30,25 @@ jobs:
 
       - name: Log in to Forgejo Registry
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         uses: docker/login-action@v3
         with:
           registry: forgejo.bryantserver.com
           username: cody
           password: ${{ secrets.BRYANTSERVER_REGISTRY_PAT }}
 
+      - name: Log in to NAS Forgejo Registry
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: docker/login-action@v3
+        with:
+          registry: forgejo.nas.bryantserver.com
+          username: cody
+          password: ${{ secrets.NAS_FORGEJO_PAT }}
+
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -50,6 +61,7 @@ jobs:
         with:
           images: |
             forgejo.bryantserver.com/${{ env.IMAGE_NAME }}
+            forgejo.nas.bryantserver.com/${{ env.IMAGE_NAME }}
             ghcr.io/${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
@@ -61,6 +73,7 @@ jobs:
             type=ref,event=pr
 
       - name: Build and push Docker image
+        continue-on-error: true
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -127,6 +140,7 @@ jobs:
           echo "Release name: ${NAME}"
 
       - name: Create or update Forgejo release
+        continue-on-error: true
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases
@@ -153,7 +167,36 @@ jobs:
               "${API}"
           fi
 
+      - name: Create or update NAS Forgejo release
+        continue-on-error: true
+        env:
+          TOKEN: ${{ secrets.NAS_FORGEJO_PAT }}
+          API: https://forgejo.nas.bryantserver.com/api/v1/repos/${{ github.repository }}/releases
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          HTTP=$(curl -sSL -o /tmp/nas-forgejo-existing.json -w "%{http_code}" \
+            -H "Authorization: token $TOKEN" \
+            "${API}/tags/${TAG}")
+          if [ "$HTTP" = "200" ]; then
+            ID=$(jq -r .id /tmp/nas-forgejo-existing.json)
+            echo "Updating existing NAS Forgejo release ${ID}"
+            curl -fsSL -X PATCH \
+              -H "Authorization: token $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/release-payload.json \
+              "${API}/${ID}"
+          else
+            echo "Creating new NAS Forgejo release for ${TAG}"
+            curl -fsSL -X POST \
+              -H "Authorization: token $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/release-payload.json \
+              "${API}"
+          fi
+
       - name: Create or update GitHub release
+        continue-on-error: true
         env:
           TOKEN: ${{ secrets.GH_RELEASE_PAT }}
           API: https://api.github.com/repos/${{ github.repository }}/releases
