@@ -4,7 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - CI and Dockerfile modernization
+## [Unreleased]
+
+## [0.8.6] - 2026-05-05 - CI and Dockerfile modernization
 
 No behavioral changes to the archiver application itself — only the CI pipeline, release flow, and image build process. Aligns archiver with the same externalized-repo conventions used by sibling projects on `forgejo.bryantserver.com`.
 
