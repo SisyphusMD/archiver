@@ -1,7 +1,7 @@
 # Multi-architecture Dockerfile for Archiver
 # Supports: linux/amd64, linux/arm64
 
-FROM debian:trixie-20260112-slim
+FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0
 
 ARG TARGETARCH
 
@@ -10,12 +10,9 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
     expect \
     openssh-client \
     openssl \
-    wget \
     cron \
     curl \
     ca-certificates \
-    gnupg \
-    lsb-release \
     sqlite3 \
     procps \
     nano \
@@ -25,16 +22,30 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
     zfsutils-linux \
     && rm -rf /var/lib/apt/lists/*
 
+# renovate: datasource=github-releases depName=gilbertchen/duplicacy extractVersion=^v(?<version>.+)$
 ENV DUPLICACY_VERSION=3.2.5
-ENV DOCKER_CLI_VERSION=5:29.1.4-1
 
-RUN install -m 0755 -d /etc/apt/keyrings && \
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
-    chmod a+r /etc/apt/keyrings/docker.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian trixie stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
-    apt-get update && \
-    apt-get install -y docker-ce-cli=${DOCKER_CLI_VERSION}~debian.13~trixie && \
-    rm -rf /var/lib/apt/lists/*
+# moby/moby's release tag pattern is `docker-vX.Y.Z`; client/api/* tags
+# are filtered out by the extractVersion anchor. The static binary
+# archive at download.docker.com/linux/static/stable/<arch>/docker-<v>.tgz
+# is published shortly after each engine release.
+# renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.+)$
+ENV DOCKER_CLI_VERSION=29.4.2
+
+# Pull the docker CLI binary directly from Docker's static archive
+# instead of installing the docker-ce-cli debian package. The apt path
+# uses a Debian-package version (`5:29.x.y-1~debian.13~trixie`) which has
+# no clean Renovate datasource; the static binary uses plain SemVer.
+RUN ARCH_SUFFIX="" && \
+    if [ "$TARGETARCH" = "amd64" ]; then \
+        ARCH_SUFFIX="x86_64"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+        ARCH_SUFFIX="aarch64"; \
+    else \
+        echo "Unsupported architecture: $TARGETARCH" && exit 1; \
+    fi && \
+    curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH_SUFFIX}/docker-${DOCKER_CLI_VERSION}.tgz" \
+        | tar -xzC /usr/local/bin --strip-components=1 docker/docker
 
 RUN ARCH_SUFFIX="" && \
     if [ "$TARGETARCH" = "amd64" ]; then \
@@ -44,8 +55,8 @@ RUN ARCH_SUFFIX="" && \
     else \
         echo "Unsupported architecture: $TARGETARCH" && exit 1; \
     fi && \
-    wget -q "https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/duplicacy_linux_${ARCH_SUFFIX}_${DUPLICACY_VERSION}" \
-    -O /usr/local/bin/duplicacy && \
+    curl -fsSL "https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/duplicacy_linux_${ARCH_SUFFIX}_${DUPLICACY_VERSION}" \
+        -o /usr/local/bin/duplicacy && \
     chmod +x /usr/local/bin/duplicacy
 
 WORKDIR /opt/archiver

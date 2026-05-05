@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - CI and Dockerfile modernization
+
+No behavioral changes to the archiver application itself — only the CI pipeline, release flow, and image build process. Aligns archiver with the same externalized-repo conventions used by sibling projects on `forgejo.bryantserver.com`.
+
+### Added
+- `release.yml` workflow for cutting releases via `workflow_dispatch` with `bump=patch|minor|major`. Promotes `[Unreleased]` to a versioned section, bumps image refs in `compose.yaml` and `README.md`, runs a smoke test, then tags + pushes — replaces the prior manual `git tag` flow.
+- `.renovaterc.json` introduced. Tracks the Dockerfile base image, ENV-pinned upstream versions (`DUPLICACY_VERSION` via github-releases against `gilbertchen/duplicacy`, `DOCKER_CLI_VERSION` via github-releases against `moby/moby`), Forgejo Action versions, and the inline skopeo image referenced by `docker-publish.yml`.
+
+### Changed
+- CI: `docker-publish.yml` split from a monolithic `build-and-push` job into separate jobs (`shellcheck`, `validate-changelog`, `pr-validate`, `build-and-push`, `create-release`, `summary`). Each concern has its own gate; failures surface to the new aggregator job rather than silently passing.
+- CI: cluster push now builds to a local OCI archive and uses `skopeo copy` per tag rather than `docker buildx build --push`. Forgejo 15.0.1 nil-derefs in `EndUploadBlob` when buildx's parallel multi-arch push hits the `UQE_package_blob_blake2b`/`sha512` unique constraint — byte-identical blobs across amd64/arm64 (e.g. arch-independent `COPY` layers) race two PUTs of the same digest. Skopeo walks manifests serially with `TryReusingBlob` HEAD-checks, so byte-identical blobs across arches dedupe before PUT.
+- CI: NAS Forgejo mirror now uses `skopeo sync` (full repo, self-healing) instead of `docker buildx imagetools create`. Same Forgejo 15.0.1 bug class as the cluster push.
+- CI: GitHub Container Registry mirror now uses `skopeo copy` per tag instead of `docker buildx imagetools create`. Different registry (no Forgejo nil-deref bug there), but skopeo's HEAD-first dedup is safer against any concurrent-PUT race in the GHCR backend.
+- CI: build cache moved from `type=registry,ref=...:buildcache` (separate cache push that hits the same Forgejo bug) to `type=inline` (cache annotations embedded on the published image manifest; `cache-from: ...:0.8` reads the previous release's inline cache on subsequent builds).
+- CI: skopeo invocation stages the OCI archive into a docker-managed named volume via `docker cp` rather than bind-mounting from `${{ github.workspace }}` — the runner-container's view of the workspace path differs from the docker host's, so a child container's `-v <archive>:<target>` silently creates an empty dir at the host path instead of finding the archive.
+- CI: release creation now reconciles every `v*.*.*` tag on every release run across all three registries (cluster Forgejo, NAS Forgejo, GitHub). A release that failed to publish on any registry (transient 5xx, NAS down, mirror lag) is picked up by the next successful release run rather than staying absent forever. Includes per-tag `target_commitish` from `git rev-parse "${tag}^{}"` for metadata normalization and defense against mirror-lag races where a reconciled tag isn't yet on the destination.
+- CI: cluster Forgejo release is now attributed to a real-user PAT (`CLUSTER_REPO_WRITE_PAT`) instead of the auto-injected `GITHUB_TOKEN`, so release commits and tags carry a stable author identity rather than appearing as "ghost".
+- CI: secret naming aligned with the bryantserver externalized-repo convention. `BRYANTSERVER_REGISTRY_PAT` → `CLUSTER_REGISTRY_PUSH_PAT`, `NAS_FORGEJO_PAT` → `NAS_FORGEJO_WRITE_PAT`. New: `CLUSTER_REPO_WRITE_PAT` for `release.yml`'s commit/tag/push and create-release attribution. `GHCR_PUSH_PAT` and `GH_RELEASE_PAT` unchanged (already convention-shaped).
+- CI: tag patterns reduced to SemVer-only (was also `:main`/`:pr-N` from `type=ref,event=branch`/`event=pr`). PR builds now validate via the `pr-validate` job (build + smoke + arm64 dry-run) without polluting the registry with branch-name and PR-number tags.
+- CI: Forgejo Action versions digest-pinned (`@v4`/`@v5` → `@<digest>`); Renovate tracks both major version and digest.
+- Dockerfile: base image digest-pinned (`debian:trixie-20260112-slim` → `...@sha256:...`).
+- Dockerfile: removed `wget`, `gnupg`, and `lsb-release` from the apt install list. No longer needed once curl replaces wget for the duplicacy download and the docker-ce-cli apt repo dance is gone.
+- Dockerfile: Docker CLI install switched from the `docker-ce-cli` debian package (with `epoch:upstream-revision` versioning that has no clean Renovate datasource) to the static binary archive at `download.docker.com/linux/static/stable/<arch>/docker-<version>.tgz`. ENV pin becomes clean SemVer (`29.4.2` instead of `5:29.1.4-1`), Renovate-tracked via `extractVersion=^docker-v(?<version>.+)$` against `moby/moby` GitHub releases. Trade-off: lose apt's auto security-patch flow within a release stream; gain explicit Renovate-managed bumps. Acceptable for a CLI talking to a host-mounted socket.
+- Dockerfile: `DUPLICACY_VERSION` Renovate-tracked via `extractVersion=^v(?<version>.+)$` against `gilbertchen/duplicacy` GitHub releases. Renovate auto-opens PRs for new duplicacy releases.
+- Dockerfile: switched `wget` → `curl` for the duplicacy binary download, since curl is already installed and wget is no longer needed.
+
+### Notes
+- All 27 prior releases (v0.1.0 through v0.8.5) will be retroactively reconciled on the cluster + NAS Forgejos and GitHub on the next release run to set per-tag `target_commitish`. They previously had blank or `"main"` values; cosmetic backfill, no functional change.
+
 ## [0.8.5] - 2026-04-30 — Forgejo as primary registry
 
 ### Changed

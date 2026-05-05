@@ -1,62 +1,149 @@
-name: Build and Publish Docker Image
+name: CI / Build / Publish
 
 on:
+  # PRs gate quality before merge; tag pushes drive the publish flow. Plain
+  # commits to main are not a trigger: release.yml is the only path that lands
+  # on main directly (release commit + tag), and it runs its own smoke test
+  # before tagging — re-validating on the release commit would be redundant.
   push:
-    tags:
-      - 'v*.*.*'
+    tags: ['v*.*.*']
   pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   IMAGE_NAME: sisyphusmd/archiver
 
 jobs:
-  build-and-push:
+  shellcheck:
+    name: Shellcheck
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Run shellcheck
+        # Pinned koalaman/shellcheck image; Renovate (github-actions manager)
+        # tracks both tag and digest. warning+ severity only — info-level
+        # noise (SC2012, SC2086 in vetted contexts) is intentionally allowed.
+        uses: docker://koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+        with:
+          args: >-
+            --severity=warning
+            --shell=bash
+            archiver.sh
+            docker-entrypoint.sh
+
+  validate-changelog:
+    name: Validate CHANGELOG structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Lint CHANGELOG
+        run: |
+          set -euo pipefail
+          # Required: an [Unreleased] section as the release workflow's promotion anchor.
+          if ! grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::Missing required '## [Unreleased]' section"
+            exit 1
+          fi
+          # Required: every '## [' heading is preceded by a blank line (or is line 1).
+          # The release workflow's awk pass and create-release's body extraction both
+          # assume this structure.
+          awk '
+            NR > 1 && /^## \[/ && prev != "" {
+              print "::error file=CHANGELOG.md,line=" NR "::Heading must be preceded by a blank line: " $0
+              failed = 1
+            }
+            { prev = $0 }
+            END { exit (failed ? 1 : 0) }
+          ' CHANGELOG.md
+
+  pr-validate:
+    name: PR build & smoke test
+    if: github.event_name == 'pull_request'
+    needs: [shellcheck, validate-changelog]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Build amd64 (load locally)
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: smoke-test:local
+      - name: Smoke test (entrypoint exits cleanly without BUNDLE_PASSWORD)
+        run: |
+          set +e
+          # --network none: smoke test exits at the BUNDLE_PASSWORD check
+          # before any cloud/SSH call, so deny network access to bound the
+          # blast radius of an untrusted PR's Dockerfile.
+          OUT=$(docker run --rm --network none smoke-test:local 2>&1)
+          RC=$?
+          echo "$OUT"
+          if [ "$RC" -eq 0 ]; then
+            echo "::error::Container exited 0; expected non-zero (BUNDLE_PASSWORD missing)"
+            exit 1
+          fi
+          if ! echo "$OUT" | grep -q "BUNDLE_PASSWORD environment variable is required"; then
+            echo "::error::Expected 'BUNDLE_PASSWORD environment variable is required' in output"
+            exit 1
+          fi
+          echo "Smoke test passed"
+      - name: Validate arm64 build (no push)
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          platforms: linux/arm64
+          push: false
+
+  build-and-push:
+    name: Build multi-arch and push
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [shellcheck, validate-changelog]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
-      packages: write
+    outputs:
+      mirror-nas: ${{ steps.mirror-nas.outcome }}
+      mirror-ghcr: ${{ steps.mirror-ghcr.outcome }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Verify version refs match tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          EXPECTED="forgejo.bryantserver.com/sisyphusmd/archiver:${VERSION}"
+          if ! grep -qF "$EXPECTED" compose.yaml; then
+            echo "::error::compose.yaml does not contain ${EXPECTED}. Manual tags must bump compose.yaml first."
+            exit 1
+          fi
+          if ! grep -qF "$EXPECTED" README.md; then
+            echo "::error::README.md does not contain ${EXPECTED}. Manual tags must bump README.md first."
+            exit 1
+          fi
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
-      - name: Log in to Forgejo Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+      - name: Log in to cluster Forgejo registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
           registry: forgejo.bryantserver.com
           username: cody
-          password: ${{ secrets.BRYANTSERVER_REGISTRY_PAT }}
+          password: ${{ secrets.CLUSTER_REGISTRY_PUSH_PAT }}
 
-      - name: Log in to NAS Forgejo Registry
-        if: github.event_name != 'pull_request'
-        continue-on-error: true
-        uses: docker/login-action@v3
-        with:
-          registry: forgejo.nas.bryantserver.com
-          username: cody
-          password: ${{ secrets.NAS_FORGEJO_PAT }}
-
-      - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        continue-on-error: true
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GHCR_PUSH_PAT }}
-
-      - name: Extract metadata (tags, labels)
+      - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
         with:
           images: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}
           flavor: |
@@ -65,237 +152,363 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=ref,event=branch
-            type=ref,event=pr
 
-      - name: Build and push to cluster Forgejo (primary)
-        uses: docker/build-push-action@v5
+      # Build to a local OCI archive instead of pushing directly. Forgejo
+      # 15.0.1 nil-derefs in EndUploadBlob when buildx's parallel multi-arch
+      # push hits the `UQE_package_blob_blake2b` (or sha512) unique constraint
+      # — byte-identical blobs across amd64/arm64 (e.g. arch-independent COPY
+      # layers) race two PUTs of the same digest. Same root cause as the NAS
+      # mirror bug the next steps work around.
+      #
+      # `cache-to: type=inline` embeds the cache annotations on the manifest
+      # itself, so subsequent builds can `cache-from` the published image
+      # without a separate cache push (which would re-trigger the same bug).
+      # Cache miss on first build of a new minor is non-fatal — buildkit
+      # logs a warning and proceeds with a full build.
+      - name: Build (multi-arch, OCI archive output)
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          push: false
+          outputs: type=oci,dest=${{ github.workspace }}/image.tar
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0.8
+          cache-to: type=inline
 
-      - name: Mirror image to NAS Forgejo
+      # Skopeo walks the OCI index manifests serially and `TryReusingBlob`-
+      # checks each layer at the destination before PUT, so byte-identical
+      # blobs across arches dedupe cleanly: amd64 pushes its copy, arm64
+      # finds the blob present, skips the PUT, no SQL conflict.
+      #
+      # The OCI archive lives in the runner-container's workspace, but
+      # bind-mounting it into a child container fails in DinD: the docker
+      # daemon (on the host) doesn't see the runner's view of the workspace
+      # path, so `-v <archive>:<target>` silently creates an empty dir at
+      # the host path and the mount lands as an empty dir inside skopeo.
+      # Stage the archive into a docker-managed named volume via
+      # `docker cp` — it streams over the docker socket and named volumes
+      # don't require host path translation.
+      - name: Push to cluster Forgejo via skopeo (per tag)
+        env:
+          DST_CREDS: cody:${{ secrets.CLUSTER_REGISTRY_PUSH_PAT }}
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_TAR: ${{ github.workspace }}/image.tar
+        run: |
+          set -euo pipefail
+          # renovate: datasource=docker depName=quay.io/skopeo/stable
+          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:ad87dcb92d681a20b00899545595225092914aba7f3448280cc03a072752df0d
+
+          docker volume create skopeo-stage >/dev/null
+          trap 'docker volume rm -f skopeo-stage >/dev/null 2>&1' EXIT
+
+          STAGE=$(docker create -v skopeo-stage:/data "$SKOPEO_IMAGE")
+          docker cp "${IMAGE_TAR}" "${STAGE}:/data/image.tar"
+          docker rm "${STAGE}" >/dev/null
+
+          while IFS= read -r dst; do
+            [ -z "$dst" ] && continue
+            docker run --rm \
+              -v skopeo-stage:/data \
+              -e DST_CREDS \
+              "$SKOPEO_IMAGE" \
+              copy --all \
+                --dest-tls-verify=false \
+                --dest-creds "$DST_CREDS" \
+                oci-archive:/data/image.tar \
+                "docker://${dst}"
+          done <<< "$META_TAGS"
+
+      # Full repo sync, not per-tag copy. NAS is the canonical mirror of the
+      # cluster registry — DR depends on it being complete. `skopeo sync` walks
+      # every tag at the source, skips ones the dest already has matching, and
+      # uploads only what's missing or drifted. Cheap when in sync (~100ms
+      # manifest check per tag), self-healing if a previous mirror dropped a
+      # tag silently.
+      - name: Mirror full repo to NAS Forgejo
         id: mirror-nas
-        if: github.event_name != 'pull_request'
         continue-on-error: true
         env:
-          TAGS: ${{ steps.meta.outputs.tags }}
-          SRC: forgejo.bryantserver.com
-          DST: forgejo.nas.bryantserver.com
+          SRC: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}
+          DST_NAMESPACE: forgejo.nas.bryantserver.com/sisyphusmd
+          SRC_CREDS: cody:${{ secrets.CLUSTER_REGISTRY_PUSH_PAT }}
+          DST_CREDS: cody:${{ secrets.NAS_FORGEJO_WRITE_PAT }}
         run: |
           set -euo pipefail
-          while IFS= read -r src; do
-            [ -z "$src" ] && continue
-            dst="${src/$SRC/$DST}"
-            echo "Mirror: $src -> $dst"
-            docker buildx imagetools create --tag "$dst" "$src"
-          done <<< "$TAGS"
+          # renovate: datasource=docker depName=quay.io/skopeo/stable
+          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:ad87dcb92d681a20b00899545595225092914aba7f3448280cc03a072752df0d
+          docker run --rm \
+            -e SRC_CREDS -e DST_CREDS \
+            "$SKOPEO_IMAGE" \
+            sync --all --keep-going \
+              --src docker --dest docker \
+              --src-creds "$SRC_CREDS" \
+              --dest-creds "$DST_CREDS" \
+              "$SRC" "$DST_NAMESPACE"
 
-      - name: Mirror image to GitHub Container Registry
+      # GHCR mirror via per-tag `skopeo copy`. `skopeo sync` would also work
+      # but copy is per-tag explicit, matching the meta-action tag list and
+      # keeping the GHCR namespace from accumulating any drift from other
+      # tags that might end up on cluster Forgejo (e.g. historical short
+      # SHAs from prior workflows). For a public mirror, less surface area
+      # is a feature.
+      - name: Mirror to GitHub Container Registry via skopeo (per tag)
         id: mirror-ghcr
-        if: github.event_name != 'pull_request'
         continue-on-error: true
         env:
-          TAGS: ${{ steps.meta.outputs.tags }}
-          SRC: forgejo.bryantserver.com
-          DST: ghcr.io
+          SRC_CREDS: cody:${{ secrets.CLUSTER_REGISTRY_PUSH_PAT }}
+          DST_CREDS: ${{ github.repository_owner }}:${{ secrets.GHCR_PUSH_PAT }}
+          META_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
+          # renovate: datasource=docker depName=quay.io/skopeo/stable
+          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:ad87dcb92d681a20b00899545595225092914aba7f3448280cc03a072752df0d
           while IFS= read -r src; do
             [ -z "$src" ] && continue
-            dst="${src/$SRC/$DST}"
-            echo "Mirror: $src -> $dst"
-            docker buildx imagetools create --tag "$dst" "$src"
-          done <<< "$TAGS"
+            dst="${src/forgejo.bryantserver.com/ghcr.io}"
+            docker run --rm \
+              -e SRC_CREDS -e DST_CREDS \
+              "$SKOPEO_IMAGE" \
+              copy --all \
+                --src-tls-verify=false \
+                --src-creds "$SRC_CREDS" \
+                --dest-creds "$DST_CREDS" \
+                "docker://${src}" "docker://${dst}"
+          done <<< "$META_TAGS"
 
+      # Surface mirror failures as warnings only; do NOT exit 1 here. Failing
+      # this job would skip create-release via `needs:`, blocking the very
+      # release notes the user wants regardless of mirror health. The summary
+      # job at the end of the workflow rolls outcomes up and turns the run
+      # red so failures still surface in the runs list.
       - name: Report mirror results
-        if: always() && github.event_name != 'pull_request'
+        if: always()
         env:
           NAS_OUTCOME: ${{ steps.mirror-nas.outcome }}
           GHCR_OUTCOME: ${{ steps.mirror-ghcr.outcome }}
         run: |
-          failed=0
           if [ "$NAS_OUTCOME" = "failure" ]; then
-            echo "::warning title=NAS Forgejo mirror failed::Image push to forgejo.nas.bryantserver.com failed"
-            failed=1
+            echo "::warning title=NAS Forgejo mirror failed::Push to forgejo.nas.bryantserver.com failed"
           fi
           if [ "$GHCR_OUTCOME" = "failure" ]; then
-            echo "::warning title=GHCR mirror failed::Image push to ghcr.io failed"
-            failed=1
+            echo "::warning title=GHCR mirror failed::Push to ghcr.io failed"
           fi
-          [ "$failed" = "0" ] || exit 1
 
   create-release:
+    name: Reconcile releases across registries
     needs: build-and-push
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      forgejo-failures: ${{ steps.reconcile.outputs.cluster-failures }}
+      nas-failures: ${{ steps.reconcile.outputs.nas-failures }}
+      github-failures: ${{ steps.reconcile.outputs.github-failures }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0   # all tags needed for reconciliation loop
 
-      - name: Extract release info from CHANGELOG
+      # Walks every v* tag and reconciles releases on cluster Forgejo, NAS
+      # Forgejo, and GitHub. Same self-healing pattern as the skopeo sync
+      # mirror step: a release that failed to create on a prior run is
+      # picked up by the next successful release run. Each tagged release
+      # retroactively heals every gap since the project began.
+      #
+      # Uses real-user PATs (not the auto-injected GITHUB_TOKEN). The
+      # ephemeral runner token works for the API call but attributes the
+      # resulting release to "ghost" in the UI; the cody-owned PATs surface
+      # the release authored by them.
+      - name: Reconcile all releases on cluster Forgejo, NAS Forgejo, and GitHub
+        id: reconcile
         env:
-          TAG: ${{ github.ref_name }}
-          SHA: ${{ github.sha }}
+          CLUSTER_TOKEN: ${{ secrets.CLUSTER_REPO_WRITE_PAT }}
+          CLUSTER_API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases
+          NAS_TOKEN: ${{ secrets.NAS_FORGEJO_WRITE_PAT }}
+          NAS_API: https://forgejo.nas.bryantserver.com/api/v1/repos/${{ github.repository }}/releases
+          GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
+          GH_API: https://api.github.com/repos/${{ github.repository }}/releases
         run: |
-          set -euo pipefail
-          VERSION="${TAG#v}"
+          set -uo pipefail
 
-          HEADER=$(grep -E "^## \[${VERSION}\]" CHANGELOG.md | head -n1 || true)
-          if [ -z "$HEADER" ]; then
-            echo "No CHANGELOG entry for ${VERSION}" >&2
-            exit 1
-          fi
+          # Reconcile a single release on a single registry. Uses Forgejo
+          # auth scheme (`Authorization: token`) by default; pass
+          # auth_scheme=bearer for GitHub.
+          # POSTs if the release is missing, PATCHes if it exists (keeps
+          # the body in sync with the latest CHANGELOG).
+          # Returns 0 on success, 1 on failure.
+          reconcile_release() {
+            local label=$1 api=$2 token=$3 auth_scheme=$4 tag=$5 payload_file=$6
+            local http id auth_header
 
-          HEADLINE=$(printf '%s\n' "$HEADER" | sed -nE 's/^## \[[^]]+\] - [0-9-]+ — (.+)$/\1/p')
-          if [ -n "$HEADLINE" ]; then
-            NAME="${TAG} - ${HEADLINE}"
-          else
-            NAME="${TAG}"
-          fi
+            if [ "$auth_scheme" = "bearer" ]; then
+              auth_header="Authorization: Bearer ${token}"
+            else
+              auth_header="Authorization: token ${token}"
+            fi
 
-          BODY=$(awk -v v="${VERSION}" '
-            $0 ~ "^## \\[" v "\\]" { in_section=1; next }
-            in_section && /^## \[/ { exit }
-            in_section && started { print }
-            in_section && /[^[:space:]]/ && !started { started=1; print }
-          ' CHANGELOG.md)
+            http=$(curl -sSL -k -o /tmp/existing.json -w "%{http_code}" \
+              -H "${auth_header}" \
+              "${api}/tags/${tag}")
 
-          if [ -z "$BODY" ]; then
-            echo "Empty body extracted for ${VERSION}" >&2
-            exit 1
-          fi
+            if [ "$http" = "200" ]; then
+              id=$(jq -r .id /tmp/existing.json)
+              if curl -fsSL -k -X PATCH \
+                  -H "${auth_header}" \
+                  -H "Content-Type: application/json" \
+                  -d @"${payload_file}" \
+                  "${api}/${id}" >/dev/null; then
+                echo "  [${label}] ${tag} updated (id=${id})"
+                return 0
+              fi
+              echo "  [${label}] ${tag} update FAILED" >&2
+              return 1
+            elif [ "$http" = "404" ]; then
+              if curl -fsSL -k -X POST \
+                  -H "${auth_header}" \
+                  -H "Content-Type: application/json" \
+                  -d @"${payload_file}" \
+                  "${api}" >/dev/null; then
+                echo "  [${label}] ${tag} created"
+                return 0
+              fi
+              echo "  [${label}] ${tag} create FAILED" >&2
+              return 1
+            else
+              echo "  [${label}] ${tag} unexpected HTTP ${http}" >&2
+              return 1
+            fi
+          }
 
-          jq -n \
-            --arg tag "$TAG" \
-            --arg name "$NAME" \
-            --arg body "$BODY" \
-            '{tag_name:$tag, name:$name, body:$body, draft:false, prerelease:false}' \
-            > /tmp/release-payload.json
+          cluster_failures=0
+          nas_failures=0
+          github_failures=0
 
-          jq --arg sha "$SHA" '. + {target_commitish:$sha}' \
-            /tmp/release-payload.json > /tmp/release-payload-github.json
+          for tag in $(git tag -l 'v*.*.*' --sort=-v:refname); do
+            version="${tag#v}"
+            # `^{}` dereferences annotated tags to their underlying commit;
+            # lightweight tags resolve to the commit directly (no-op).
+            commit_sha=$(git rev-parse "${tag}^{}")
 
-          echo "Release name: ${NAME}"
+            HEADER=$(grep -E "^## \[${version}\]" CHANGELOG.md | head -n1 || true)
+            if [ -z "$HEADER" ]; then
+              echo "::warning::No CHANGELOG entry for ${version}; skipping ${tag}"
+              continue
+            fi
 
-      - name: Create or update Forgejo release
-        id: release-forgejo
-        continue-on-error: true
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          HTTP=$(curl -sSL -o /tmp/forgejo-existing.json -w "%{http_code}" \
-            -H "Authorization: token $TOKEN" \
-            "${API}/tags/${TAG}")
-          if [ "$HTTP" = "200" ]; then
-            ID=$(jq -r .id /tmp/forgejo-existing.json)
-            echo "Updating existing Forgejo release ${ID}"
-            curl -fsSL -X PATCH \
-              -H "Authorization: token $TOKEN" \
-              -H "Content-Type: application/json" \
-              -d @/tmp/release-payload.json \
-              "${API}/${ID}"
-          else
-            echo "Creating new Forgejo release for ${TAG}"
-            curl -fsSL -X POST \
-              -H "Authorization: token $TOKEN" \
-              -H "Content-Type: application/json" \
-              -d @/tmp/release-payload.json \
-              "${API}"
-          fi
+            HEADLINE=$(printf '%s\n' "$HEADER" | sed -nE 's/^## \[[^]]+\] - [0-9-]+ - (.+)$/\1/p')
+            if [ -n "$HEADLINE" ]; then
+              NAME="${tag} - ${HEADLINE}"
+            else
+              NAME="${tag}"
+            fi
 
-      - name: Create or update NAS Forgejo release
-        id: release-nas
-        continue-on-error: true
-        env:
-          TOKEN: ${{ secrets.NAS_FORGEJO_PAT }}
-          API: https://forgejo.nas.bryantserver.com/api/v1/repos/${{ github.repository }}/releases
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          HTTP=$(curl -sSL -o /tmp/nas-forgejo-existing.json -w "%{http_code}" \
-            -H "Authorization: token $TOKEN" \
-            "${API}/tags/${TAG}")
-          if [ "$HTTP" = "200" ]; then
-            ID=$(jq -r .id /tmp/nas-forgejo-existing.json)
-            echo "Updating existing NAS Forgejo release ${ID}"
-            curl -fsSL -X PATCH \
-              -H "Authorization: token $TOKEN" \
-              -H "Content-Type: application/json" \
-              -d @/tmp/release-payload.json \
-              "${API}/${ID}"
-          else
-            echo "Creating new NAS Forgejo release for ${TAG}"
-            curl -fsSL -X POST \
-              -H "Authorization: token $TOKEN" \
-              -H "Content-Type: application/json" \
-              -d @/tmp/release-payload.json \
-              "${API}"
-          fi
+            # Escape regex metacharacters in version (the dots) before passing to awk.
+            V_RE=$(printf '%s' "${version}" | sed 's/\./\\./g')
+            BODY=$(awk -v v="${V_RE}" '
+              $0 ~ "^## \\[" v "\\]" { in_section=1; next }
+              in_section && /^## \[/ { exit }
+              in_section && started { print }
+              in_section && /[^[:space:]]/ && !started { started=1; print }
+            ' CHANGELOG.md)
 
-      - name: Create or update GitHub release
-        id: release-github
-        continue-on-error: true
-        env:
-          TOKEN: ${{ secrets.GH_RELEASE_PAT }}
-          API: https://api.github.com/repos/${{ github.repository }}/releases
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          HTTP=$(curl -sSL -o /tmp/github-existing.json -w "%{http_code}" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "${API}/tags/${TAG}")
-          if [ "$HTTP" = "200" ]; then
-            ID=$(jq -r .id /tmp/github-existing.json)
-            echo "Updating existing GitHub release ${ID}"
-            curl -fsSL -X PATCH \
-              -H "Authorization: Bearer $TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              -H "Content-Type: application/json" \
-              -d @/tmp/release-payload-github.json \
-              "${API}/${ID}"
-          else
-            echo "Creating new GitHub release for ${TAG}"
-            curl -fsSL -X POST \
-              -H "Authorization: Bearer $TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              -H "Content-Type: application/json" \
-              -d @/tmp/release-payload-github.json \
-              "${API}"
-          fi
+            if [ -z "$BODY" ]; then
+              BODY="See CHANGELOG.md for details."
+            fi
 
-      - name: Report release results
+            jq -n \
+              --arg tag "$tag" \
+              --arg name "$NAME" \
+              --arg body "$BODY" \
+              --arg sha "$commit_sha" \
+              '{tag_name:$tag, name:$name, body:$body, target_commitish:$sha, draft:false, prerelease:false}' \
+              > /tmp/release-payload.json
+
+            echo "::group::Reconciling ${tag}"
+            reconcile_release "cluster" "$CLUSTER_API" "$CLUSTER_TOKEN" "token"  "$tag" /tmp/release-payload.json \
+              || cluster_failures=$((cluster_failures + 1))
+            reconcile_release "nas"     "$NAS_API"     "$NAS_TOKEN"     "token"  "$tag" /tmp/release-payload.json \
+              || nas_failures=$((nas_failures + 1))
+            reconcile_release "github"  "$GH_API"      "$GH_TOKEN"      "bearer" "$tag" /tmp/release-payload.json \
+              || github_failures=$((github_failures + 1))
+            echo "::endgroup::"
+          done
+
+          echo "Reconciliation: cluster_failures=${cluster_failures} nas_failures=${nas_failures} github_failures=${github_failures}"
+          echo "cluster-failures=${cluster_failures}" >> "$GITHUB_OUTPUT"
+          echo "nas-failures=${nas_failures}" >> "$GITHUB_OUTPUT"
+          echo "github-failures=${github_failures}" >> "$GITHUB_OUTPUT"
+
+          # Don't exit non-zero — the summary job rolls failures up. Exiting
+          # here would skip subsequent steps in this job.
+
+      # Warnings only; the summary job rolls them up and fails the run.
+      - name: Report reconciliation results
         if: always()
         env:
-          FORGEJO_OUTCOME: ${{ steps.release-forgejo.outcome }}
-          NAS_OUTCOME: ${{ steps.release-nas.outcome }}
-          GITHUB_OUTCOME: ${{ steps.release-github.outcome }}
+          CLUSTER_FAILURES: ${{ steps.reconcile.outputs.cluster-failures }}
+          NAS_FAILURES: ${{ steps.reconcile.outputs.nas-failures }}
+          GITHUB_FAILURES: ${{ steps.reconcile.outputs.github-failures }}
         run: |
+          if [ "${CLUSTER_FAILURES:-0}" != "0" ]; then
+            echo "::warning title=Cluster Forgejo release failures::${CLUSTER_FAILURES} release(s) failed to reconcile on forgejo.bryantserver.com"
+          fi
+          if [ "${NAS_FAILURES:-0}" != "0" ]; then
+            echo "::warning title=NAS Forgejo release failures::${NAS_FAILURES} release(s) failed to reconcile on forgejo.nas.bryantserver.com"
+          fi
+          if [ "${GITHUB_FAILURES:-0}" != "0" ]; then
+            echo "::warning title=GitHub release failures::${GITHUB_FAILURES} release(s) failed to reconcile on github.com"
+          fi
+
+  # Final aggregator: rolls up step outcomes from build-and-push and
+  # create-release. Per-job Report steps only warn so they don't block the
+  # next job. This job exits 1 if any tracked outcome is 'failure', turning
+  # the workflow run red so partial failures surface in the runs list.
+  summary:
+    name: Workflow summary
+    needs: [build-and-push, create-release]
+    if: always() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate outcomes
+        env:
+          BP_RESULT: ${{ needs.build-and-push.result }}
+          CR_RESULT: ${{ needs.create-release.result }}
+          MIRROR_NAS: ${{ needs.build-and-push.outputs.mirror-nas }}
+          MIRROR_GHCR: ${{ needs.build-and-push.outputs.mirror-ghcr }}
+          FORGEJO_FAILURES: ${{ needs.create-release.outputs.forgejo-failures }}
+          NAS_FAILURES: ${{ needs.create-release.outputs.nas-failures }}
+          GITHUB_FAILURES: ${{ needs.create-release.outputs.github-failures }}
+        run: |
+          set -eu
+          echo "Job results:"
+          echo "  build-and-push: ${BP_RESULT}"
+          echo "  create-release: ${CR_RESULT}"
+          echo "Step outcomes:"
+          echo "  mirror-nas:        ${MIRROR_NAS:-<n/a>}"
+          echo "  mirror-ghcr:       ${MIRROR_GHCR:-<n/a>}"
+          echo "  forgejo-failures:  ${FORGEJO_FAILURES:-<n/a>}"
+          echo "  nas-failures:      ${NAS_FAILURES:-<n/a>}"
+          echo "  github-failures:   ${GITHUB_FAILURES:-<n/a>}"
           failed=0
-          if [ "$FORGEJO_OUTCOME" = "failure" ]; then
-            echo "::warning title=Cluster Forgejo release failed::Release publish to forgejo.bryantserver.com failed"
-            failed=1
+          # Job-level: success or skipped (skipped == upstream cancellation).
+          # Treat anything else as a failure.
+          for r in "$BP_RESULT" "$CR_RESULT"; do
+            case "$r" in
+              success|skipped) ;;
+              *) failed=1 ;;
+            esac
+          done
+          # Mirror outcomes from the continue-on-error steps.
+          [ "$MIRROR_NAS" = "failure" ] && failed=1
+          [ "$MIRROR_GHCR" = "failure" ] && failed=1
+          # Reconciliation failure counts (>0 means at least one tag failed).
+          [ "${FORGEJO_FAILURES:-0}" != "0" ] && failed=1
+          [ "${NAS_FAILURES:-0}" != "0" ] && failed=1
+          [ "${GITHUB_FAILURES:-0}" != "0" ] && failed=1
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::One or more publish targets failed; see warnings above"
+            exit 1
           fi
-          if [ "$NAS_OUTCOME" = "failure" ]; then
-            echo "::warning title=NAS Forgejo release failed::Release publish to forgejo.nas.bryantserver.com failed"
-            failed=1
-          fi
-          if [ "$GITHUB_OUTCOME" = "failure" ]; then
-            echo "::warning title=GitHub release failed::Release publish to github.com failed"
-            failed=1
-          fi
-          [ "$failed" = "0" ] || exit 1
+          echo "All publish targets succeeded"

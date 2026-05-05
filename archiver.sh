@@ -1,6 +1,7 @@
 #!/bin/bash
 # Main CLI entrypoint for Archiver commands
 
+# shellcheck disable=SC2034  # sourced by external scripts that gate re-source on this sentinel
 ARCHIVER_SH_SOURCED=true
 
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then

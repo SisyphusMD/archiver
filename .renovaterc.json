@@ -1,0 +1,67 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "customManagers:dockerfileVersions"
+  ],
+  "gitAuthor": "Renovate Bot <renovate@bryantserver.local>",
+  "assignees": ["cody"],
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "separateMinorPatch": true,
+  "fetchChangeLogs": "pr",
+  "enabledManagers": ["dockerfile", "github-actions", "custom.regex"],
+  "includePaths": [
+    "Dockerfile",
+    ".forgejo/workflows/docker-publish.yml",
+    ".forgejo/workflows/release.yml"
+  ],
+  "github-actions": {
+    "managerFilePatterns": ["/\\.forgejo/workflows/.+\\.ya?ml$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track inline docker images in workflow shell blocks via `# renovate:` comment",
+      "managerFilePatterns": ["/\\.forgejo/workflows/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\s[^\\n]*?:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Track Dockerfile ENV-pinned upstream versions via `# renovate:` comment with extractVersion",
+      "managerFilePatterns": ["/Dockerfile$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+) extractVersion=(?<extractVersion>[^\\s]+)\\s+ENV [A-Z_]+=(?<currentValue>\\S+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Docker Images",
+      "matchDatasources": ["docker"],
+      "addLabels": ["docker"]
+    },
+    {
+      "description": "Major Updates",
+      "matchUpdateTypes": ["major"],
+      "addLabels": ["major-update"]
+    },
+    {
+      "description": "Minor Updates",
+      "matchUpdateTypes": ["minor"],
+      "addLabels": ["minor-update"]
+    },
+    {
+      "description": "Patch Updates",
+      "matchUpdateTypes": ["patch"],
+      "addLabels": ["patch-update"]
+    },
+    {
+      "description": "Automerge patches and digests; manual workflow_dispatch cuts the release later",
+      "matchUpdateTypes": ["patch", "digest"],
+      "automerge": true
+    }
+  ]
+}

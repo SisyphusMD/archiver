@@ -1,0 +1,231 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Cut release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # workflow_dispatch fires from whatever branch the user picked in the
+      # UI. The bump pushes back to ${github.ref_name}, so dispatching from a
+      # non-main branch would land the CHANGELOG/example bump on that branch.
+      # Refuse early; cutting a release from anything but main is never right.
+      - name: Refuse non-main dispatches
+        run: |
+          if [ "${{ github.ref_name }}" != "main" ]; then
+            echo "::error::Release must be dispatched from main; got '${{ github.ref_name }}'"
+            exit 1
+          fi
+
+      - name: Checkout (full history + tags)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.CLUSTER_REPO_WRITE_PAT }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "forgejo-actions[bot]"
+          git config user.email "forgejo-actions[bot]@users.noreply.bryantserver.com"
+
+      - name: Compute next version
+        id: ver
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          PREV_TAG=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n1 || true)
+          if [ -z "$PREV_TAG" ]; then
+            CURRENT="0.0.0"
+          else
+            CURRENT="${PREV_TAG#v}"
+          fi
+          MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+          MINOR=$(echo "$CURRENT" | cut -d. -f2)
+          PATCH=$(echo "$CURRENT" | cut -d. -f3)
+          case "$BUMP" in
+            patch) PATCH=$((PATCH + 1)) ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+          esac
+          NEXT="${MAJOR}.${MINOR}.${PATCH}"
+          echo "version=${NEXT}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${NEXT}" >> "$GITHUB_OUTPUT"
+          echo "previous=${PREV_TAG}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${NEXT} (bump=${BUMP}, previous=${PREV_TAG:-none})"
+
+      - name: Sanity guards
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::Missing '## [Unreleased]' section"
+            exit 1
+          fi
+          if grep -qE "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::CHANGELOG already has a [${VERSION}] section"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
+
+      - name: Detect dependency commits since previous tag
+        id: deps
+        env:
+          PREV: ${{ steps.ver.outputs.previous }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PREV" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV}..HEAD"
+          fi
+          DEPS=$(git log "$RANGE" --pretty=format:'%s' | grep -E '^(chore|fix)\(deps\):' || true)
+          if [ -z "$DEPS" ]; then
+            echo "No dependency commits since ${PREV:-beginning}"
+            {
+              echo 'deps<<DEPS_EOF'
+              echo 'DEPS_EOF'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "Detected dependency commits:"
+            echo "$DEPS"
+            {
+              echo 'deps<<DEPS_EOF'
+              echo "$DEPS"
+              echo 'DEPS_EOF'
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Promote [Unreleased] and append dependencies
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          DEPS: ${{ steps.deps.outputs.deps }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          # ENVIRON["DEPS"] avoids awk's -v backslash-escape processing,
+          # which would corrupt subjects containing backslashes.
+          awk -v ver="$VERSION" -v date="$DATE" '
+            BEGIN { in_section = 0; emitted = 0; deps = ENVIRON["DEPS"] }
+            /^## \[Unreleased\]/ {
+              suffix = $0
+              sub(/^## \[Unreleased\]/, "", suffix)
+              print "## [Unreleased]"
+              print ""
+              print "## [" ver "] - " date suffix
+              in_section = 1
+              next
+            }
+            in_section && /^## \[/ {
+              if (!emitted && deps != "") {
+                print "### Dependencies"
+                print ""
+                n = split(deps, lines, "\n")
+                for (i = 1; i <= n; i++) if (lines[i] != "") print "- " lines[i]
+                print ""
+                emitted = 1
+              }
+              in_section = 0
+              print
+              next
+            }
+            { print }
+            END {
+              if (in_section && !emitted && deps != "") {
+                print ""
+                print "### Dependencies"
+                print ""
+                n = split(deps, lines, "\n")
+                for (i = 1; i <= n; i++) if (lines[i] != "") print "- " lines[i]
+              }
+            }
+          ' CHANGELOG.md > CHANGELOG.md.new
+          mv CHANGELOG.md.new CHANGELOG.md
+
+      - name: Bump image tag in compose.yaml and README
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s|(forgejo\.bryantserver\.com/sisyphusmd/archiver:)[0-9]+\.[0-9]+\.[0-9]+|\1${VERSION}|g" \
+            compose.yaml README.md
+
+      - name: Show diff
+        run: git --no-pager diff
+
+      # Build + smoke test BEFORE committing the release. A failure here aborts
+      # the release cleanly: no commit, no tag, no stranded artifacts. The
+      # multi-arch publish in docker-publish.yml trusts this gate.
+      - uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Build amd64 for smoke test
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: smoke-test:local
+      - name: Smoke test
+        run: |
+          set +e
+          # Run the entrypoint with no env vars set. `docker-entrypoint.sh`
+          # falls through to `prepare_bundle()`, which exits 1 with a clear
+          # error message when BUNDLE_PASSWORD is unset. We assert that exact
+          # exit + error string — confirms the image boots, sources lib code
+          # without import errors, and reaches the prepare_bundle gate.
+          # `--network none` bounds blast radius for the smoke run.
+          OUT=$(docker run --rm --network none smoke-test:local 2>&1)
+          RC=$?
+          echo "$OUT"
+          if [ "$RC" -eq 0 ]; then
+            echo "::error::Container exited 0; expected non-zero (BUNDLE_PASSWORD missing)"
+            exit 1
+          fi
+          if ! echo "$OUT" | grep -q "BUNDLE_PASSWORD environment variable is required"; then
+            echo "::error::Expected 'BUNDLE_PASSWORD environment variable is required' in output"
+            exit 1
+          fi
+          echo "Smoke test passed"
+
+      - name: Commit, tag, and push
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          TOKEN: ${{ secrets.CLUSTER_REPO_WRITE_PAT }}
+        run: |
+          set -euo pipefail
+          git add CHANGELOG.md compose.yaml README.md
+          git commit -m "release: ${VERSION}"
+          git tag "${TAG}"
+          # Pass the token via http.extraheader (HTTP Authorization header) instead
+          # of embedding it in the remote URL. Avoids token leakage in git's error
+          # output, which prints the URL on auth failures. Works around the
+          # actions/checkout@v6 + forgejo-runner extraheader quirk (#2321) by
+          # setting the header explicitly per-command.
+          AUTH_B64=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
+          git -c "http.extraheader=Authorization: Basic ${AUTH_B64}" \
+            push origin "HEAD:${{ github.ref_name }}"
+          git -c "http.extraheader=Authorization: Basic ${AUTH_B64}" \
+            push origin "${TAG}"
