@@ -257,7 +257,7 @@ jobs:
         continue-on-error: true
         env:
           SRC_CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
-          DST_CREDS: ${{ github.repository_owner }}:${{ secrets.GHCR_PUSH_PAT }}
+          DST_CREDS: ${{ github.repository_owner }}:${{ secrets.GH_REGISTRY_PUSH_PAT }}
           META_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
@@ -327,7 +327,7 @@ jobs:
           CLUSTER_API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases
           NAS_TOKEN: ${{ secrets.NAS_FORGEJO_REPO_WRITE_PAT }}
           NAS_API: https://forgejo.nas.bryantserver.com/api/v1/repos/${{ github.repository }}/releases
-          GH_TOKEN: ${{ secrets.GH_RELEASE_PAT }}
+          GH_TOKEN: ${{ secrets.GH_REPO_WRITE_PAT }}
           GH_API: https://api.github.com/repos/${{ github.repository }}/releases
         run: |
           set -uo pipefail
