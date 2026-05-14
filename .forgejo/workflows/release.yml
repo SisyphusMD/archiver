@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-          token: ${{ secrets.CLUSTER_REPO_WRITE_PAT }}
+          token: ${{ secrets.CLUSTER_FORGEJO_REPO_WRITE_PAT }}
 
       - name: Configure git identity
         run: |
@@ -213,7 +213,7 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
           TAG: ${{ steps.ver.outputs.tag }}
-          TOKEN: ${{ secrets.CLUSTER_REPO_WRITE_PAT }}
+          TOKEN: ${{ secrets.CLUSTER_FORGEJO_REPO_WRITE_PAT }}
         run: |
           set -euo pipefail
           git add CHANGELOG.md compose.yaml README.md
