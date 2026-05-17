@@ -197,7 +197,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:b63ff3bf0e3ef862fa4b1c52658c832a7d676c74a74cdb7a53cf5e11e7fb7e96
+          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:9d905e2addca645ae02fd6cec1df9b7bc5eee1d8452fe1f73d39ea0b99124efb
 
           docker volume create skopeo-stage >/dev/null
           trap 'docker volume rm -f skopeo-stage >/dev/null 2>&1' EXIT
@@ -236,7 +236,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:b63ff3bf0e3ef862fa4b1c52658c832a7d676c74a74cdb7a53cf5e11e7fb7e96
+          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:9d905e2addca645ae02fd6cec1df9b7bc5eee1d8452fe1f73d39ea0b99124efb
           docker run --rm \
             -e SRC_CREDS -e DST_CREDS \
             "$SKOPEO_IMAGE" \
@@ -262,7 +262,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:b63ff3bf0e3ef862fa4b1c52658c832a7d676c74a74cdb7a53cf5e11e7fb7e96
+          SKOPEO_IMAGE=quay.io/skopeo/stable:v1.22.2@sha256:9d905e2addca645ae02fd6cec1df9b7bc5eee1d8452fe1f73d39ea0b99124efb
           while IFS= read -r src; do
             [ -z "$src" ] && continue
             dst="${src/forgejo.bryantserver.com/ghcr.io}"
