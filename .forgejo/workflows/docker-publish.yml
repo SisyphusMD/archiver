@@ -22,7 +22,7 @@ jobs:
     name: Shellcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Run shellcheck
         # Pinned koalaman/shellcheck image; Renovate (github-actions manager)
         # tracks both tag and digest. warning+ severity only — info-level
@@ -39,7 +39,7 @@ jobs:
     name: Validate CHANGELOG structure
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Lint CHANGELOG
         run: |
           set -euo pipefail
@@ -66,7 +66,7 @@ jobs:
     needs: [shellcheck, validate-changelog]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
       - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
       - name: Build amd64 (load locally)
@@ -113,7 +113,7 @@ jobs:
       mirror-nas: ${{ steps.mirror-nas.outcome }}
       mirror-ghcr: ${{ steps.mirror-ghcr.outcome }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Verify version refs match tag
         env:
@@ -306,7 +306,7 @@ jobs:
       nas-failures: ${{ steps.reconcile.outputs.nas-failures }}
       github-failures: ${{ steps.reconcile.outputs.github-failures }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0   # all tags needed for reconciliation loop
 
