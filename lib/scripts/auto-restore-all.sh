@@ -4,6 +4,11 @@
 # trying all storage targets) for each. Built for rebuilding a blank host (e.g.
 # the humblepixels vps up.sh tier-3 path). The per-service restore mechanics live
 # in auto-restore.sh; this only orchestrates the loop and aggregates the result.
+#
+# Files only by default. Set RUN_RESTORE_SERVICE=1 to also run each service's
+# ./restore-service.sh after its file restore (DB reload, container restart) —
+# required for a full host bring-up where DBs are backed up as dumps, not raw
+# data dirs. A restore-service.sh failure marks that service failed in the summary.
 
 AUTO_RESTORE_ALL_SH_SOURCED=true
 
@@ -23,7 +28,8 @@ usage() {
   echo "Usage: archiver auto-restore-all" >&2
   echo "Restores every service in SERVICE_DIRECTORIES at its latest revision." >&2
   echo "Non-interactive. Optional env is passed through to each auto-restore:" >&2
-  echo "  REVISION, STORAGE_TARGET, OVERWRITE, DELETE_EXTRA, HASH_COMPARE, IGNORE_OWNERSHIP" >&2
+  echo "  REVISION, STORAGE_TARGET, OVERWRITE, DELETE_EXTRA, HASH_COMPARE, IGNORE_OWNERSHIP," >&2
+  echo "  RUN_RESTORE_SERVICE (run each service's restore-service.sh after its file restore)" >&2
   echo "Exit codes: 0=all restored, 1=one or more failed, 2=invalid usage, 3=lock held" >&2
   exit 2
 }

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- `RUN_RESTORE_SERVICE` env toggle on `auto-restore` (and, via pass-through, `auto-restore-all`): when non-empty, runs the service's `./restore-service.sh` after a successful file restore — non-interactively reloading databases and restarting the stack, mirroring what the interactive `restore` command prompts for. Its exit code propagates, so a failed reload surfaces as a failed restore (and a failed service in the `auto-restore-all` summary). Required for full-host DR where databases are backed up as dumps (not raw data dirs) and so must be reloaded post-restore. The interactive `restore` command also honors the toggle to skip its y/N prompt.
+
 ## [0.8.7] - 2026-06-03
 
 ### Added

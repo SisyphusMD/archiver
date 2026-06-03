@@ -20,9 +20,11 @@ usage() {
   echo "Usage: archiver auto-restore" >&2
   echo "Required env: SNAPSHOT_ID, LOCAL_DIR" >&2
   echo "Optional env: REVISION (default 'latest'), STORAGE_TARGET (name or id)," >&2
-  echo "              OVERWRITE, DELETE_EXTRA, HASH_COMPARE, IGNORE_OWNERSHIP (non-empty enables)," >&2
+  echo "              OVERWRITE, DELETE_EXTRA, HASH_COMPARE, IGNORE_OWNERSHIP," >&2
+  echo "              RUN_RESTORE_SERVICE (non-empty enables — runs ./restore-service.sh" >&2
+  echo "              after a successful file restore)," >&2
   echo "              RESTORE_THREADS (default matches DUPLICACY_THREADS)" >&2
-  echo "Exit codes: 0=restored, 1=snapshot not found or restore failed," >&2
+  echo "Exit codes: 0=restored, 1=snapshot not found, restore failed, or restore-service.sh failed," >&2
   echo "            2=infra/unreachable or invalid env, 3=lock held" >&2
   exit 2
 }
@@ -134,6 +136,23 @@ attempt_target() {
   return 0
 }
 
+# After a successful file restore, optionally run the service's own
+# restore-service.sh (DB reload, container restart, etc.). Enabled by
+# RUN_RESTORE_SERVICE (non-empty). Runs in the restored LOCAL_DIR (the cwd set
+# by prepare_local_dir), mirroring the interactive `restore` flow. Its exit
+# code propagates, so a failed reload surfaces as an auto-restore failure
+# (and, via auto-restore-all, a failed service in the summary).
+maybe_run_restore_service() {
+  [ -n "${RUN_RESTORE_SERVICE:-}" ] || return 0
+  if [ -f restore-service.sh ]; then
+    echo "Running restore-service.sh (RUN_RESTORE_SERVICE set)..."
+    bash restore-service.sh
+    return $?
+  fi
+  echo "No restore-service.sh present in '${LOCAL_DIR}'; nothing to run."
+  return 0
+}
+
 restore_from_targets() {
   local storage_id
   local status
@@ -149,7 +168,8 @@ restore_from_targets() {
       echo "Restoring from '${SELECTED_STORAGE_TARGET_NAME}' at revision ${REVISION}..."
       if perform_restore; then
         echo "Repository restored."
-        exit 0
+        maybe_run_restore_service
+        exit $?
       fi
       echo "ERROR: Restore from '${SELECTED_STORAGE_TARGET_NAME}' failed" >&2
       exit 1

@@ -667,11 +667,12 @@ Iterates storage targets in configured order and restores from the first target 
 | `DELETE_EXTRA` | No | Non-empty enables `-delete` |
 | `HASH_COMPARE` | No | Non-empty enables `-hash` |
 | `IGNORE_OWNERSHIP` | No | Non-empty enables `-ignore-owner` |
+| `RUN_RESTORE_SERVICE` | No | Non-empty runs `./restore-service.sh` after a successful file restore (DB reload, stack restart); its exit code propagates |
 | `RESTORE_THREADS` | No | Override download thread count (default matches `DUPLICACY_THREADS`) |
 
 Exit codes:
-- `0` — snapshot restored
-- `1` — snapshot not found on any reachable target, or the restore itself failed
+- `0` — snapshot restored (and, if `RUN_RESTORE_SERVICE` set, `restore-service.sh` succeeded)
+- `1` — snapshot not found on any reachable target, the restore itself failed, or `restore-service.sh` failed
 - `2` — all targets unreachable, or invalid env
 - `3` — an Archiver backup is in progress; restore skipped
 

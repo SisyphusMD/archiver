@@ -172,6 +172,14 @@ configure_restore_options() {
 
 service_specific_restore_script() {
   if [ -f restore-service.sh ]; then
+    # RUN_RESTORE_SERVICE (non-empty) skips the prompt and runs it — lets a
+    # scripted `RUN_RESTORE_SERVICE=1 archiver restore` match the non-interactive
+    # auto-restore behavior.
+    if [ -n "${RUN_RESTORE_SERVICE:-}" ]; then
+      echo "Running restore-service.sh (RUN_RESTORE_SERVICE set)..."
+      bash restore-service.sh
+      return
+    fi
     echo    # Move to a new line
     read -p "Found a restore-service.sh file. Would you like to run it now? (y|N):" -n 1 -r
     echo    # Move to a new line
