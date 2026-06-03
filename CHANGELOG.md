@@ -6,8 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-06-03
+
 ### Added
 - `auto-restore-all` command: non-interactive restore of every service in `SERVICE_DIRECTORIES` in one pass. Iterates the service registry and runs `auto-restore` at the latest revision (trying all storage targets) for each, then aggregates — exits 0 only if every service restored, 1 if any failed, 3 if the backup lock is held. Optional env (`REVISION`, `STORAGE_TARGET`, `OVERWRITE`, `DELETE_EXTRA`, `HASH_COMPARE`, `IGNORE_OWNERSHIP`) passes through to each per-service restore. Available as `archiver auto-restore-all` and entrypoint `run auto-restore-all`. Built for full-host disaster recovery onto a blank box.
+
+### Dependencies
+
+- chore(deps): update actions/checkout action to v6.0.3
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to c7d3c51
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 159006f
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 2bfc4bc
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 8f55827
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 5a74dfa
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 8c42892
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to fd4978c
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 61e442c
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 684d92c
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 59ebcd2
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 49e7bdf
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 4d6a1f3
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to bc173ba
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 96db676
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 9d905e2
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to b63ff3b
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 179b9ff
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 4139c95
+- chore(deps): update quay.io/skopeo/stable:v1.22.2 docker digest to 4d60d6c
 
 ## [0.8.6] - 2026-05-05 - CI and Dockerfile modernization
 
