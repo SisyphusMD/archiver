@@ -338,7 +338,7 @@ The entrypoint selects one of three modes based on the first container argument:
 | _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Decrypts the bundle, then either runs `cron -f` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
 | `run` | `docker run ... archiver:<tag> run <subcommand>` | Decrypts the bundle, then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
-`run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `snapshot-exists`, `healthcheck`, and `backup` (a synchronous backup path intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`. The user-facing `archiver start` command remains async and is intentionally not supported here.
+`run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, and `backup` (a synchronous backup path intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`. The user-facing `archiver start` command remains async and is intentionally not supported here.
 
 ### Image Tags
 
@@ -524,7 +524,8 @@ archiver status            # Check if backup is running
 archiver bundle export     # Create encrypted config/keys bundle
 archiver bundle import     # Import from encrypted bundle
 archiver restore           # Restore data from backup (interactive)
-archiver auto-restore      # Restore data from backup (non-interactive, env-driven)
+archiver auto-restore      # Restore one snapshot from backup (non-interactive, env-driven)
+archiver auto-restore-all  # Restore every service in one pass (non-interactive)
 archiver snapshot-exists   # Check if a snapshot exists on any storage target
 archiver healthcheck       # Check system health
 archiver help              # Show help

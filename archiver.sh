@@ -10,9 +10,9 @@ fi
 source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|auto-restore|snapshot-exists|healthcheck|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help} [logs|prune|retain]"
   echo "Note:"
-  echo "  stop|pause|logs|status|restore|auto-restore|snapshot-exists|healthcheck|help cannot have further arguments."
+  echo "  stop|pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
   echo "  bundle requires a subcommand: export or import"
@@ -131,6 +131,13 @@ case "${command}" in
       usage
     fi
     exec "${AUTO_RESTORE_SCRIPT}"
+    ;;
+  auto-restore-all)
+    if [[ $# -gt 0 ]]; then
+      echo "'${command}' cannot have further arguments."
+      usage
+    fi
+    exec "${AUTO_RESTORE_ALL_SCRIPT}"
     ;;
   snapshot-exists)
     if [[ $# -gt 0 ]]; then

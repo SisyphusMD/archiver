@@ -47,6 +47,7 @@ DUPLICACY_RESTORE_FEATURE="${FEATURES_DIR}/duplicacy-restore.sh"
 NOTIFICATION_FEATURE="${FEATURES_DIR}/notification.sh"
 
 AUTO_RESTORE_SCRIPT="${SCRIPTS_DIR}/auto-restore.sh"
+AUTO_RESTORE_ALL_SCRIPT="${SCRIPTS_DIR}/auto-restore-all.sh"
 BUNDLE_EXPORT_SCRIPT="${SCRIPTS_DIR}/bundle-export.sh"
 BUNDLE_IMPORT_SCRIPT="${SCRIPTS_DIR}/bundle-import.sh"
 HEALTHCHECK_SCRIPT="${SCRIPTS_DIR}/healthcheck.sh"

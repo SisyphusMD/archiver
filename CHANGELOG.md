@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- `auto-restore-all` command: non-interactive restore of every service in `SERVICE_DIRECTORIES` in one pass. Iterates the service registry and runs `auto-restore` at the latest revision (trying all storage targets) for each, then aggregates — exits 0 only if every service restored, 1 if any failed, 3 if the backup lock is held. Optional env (`REVISION`, `STORAGE_TARGET`, `OVERWRITE`, `DELETE_EXTRA`, `HASH_COMPARE`, `IGNORE_OWNERSHIP`) passes through to each per-service restore. Available as `archiver auto-restore-all` and entrypoint `run auto-restore-all`. Built for full-host disaster recovery onto a blank box.
+
 ## [0.8.6] - 2026-05-05 - CI and Dockerfile modernization
 
 No behavioral changes to the archiver application itself — only the CI pipeline, release flow, and image build process. Aligns archiver with the same externalized-repo conventions used by sibling projects on `forgejo.bryantserver.com`.
