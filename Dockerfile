@@ -71,6 +71,7 @@ RUN mkdir -p /opt/archiver/logs \
     /opt/archiver/import
 
 RUN chmod +x /opt/archiver/archiver.sh && \
+    chmod +x /opt/archiver/lib/scripts/*.sh && \
     ln -s /opt/archiver/archiver.sh /usr/local/bin/archiver
 
 COPY docker-entrypoint.sh /usr/local/bin/

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- `auto-restore-all.sh` shipped without its execute bit (mode 0644 in the repo, preserved into the image by `COPY`), so `archiver auto-restore-all` failed with "Permission denied" when the dispatcher `exec`'d it — breaking the tier-3 full-host restore path. Restored the script's exec bit and hardened the Dockerfile to `chmod +x lib/scripts/*.sh` so a missing source bit can't recur.
+
 ## [0.8.8] - 2026-06-03
 
 ### Added
