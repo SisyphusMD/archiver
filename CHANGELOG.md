@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.8.10] - 2026-06-05
+
 ### Fixed
 - Restore from a storage whose name contains a character invalid in a shell identifier (e.g. a hyphen, like `do-spaces`) failed: `duplicacy-restore.sh` built `DUPLICACY_<NAME>_S3_ID`/`_SECRET`/`_PASSWORD` from the **raw** name, so `export` rejected it ("not a valid identifier"), the credentials never reached duplicacy, and it fell through to an interactive prompt → EOF → that target was skipped. Now sanitizes the storage name (matching `duplicacy-backup.sh`) before building the env-var names and `-storage-name`.
 
