@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- The 0.8.10 do-spaces restore fix was still broken in `auto-restore`: `sanitize_storage_name` logs a "name was sanitized" WARN via `log_message`, and `auto-restore.sh` redefines `log_message` to also echo to **stdout** — so callers doing `name="$(sanitize_storage_name …)"` captured that log line into the name, re-corrupting `DUPLICACY_<NAME>_*`. The function now redirects its `log_message` to stderr, so only the sanitized name reaches stdout. Kept as one shared function (called by both backup and restore) so the sanitization is guaranteed identical on both paths.
+
 ## [0.8.10] - 2026-06-05
 
 ### Fixed

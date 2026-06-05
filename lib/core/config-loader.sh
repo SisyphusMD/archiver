@@ -17,9 +17,13 @@ sanitize_storage_name() {
   local sanitized
   sanitized="$(printf "%s" "${name}" | tr -c '[:alnum:]_' '_' | sed 's/^[0-9]/_&/')"
 
+  # Still logged via log_message (it writes to the archiver log file internally), but
+  # redirect log_message's STDOUT to stderr: this function returns the sanitized name
+  # ON STDOUT (callers do `name="$(sanitize_storage_name …)"`), and auto-restore.sh
+  # redefines log_message to echo to stdout — without this redirect that echo would be
+  # captured and corrupt the returned name.
   if [[ "${name}" != "${sanitized}" ]]; then
-    echo "WARNING: Storage name ${name} was sanitized to ${sanitized} for use in Duplicacy commands and environment variables." >&2
-    log_message "WARN" "Storage name ${name} was sanitized to ${sanitized} for use in Duplicacy commands and environment variables."
+    log_message "WARN" "Storage name ${name} was sanitized to ${sanitized} for use in Duplicacy commands and environment variables." >&2
   fi
 
   printf "%s" "${sanitized}"
