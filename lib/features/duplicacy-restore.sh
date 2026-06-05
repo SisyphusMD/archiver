@@ -43,7 +43,10 @@ resolve_storage_target_by_name() {
 # storage target. Requires SELECTED_STORAGE_TARGET_{ID,NAME,TYPE} and SNAPSHOT_ID set.
 duplicacy_init_for_restore() {
   local storage_id="${SELECTED_STORAGE_TARGET_ID}"
-  local storage_name="${SELECTED_STORAGE_TARGET_NAME}"
+  # Sanitize (e.g. hyphens -> _) so DUPLICACY_<NAME>_* env vars are valid shell
+  # identifiers and the -storage-name matches what duplicacy-backup.sh registered.
+  local storage_name
+  storage_name="$(sanitize_storage_name "${SELECTED_STORAGE_TARGET_NAME}")"
   local storage_type="${SELECTED_STORAGE_TARGET_TYPE}"
   local storage_name_upper
   local duplicacy_storage_password_var
