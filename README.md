@@ -229,6 +229,8 @@ services:
     cap_add:
       - DAC_OVERRIDE              # Write to dirs owned by other UIDs
       - SETGID                    # Required for cron (remove if not using CRON_SCHEDULE)
+      - CHOWN                     # Restore: recreate files under their original owner (chown to arbitrary UID)
+      - FOWNER                    # Restore: set mode/timestamps on files owned by other UIDs
     security_opt:
       - no-new-privileges:true
 
@@ -299,6 +301,8 @@ services:
     cap_add:
       - DAC_OVERRIDE # Required: write to directories owned by other UIDs
       - SETGID       # Required if using CRON_SCHEDULE: cron needs setgid to execute jobs
+      - CHOWN        # Required for restore: recreate files under their original owner
+      - FOWNER       # Required for restore: set mode/timestamps on files owned by other UIDs
     security_opt:
       - no-new-privileges:true  # Prevent privilege escalation
 ```
@@ -307,8 +311,10 @@ services:
 |-----------|---------------|-----|
 | `DAC_OVERRIDE` | Always (with `cap_drop: ALL`) | Archiver runs as root but writes to service data directories that may be owned by other users (e.g., UID 1000) |
 | `SETGID` | When using `CRON_SCHEDULE` | Debian's cron daemon requires `setgid` to execute scheduled jobs. Without it, cron starts but jobs silently fail to run |
+| `CHOWN` | When restoring with original ownership (the default) | Restore recreates files as their original UID/GID via `chown()`, which requires `CAP_CHOWN`. Without it, restored files silently land owned by root |
+| `FOWNER` | When restoring with original ownership (the default) | Lets Archiver set permissions/timestamps on restored files owned by other UIDs |
 
-**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with both `DAC_OVERRIDE` and `SETGID` and is recommended for defense in depth.
+**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with `DAC_OVERRIDE`, `SETGID`, `CHOWN`, and `FOWNER`, and is recommended for defense in depth.
 
 ### Graceful Shutdown
 

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- Restore silently lost original file ownership under the recommended hardened cap set: the example `compose.yaml` / `README.md` did `cap_drop: ALL` and added back only `DAC_OVERRIDE` + `SETGID`, but restore preserves ownership by default (`-ignore-owner` is opt-in) and Duplicacy recreates the original UID/GID via `chown()`, which requires `CAP_CHOWN` (and `CAP_FOWNER` to set mode/timestamps on other-UID files). `DAC_OVERRIDE` bypasses permission checks but not `chown`, so a restore completed with every file owned by root. Added `CHOWN` + `FOWNER` to the documented cap set. (Default Docker caps already include `CHOWN`; this only affected the hardened `cap_drop: ALL` template.)
+
 ## [0.8.11] - 2026-06-05
 
 ### Fixed
