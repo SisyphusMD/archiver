@@ -29,6 +29,96 @@ sanitize_storage_name() {
   printf "%s" "${sanitized}"
 }
 
+# Echoes the Duplicacy storage URL for a storage-target numeric ID on STDOUT. Pure
+# string construction from that target's STORAGE_TARGET_<id>_* config (no side effects,
+# safe inside "$(...)"), so the per-type URL format lives in exactly one place. Returns
+# non-zero and prints nothing for an unsupported type.
+build_storage_url() {
+  local storage_id="${1}"
+  local storage_type_var="STORAGE_TARGET_${storage_id}_TYPE"
+  local storage_type="${!storage_type_var}"
+
+  case "${storage_type}" in
+    local)
+      local local_path_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
+      printf "%s" "${!local_path_var}"
+      ;;
+    sftp)
+      local sftp_user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
+      local sftp_url_var="STORAGE_TARGET_${storage_id}_SFTP_URL"
+      local sftp_port_var="STORAGE_TARGET_${storage_id}_SFTP_PORT"
+      local sftp_path_var="STORAGE_TARGET_${storage_id}_SFTP_PATH"
+      printf "sftp://%s@%s:%s//%s" "${!sftp_user_var}" "${!sftp_url_var}" "${!sftp_port_var}" "${!sftp_path_var}"
+      ;;
+    b2)
+      local b2_bucketname_var="STORAGE_TARGET_${storage_id}_B2_BUCKETNAME"
+      printf "b2://%s" "${!b2_bucketname_var}"
+      ;;
+    s3)
+      local s3_endpoint_var="STORAGE_TARGET_${storage_id}_S3_ENDPOINT"
+      local s3_bucketname_var="STORAGE_TARGET_${storage_id}_S3_BUCKETNAME"
+      local s3_region_var="STORAGE_TARGET_${storage_id}_S3_REGION"
+      local s3_region
+      s3_region="${!s3_region_var}"
+      s3_region="${s3_region:-none}"
+      printf "s3://%s@%s/%s" "${s3_region}" "${!s3_endpoint_var}" "${!s3_bucketname_var}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Exports the DUPLICACY_<NAME>_* credential env vars the duplicacy binary reads for a
+# storage-target numeric ID: the storage password (every type) plus the type-specific
+# secrets. Centralizes the sanitize -> UPPER -> DUPLICACY_<NAME>_ mapping that the two
+# do-spaces field incidents (0.8.10 hyphen, 0.8.11 log-leak) traced back to. Exports as
+# a side effect, so call it as a plain statement — NOT inside "$(...)", whose subshell
+# would discard the exports. Unknown types export only the password; the caller's own
+# type dispatch reports the unsupported type.
+export_duplicacy_storage_secrets() {
+  local storage_id="${1}"
+  local storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
+  local storage_type_var="STORAGE_TARGET_${storage_id}_TYPE"
+  local storage_name
+  local storage_name_upper
+  local storage_type
+  local password_var
+
+  storage_name="$(sanitize_storage_name "${!storage_name_var}")"
+  storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
+  storage_type="${!storage_type_var}"
+
+  password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
+  export "${password_var}"="${STORAGE_PASSWORD}"
+
+  case "${storage_type}" in
+    local)
+      # local storage takes no credentials
+      ;;
+    sftp)
+      local ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
+      export "${ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
+      ;;
+    b2)
+      local config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
+      local config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
+      local duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
+      local duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
+      export "${duplicacy_b2_id_var}"="${!config_b2_id_var}"
+      export "${duplicacy_b2_key_var}"="${!config_b2_key_var}"
+      ;;
+    s3)
+      local config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
+      local config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
+      local duplicacy_s3_id_var="DUPLICACY_${storage_name_upper}_S3_ID"
+      local duplicacy_s3_secret_var="DUPLICACY_${storage_name_upper}_S3_SECRET"
+      export "${duplicacy_s3_id_var}"="${!config_s3_id_var}"
+      export "${duplicacy_s3_secret_var}"="${!config_s3_secret_var}"
+      ;;
+  esac
+}
+
 # Expands glob patterns in SERVICE_DIRECTORIES (e.g., /srv/*/ -> /srv/app1/ /srv/app2/)
 expand_service_directories() {
   local expanded_service_directories=()

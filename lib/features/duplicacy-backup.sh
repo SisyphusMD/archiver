@@ -43,52 +43,37 @@ duplicacy_filters() {
 duplicacy_primary_backup() {
   local exit_status
   local storage_name
-  local storage_name_upper
-  local duplicacy_storage_password_var
   local backup_type
+  local storage_url
 
   storage_name="$(sanitize_storage_name "${STORAGE_TARGET_1_NAME}")"
-  storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
-  duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
   backup_type="${STORAGE_TARGET_1_TYPE}"
 
-  # Export password so Duplicacy binary can see variable
-  export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}"
+  # Export the DUPLICACY_<NAME>_* credentials the duplicacy binary reads.
+  export_duplicacy_storage_secrets "1"
+
+  storage_url="$(build_storage_url "1")"
+  if [[ -z "${storage_url}" ]]; then
+    handle_error "${backup_type} is not a supported backup type. Please edit config.sh to fix."
+    return 1
+  fi
 
   cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}."
 
   rm -f "${DUPLICACY_PREFERENCES_FILE}" || handle_error "Error removing preferences file for the ${SERVICE} service."
 
-  if [[ "${backup_type}" == "local" ]]; then
-    log_message "INFO" "Initializing primary storage for ${SERVICE} service."
+  log_message "INFO" "Initializing primary storage for ${SERVICE} service."
+  "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+    -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+    "${storage_url}" 2>&1 | \
+    log_output
+  exit_status="${PIPESTATUS[0]}"
+  if [ "${exit_status}" -ne 0 ]; then
+    handle_error "Primary storage initialization failed for ${SERVICE} service."
+  fi
 
-    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-      "${STORAGE_TARGET_1_LOCAL_PATH}" 2>&1 | \
-      log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Primary storage initialization failed for ${SERVICE} service."
-    fi
-
-  elif [[ "${backup_type}" == "sftp" ]]; then
-    local duplicacy_ssh_key_file_var
-
-    duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
-
-    # Export SSH key file so Duplicacy binary can see variable
-    export "${duplicacy_ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
-    log_message "INFO" "Initializing primary storage for ${SERVICE} service."
-
-    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-      "sftp://${STORAGE_TARGET_1_SFTP_USER}@${STORAGE_TARGET_1_SFTP_URL}:${STORAGE_TARGET_1_SFTP_PORT}//${STORAGE_TARGET_1_SFTP_PATH}" 2>&1 | \
-      log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Primary storage initialization failed for ${SERVICE} service."
-    fi
-
+  # Persist type-specific credentials to the storage's preferences file.
+  if [[ "${backup_type}" == "sftp" ]]; then
     "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
     if [ "${exit_status}" -ne 0 ]; then
@@ -96,26 +81,6 @@ duplicacy_primary_backup() {
     fi
 
   elif [[ "${backup_type}" == "b2" ]]; then
-    local duplicacy_b2_id_var
-    local duplicacy_b2_key_var
-
-    duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
-    duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
-
-    # Export BackBlaze credentials so Duplicacy binary can see variables
-    export "${duplicacy_b2_id_var}"="${STORAGE_TARGET_1_B2_ID}"
-    export "${duplicacy_b2_key_var}"="${STORAGE_TARGET_1_B2_KEY}"
-    log_message "INFO" "Initializing primary storage for ${SERVICE} service."
-
-    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-      "b2://${STORAGE_TARGET_1_B2_BUCKETNAME}" 2>&1 | \
-      log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Primary storage initialization failed for ${SERVICE} service."
-    fi
-
     "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
       -value "${STORAGE_TARGET_1_B2_ID}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
@@ -131,28 +96,6 @@ duplicacy_primary_backup() {
     fi
 
   elif [[ "${backup_type}" == "s3" ]]; then
-    local duplicacy_s3_id_var
-    local duplicacy_s3_secret_var
-    local s3_region
-
-    duplicacy_s3_id_var="DUPLICACY_${storage_name_upper}_S3_ID"
-    duplicacy_s3_secret_var="DUPLICACY_${storage_name_upper}_S3_SECRET"
-    s3_region="${STORAGE_TARGET_1_S3_REGION:-none}"
-
-    # Export S3 credentials so Duplicacy binary can see variables
-    export "${duplicacy_s3_id_var}"="${STORAGE_TARGET_1_S3_ID}"
-    export "${duplicacy_s3_secret_var}"="${STORAGE_TARGET_1_S3_SECRET}"
-    log_message "INFO" "Initializing primary storage for ${SERVICE} service."
-
-    "${DUPLICACY_BIN}" init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-      "s3://${s3_region}@${STORAGE_TARGET_1_S3_ENDPOINT}/${STORAGE_TARGET_1_S3_BUCKETNAME}" 2>&1 | \
-      log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Primary storage initialization failed for ${SERVICE} service."
-    fi
-
     "${DUPLICACY_BIN}" set -storage "${storage_name}" -key s3_id \
       -value "${STORAGE_TARGET_1_S3_ID}" 2>&1 | log_output
     exit_status="${PIPESTATUS[0]}"
@@ -166,9 +109,6 @@ duplicacy_primary_backup() {
     if [ "${exit_status}" -ne 0 ]; then
       handle_error "Failed to set S3 secret for ${SERVICE} service."
     fi
-
-  else
-    handle_error "${backup_type} is not a supported backup type. Please edit config.sh to fix."
   fi
 
   "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" 2>&1 | log_output
@@ -241,63 +181,37 @@ duplicacy_add_backup() {
       local backup_type
       local storage_name_var
       local storage_name
-      local storage_name_upper
-      local duplicacy_storage_password_var
+      local storage_url
 
       storage_id="${i}"
       backup_type_var="STORAGE_TARGET_${storage_id}_TYPE"
       backup_type="${!backup_type_var}"
       storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
       storage_name="$(sanitize_storage_name "${!storage_name_var}")"
-      storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
-      duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
 
-      # Export password so Duplicacy binary can see variable
-      export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}"
+      # Export the DUPLICACY_<NAME>_* credentials the duplicacy binary reads.
+      export_duplicacy_storage_secrets "${storage_id}"
+
+      storage_url="$(build_storage_url "${storage_id}")"
+      if [[ -z "${storage_url}" ]]; then
+        handle_error "${backup_type} is not a supported backup type. Please edit config.sh to only reference supported backup types."
+        continue
+      fi
 
       cd "${SERVICE_DIR}" || handle_error "Failed to change to directory ${SERVICE_DIR}."
 
-      if [[ "${backup_type}" == "local" ]]; then
-        local config_local_path_var
+      log_message "INFO" "Adding ${backup_type} storage ${storage_name} for ${SERVICE} service."
+      "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
+        "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
+        "${storage_url}" 2>&1 | \
+        log_output
+      exit_status="${PIPESTATUS[0]}"
+      if [ "${exit_status}" -ne 0 ]; then
+        handle_error "Failed to add ${backup_type} storage ${storage_name} for ${SERVICE} service."
+      fi
 
-        config_local_path_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
-
-        log_message "INFO" "Adding local storage ${storage_name} for ${SERVICE} service."
-        "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
-          "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-          "${!config_local_path_var}" 2>&1 | \
-          log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to add local storage ${storage_name} for ${SERVICE} service."
-        fi
-
-      elif [[ "${backup_type}" == "sftp" ]]; then
-        local config_sftp_url_var
-        local config_sftp_port_var
-        local config_sftp_user_var
-        local config_sftp_path_var
-        local duplicacy_ssh_key_file_var
-
-        config_sftp_url_var="STORAGE_TARGET_${storage_id}_SFTP_URL"
-        config_sftp_port_var="STORAGE_TARGET_${storage_id}_SFTP_PORT"
-        config_sftp_user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
-        config_sftp_path_var="STORAGE_TARGET_${storage_id}_SFTP_PATH"
-        duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
-
-        # Export SSH key file so Duplicacy binary can see variable
-        export "${duplicacy_ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
-
-        log_message "INFO" "Adding SFTP storage ${storage_name} for ${SERVICE} service."
-        "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
-          "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-          "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" 2>&1 | \
-          log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to add SFTP storage ${storage_name} for ${SERVICE} service."
-        fi
-
+      # Persist type-specific credentials to the storage's preferences file.
+      if [[ "${backup_type}" == "sftp" ]]; then
         "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 2>&1 | log_output
         exit_status="${PIPESTATUS[0]}"
         if [ "${exit_status}" -ne 0 ]; then
@@ -305,31 +219,8 @@ duplicacy_add_backup() {
         fi
 
       elif [[ "${backup_type}" == "b2" ]]; then
-        local config_b2_bucketname_var
-        local config_b2_id_var
-        local config_b2_key_var
-        local duplicacy_b2_id_var
-        local duplicacy_b2_key_var
-
-        config_b2_bucketname_var="STORAGE_TARGET_${storage_id}_B2_BUCKETNAME"
-        config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
-        config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
-        duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
-        duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
-
-        # Export BackBlaze credentials so Duplicacy binary can see variables
-        export "${duplicacy_b2_id_var}"="${!config_b2_id_var}"
-        export "${duplicacy_b2_key_var}"="${!config_b2_key_var}"
-
-        log_message "INFO" "Adding BackBlaze storage ${storage_name} for ${SERVICE} service."
-        "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
-          "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-          "b2://${!config_b2_bucketname_var}" 2>&1 | \
-          log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to add BackBlaze storage ${storage_name} for ${SERVICE} service."
-        fi
+        local config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
+        local config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
 
         "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
           -value "${!config_b2_id_var}" 2>&1 | log_output
@@ -346,39 +237,8 @@ duplicacy_add_backup() {
         fi
 
       elif [[ "${backup_type}" == "s3" ]]; then
-        local config_s3_bucketname_var
-        local config_s3_endpoint_var
-        local config_s3_region_var
-        local config_s3_id_var
-        local config_s3_secret_var
-        local duplicacy_s3_id_var
-        local duplicacy_s3_secret_var
-        local s3_region
-
-        config_s3_bucketname_var="STORAGE_TARGET_${storage_id}_S3_BUCKETNAME"
-        config_s3_endpoint_var="STORAGE_TARGET_${storage_id}_S3_ENDPOINT"
-        config_s3_region_var="STORAGE_TARGET_${storage_id}_S3_REGION"
-        config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
-        config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
-        duplicacy_s3_id_var="DUPLICACY_${storage_name_upper}_S3_ID"
-        duplicacy_s3_secret_var="DUPLICACY_${storage_name_upper}_S3_SECRET"
-
-        s3_region="${!config_s3_region_var}"
-        s3_region="${s3_region:-none}"
-
-        # Export S3 credentials so Duplicacy binary can see variables
-        export "${duplicacy_s3_id_var}"="${!config_s3_id_var}"
-        export "${duplicacy_s3_secret_var}"="${!config_s3_secret_var}"
-
-        log_message "INFO" "Adding S3 storage ${storage_name} for ${SERVICE} service."
-        "${DUPLICACY_BIN}" add -e -copy "${primary_storage_name}" -bit-identical -key \
-          "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" "${storage_name}" "${DUPLICACY_SNAPSHOT_ID}" \
-          "s3://${s3_region}@${!config_s3_endpoint_var}/${!config_s3_bucketname_var}" 2>&1 | \
-          log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to add S3 storage ${storage_name} for ${SERVICE} service."
-        fi
+        local config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
+        local config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
 
         "${DUPLICACY_BIN}" set -storage "${storage_name}" -key s3_id \
           -value "${!config_s3_id_var}" 2>&1 | log_output
@@ -393,9 +253,6 @@ duplicacy_add_backup() {
         if [ "${exit_status}" -ne 0 ]; then
           handle_error "Failed to set S3 secret for storage ${storage_name} for ${SERVICE} service."
         fi
-
-      else
-        handle_error "${backup_type} is not a supported backup type. Please edit config.sh to only reference supported backup types."
       fi
 
       "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password \
