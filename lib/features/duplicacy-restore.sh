@@ -43,101 +43,62 @@ resolve_storage_target_by_name() {
 # storage target. Requires SELECTED_STORAGE_TARGET_{ID,NAME,TYPE} and SNAPSHOT_ID set.
 duplicacy_init_for_restore() {
   local storage_id="${SELECTED_STORAGE_TARGET_ID}"
-  # Sanitize (e.g. hyphens -> _) so DUPLICACY_<NAME>_* env vars are valid shell
-  # identifiers and the -storage-name matches what duplicacy-backup.sh registered.
+  # Sanitize (e.g. hyphens -> _) so the -storage-name matches what duplicacy-backup.sh
+  # registered and the DUPLICACY_<NAME>_* env vars stay valid shell identifiers.
   local storage_name
   storage_name="$(sanitize_storage_name "${SELECTED_STORAGE_TARGET_NAME}")"
   local storage_type="${SELECTED_STORAGE_TARGET_TYPE}"
-  local storage_name_upper
-  local duplicacy_storage_password_var
+  local storage_url
 
-  storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
-  duplicacy_storage_password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
+  # Export the DUPLICACY_<NAME>_* credentials the duplicacy binary reads.
+  export_duplicacy_storage_secrets "${storage_id}"
 
-  export "${duplicacy_storage_password_var}"="${STORAGE_PASSWORD}"
-
-  if [[ "${storage_type}" == "local" ]]; then
-    local config_local_path_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
-
-    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
-      "${!config_local_path_var}" || \
-      { handle_error "Duplicacy Local Storage initialization failed for '${storage_name}'."; return 1; }
-
-  elif [[ "${storage_type}" == "sftp" ]]; then
+  # sftp needs its key files present before init even tries to reach the host.
+  if [[ "${storage_type}" == "sftp" ]]; then
     if [ ! -f "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" ]; then
       handle_error "Missing SSH key files for SFTP storage '${storage_name}'."
       return 1
     fi
+  fi
 
-    local config_sftp_url_var="STORAGE_TARGET_${storage_id}_SFTP_URL"
-    local config_sftp_port_var="STORAGE_TARGET_${storage_id}_SFTP_PORT"
-    local config_sftp_user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
-    local config_sftp_path_var="STORAGE_TARGET_${storage_id}_SFTP_PATH"
-    local duplicacy_ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
-
-    export "${duplicacy_ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
-
-    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
-      "sftp://${!config_sftp_user_var}@${!config_sftp_url_var}:${!config_sftp_port_var}//${!config_sftp_path_var}" || \
-      { handle_error "Duplicacy SFTP Storage initialization failed for '${storage_name}'."; return 1; }
-
-    duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" || \
-      { handle_error "Setting the Duplicacy SFTP key file failed for '${storage_name}'."; return 1; }
-
-  elif [[ "${storage_type}" == "b2" ]]; then
-    local config_b2_bucketname_var="STORAGE_TARGET_${storage_id}_B2_BUCKETNAME"
-    local config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
-    local config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
-    local duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
-    local duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
-
-    export "${duplicacy_b2_id_var}"="${!config_b2_id_var}"
-    export "${duplicacy_b2_key_var}"="${!config_b2_key_var}"
-
-    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
-      "b2://${!config_b2_bucketname_var}" || \
-      { handle_error "Duplicacy B2 Storage initialization failed for '${storage_name}'."; return 1; }
-
-    duplicacy set -storage "${storage_name}" -key b2_id -value "${!config_b2_id_var}" || \
-      { handle_error "Setting the Duplicacy B2 keyID failed for '${storage_name}'."; return 1; }
-
-    duplicacy set -storage "${storage_name}" -key b2_key -value "${!config_b2_key_var}" || \
-      { handle_error "Setting the Duplicacy B2 applicationKey failed for '${storage_name}'."; return 1; }
-
-  elif [[ "${storage_type}" == "s3" ]]; then
-    local config_s3_bucketname_var="STORAGE_TARGET_${storage_id}_S3_BUCKETNAME"
-    local config_s3_endpoint_var="STORAGE_TARGET_${storage_id}_S3_ENDPOINT"
-    local config_s3_region_var="STORAGE_TARGET_${storage_id}_S3_REGION"
-    local config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
-    local config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
-    local duplicacy_s3_id_var="DUPLICACY_${storage_name_upper}_S3_ID"
-    local duplicacy_s3_secret_var="DUPLICACY_${storage_name_upper}_S3_SECRET"
-    local s3_region
-
-    s3_region="${!config_s3_region_var}"
-    s3_region="${s3_region:-none}"
-
-    export "${duplicacy_s3_id_var}"="${!config_s3_id_var}"
-    export "${duplicacy_s3_secret_var}"="${!config_s3_secret_var}"
-
-    duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
-      -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
-      "s3://${s3_region}@${!config_s3_endpoint_var}/${!config_s3_bucketname_var}" || \
-      { handle_error "Duplicacy S3 Storage initialization failed for '${storage_name}'."; return 1; }
-
-    duplicacy set -storage "${storage_name}" -key s3_id -value "${!config_s3_id_var}" || \
-      { handle_error "Setting the Duplicacy S3 ID failed for '${storage_name}'."; return 1; }
-
-    duplicacy set -storage "${storage_name}" -key s3_secret -value "${!config_s3_secret_var}" || \
-      { handle_error "Setting the Duplicacy S3 Secret failed for '${storage_name}'."; return 1; }
-
-  else
+  storage_url="$(build_storage_url "${storage_id}")"
+  if [[ -z "${storage_url}" ]]; then
     handle_error "'${storage_type}' is not a supported storage type."
     return 1
   fi
+
+  duplicacy init -e -key "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" \
+    -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
+    "${storage_url}" || \
+    { handle_error "Duplicacy ${storage_type} storage initialization failed for '${storage_name}'."; return 1; }
+
+  # Persist type-specific credentials to the storage's preferences file.
+  case "${storage_type}" in
+    sftp)
+      duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" || \
+        { handle_error "Setting the Duplicacy SFTP key file failed for '${storage_name}'."; return 1; }
+      ;;
+    b2)
+      local config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
+      local config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
+
+      duplicacy set -storage "${storage_name}" -key b2_id -value "${!config_b2_id_var}" || \
+        { handle_error "Setting the Duplicacy B2 keyID failed for '${storage_name}'."; return 1; }
+
+      duplicacy set -storage "${storage_name}" -key b2_key -value "${!config_b2_key_var}" || \
+        { handle_error "Setting the Duplicacy B2 applicationKey failed for '${storage_name}'."; return 1; }
+      ;;
+    s3)
+      local config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
+      local config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
+
+      duplicacy set -storage "${storage_name}" -key s3_id -value "${!config_s3_id_var}" || \
+        { handle_error "Setting the Duplicacy S3 ID failed for '${storage_name}'."; return 1; }
+
+      duplicacy set -storage "${storage_name}" -key s3_secret -value "${!config_s3_secret_var}" || \
+        { handle_error "Setting the Duplicacy S3 Secret failed for '${storage_name}'."; return 1; }
+      ;;
+  esac
 
   duplicacy set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" || \
     { handle_error "Setting the Duplicacy storage password failed for '${storage_name}'."; return 1; }
