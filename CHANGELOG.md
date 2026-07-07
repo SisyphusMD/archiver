@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.8.12] - 2026-07-07
+
 ### Changed
 - Replaced the in-container Debian `cron` daemon with [supercronic](https://github.com/aptible/supercronic) for scheduled backups (`CRON_SCHEDULE`). supercronic runs jobs as the container user instead of forking with `setgid`, so the `SETGID` capability is **no longer required** and has been removed from the documented hardened cap set (`compose.yaml`, `README.md`) — the set is now `DAC_OVERRIDE` + `CHOWN` + `FOWNER`. It also passes the container environment straight through (Debian cron scrubs it). The entrypoint validates the schedule with `supercronic -test` (fail-fast on a malformed `CRON_SCHEDULE`) and runs supercronic backgrounded so the SIGTERM graceful-stop path is preserved. Added `tzdata` so a non-UTC `TZ` resolves. A new CI scheduler smoke test asserts a job fires under `cap_drop: ALL` with no `SETGID`. **Action for hardened deployments:** drop `SETGID` from your `cap_add` when you upgrade to this image.
 - Consolidated the per-storage-type credential and URL construction — previously duplicated across the primary-backup, add-copy, and restore code paths — into two shared helpers in `config-loader.sh`: `build_storage_url` and `export_duplicacy_storage_secrets`. No behavior change. Adds bats coverage of the `DUPLICACY_<NAME>_*` credential mapping across all four storage types (the surface the 0.8.10/0.8.11 do-spaces incidents traced to), so a single definition is now the source of truth for both backup and restore.
