@@ -33,3 +33,44 @@ services:
       # - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket    # systemctl start/stop/status
       # - /etc/systemd/system:/etc/systemd/system                    # systemctl mask/unmask/enable/disable
       # - /path/to/host/restore-dir:/mnt/restore-dir                 # Restore location (will be prompted)
+
+# ---------------------------------------------------------------------------------------
+# Env-native alternative (no bundle). Supply non-secret config as environment variables and
+# secrets/keys as files under /run/secrets. Use this INSTEAD OF the bundle service above:
+# there is no BUNDLE_PASSWORD and no bundle volume. Secrets can be Docker secrets or plain
+# bind-mounted files; each must land at /run/secrets/<name>. STORAGE_PASSWORD must be >= 8
+# chars. See the README "Configuration Sources" section.
+# ---------------------------------------------------------------------------------------
+# services:
+#   archiver:
+#     container_name: archiver
+#     image: forgejo.bryantserver.com/sisyphusmd/archiver:0.8.11
+#     restart: unless-stopped
+#     stop_grace_period: 2m
+#     hostname: backup-server
+#     cap_drop:
+#       - ALL
+#     cap_add:
+#       - DAC_OVERRIDE
+#       - CHOWN
+#       - FOWNER
+#     security_opt:
+#       - no-new-privileges:true
+#     environment:
+#       CRON_SCHEDULE: "0 3 * * *"
+#       TZ: "America/New_York"
+#       SERVICE_DIRECTORIES: "/mnt/backup-dir/"              # colon-delimited list; a YAML block scalar also works
+#       STORAGE_TARGET_1_NAME: "local"
+#       STORAGE_TARGET_1_TYPE: "local"
+#       STORAGE_TARGET_1_LOCAL_PATH: "/mnt/backup/storage"
+#       ROTATE_BACKUPS: "true"
+#     volumes:
+#       - ./archiver-logs:/opt/archiver/logs                        # Persistent logs (optional)
+#       - /path/to/host/backup-dir:/mnt/backup-dir                  # Data to backup
+#       - /path/to/host/backup/storage:/mnt/backup/storage          # Local storage target
+#       # Secrets + keys as files (RSA public/private required in env-native mode):
+#       - ./secrets/storage_password:/run/secrets/storage_password:ro
+#       - ./secrets/rsa_passphrase:/run/secrets/rsa_passphrase:ro
+#       - ./secrets/rsa_private_key:/run/secrets/rsa_private_key:ro
+#       - ./secrets/rsa_public_key:/run/secrets/rsa_public_key:ro
+#       # - ./secrets/ssh_private_key:/run/secrets/ssh_private_key:ro  # only for sftp targets

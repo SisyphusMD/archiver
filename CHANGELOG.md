@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- Env-native configuration as a dual-mode alternative to the encrypted bundle, so a deployment can be driven entirely by environment variables plus file-based secrets (for example a Kubernetes ConfigMap + Secret) with no bundle at all. Configuration is now resolved in layers of increasing precedence: the decrypted bundle's `config.sh` (optional baseline, still the cold-restore path), plain environment variables for non-secret settings, then files for secrets. Non-secret settings (`SERVICE_DIRECTORIES`, the `STORAGE_TARGET_N_*` non-secret fields, `ROTATE_BACKUPS`, `PRUNE_KEEP`, `DUPLICACY_THREADS`, `NOTIFICATION_SERVICE`) can be set as env vars and override the bundle. Secrets (`STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`/`B2_KEY`/`S3_ID`/`S3_SECRET`) are read only from files, never from a raw env var: each comes from `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`, and a secret passed as a raw env var is purged. The RSA keypair (and optional SFTP key) are supplied the same way and materialized into `/opt/archiver/keys` at startup, with mounted key files overriding bundle-extracted keys. This lets you migrate off the bundle one value at a time: set an env var or mount a secret and it shadows the bundle, and once every value is shadowed you can drop the bundle. With no env or secret overrides and a bundle present, behavior is unchanged.
+- `SERVICE_DIRECTORIES` accepts a colon-delimited scalar (for example `/srv/*/:/home/user/data/`) in addition to the bundle's bash-array form, so it fits in a single env var or a YAML block. Newlines are also accepted as separators.
+
+### Changed
+- `config-loader` now fails fast with a clear message when `STORAGE_PASSWORD` is shorter than 8 characters (a Duplicacy storage-init requirement), instead of letting it surface later as an opaque "storage initialization failed".
+
 ## [0.8.12] - 2026-07-07
 
 ### Changed

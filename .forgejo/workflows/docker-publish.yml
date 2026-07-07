@@ -106,21 +106,21 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: smoke-test:local
-      - name: Smoke test (entrypoint exits cleanly without BUNDLE_PASSWORD)
+      - name: Smoke test (entrypoint exits cleanly with neither bundle nor keys)
         run: |
           set +e
-          # --network none: smoke test exits at the BUNDLE_PASSWORD check
-          # before any cloud/SSH call, so deny network access to bound the
+          # --network none: with no bundle and no key files the entrypoint exits at the
+          # config check before any cloud/SSH call, so deny network access to bound the
           # blast radius of an untrusted PR's Dockerfile.
           OUT=$(docker run --rm --network none smoke-test:local 2>&1)
           RC=$?
           echo "$OUT"
           if [ "$RC" -eq 0 ]; then
-            echo "::error::Container exited 0; expected non-zero (BUNDLE_PASSWORD missing)"
+            echo "::error::Container exited 0; expected non-zero (no bundle and no keys)"
             exit 1
           fi
-          if ! echo "$OUT" | grep -q "BUNDLE_PASSWORD environment variable is required"; then
-            echo "::error::Expected 'BUNDLE_PASSWORD environment variable is required' in output"
+          if ! echo "$OUT" | grep -q "no bundle and no RSA key files found"; then
+            echo "::error::Expected 'no bundle and no RSA key files found' in output"
             exit 1
           fi
           echo "Smoke test passed"

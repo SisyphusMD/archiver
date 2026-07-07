@@ -54,7 +54,7 @@ duplicacy_primary_backup() {
 
   storage_url="$(build_storage_url "1")"
   if [[ -z "${storage_url}" ]]; then
-    handle_error "${backup_type} is not a supported backup type. Please edit config.sh to fix."
+    handle_error "${backup_type} is not a supported backup type (local, sftp, b2, s3)."
     return 1
   fi
 
@@ -194,7 +194,7 @@ duplicacy_add_backup() {
 
       storage_url="$(build_storage_url "${storage_id}")"
       if [[ -z "${storage_url}" ]]; then
-        handle_error "${backup_type} is not a supported backup type. Please edit config.sh to only reference supported backup types."
+        handle_error "${backup_type} is not a supported backup type (local, sftp, b2, s3)."
         continue
       fi
 

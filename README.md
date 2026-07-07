@@ -326,10 +326,12 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc. **Note:** If your password contains `$`, you must escape it as `$$` (e.g., `my$password` → `my$$password`) |
+| `BUNDLE_PASSWORD` | Bundle mode | Password for decrypting `bundle.tar.enc`. Required when running from a bundle; omit it in env-native mode. **Note:** If your password contains `$`, you must escape it as `$$` (e.g., `my$password` → `my$$password`) |
 | `CRON_SCHEDULE` | No | Standard 5-field cron expression for automatic backups (empty = manual mode) |
 | `TZ` | No | Timezone for scheduled backups and log timestamps (default: UTC) |
 | `SYSTEMCTL_FORCE_BUS` | No | Set to `1` to enable systemctl access to host services via D-Bus socket (requires socket mounts, see above) |
+
+The rest of Archiver's configuration (service directories, storage targets, secrets, rotation) can also be supplied as environment variables and file-based secrets instead of, or on top of, the bundle. See [Configuration Sources](#configuration-sources-bundle-or-env-native).
 
 ### Container Modes
 
@@ -338,8 +340,8 @@ The entrypoint selects one of three modes based on the first container argument:
 | Mode | How it's invoked | Behavior |
 |------|------------------|----------|
 | `init` | `docker run ... archiver:<tag> init` | Interactive bundle generation. Exits when done. |
-| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Decrypts the bundle, then either runs `supercronic` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
-| `run` | `docker run ... archiver:<tag> run <subcommand>` | Decrypts the bundle, then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
+| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (bundle and/or env-native), then either runs `supercronic` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
+| `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads configuration (bundle and/or env-native), then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
 `run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, and `backup` (a synchronous backup path intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`. The user-facing `archiver start` command remains async and is intentionally not supported here.
 
@@ -353,7 +355,23 @@ The entrypoint selects one of three modes based on the first container argument:
 
 ## Configuration
 
-The `config.sh` file defines what to backup and where. See [Editing Configuration](docs/guides/configuration/editing-config.md) for how to modify it in Docker.
+The settings below define what to backup and where. They can be supplied through the encrypted bundle's `config.sh`, through environment variables and file-based secrets, or a mix of the two (see [Configuration Sources](#configuration-sources-bundle-or-env-native) below). See [Editing Configuration](docs/guides/configuration/editing-config.md) for how to edit the bundle's `config.sh` in Docker.
+
+### Configuration Sources: Bundle or Env-Native
+
+Archiver reads its configuration from three layers, in increasing precedence:
+
+1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`). Optional, and still the easy cold-restore path: mount the bundle and set `BUNDLE_PASSWORD` and it becomes the baseline again.
+2. **Environment variables** for non-secret settings, which override the bundle.
+3. **Files** for secrets, which override the bundle.
+
+With a bundle and no overrides, behavior is exactly as before. With no bundle at all, configuration is fully **env-native** (for example a Kubernetes ConfigMap for the non-secret settings plus a Secret for the files), which keeps config under version control and secrets in a secret store. Because the layers stack, you can migrate off the bundle one value at a time: set an env var or mount a secret file, confirm the backup still runs, and repeat until nothing depends on the bundle.
+
+**Non-secret settings (plain env vars).** These override the bundle when set: `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `ROTATE_BACKUPS`, `PRUNE_KEEP`, `DUPLICACY_THREADS`, and `NOTIFICATION_SERVICE`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine). The bundle's bash-array form is still read.
+
+**Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`, `B2_KEY`, `S3_ID`, and `S3_SECRET`. For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement).
+
+**Keys (files).** Keys are always files under `/opt/archiver/keys`. In env-native mode (no bundle) the RSA keypair must be provided as files at `/run/secrets/rsa_private_key` and `/run/secrets/rsa_public_key` (override the paths with `RSA_PRIVATE_KEY_FILE` / `RSA_PUBLIC_KEY_FILE`). The SFTP key is optional, for sftp targets, at `/run/secrets/ssh_private_key` (override with `SSH_PRIVATE_KEY_FILE`). When a bundle is also present, mounted key files override the bundle's keys.
 
 ### Service Directories
 

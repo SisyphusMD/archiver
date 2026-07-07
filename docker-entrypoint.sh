@@ -25,22 +25,27 @@ handle_shutdown() {
 
 trap 'handle_shutdown' SIGTERM
 
-prepare_bundle() {
-    if [ -z "$BUNDLE_PASSWORD" ]; then
-        echo "ERROR: BUNDLE_PASSWORD environment variable is required"
-        echo "Please set it to the password used to encrypt your bundle.tar.enc file"
-        exit 1
-    fi
+# Copy a provided key file into its canonical KEYS_DIR path with the right mode. A missing
+# source is a no-op (bundle mode with no mounted keys, or an unused optional SSH key).
+place_key_file() {
+    local src="$1" dst="$2" mode="$3"
+    [ -f "$src" ] || return 0
+    cp "$src" "$dst"
+    chmod "$mode" "$dst"
+}
 
-    if [ ! -f "$BUNDLE_FILE" ]; then
-        echo "ERROR: Bundle file not found at $BUNDLE_FILE"
-        echo "Please mount your bundle directory to ${BUNDLE_DIR}"
-        echo "Example: docker run -v /path/to/bundle:${BUNDLE_DIR} ..."
-        exit 1
-    fi
+# Overlay any mounted RSA/SSH key files onto KEYS_DIR. Mounted files win over bundle-extracted
+# keys, so a deployment can move just its keys to secrets while the rest still comes from a
+# bundle. Paths default under SECRETS_DIR; each is overridable via its <NAME>_FILE env var.
+overlay_key_files() {
+    mkdir -p "${KEYS_DIR}"
+    place_key_file "${RSA_PRIVATE_KEY_FILE:-${SECRETS_DIR}/rsa_private_key}" "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 600
+    place_key_file "${RSA_PUBLIC_KEY_FILE:-${SECRETS_DIR}/rsa_public_key}"   "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" 644
+    place_key_file "${SSH_PRIVATE_KEY_FILE:-${SECRETS_DIR}/ssh_private_key}" "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 600
+}
 
+import_bundle() {
     echo "Bundle file found: $BUNDLE_FILE"
-
     echo "Decrypting and importing configuration..."
     export ARCHIVER_BUNDLE_PASSWORD="$BUNDLE_PASSWORD"
     export ARCHIVER_BUNDLE_FILE="$BUNDLE_FILE"
@@ -56,13 +61,40 @@ prepare_bundle() {
         echo "ERROR: config.sh not found after import"
         exit 1
     fi
+}
 
-    if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
-        echo "ERROR: RSA keys not found after import"
-        exit 1
+# Prepare configuration + keys from whichever source is present. An encrypted bundle
+# (BUNDLE_PASSWORD + a mounted bundle.tar.enc) is the optional baseline; env vars plus
+# file-based secrets are the override layer, resolved later by config-loader. Keys are
+# files, so they are materialized into KEYS_DIR here regardless of mode.
+prepare_config() {
+    local have_bundle=0
+    if [ -n "$BUNDLE_PASSWORD" ] && [ -f "$BUNDLE_FILE" ]; then
+        have_bundle=1
+        import_bundle
     fi
 
-    echo "Configuration imported successfully"
+    overlay_key_files
+
+    if [ "$have_bundle" -eq 1 ]; then
+        if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
+            echo "ERROR: RSA keys not found after import"
+            exit 1
+        fi
+        echo "Configuration imported successfully"
+        return 0
+    fi
+
+    # Env-native mode: config comes from env + ${SECRETS_DIR} (validated at run time by
+    # config-loader). Only the RSA keypair must already be present here, as files.
+    if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" ]; then
+        echo "ERROR: no bundle and no RSA key files found." >&2
+        echo "Provide an encrypted bundle (set BUNDLE_PASSWORD and mount it at $BUNDLE_FILE)," >&2
+        echo "or mount the RSA keypair at ${SECRETS_DIR}/rsa_private_key and ${SECRETS_DIR}/rsa_public_key" >&2
+        echo "(or point RSA_PRIVATE_KEY_FILE / RSA_PUBLIC_KEY_FILE at them)." >&2
+        exit 1
+    fi
+    echo "Env-native configuration (no bundle): keys loaded from files."
 }
 
 echo "==================================="
@@ -103,12 +135,12 @@ if [ "$1" = "run" ]; then
 
     echo "Running in RUN mode: $*"
     echo ""
-    prepare_bundle
+    prepare_config
     cd "${ARCHIVER_DIR}"
     exec "${ARCHIVER_DIR}/archiver.sh" "$@"
 fi
 
-prepare_bundle
+prepare_config
 
 # Start log tailer in background to forward logs to stdout
 # This allows 'docker logs -f' to work

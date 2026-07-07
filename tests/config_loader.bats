@@ -36,8 +36,15 @@ setup() {
 }
 
 @test "check_required_secrets passes when both secrets are set" {
-  STORAGE_PASSWORD="x"
+  STORAGE_PASSWORD="longenoughpw"
   RSA_PASSPHRASE="y"
   run check_required_secrets
   [ "$status" -eq 0 ]
+}
+
+@test "check_required_secrets fails when STORAGE_PASSWORD is shorter than 8 chars" {
+  STORAGE_PASSWORD="short"
+  RSA_PASSPHRASE="y"
+  run check_required_secrets
+  [ "$status" -ne 0 ]
 }
