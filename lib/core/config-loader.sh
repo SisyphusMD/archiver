@@ -7,7 +7,109 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOGGING_CORE}"
-source "${CONFIG_FILE}"
+
+# ------------------------------------------------------------------------------
+# Layered configuration load
+#
+# Config is resolved from three sources, in increasing precedence:
+#   1. the decrypted bundle's config.sh              (optional baseline; the cold-restore path)
+#   2. plain environment variables                   (non-secret config only)
+#   3. files: <NAME>_FILE, else ${SECRETS_DIR}/<name>  (secrets only — never raw env)
+#
+# This lets a deployment migrate off the bundle one value at a time: set an env var or
+# mount a secret file and it shadows the bundle; once every value is shadowed the bundle
+# can be dropped (pure env-native, e.g. a k8s ConfigMap + Secret). With no env/secret
+# overrides and a bundle present, the result is byte-identical to sourcing config.sh alone.
+# ------------------------------------------------------------------------------
+
+SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"
+
+# Secrets must come from the bundle or a file, never a plain env var (which would leak via
+# /proc and `docker inspect`). Drop any passed in the environment before loading, so the
+# only remaining sources are config.sh and the secret files.
+purge_raw_env_secrets() {
+  local v
+  unset STORAGE_PASSWORD RSA_PASSPHRASE PUSHOVER_USER_KEY PUSHOVER_API_TOKEN
+  while IFS= read -r v; do
+    unset "${v}"
+  done < <(compgen -v | grep -E '^STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET)$')
+}
+
+# Non-secret config passed via the environment is the override layer that must win over the
+# bundle. Capture it now, because sourcing config.sh below would otherwise clobber it.
+declare -gA ENV_CONFIG_OVERRIDES=()
+snapshot_env_overrides() {
+  local v
+  while IFS= read -r v; do
+    ENV_CONFIG_OVERRIDES["${v}"]="${!v}"
+  done < <(compgen -v | grep -E '^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_KEEP|DUPLICACY_THREADS|NOTIFICATION_SERVICE|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION))$')
+}
+
+apply_env_overrides() {
+  local v
+  for v in "${!ENV_CONFIG_OVERRIDES[@]}"; do
+    unset "${v}"                                   # drop a possible array baseline before re-setting as scalar
+    printf -v "${v}" '%s' "${ENV_CONFIG_OVERRIDES[${v}]}"
+  done
+}
+
+# Populate one secret from a file only: ${VAR}_FILE if set, else ${SECRETS_DIR}/<var lower>.
+# Overrides the bundle value only when such a file exists, so a bundle-provided secret
+# survives when nothing is mounted. $(<file) trims the trailing newline editors/tools add.
+resolve_secret() {
+  local var="${1}"
+  local file_var="${var}_FILE"
+  local path="${!file_var:-${SECRETS_DIR}/$(printf '%s' "${var}" | tr '[:upper:]' '[:lower:]')}"
+  if [[ -f "${path}" ]]; then
+    printf -v "${var}" '%s' "$(<"${path}")"
+  fi
+}
+
+resolve_secret_files() {
+  resolve_secret STORAGE_PASSWORD
+  resolve_secret RSA_PASSPHRASE
+  resolve_secret PUSHOVER_USER_KEY
+  resolve_secret PUSHOVER_API_TOKEN
+
+  local n=1 name_var type_var type
+  while :; do
+    name_var="STORAGE_TARGET_${n}_NAME"
+    [[ -z "${!name_var}" ]] && break
+    type_var="STORAGE_TARGET_${n}_TYPE"
+    type="${!type_var}"
+    case "${type}" in
+      b2) resolve_secret "STORAGE_TARGET_${n}_B2_ID";  resolve_secret "STORAGE_TARGET_${n}_B2_KEY" ;;
+      s3) resolve_secret "STORAGE_TARGET_${n}_S3_ID";  resolve_secret "STORAGE_TARGET_${n}_S3_SECRET" ;;
+    esac
+    n=$((n + 1))
+  done
+}
+
+# SERVICE_DIRECTORIES may be a bash array (legacy bundle config.sh) or a colon/newline
+# delimited scalar (env-native and new config.sh). Normalize the scalar into the array
+# that expand_service_directories() consumes; leave a real array untouched.
+normalize_service_directories() {
+  case "${SERVICE_DIRECTORIES@a}" in
+    *a*) return 0 ;;                               # already an array
+  esac
+  local raw="${SERVICE_DIRECTORIES:-}"
+  [[ -z "${raw}" ]] && return 0
+  raw="${raw//$'\n'/:}"                            # accept newline as a separator too (YAML block scalars)
+  local parts=() out=() p
+  IFS=':' read -ra parts <<<"${raw}"
+  for p in "${parts[@]}"; do
+    [[ -n "${p}" ]] && out+=("${p}")
+  done
+  unset SERVICE_DIRECTORIES
+  SERVICE_DIRECTORIES=("${out[@]}")
+}
+
+purge_raw_env_secrets
+snapshot_env_overrides
+[[ -f "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
+apply_env_overrides
+resolve_secret_files
+normalize_service_directories
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
 # Converts storage names to valid Bash variable format
@@ -124,7 +226,7 @@ expand_service_directories() {
   local expanded_service_directories=()
 
   if [[ -z "${SERVICE_DIRECTORIES[*]}" ]]; then
-    handle_error "SERVICE_DIRECTORIES is not defined or is empty. Please set the SERVICE_DIRECTORIES array."
+    handle_error "SERVICE_DIRECTORIES is not set. Provide it via config.sh or the SERVICE_DIRECTORIES environment variable (colon-delimited)."
     exit 1
   fi
 
@@ -153,7 +255,7 @@ count_storage_targets() {
   done
 
   if [[ $count -eq 0 ]]; then
-    handle_error "No Storage Targets specified. Please edit config.sh and specify at least one storage target."
+    handle_error "No storage targets specified. Provide at least one via config.sh or the STORAGE_TARGET_N_* environment variables."
     exit 1
   else
     log_message "INFO" "${count} backup targets configured."
@@ -223,10 +325,17 @@ check_required_secrets() {
 
   for secret in "${secrets[@]}"; do
     if [[ -z "${!secret}" ]]; then
-      handle_error "The required secret ${secret} is not set. Please edit config.sh and specify a value for ${secret}."
+      handle_error "The required secret ${secret} is not set. Provide it via the bundle, ${secret}_FILE, or ${SECRETS_DIR}/$(echo "${secret}" | tr '[:upper:]' '[:lower:]')."
       exit 1
     fi
   done
+
+  # Duplicacy rejects a storage password shorter than 8 characters, but only at init time
+  # with an opaque failure. Catch it here with a clear message (env-native users set this).
+  if (( ${#STORAGE_PASSWORD} < 8 )); then
+    handle_error "STORAGE_PASSWORD must be at least 8 characters (a Duplicacy requirement); got ${#STORAGE_PASSWORD}."
+    exit 1
+  fi
 
   log_message "INFO" "All required secrets are set."
 }
@@ -239,7 +348,7 @@ check_notification_config() {
     local settings=("PUSHOVER_USER_KEY" "PUSHOVER_API_TOKEN")
     for setting in "${settings[@]}"; do
       if [[ -z "${!setting}" ]]; then
-        handle_error "Notification service is set to ${NOTIFICATION_SERVICE}, but the necessary setting ${setting} is not set. Please edit config.sh and specify a value for ${setting}."
+        handle_error "Notification service is set to ${NOTIFICATION_SERVICE}, but ${setting} is not set. Provide it via config.sh or your env-native configuration."
         exit 1
       fi
     done

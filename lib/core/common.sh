@@ -30,6 +30,9 @@ KEYS_DIR="${ARCHIVER_DIR}/keys"
 BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
 
 CONFIG_FILE="${ARCHIVER_DIR}/config.sh"
+# Directory holding file-based secrets (Docker/k8s convention). Each secret is one file;
+# a per-secret <NAME>_FILE env var can point elsewhere. Overridable for tests.
+SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"
 
 DUPLICACY_RSA_PUBLIC_KEY_FILE="${KEYS_DIR}/public.pem"
 DUPLICACY_RSA_PRIVATE_KEY_FILE="${KEYS_DIR}/private.pem"

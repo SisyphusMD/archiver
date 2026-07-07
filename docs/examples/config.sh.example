@@ -9,6 +9,11 @@
 # - STORAGE_PASSWORD and RSA_PASSPHRASE                                                 #
 #########################################################################################
 
+# Every setting below can alternatively be supplied env-native, without this file: non-secret
+# settings as environment variables, and secrets (STORAGE_PASSWORD, RSA_PASSPHRASE, PUSHOVER_*,
+# and each target's B2/S3 id and key/secret) as files read from <NAME>_FILE or
+# /run/secrets/<name>. See the README "Configuration Sources" section for details.
+
 # ------------------ #
 # REQUIRED VARIABLES #
 # ------------------ #
@@ -16,10 +21,14 @@
 # Please provide a list of directories on your device to be backed up. Must provide the"
 #   full paths. Can use * to indicate each individual subdirectory within the parent"
 #   directory. Each directory will be backed up as an individual duplicacy repository."
+# Colon-delimited list (fits a single env var or a YAML block; newlines also accepted). Here
+#   /srv/*/ and /mnt/*/ each back up every subdirectory as its own repository, and /home/user/
+#   is one repository.
+  # SERVICE_DIRECTORIES="/srv/*/:/mnt/*/:/home/user/"
+# The legacy bash-array form is still accepted:
   # SERVICE_DIRECTORIES=(
-  #   "/srv/*/" # Will backup each subdirectory within /srv/ - multiple individual repositories.
-  #   "/mnt/*/" # Will backup each subdirectory within /mnt/ - multiple individual repositories.
-  #   "/home/user/" # Will backup the /home/user/ directory - one individual repository.
+  #   "/srv/*/"
+  #   "/home/user/"
   # )
 
 # Storage targets must be numbered sequentially, starting with 1, following the naming

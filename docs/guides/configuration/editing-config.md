@@ -2,6 +2,8 @@
 
 This guide covers how to edit your Archiver configuration when running in Docker.
 
+> **Env-native deployments:** This guide covers the bundle workflow. If you run Archiver env-native (configuration from environment variables and file-based secrets, with no bundle), edit the environment variables or secret files in your platform instead (for example a Kubernetes ConfigMap and Secret), then restart the container to pick them up. See the README "Configuration Sources" section.
+
 ## Overview
 
 Your configuration is stored in the encrypted bundle file. To edit it:
