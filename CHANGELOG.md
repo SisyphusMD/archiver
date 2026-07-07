@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `SERVICE_DIRECTORIES` accepts a colon-delimited scalar (for example `/srv/*/:/home/user/data/`) in addition to the bundle's bash-array form, so it fits in a single env var or a YAML block. Newlines are also accepted as separators.
 
 ### Changed
+- **BREAKING: `BUNDLE_PASSWORD` is no longer read from the environment and must be provided as a file** (a Docker or Kubernetes secret). The bundle password decrypts the entire bundle, including the RSA private key, so holding it in an environment variable leaked it through `docker inspect` and `/proc`. Provide it at `/run/secrets/bundle_password`, or point `BUNDLE_PASSWORD_FILE` at another path. A container that still has `BUNDLE_PASSWORD` set in its environment now fails fast at startup with a migration message instead of silently ignoring it (which would otherwise drop a bundle deployment into env-native mode and fail later with a confusing "no bundle" error). To migrate: write the password to a file, mount it at `/run/secrets/bundle_password` (a Docker Compose or Swarm `secrets:` entry named `bundle_password` lands there automatically), and remove `BUNDLE_PASSWORD` from your `environment:` / `env_file`.
 - `config-loader` now fails fast with a clear message when `STORAGE_PASSWORD` is shorter than 8 characters (a Duplicacy storage-init requirement), instead of letting it surface later as an opaque "storage initialization failed".
 
 ## [0.8.12] - 2026-07-07

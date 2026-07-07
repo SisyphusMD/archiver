@@ -506,7 +506,7 @@ display_credentials() {
 
   echo "Next steps:"
   echo "  1. Store bundle password and bundle.tar.enc in a safe location"
-  echo "  2. Set BUNDLE_PASSWORD in compose.yaml (see password above)"
+  echo "  2. Provide the bundle password as a secret file at /run/secrets/bundle_password (see password above)"
   echo "  3. Start container: docker compose up -d"
   echo
 }
