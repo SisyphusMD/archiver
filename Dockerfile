@@ -28,7 +28,7 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
 # supercronic ships no sidecar checksum file, so a build-time hash check adds nothing
 # over TLS. Renovate tracks the pin via the comment below (dockerfileVersions preset).
 # renovate: datasource=github-releases depName=aptible/supercronic
-ARG SUPERCRONIC_VERSION=v0.2.45
+ARG SUPERCRONIC_VERSION=v0.2.47
 ARG SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}
 RUN curl -fsSL "$SUPERCRONIC_URL" -o /usr/local/bin/supercronic && \
     chmod +x /usr/local/bin/supercronic
