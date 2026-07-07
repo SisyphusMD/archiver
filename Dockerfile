@@ -41,7 +41,7 @@ ENV DUPLICACY_VERSION=3.2.5
 # archive at download.docker.com/linux/static/stable/<arch>/docker-<v>.tgz
 # is published shortly after each engine release.
 # renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.+)$
-ENV DOCKER_CLI_VERSION=29.4.3
+ENV DOCKER_CLI_VERSION=29.6.1
 
 # Pull the docker CLI binary directly from Docker's static archive
 # instead of installing the docker-ce-cli debian package. The apt path
