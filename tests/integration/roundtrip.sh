@@ -6,7 +6,7 @@
 #
 # Must run with the restore caps present (CHOWN + FOWNER), i.e.:
 #   docker run --rm --hostname rt-host \
-#     --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add SETGID --cap-add CHOWN --cap-add FOWNER \
+#     --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
 #     -v "$PWD/tests/integration:/tests:ro" --entrypoint bash archiver:rt /tests/roundtrip.sh
 #
 # The snapshot id is ${HOSTNAME}-${service_basename}; --hostname makes it deterministic.

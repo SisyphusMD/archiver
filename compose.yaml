@@ -13,7 +13,6 @@ services:
       - ALL
     cap_add:
       - DAC_OVERRIDE              # Write to dirs owned by other UIDs
-      - SETGID                    # Required for cron (remove if not using CRON_SCHEDULE)
       - CHOWN                     # Restore: recreate files under their original owner (chown to arbitrary UID)
       - FOWNER                    # Restore: set mode/timestamps on files owned by other UIDs
     security_opt:
@@ -22,7 +21,7 @@ services:
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
-      TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
+      TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
       # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
 
     volumes:

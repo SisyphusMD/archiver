@@ -15,7 +15,7 @@ handle_shutdown() {
     kill "$LOG_TAILER_PID" 2>/dev/null || true
   fi
 
-  # Kill cron or tail process if running
+  # Kill supercronic or tail process if running
   if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
     kill "$MAIN_PID" 2>/dev/null || true
   fi
@@ -131,21 +131,23 @@ if [ -d "${LOG_DIR}" ]; then
 fi
 
 if [ -n "$CRON_SCHEDULE" ]; then
-    echo "Setting up cron with schedule: $CRON_SCHEDULE"
+    echo "Setting up scheduler (supercronic) with schedule: $CRON_SCHEDULE"
 
-    cat > /etc/cron.d/archiver << EOF
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-TZ=${TZ:-UTC}
-$CRON_SCHEDULE ${ARCHIVER_DIR}/archiver.sh start >> /proc/1/fd/1 2>&1
-EOF
-    chmod 0644 /etc/cron.d/archiver
+    CRONTAB_FILE=/tmp/archiver.crontab
+    echo "${CRON_SCHEDULE} ${ARCHIVER_DIR}/archiver.sh start" > "${CRONTAB_FILE}"
 
-    crontab /etc/cron.d/archiver
+    # Fail fast on a malformed schedule instead of crash-looping the container.
+    if ! supercronic -test "${CRONTAB_FILE}"; then
+        echo "ERROR: CRON_SCHEDULE is invalid: '$CRON_SCHEDULE'"
+        exit 1
+    fi
 
-    echo "Cron configured. Backups will run on schedule: $CRON_SCHEDULE"
-    echo "Starting cron daemon..."
+    echo "Scheduler configured. Backups will run on schedule: $CRON_SCHEDULE"
+    echo "Starting supercronic..."
 
-    cron -f &
+    # Background (not exec) so the SIGTERM trap can still run 'archiver stop' and
+    # tear down the log tailer. supercronic passes TZ through for schedule evaluation.
+    supercronic -passthrough-logs "${CRONTAB_FILE}" &
     MAIN_PID=$!
     wait $MAIN_PID
 else

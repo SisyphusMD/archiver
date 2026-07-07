@@ -135,7 +135,7 @@ jobs:
           push: false
 
   integration:
-    name: Backup/restore round-trip
+    name: Round-trip + scheduler smoke
     needs: [shellcheck, validate-changelog, bats]
     runs-on: ubuntu-latest
     steps:
@@ -154,8 +154,15 @@ jobs:
         # would land empty (same reason build-and-push stages the OCI archive via docker cp).
         run: |
           docker run -i --rm --hostname rt-host \
-            --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add SETGID --cap-add CHOWN --cap-add FOWNER \
+            --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/roundtrip.sh
+      - name: Scheduler smoke test (supercronic fires a job without SETGID)
+        # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
+        # runs scheduled jobs without the capability Phase 2 removed.
+        run: |
+          docker run -i --rm \
+            --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+            --entrypoint bash roundtrip:local -s < tests/integration/scheduler.sh
 
   build-and-push:
     name: Build multi-arch and push
