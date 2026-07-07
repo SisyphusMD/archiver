@@ -19,10 +19,12 @@ services:
       - no-new-privileges:true
 
     environment:
-      BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
       # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
+
+    secrets:
+      - bundle_password           # Bundle decryption password; mounted at /run/secrets/bundle_password
 
     volumes:
       - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
@@ -33,6 +35,12 @@ services:
       # - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket    # systemctl start/stop/status
       # - /etc/systemd/system:/etc/systemd/system                    # systemctl mask/unmask/enable/disable
       # - /path/to/host/restore-dir:/mnt/restore-dir                 # Restore location (will be prompted)
+
+# Docker secret for the bundle service above. Each secret is one file mounted at
+# /run/secrets/<name>; the bundle password is read from /run/secrets/bundle_password.
+secrets:
+  bundle_password:
+    file: ./secrets/bundle_password   # a file containing ONLY the bundle password
 
 # ---------------------------------------------------------------------------------------
 # Env-native alternative (no bundle). Supply non-secret config as environment variables and
@@ -64,13 +72,19 @@ services:
 #       STORAGE_TARGET_1_TYPE: "local"
 #       STORAGE_TARGET_1_LOCAL_PATH: "/mnt/backup/storage"
 #       ROTATE_BACKUPS: "true"
+#     secrets:                                                    # secrets + keys as Docker secrets
+#       - storage_password
+#       - rsa_passphrase
+#       - rsa_private_key                                         # RSA keypair required in env-native mode
+#       - rsa_public_key
+#       # - ssh_private_key                                       # only for sftp targets
 #     volumes:
 #       - ./archiver-logs:/opt/archiver/logs                        # Persistent logs (optional)
 #       - /path/to/host/backup-dir:/mnt/backup-dir                  # Data to backup
 #       - /path/to/host/backup/storage:/mnt/backup/storage          # Local storage target
-#       # Secrets + keys as files (RSA public/private required in env-native mode):
-#       - ./secrets/storage_password:/run/secrets/storage_password:ro
-#       - ./secrets/rsa_passphrase:/run/secrets/rsa_passphrase:ro
-#       - ./secrets/rsa_private_key:/run/secrets/rsa_private_key:ro
-#       - ./secrets/rsa_public_key:/run/secrets/rsa_public_key:ro
-#       # - ./secrets/ssh_private_key:/run/secrets/ssh_private_key:ro  # only for sftp targets
+# secrets:
+#   storage_password: { file: ./secrets/storage_password }
+#   rsa_passphrase:   { file: ./secrets/rsa_passphrase }
+#   rsa_private_key:  { file: ./secrets/rsa_private_key }
+#   rsa_public_key:   { file: ./secrets/rsa_public_key }
+#   # ssh_private_key: { file: ./secrets/ssh_private_key }        # only for sftp targets

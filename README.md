@@ -234,9 +234,11 @@ services:
       - no-new-privileges:true
 
     environment:
-      BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
+
+    secrets:
+      - bundle_password           # Bundle password; mounted at /run/secrets/bundle_password
 
     volumes:
       - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
@@ -244,9 +246,13 @@ services:
       - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match config.sh)
       # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
       # - /path/to/host/restore-dir:/mnt/restore-dir # Restore location (will be prompted)
+
+secrets:
+  bundle_password:
+    file: ./secrets/bundle_password   # a file containing ONLY the bundle password
 ```
 
-Update paths and password, then start:
+Update paths, write your bundle password to `secrets/bundle_password`, then start:
 
 ```bash
 docker compose up -d
@@ -326,12 +332,11 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `BUNDLE_PASSWORD` | Bundle mode | Password for decrypting `bundle.tar.enc`. Required when running from a bundle; omit it in env-native mode. **Note:** If your password contains `$`, you must escape it as `$$` (e.g., `my$password` → `my$$password`) |
 | `CRON_SCHEDULE` | No | Standard 5-field cron expression for automatic backups (empty = manual mode) |
 | `TZ` | No | Timezone for scheduled backups and log timestamps (default: UTC) |
 | `SYSTEMCTL_FORCE_BUS` | No | Set to `1` to enable systemctl access to host services via D-Bus socket (requires socket mounts, see above) |
 
-The rest of Archiver's configuration (service directories, storage targets, secrets, rotation) can also be supplied as environment variables and file-based secrets instead of, or on top of, the bundle. See [Configuration Sources](#configuration-sources-bundle-or-env-native).
+The bundle password is **not** an environment variable. It is a file-based secret, read from `/run/secrets/bundle_password` (or the path in `BUNDLE_PASSWORD_FILE`); a container that still sets `BUNDLE_PASSWORD` in its environment fails fast at startup. Existing deployments that set it via `environment:` or `env_file` must move the value to that file and remove the env var. The rest of Archiver's configuration (service directories, storage targets, secrets, rotation) can also be supplied as environment variables and file-based secrets instead of, or on top of, the bundle. See [Configuration Sources](#configuration-sources-bundle-or-env-native).
 
 ### Container Modes
 
@@ -361,7 +366,7 @@ The settings below define what to backup and where. They can be supplied through
 
 Archiver reads its configuration from three layers, in increasing precedence:
 
-1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`). Optional, and still the easy cold-restore path: mount the bundle and set `BUNDLE_PASSWORD` and it becomes the baseline again.
+1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`). Optional, and still the easy cold-restore path: mount the bundle and provide its password at `/run/secrets/bundle_password` and it becomes the baseline again.
 2. **Environment variables** for non-secret settings, which override the bundle.
 3. **Files** for secrets, which override the bundle.
 
@@ -369,7 +374,7 @@ With a bundle and no overrides, behavior is exactly as before. With no bundle at
 
 **Non-secret settings (plain env vars).** These override the bundle when set: `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `ROTATE_BACKUPS`, `PRUNE_KEEP`, `DUPLICACY_THREADS`, and `NOTIFICATION_SERVICE`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine). The bundle's bash-array form is still read.
 
-**Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`, `B2_KEY`, `S3_ID`, and `S3_SECRET`. For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement).
+**Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `BUNDLE_PASSWORD` (the bundle decryption password, read from `/run/secrets/bundle_password` or `BUNDLE_PASSWORD_FILE`), `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`, `B2_KEY`, `S3_ID`, and `S3_SECRET`. For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `bundle_password`) is picked up with no extra configuration.
 
 **Keys (files).** Keys are always files under `/opt/archiver/keys`. In env-native mode (no bundle) the RSA keypair must be provided as files at `/run/secrets/rsa_private_key` and `/run/secrets/rsa_public_key` (override the paths with `RSA_PRIVATE_KEY_FILE` / `RSA_PUBLIC_KEY_FILE`). The SFTP key is optional, for sftp targets, at `/run/secrets/ssh_private_key` (override with `SSH_PRIVATE_KEY_FILE`). When a bundle is also present, mounted key files override the bundle's keys.
 
@@ -572,13 +577,13 @@ Exit codes:
 
 ```bash
 docker run --rm \
-  -e BUNDLE_PASSWORD='your-bundle-password-here' \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
+  -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
   -v /path/to/host/backup-dir:/mnt/backup-dir \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 run backup
 ```
 
-Accepts the same optional flags as `archiver start`: `run backup prune` forces rotation, `run backup retain` forces retention (overriding `ROTATE_BACKUPS` in `config.sh`).
+`/path/to/bundle_password` is a file containing only the bundle password. Accepts the same optional flags as `archiver start`: `run backup prune` forces rotation, `run backup retain` forces retention (overriding `ROTATE_BACKUPS` in `config.sh`).
 
 **Example: Kubernetes CronJob**
 
@@ -599,16 +604,18 @@ spec:
             - name: archiver
               image: forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12
               args: ["run", "backup"]
-              env:
-                - name: BUNDLE_PASSWORD
-                  valueFrom:
-                    secretKeyRef: { name: archiver-bundle, key: password }
               volumeMounts:
-                - { name: bundle,     mountPath: /opt/archiver/bundle }
-                - { name: backup-dir, mountPath: /mnt/backup-dir }
+                - { name: bundle,          mountPath: /opt/archiver/bundle }
+                - { name: bundle-password, mountPath: /run/secrets }
+                - { name: backup-dir,      mountPath: /mnt/backup-dir }
           volumes:
             - name: bundle
               secret: { secretName: archiver-bundle-tar }
+            - name: bundle-password
+              secret:
+                secretName: archiver-bundle       # the bundle password Secret
+                items:
+                  - { key: password, path: bundle_password }   # -> /run/secrets/bundle_password
             - name: backup-dir
               persistentVolumeClaim: { claimName: backup-data }
 ```
@@ -647,7 +654,7 @@ For a one-time restore without modifying your running container, use a temporary
 ```bash
 # One-off restore (container exits after completion)
 docker run --rm -it \
-  -e BUNDLE_PASSWORD='your-bundle-password-here' \
+  -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 \
@@ -716,14 +723,14 @@ For Kubernetes Jobs, init containers, or one-shot `docker run` invocations, use 
 ```bash
 # Probe whether a backup is available
 docker run --rm \
-  -e BUNDLE_PASSWORD='your-bundle-password-here' \
+  -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
   -e SNAPSHOT_ID=myservice \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 run snapshot-exists
 
 # Restore a snapshot into a mounted destination
 docker run --rm \
-  -e BUNDLE_PASSWORD='your-bundle-password-here' \
+  -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
   -e SNAPSHOT_ID=myservice \
   -e LOCAL_DIR=/mnt/restore \
   -e OVERWRITE=1 \

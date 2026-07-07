@@ -106,7 +106,7 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: smoke-test:local
-      - name: Smoke test (entrypoint exits cleanly with neither bundle nor keys)
+      - name: Smoke test (no config exits cleanly; BUNDLE_PASSWORD rejected from env)
         run: |
           set +e
           # --network none: with no bundle and no key files the entrypoint exits at the
@@ -121,6 +121,18 @@ jobs:
           fi
           if ! echo "$OUT" | grep -q "no bundle and no RSA key files found"; then
             echo "::error::Expected 'no bundle and no RSA key files found' in output"
+            exit 1
+          fi
+          # BUNDLE_PASSWORD is a file-only secret now; a raw-env value must be rejected.
+          OUT2=$(docker run --rm --network none -e BUNDLE_PASSWORD=x smoke-test:local 2>&1)
+          RC2=$?
+          echo "$OUT2"
+          if [ "$RC2" -eq 0 ]; then
+            echo "::error::Container exited 0 with BUNDLE_PASSWORD in env; expected non-zero"
+            exit 1
+          fi
+          if ! echo "$OUT2" | grep -q "BUNDLE_PASSWORD is no longer read from the environment"; then
+            echo "::error::Expected the BUNDLE_PASSWORD env-rejection message"
             exit 1
           fi
           echo "Smoke test passed"
@@ -156,6 +168,11 @@ jobs:
           docker run -i --rm --hostname rt-host \
             --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/roundtrip.sh
+      - name: Bundle decrypts from a file-based password (Docker secret, not an env var)
+        run: |
+          docker run -i --rm --hostname bs-host \
+            --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+            --entrypoint bash roundtrip:local -s < tests/integration/bundle-secret.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.

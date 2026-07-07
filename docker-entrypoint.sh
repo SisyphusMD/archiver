@@ -44,6 +44,23 @@ overlay_key_files() {
     place_key_file "${SSH_PRIVATE_KEY_FILE:-${SECRETS_DIR}/ssh_private_key}" "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 600
 }
 
+# BUNDLE_PASSWORD decrypts the whole bundle (including the RSA private key), so it is the most
+# sensitive secret and is read from a file, never the environment. A raw-env value is rejected
+# with a migration message rather than silently ignored, which would otherwise drop a bundle
+# deployment into env-native mode and fail later with a confusing "no bundle" error.
+resolve_bundle_password() {
+    if [ -n "${BUNDLE_PASSWORD:-}" ]; then
+        echo "ERROR: BUNDLE_PASSWORD is no longer read from the environment (an env var leaks via 'docker inspect' and /proc)." >&2
+        echo "Write the password to a file, mount it at ${SECRETS_DIR}/bundle_password (or set BUNDLE_PASSWORD_FILE to its path)," >&2
+        echo "and remove BUNDLE_PASSWORD from the container environment." >&2
+        exit 1
+    fi
+    local path="${BUNDLE_PASSWORD_FILE:-${SECRETS_DIR}/bundle_password}"
+    if [ -f "${path}" ]; then
+        BUNDLE_PASSWORD="$(<"${path}")"
+    fi
+}
+
 import_bundle() {
     echo "Bundle file found: $BUNDLE_FILE"
     echo "Decrypting and importing configuration..."
@@ -53,7 +70,7 @@ import_bundle() {
     cd "${ARCHIVER_DIR}"
     if ! "${BUNDLE_IMPORT_SCRIPT}"; then
         echo "ERROR: Failed to import configuration"
-        echo "Please verify your BUNDLE_PASSWORD is correct"
+        echo "Please verify the bundle password (at ${SECRETS_DIR}/bundle_password or BUNDLE_PASSWORD_FILE) is correct"
         exit 1
     fi
 
@@ -64,7 +81,7 @@ import_bundle() {
 }
 
 # Prepare configuration + keys from whichever source is present. An encrypted bundle
-# (BUNDLE_PASSWORD + a mounted bundle.tar.enc) is the optional baseline; env vars plus
+# (a mounted bundle.tar.enc + its password file) is the optional baseline; env vars plus
 # file-based secrets are the override layer, resolved later by config-loader. Keys are
 # files, so they are materialized into KEYS_DIR here regardless of mode.
 prepare_config() {
@@ -89,7 +106,7 @@ prepare_config() {
     # config-loader). Only the RSA keypair must already be present here, as files.
     if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" ]; then
         echo "ERROR: no bundle and no RSA key files found." >&2
-        echo "Provide an encrypted bundle (set BUNDLE_PASSWORD and mount it at $BUNDLE_FILE)," >&2
+        echo "Provide an encrypted bundle (mount it at $BUNDLE_FILE with its password at ${SECRETS_DIR}/bundle_password)," >&2
         echo "or mount the RSA keypair at ${SECRETS_DIR}/rsa_private_key and ${SECRETS_DIR}/rsa_public_key" >&2
         echo "(or point RSA_PRIVATE_KEY_FILE / RSA_PUBLIC_KEY_FILE at them)." >&2
         exit 1
@@ -100,6 +117,8 @@ prepare_config() {
 echo "==================================="
 echo "Archiver Container Starting"
 echo "==================================="
+
+resolve_bundle_password
 
 if [ "$1" = "init" ]; then
     echo "Running in INIT mode"

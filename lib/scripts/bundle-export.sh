@@ -10,9 +10,16 @@ echo "This script will create a bundle file containing your config.sh and keys d
 echo "The bundle will be encrypted and protected by a password you provide below."
 echo "You must remember this password and keep a copy of the bundle file."
 
+# Pick up a file-provided bundle password for a non-interactive (re-)export; otherwise fall
+# through to the interactive prompt below.
+if [ -z "${BUNDLE_PASSWORD:-}" ]; then
+    bundle_password_path="${BUNDLE_PASSWORD_FILE:-${SECRETS_DIR}/bundle_password}"
+    [ -f "${bundle_password_path}" ] && BUNDLE_PASSWORD="$(<"${bundle_password_path}")"
+fi
+
 if [ -n "${BUNDLE_PASSWORD}" ]; then
     echo ""
-    read -p "Reuse existing BUNDLE_PASSWORD environment variable? (Y/n): " -n 1 -r
+    read -p "Reuse the existing bundle password? (Y/n): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Nn]$ ]]; then
         PASSWORD="${BUNDLE_PASSWORD}"
