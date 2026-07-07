@@ -228,7 +228,6 @@ services:
       - ALL
     cap_add:
       - DAC_OVERRIDE              # Write to dirs owned by other UIDs
-      - SETGID                    # Required for cron (remove if not using CRON_SCHEDULE)
       - CHOWN                     # Restore: recreate files under their original owner (chown to arbitrary UID)
       - FOWNER                    # Restore: set mode/timestamps on files owned by other UIDs
     security_opt:
@@ -237,7 +236,7 @@ services:
     environment:
       BUNDLE_PASSWORD: "your-bundle-password-here"  # Escape $ as $$ (e.g., my$pass → my$$pass)
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
-      TZ: "America/New_York"      # Timezone for cron and timestamps (default: UTC)
+      TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
 
     volumes:
       - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
@@ -300,7 +299,6 @@ services:
       - ALL
     cap_add:
       - DAC_OVERRIDE # Required: write to directories owned by other UIDs
-      - SETGID       # Required if using CRON_SCHEDULE: cron needs setgid to execute jobs
       - CHOWN        # Required for restore: recreate files under their original owner
       - FOWNER       # Required for restore: set mode/timestamps on files owned by other UIDs
     security_opt:
@@ -310,11 +308,10 @@ services:
 | Capability | When Required | Why |
 |-----------|---------------|-----|
 | `DAC_OVERRIDE` | Always (with `cap_drop: ALL`) | Archiver runs as root but writes to service data directories that may be owned by other users (e.g., UID 1000) |
-| `SETGID` | When using `CRON_SCHEDULE` | Debian's cron daemon requires `setgid` to execute scheduled jobs. Without it, cron starts but jobs silently fail to run |
 | `CHOWN` | When restoring with original ownership (the default) | Restore recreates files as their original UID/GID via `chown()`, which requires `CAP_CHOWN`. Without it, restored files silently land owned by root |
 | `FOWNER` | When restoring with original ownership (the default) | Lets Archiver set permissions/timestamps on restored files owned by other UIDs |
 
-**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with `DAC_OVERRIDE`, `SETGID`, `CHOWN`, and `FOWNER`, and is recommended for defense in depth.
+**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with `DAC_OVERRIDE`, `CHOWN`, and `FOWNER`, and is recommended for defense in depth. Scheduled backups (`CRON_SCHEDULE`) no longer need `SETGID` — Archiver uses [supercronic](https://github.com/aptible/supercronic), which runs jobs as the container user rather than forking with `setgid` like Debian's cron.
 
 ### Graceful Shutdown
 
@@ -330,8 +327,8 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `BUNDLE_PASSWORD` | Yes | Password for decrypting bundle.tar.enc. **Note:** If your password contains `$`, you must escape it as `$$` (e.g., `my$password` → `my$$password`) |
-| `CRON_SCHEDULE` | No | Cron expression for automatic backups (empty = manual mode) |
-| `TZ` | No | Timezone for cron scheduling (default: UTC) |
+| `CRON_SCHEDULE` | No | Standard 5-field cron expression for automatic backups (empty = manual mode) |
+| `TZ` | No | Timezone for scheduled backups and log timestamps (default: UTC) |
 | `SYSTEMCTL_FORCE_BUS` | No | Set to `1` to enable systemctl access to host services via D-Bus socket (requires socket mounts, see above) |
 
 ### Container Modes
@@ -341,7 +338,7 @@ The entrypoint selects one of three modes based on the first container argument:
 | Mode | How it's invoked | Behavior |
 |------|------------------|----------|
 | `init` | `docker run ... archiver:<tag> init` | Interactive bundle generation. Exits when done. |
-| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Decrypts the bundle, then either runs `cron -f` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
+| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Decrypts the bundle, then either runs `supercronic` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
 | `run` | `docker run ... archiver:<tag> run <subcommand>` | Decrypts the bundle, then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
 `run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, and `backup` (a synchronous backup path intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`. The user-facing `archiver start` command remains async and is intentionally not supported here.
@@ -544,7 +541,7 @@ archiver help              # Show help
 
 ### Running a Backup from an External Scheduler (`run backup`)
 
-For most users, a long-lived container with `CRON_SCHEDULE` set is the simplest way to get scheduled backups — the in-container cron daemon fires `archiver start` on schedule, and you don't have to manage anything. Skip this section unless you specifically need to drive scheduling from *outside* the container.
+For most users, a long-lived container with `CRON_SCHEDULE` set is the simplest way to get scheduled backups — the in-container scheduler fires `archiver start` on schedule, and you don't have to manage anything. Skip this section unless you specifically need to drive scheduling from *outside* the container.
 
 If your environment already owns scheduling — e.g., a Kubernetes `CronJob`, a GitHub Actions scheduled workflow, a systemd timer on the host, or any other platform that spawns a short-lived container per run and expects a meaningful exit code — use the entrypoint's `run backup` mode instead. It decrypts the bundle, runs a backup **synchronously**, and exits with the backup's result code. The container terminates when the backup finishes; your scheduler then reports success or failure based on the exit code.
 
@@ -600,7 +597,7 @@ spec:
 
 The Pod lives for the duration of one backup and exits. If the backup fails, the Pod exits non-zero and Kubernetes marks the Job failed — the usual CronJob semantics apply.
 
-> **Why `run backup` instead of `run start`?** `archiver start` is asynchronous — it backgrounds the backup and returns exit `0` immediately, before the backup has done any real work. That's the right behavior for the in-container cron daemon (which fires and forgets), but it would cause an external scheduler to always report "success" regardless of what actually happened. `run backup` blocks until the backup finishes so the exit code is meaningful. For this reason `start` is deliberately not whitelisted in `run` mode.
+> **Why `run backup` instead of `run start`?** `archiver start` is asynchronous — it backgrounds the backup and returns exit `0` immediately, before the backup has done any real work. That's the right behavior for the in-container scheduler (which fires and forgets), but it would cause an external scheduler to always report "success" regardless of what actually happened. `run backup` blocks until the backup finishes so the exit code is meaningful. For this reason `start` is deliberately not whitelisted in `run` mode.
 
 </details>
 
