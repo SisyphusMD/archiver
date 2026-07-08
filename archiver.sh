@@ -10,12 +10,13 @@ fi
 source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|migrate|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help} [logs|prune|retain]"
   echo "Note:"
   echo "  stop|pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
   echo "  bundle requires a subcommand: export or import"
+  echo "  migrate takes an optional OUTPUT_DIR (default /opt/archiver/migrate): writes the effective config as an env file + secret files."
   echo "  auto-restore and snapshot-exists are non-interactive and driven by environment variables."
   exit 1
 }
@@ -187,6 +188,13 @@ case "${command}" in
       echo "Valid subcommands: export, import"
       usage
     fi
+    ;;
+  migrate)
+    if [[ $# -gt 1 ]]; then
+      echo "'migrate' takes at most one argument: the output directory."
+      usage
+    fi
+    "${MIGRATE_SCRIPT}" "${@}"
     ;;
   help)
     usage

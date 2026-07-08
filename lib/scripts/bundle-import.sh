@@ -69,10 +69,12 @@ mv "${TEMP_DIR}/config.sh" "${CONFIG_FILE}"
 mkdir -p "${KEYS_DIR}"
 mv "${TEMP_DIR}/keys"/* "${KEYS_DIR}/"
 chmod 700 "${KEYS_DIR}"
-chmod 600 "${DUPLICACY_RSA_PRIVATE_KEY_FILE}"
-chmod 644 "${DUPLICACY_RSA_PUBLIC_KEY_FILE}"
-chmod 600 "${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
-chmod 644 "${DUPLICACY_SSH_PUBLIC_KEY_FILE}"
+# The RSA keypair is always present; the SSH keypair is optional (only sftp targets need it,
+# and an env-native bundle may not carry it), so chmod only the key files that exist.
+[ -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ] && chmod 600 "${DUPLICACY_RSA_PRIVATE_KEY_FILE}"
+[ -f "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" ] && chmod 644 "${DUPLICACY_RSA_PUBLIC_KEY_FILE}"
+[ -f "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" ] && chmod 600 "${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
+[ -f "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" ] && chmod 644 "${DUPLICACY_SSH_PUBLIC_KEY_FILE}"
 chmod 600 "${CONFIG_FILE}"
 
 rm -rf "${TEMP_DIR}"
@@ -82,8 +84,8 @@ if [ ! -f "${CONFIG_FILE}" ]; then
   exit 1
 fi
 
-if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" ]; then
-  echo "Error: Key files were not created during import."
+if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" ]; then
+  echo "Error: RSA key files were not created during import."
   exit 1
 fi
 

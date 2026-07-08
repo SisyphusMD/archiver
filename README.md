@@ -378,6 +378,21 @@ With a bundle and no overrides, behavior is exactly as before. With no bundle at
 
 **Keys (files).** Keys are always files under `/opt/archiver/keys`. In env-native mode (no bundle) the RSA keypair must be provided as files at `/run/secrets/rsa_private_key` and `/run/secrets/rsa_public_key` (override the paths with `RSA_PRIVATE_KEY_FILE` / `RSA_PUBLIC_KEY_FILE`). The SFTP key is optional, for sftp targets, at `/run/secrets/ssh_private_key` (override with `SSH_PRIVATE_KEY_FILE`). When a bundle is also present, mounted key files override the bundle's keys.
 
+### Migrating a bundle to env-native
+
+To move an existing bundle deployment to env-native without hand-transcribing anything, run `archiver migrate` inside the container (with an output directory mounted):
+
+```bash
+docker exec archiver archiver migrate /opt/archiver/migrate
+```
+
+It writes the effective configuration as ready-to-use materials:
+
+- `archiver.env`: the non-secret settings as `KEY=value`, for a Compose `environment:` block or a Kubernetes ConfigMap.
+- `secrets/`: one file per secret plus the RSA/SSH keys, to load as Docker secrets, a Kubernetes Secret, or openbao entries mounted under `/run/secrets`.
+
+Load those, start the container without the bundle, and you are fully env-native. The move is reversible: `bundle export` is mode-agnostic, so from an env-native deployment you can regenerate a portable encrypted bundle at any time for cold restore.
+
 ### Service Directories
 
 Directories to backup. Use `*` for subdirectories:

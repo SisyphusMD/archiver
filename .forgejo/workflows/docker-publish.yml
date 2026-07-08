@@ -173,6 +173,11 @@ jobs:
           docker run -i --rm --hostname bs-host \
             --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/bundle-secret.sh
+      - name: Migrate round-trip (bundle -> migrate -> env-native -> export -> re-import)
+        run: |
+          docker run -i --rm --hostname mig-host \
+            --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+            --entrypoint bash roundtrip:local -s < tests/integration/migrate.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.

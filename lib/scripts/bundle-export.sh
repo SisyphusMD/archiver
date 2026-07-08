@@ -5,6 +5,8 @@ BUNDLE_EXPORT_SH_SOURCED=true
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
+source_if_not_sourced "${CONFIG_LOADER_CORE}"      # load the effective configuration
+source_if_not_sourced "${CONFIG_SERIALIZE_CORE}"
 
 echo "This script will create a bundle file containing your config.sh and keys directory."
 echo "The bundle will be encrypted and protected by a password you provide below."
@@ -63,8 +65,14 @@ if [ -f "${OUTPUT_ENC}" ]; then
   fi
 fi
 
-cd "${ARCHIVER_DIR}"
-tar -cf "${OUTPUT_TAR}" keys config.sh
+# Serialize the effective (env-merged) config so the bundle is self-contained even in
+# env-native mode where there is no on-disk config.sh. Stage into a temp dir so the live
+# /opt/archiver/config.sh is never touched.
+STAGING="$(mktemp -d)"
+cp -a "${KEYS_DIR}" "${STAGING}/keys"
+serialize_config_sh "${STAGING}/config.sh"
+tar -cf "${OUTPUT_TAR}" -C "${STAGING}" keys config.sh
+rm -rf "${STAGING}"
 
 openssl enc -aes-256-cbc -pbkdf2 -salt -in "${OUTPUT_TAR}" -out "${OUTPUT_ENC}" -k "${PASSWORD}"
 
