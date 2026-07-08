@@ -143,9 +143,30 @@ resolve_latest_revision() {
   echo "${latest}"
 }
 
+# Warn (never block) if an ownership-preserving restore is running without the capabilities it
+# needs. Without CAP_CHOWN / CAP_FOWNER, duplicacy still restores the data correctly, but it
+# cannot recreate the original UID/GID or set modes on other-UID files, so those land owned by
+# root. A disaster-recovery restore must never be refused, so this only warns; add the caps (see
+# cap_add in compose.yaml) or set IGNORE_OWNERSHIP=1 to silence it.
+warn_if_restore_caps_missing() {
+  case " ${RESTORE_FLAGS} " in
+    *" -ignore-owner "*) return 0 ;;   # ownership intentionally not preserved
+  esac
+  local capeff
+  capeff="$(grep -m1 '^CapEff:' /proc/self/status 2>/dev/null | awk '{print $2}')"
+  [ -n "${capeff}" ] || return 0
+  local missing=()
+  (( 0x${capeff} & 0x1 )) || missing+=("CHOWN")    # CAP_CHOWN  = bit 0
+  (( 0x${capeff} & 0x8 )) || missing+=("FOWNER")   # CAP_FOWNER = bit 3
+  if [ "${#missing[@]}" -gt 0 ]; then
+    log_message "WARN" "Restore preserves original ownership, but the ${missing[*]} capability is not granted: restored files will be owned by root. Add CHOWN and FOWNER to the container's cap_add, or set IGNORE_OWNERSHIP=1 to restore without preserving ownership."
+  fi
+}
+
 # Perform duplicacy restore. Requires CWD to be the restore destination, duplicacy
 # initialized, and REVISION / RESTORE_FLAGS / RESTORE_THREADS set.
 perform_restore() {
+  warn_if_restore_caps_missing
   # shellcheck disable=SC2086
   duplicacy restore -r "${REVISION}" -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" \
     -stats -threads "${RESTORE_THREADS}" ${RESTORE_FLAGS}

@@ -178,6 +178,12 @@ jobs:
           docker run -i --rm --hostname mig-host \
             --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/migrate.sh
+      - name: Restore capability warning (backup-only caps warn; full caps stay quiet)
+        run: |
+          docker run -i --rm --cap-drop ALL --cap-add DAC_OVERRIDE \
+            -e EXPECT_WARN=1 --entrypoint bash roundtrip:local -s < tests/integration/restore-caps.sh
+          docker run -i --rm --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+            -e EXPECT_WARN=0 --entrypoint bash roundtrip:local -s < tests/integration/restore-caps.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.

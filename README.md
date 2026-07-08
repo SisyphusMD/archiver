@@ -227,9 +227,9 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - DAC_OVERRIDE              # Write to dirs owned by other UIDs
-      - CHOWN                     # Restore: recreate files under their original owner (chown to arbitrary UID)
-      - FOWNER                    # Restore: set mode/timestamps on files owned by other UIDs
+      - DAC_OVERRIDE              # Backup + restore: read/write data owned by other UIDs
+      - CHOWN                     # Restore only (drop for backup-only): recreate files under their original owner
+      - FOWNER                    # Restore only (drop for backup-only): set mode/timestamps on files owned by other UIDs
     security_opt:
       - no-new-privileges:true
 
@@ -304,9 +304,9 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - DAC_OVERRIDE # Required: write to directories owned by other UIDs
-      - CHOWN        # Required for restore: recreate files under their original owner
-      - FOWNER       # Required for restore: set mode/timestamps on files owned by other UIDs
+      - DAC_OVERRIDE # Backup + restore: write to directories owned by other UIDs
+      - CHOWN        # Restore only (drop for backup-only): recreate files under their original owner
+      - FOWNER       # Restore only (drop for backup-only): set mode/timestamps on files owned by other UIDs
     security_opt:
       - no-new-privileges:true  # Prevent privilege escalation
 ```
@@ -314,8 +314,10 @@ services:
 | Capability | When Required | Why |
 |-----------|---------------|-----|
 | `DAC_OVERRIDE` | Always (with `cap_drop: ALL`) | Archiver runs as root but writes to service data directories that may be owned by other users (e.g., UID 1000) |
-| `CHOWN` | When restoring with original ownership (the default) | Restore recreates files as their original UID/GID via `chown()`, which requires `CAP_CHOWN`. Without it, restored files silently land owned by root |
-| `FOWNER` | When restoring with original ownership (the default) | Lets Archiver set permissions/timestamps on restored files owned by other UIDs |
+| `CHOWN` | Restore with original ownership (the default) | Restore recreates files as their original UID/GID via `chown()`, which requires `CAP_CHOWN`. Without it, restored files land owned by root (Archiver logs a warning when this happens) |
+| `FOWNER` | Restore with original ownership (the default) | Lets Archiver set permissions/timestamps on restored files owned by other UIDs |
+
+**Backup-only least privilege:** `CHOWN` and `FOWNER` are used only by restore, so a container that only takes scheduled backups can drop both and run with just `DAC_OVERRIDE`. Add them back when you need to restore with original ownership. Restoring without them does not fail: the data is restored correctly, but files land owned by root and Archiver logs a warning. To restore without preserving ownership on purpose, set `IGNORE_OWNERSHIP=1`.
 
 **Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with `DAC_OVERRIDE`, `CHOWN`, and `FOWNER`, and is recommended for defense in depth. Scheduled backups (`CRON_SCHEDULE`) no longer need `SETGID` — Archiver uses [supercronic](https://github.com/aptible/supercronic), which runs jobs as the container user rather than forking with `setgid` like Debian's cron.
 
