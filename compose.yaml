@@ -12,8 +12,11 @@ services:
     cap_drop:
       - ALL
     cap_add:
-      - DAC_OVERRIDE              # Write to dirs owned by other UIDs
-      - CHOWN                     # Restore: recreate files under their original owner (chown to arbitrary UID)
+      - DAC_OVERRIDE              # Backup + restore: read/write data owned by other UIDs
+      # CHOWN + FOWNER are ONLY needed to restore with original ownership. A backup-only
+      # deployment can drop both; a restore without them logs a warning and lands files owned
+      # by root (or run the restore with IGNORE_OWNERSHIP=1).
+      - CHOWN                     # Restore: recreate files under their original owner
       - FOWNER                    # Restore: set mode/timestamps on files owned by other UIDs
     security_opt:
       - no-new-privileges:true
