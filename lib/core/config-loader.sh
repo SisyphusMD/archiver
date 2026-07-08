@@ -24,15 +24,20 @@ source_if_not_sourced "${LOGGING_CORE}"
 
 SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"
 
+# The user-config var surface, as two regexes over variable names. Single source of truth for
+# the load path AND the serializers in config-serialize.sh (migrate / mode-agnostic bundle
+# export): adding a field here is picked up by both, so a serializer can't silently drop it.
+CONFIG_NONSECRET_VARS_RE='^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_KEEP|DUPLICACY_THREADS|NOTIFICATION_SERVICE|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION))$'
+CONFIG_SECRET_VARS_RE='^(STORAGE_PASSWORD|RSA_PASSPHRASE|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET))$'
+
 # Secrets must come from the bundle or a file, never a plain env var (which would leak via
 # /proc and `docker inspect`). Drop any passed in the environment before loading, so the
 # only remaining sources are config.sh and the secret files.
 purge_raw_env_secrets() {
   local v
-  unset STORAGE_PASSWORD RSA_PASSPHRASE PUSHOVER_USER_KEY PUSHOVER_API_TOKEN
   while IFS= read -r v; do
     unset "${v}"
-  done < <(compgen -v | grep -E '^STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET)$')
+  done < <(compgen -v | grep -E "${CONFIG_SECRET_VARS_RE}")
 }
 
 # Non-secret config passed via the environment is the override layer that must win over the
@@ -42,7 +47,7 @@ snapshot_env_overrides() {
   local v
   while IFS= read -r v; do
     ENV_CONFIG_OVERRIDES["${v}"]="${!v}"
-  done < <(compgen -v | grep -E '^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_KEEP|DUPLICACY_THREADS|NOTIFICATION_SERVICE|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION))$')
+  done < <(compgen -v | grep -E "${CONFIG_NONSECRET_VARS_RE}")
 }
 
 apply_env_overrides() {
