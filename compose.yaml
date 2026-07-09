@@ -81,6 +81,7 @@ secrets:
 #       - rsa_private_key                                         # RSA keypair required in env-native mode
 #       - rsa_public_key
 #       # - ssh_private_key                                       # only for sftp targets
+#       # - ssh_public_key                                        # only for sftp targets (restore needs both halves)
 #     volumes:
 #       - ./archiver-logs:/opt/archiver/logs                        # Persistent logs (optional)
 #       - /path/to/host/backup-dir:/mnt/backup-dir                  # Data to backup
@@ -91,3 +92,4 @@ secrets:
 #   rsa_private_key:  { file: ./secrets/rsa_private_key }
 #   rsa_public_key:   { file: ./secrets/rsa_public_key }
 #   # ssh_private_key: { file: ./secrets/ssh_private_key }        # only for sftp targets
+#   # ssh_public_key:  { file: ./secrets/ssh_public_key }         # only for sftp targets

@@ -6,8 +6,6 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOGGING_CORE}"
-LOCKFILE="/var/lock/archiver-main.lock"
-STOP_FLAG="/var/lock/archiver-stop-requested"
 
 get_lock_pid() {
   head -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f1
@@ -109,20 +107,27 @@ is_lock_valid() {
 
 acquire_lock() {
   local lock_pid
+  local stale=false
 
   if [ -e "${LOCKFILE}" ]; then
     lock_pid=$(get_lock_pid)
 
     if [ -n "${lock_pid}" ] && kill -0 "${lock_pid}" 2>/dev/null; then
       return 1
-    else
-      rm -f "${LOCKFILE}"
-      return 2
     fi
+    # Stale lock (dead or missing PID): clean it up and still take the lock below —
+    # returning without acquiring would leave the whole run lockless (stop/status/pause
+    # blind to it, and a concurrent backup would be admitted).
+    rm -f "${LOCKFILE}"
+    stale=true
   fi
 
   echo "$$ duplicacy pre-backup" > "${LOCKFILE}"
   record_state_change "running"
+
+  if [ "${stale}" = true ]; then
+    return 2
+  fi
   return 0
 }
 

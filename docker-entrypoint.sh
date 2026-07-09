@@ -11,6 +11,15 @@ handle_shutdown() {
 
   "${ARCHIVER_DIR}/archiver.sh" stop 2>&1 || true
 
+  # During a service backup 'archiver stop' only sets the stop flag; the backup process
+  # records the stop and releases the lock itself. Exiting before that happens tears down
+  # the PID namespace and SIGKILLs that cleanup mid-flight, so wait for the lock to clear
+  # (bounded well under the documented stop_grace_period of 2m).
+  for _ in $(seq 1 100); do
+    [ -e "${LOCKFILE}" ] || break
+    sleep 1
+  done
+
   if [ -n "$LOG_TAILER_PID" ] && kill -0 "$LOG_TAILER_PID" 2>/dev/null; then
     kill "$LOG_TAILER_PID" 2>/dev/null || true
   fi
@@ -42,6 +51,8 @@ overlay_key_files() {
     place_key_file "${RSA_PRIVATE_KEY_FILE:-${SECRETS_DIR}/rsa_private_key}" "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 600
     place_key_file "${RSA_PUBLIC_KEY_FILE:-${SECRETS_DIR}/rsa_public_key}"   "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" 644
     place_key_file "${SSH_PRIVATE_KEY_FILE:-${SECRETS_DIR}/ssh_private_key}" "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 600
+    # The SFTP restore path requires the public half too (duplicacy-restore checks both).
+    place_key_file "${SSH_PUBLIC_KEY_FILE:-${SECRETS_DIR}/ssh_public_key}"   "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" 644
 }
 
 # BUNDLE_PASSWORD decrypts the whole bundle (including the RSA private key), so it is the most

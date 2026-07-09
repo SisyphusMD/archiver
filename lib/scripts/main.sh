@@ -30,6 +30,7 @@ initialize() {
   lock_status=$?
 
   if [ "${lock_status}" -eq 1 ]; then
+    echo "A backup is already running (PID $(get_lock_pid)). Not starting another." >&2
     early_exit=true
     exit 1
   elif [ "${lock_status}" -eq 2 ]; then
