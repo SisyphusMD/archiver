@@ -76,7 +76,9 @@ arrange_effective_config() {
 
   [ "$(cat "${OUTSECRETS}/storage_password")" = "${STORAGE_PASSWORD}" ]
   [ "$(cat "${OUTSECRETS}/storage_target_1_s3_secret")" = "${STORAGE_TARGET_1_S3_SECRET}" ]
-  [ "$(stat -f '%Lp' "${OUTSECRETS}/storage_password" 2>/dev/null || stat -c '%a' "${OUTSECRETS}/storage_password")" = "600" ]
+  # -c is GNU/busybox (CI); -f is the BSD/macOS fallback. GNU must come first: BSD-style
+  # 'stat -f' on GNU "succeeds" with filesystem info instead of failing over.
+  [ "$(stat -c '%a' "${OUTSECRETS}/storage_password" 2>/dev/null || stat -f '%Lp' "${OUTSECRETS}/storage_password")" = "600" ]
 
   grep -q "^SERVICE_DIRECTORIES=/srv/app:/home/user/data$" "${ENVFILE}"
   grep -q "^ROTATE_BACKUPS=true$" "${ENVFILE}"
