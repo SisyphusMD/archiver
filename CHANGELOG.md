@@ -18,6 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `bundle import` now treats the SSH keypair as optional (only sftp targets need it); the RSA keypair is what it requires. This lets a bundle exported from an env-native deployment that has no SSH key re-import cleanly.
 - Restore now logs a warning (instead of doing it silently) when it would preserve original ownership but the container lacks `CHOWN`/`FOWNER`, so restored files would land owned by root. This makes it safe to run a backup-only deployment with just `DAC_OVERRIDE` and add `CHOWN` + `FOWNER` only when restoring. The restore is never blocked; set `IGNORE_OWNERSHIP=1` to restore without preserving ownership.
 
+### Fixed
+- A failed primary backup is now detected and reported. The backgrounded backup pipeline captured the log reader's PID instead of duplicacy's, so a duplicacy failure was invisible: the run logged the backup as completed, sent a success notification, and exited 0. A failed backup now logs an error, is counted in the completion notification, skips that service's copy/wrap-up, and makes `archiver backup` exit non-zero.
+- `archiver stop` requested during the final service's backup now actually stops the run. Previously that path swallowed the stop: the run continued into the storage check, `prune -exhaustive`, and copies to secondary storages, then recorded a successful completion. A stop during any service's backup now terminates duplicacy directly (previously it killed the log reader and waited for duplicacy to die of a broken pipe), skips the storage wrap-up, and records "Backup stopped" without counting the stop as an error.
+- When no service completes a backup, the storage wrap-up (check/prune) is skipped instead of silently running from whatever repository directory the last failed service left as the working directory.
+
 ## [0.8.12] - 2026-07-07
 
 ### Changed

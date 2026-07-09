@@ -133,8 +133,12 @@ duplicacy_primary_backup() {
 
   log_message "INFO" "Starting backup to ${STORAGE_TARGET_1_NAME} for ${SERVICE} service."
 
-  # Run backup in background to allow stop monitoring
-  "${DUPLICACY_BIN}" backup -storage "${storage_name}" -stats -threads "${DUPLICACY_THREADS}" 2>&1 | log_output &
+  # Run backup in the background so stop requests can be honored mid-backup. Process
+  # substitution (not a backgrounded pipeline) keeps duplicacy itself as $! and as a direct
+  # child of this shell: a pipeline's $! would be log_output's subshell, whose exit status
+  # masks a failed backup, and pause/stop signal this shell's direct children (pkill -P).
+  "${DUPLICACY_BIN}" backup -storage "${storage_name}" -stats -threads "${DUPLICACY_THREADS}" \
+    > >(log_output) 2>&1 &
   local backup_pid=$!
 
   # Monitor for stop requests while backup runs
@@ -164,6 +168,7 @@ duplicacy_primary_backup() {
 
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Backup to ${STORAGE_TARGET_1_NAME} failed for ${SERVICE} service."
+    return 1
   fi
 
   log_message "INFO" "Backup to ${STORAGE_TARGET_1_NAME} completed for ${SERVICE} service."

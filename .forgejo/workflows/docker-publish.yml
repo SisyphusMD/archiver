@@ -184,6 +184,14 @@ jobs:
             -e EXPECT_WARN=1 --entrypoint bash roundtrip:local -s < tests/integration/restore-caps.sh
           docker run -i --rm --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             -e EXPECT_WARN=0 --entrypoint bash roundtrip:local -s < tests/integration/restore-caps.sh
+      - name: Failed backup is reported (non-zero exit, ERROR logged, no false success)
+        run: |
+          docker run -i --rm --hostname bf-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/backup-failure.sh
+      - name: Stop during backup halts before storage wrap-up (no check/prune after stop)
+        run: |
+          docker run -i --rm --hostname sp-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/stop-skips-prune.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.
