@@ -34,6 +34,9 @@ CONFIG_FILE="${ARCHIVER_DIR}/config.sh"
 # a per-secret <NAME>_FILE env var can point elsewhere. Overridable for tests.
 SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"
 
+LOCKFILE="/var/lock/archiver-main.lock"
+STOP_FLAG="/var/lock/archiver-stop-requested"
+
 DUPLICACY_RSA_PUBLIC_KEY_FILE="${KEYS_DIR}/public.pem"
 DUPLICACY_RSA_PRIVATE_KEY_FILE="${KEYS_DIR}/private.pem"
 DUPLICACY_SSH_PUBLIC_KEY_FILE="${KEYS_DIR}/id_ed25519.pub"

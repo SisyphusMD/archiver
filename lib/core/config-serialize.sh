@@ -69,4 +69,7 @@ serialize_env_and_secrets() {
   if [[ -f "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" ]]; then
     cp "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" "${secretsdir}/ssh_private_key"; chmod 600 "${secretsdir}/ssh_private_key"
   fi
+  if [[ -f "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" ]]; then
+    cp "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" "${secretsdir}/ssh_public_key"; chmod 644 "${secretsdir}/ssh_public_key"
+  fi
 }

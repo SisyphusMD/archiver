@@ -23,10 +23,14 @@ info() {
   echo "OK: $1"
 }
 
-if [ ! -f "${CONFIG_FILE}" ]; then
-  error "Configuration file not found (config.sh)"
-else
+# Env-native deployments have no config.sh at all (config comes from env vars + secret
+# files), so its absence is only an error when there is no RSA key either.
+if [ -f "${CONFIG_FILE}" ]; then
   info "Configuration file exists"
+elif [ -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
+  info "No config.sh; env-native configuration (RSA key present)"
+else
+  error "No configuration found (no config.sh and no RSA private key)"
 fi
 
 if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
@@ -55,11 +59,12 @@ else
   if [ -f "${LOG_DIR}/archiver.log" ]; then
     ERROR_COUNT=$(tail -100 "${LOG_DIR}/archiver.log" 2>/dev/null | grep -c "\[ERROR\]" || true)
     if [ "${ERROR_COUNT}" -gt 0 ]; then
-      # Check if backup completed despite errors (transient errors are OK)
-      if tail -100 "${LOG_DIR}/archiver.log" 2>/dev/null | grep -q "Archiver script completed"; then
-        warn "Found ${ERROR_COUNT} errors in recent logs, but backup completed"
+      # Errors are only fatal when the run never finished: "Main backup script exited."
+      # is main.sh's EXIT-trap line, so errors without it mean a crash or hang mid-backup.
+      if tail -100 "${LOG_DIR}/archiver.log" 2>/dev/null | grep -q "Main backup script exited."; then
+        warn "Found ${ERROR_COUNT} errors in recent logs, but the run finished"
       else
-        error "Found ${ERROR_COUNT} errors in recent logs without completion"
+        error "Found ${ERROR_COUNT} errors in recent logs without a finished run"
       fi
     else
       info "No errors in recent logs"
