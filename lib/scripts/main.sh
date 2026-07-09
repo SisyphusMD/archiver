@@ -70,7 +70,8 @@ process_service() {
 
   if ! is_stop_requested; then
     update_lock_stage "service:${service_dir}" "backup"
-    duplicacy_primary_backup || { handle_error "Backup failed for ${SERVICE} service."; return 1; }
+    # duplicacy_primary_backup reports its own failures; a stop-triggered return is not an error.
+    duplicacy_primary_backup || return 1
   fi
 
   # Always run post-backup hook after pre-backup
@@ -129,6 +130,24 @@ main() {
   done
 
   update_lock_stage "duplicacy" "post-backup"
+
+  # A stop during the final service's backup returns from process_service before reaching
+  # its stop handler; honor it here or the wrap-up below would run a destructive prune.
+  if is_stop_requested; then
+    log_message "INFO" "Stop requested. Skipping storage wrap-up, invoking stop handler."
+    "${STOP_SCRIPT}"
+    # Should not reach here, but exit just in case
+    exit 0
+  fi
+
+  # cd "" is a silent no-op, so guard explicitly: with no successful service there is
+  # nothing to wrap up, and prune would run from an arbitrary repository directory.
+  if [ -z "${last_working_dir}" ]; then
+    handle_error "No service completed a backup. Skipping storage wrap-up."
+    record_state_change "completed"
+    send_completion_notification
+    return
+  fi
 
   # Run prune from the final service directory
   # Per https://forum.duplicacy.com/t/prune-command-details/1005 only one repository should run prune
