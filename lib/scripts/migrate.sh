@@ -7,6 +7,10 @@
 
 MIGRATE_SH_SOURCED=true
 
+set -e
+# Everything written below is secret material; never let it exist world-readable, even briefly.
+umask 077
+
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -23,13 +27,15 @@ if ! mkdir -p "${OUTPUT_DIR}"; then
 fi
 
 serialize_env_and_secrets "${ENV_FILE}" "${SECRETS_OUT}"
-chmod 700 "${SECRETS_OUT}"
 
 echo "Migrated the effective configuration to ${OUTPUT_DIR}:"
 echo "  ${ENV_FILE}"
 echo "      non-secret settings as KEY=value (a Compose 'environment:' block or a k8s ConfigMap)"
 echo "  ${SECRETS_OUT}/"
 echo "      one file per secret plus the keys (Docker secrets, a k8s Secret, or openbao)"
+echo
+echo "SECURITY: these files hold your secrets in PLAINTEXT. Move them into your secret store"
+echo "(Docker secrets, a Kubernetes Secret, openbao) and delete this directory."
 echo
 echo "Next steps:"
 echo "  1. Load ${ENV_FILE##*/} as environment variables (ConfigMap / compose environment)."

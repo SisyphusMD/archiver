@@ -66,9 +66,16 @@ resolve_bundle_password() {
         echo "and remove BUNDLE_PASSWORD from the container environment." >&2
         exit 1
     fi
+    # An explicitly set BUNDLE_PASSWORD_FILE pointing nowhere is a config error, not a
+    # fallback — silently ignoring it would drop a bundle deployment into env-native mode.
+    if [ -n "${BUNDLE_PASSWORD_FILE:-}" ] && [ ! -f "${BUNDLE_PASSWORD_FILE}" ]; then
+        echo "ERROR: BUNDLE_PASSWORD_FILE is set to '${BUNDLE_PASSWORD_FILE}', but no such file exists." >&2
+        exit 1
+    fi
     local path="${BUNDLE_PASSWORD_FILE:-${SECRETS_DIR}/bundle_password}"
     if [ -f "${path}" ]; then
         BUNDLE_PASSWORD="$(<"${path}")"
+        BUNDLE_PASSWORD="${BUNDLE_PASSWORD%$'\r'}"   # CRLF-edited file would fail as "wrong password"
     fi
 }
 
@@ -85,6 +92,10 @@ import_bundle() {
         exit 1
     fi
 
+    # The password's job is done; keeping it exported would hand it to every child process
+    # (supercronic, backups, user hooks) via /proc — the leak the file-only rule exists for.
+    unset ARCHIVER_BUNDLE_PASSWORD ARCHIVER_BUNDLE_FILE BUNDLE_PASSWORD
+
     if [ ! -f "${CONFIG_FILE}" ]; then
         echo "ERROR: config.sh not found after import"
         exit 1
@@ -97,6 +108,14 @@ import_bundle() {
 # files, so they are materialized into KEYS_DIR here regardless of mode.
 prepare_config() {
     local have_bundle=0
+    if [ -f "$BUNDLE_FILE" ] && [ -z "$BUNDLE_PASSWORD" ]; then
+        # A mounted bundle with no resolvable password is the upgrade path every pre-0.9.0
+        # deployment walks; falling through to env-native here would either start a container
+        # that never backs up (keys mounted) or blame a missing bundle that plainly exists.
+        echo "ERROR: bundle found at $BUNDLE_FILE, but no bundle password." >&2
+        echo "Provide it at ${SECRETS_DIR}/bundle_password (or point BUNDLE_PASSWORD_FILE at it)." >&2
+        exit 1
+    fi
     if [ -n "$BUNDLE_PASSWORD" ] && [ -f "$BUNDLE_FILE" ]; then
         have_bundle=1
         import_bundle

@@ -71,10 +71,12 @@ fi
 STAGING="$(mktemp -d)"
 cp -a "${KEYS_DIR}" "${STAGING}/keys"
 serialize_config_sh "${STAGING}/config.sh"
+chmod 600 "${STAGING}/config.sh"          # the tar records this mode; the file inlines secrets
 tar -cf "${OUTPUT_TAR}" -C "${STAGING}" keys config.sh
 rm -rf "${STAGING}"
 
-openssl enc -aes-256-cbc -pbkdf2 -salt -in "${OUTPUT_TAR}" -out "${OUTPUT_ENC}" -k "${PASSWORD}"
+# -pass fd: keeps the password off the openssl argv (world-readable in /proc while it runs).
+openssl enc -aes-256-cbc -pbkdf2 -salt -in "${OUTPUT_TAR}" -out "${OUTPUT_ENC}" -pass fd:3 3<<<"${PASSWORD}"
 
 rm "${OUTPUT_TAR}"
 

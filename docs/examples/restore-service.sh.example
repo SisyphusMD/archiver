@@ -10,8 +10,8 @@
 # - Include it in your backup so it's available after restore                           #
 # - Archiver will prompt to run it after restoration completes                          #
 #                                                                                       #
-# Available tools: duplicacy, docker, sqlite3, systemctl, zfs, curl, wget, ssh,         #
-#   openssl, gpg, vim                                                                   #
+# Available tools: duplicacy, docker, sqlite3, systemctl, zfs, curl, ssh,               #
+#   openssl, vim                                                                        #
 # Note: Docker commands require mounting the Docker or Podman socket in compose.yaml    #
 #########################################################################################
 

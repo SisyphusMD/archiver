@@ -88,11 +88,10 @@ RUN chmod +x /opt/archiver/archiver.sh && \
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-ENV BUNDLE_PASSWORD="" \
-    CRON_SCHEDULE=""
+ENV CRON_SCHEDULE=""
 
 # Volumes
-# /opt/archiver/bundle/bundle.tar.enc - Required: encrypted bundle file (mount as single file)
+# /opt/archiver/bundle/bundle.tar.enc - Optional: encrypted bundle (bundle mode / cold restore)
 # /opt/archiver/bundle/ - For setup mode: directory to save generated bundle
 # /opt/archiver/logs - Optional: persistent logs directory
 # User must also mount their service directories to backup

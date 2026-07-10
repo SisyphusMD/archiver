@@ -32,11 +32,13 @@ CONFIG_SECRET_VARS_RE='^(STORAGE_PASSWORD|RSA_PASSPHRASE|PUSHOVER_USER_KEY|PUSHO
 
 # Secrets must come from the bundle or a file, never a plain env var (which would leak via
 # /proc and `docker inspect`). Drop any passed in the environment before loading, so the
-# only remaining sources are config.sh and the secret files.
+# only remaining sources are config.sh and the secret files. Warn per purged var: a silent
+# purge turns a natural env-var deployment into a baffling "X is not set" failure later.
 purge_raw_env_secrets() {
   local v
   while IFS= read -r v; do
     unset "${v}"
+    log_message "WARNING" "Ignoring ${v} from the environment: secrets are file-only. Put it in ${SECRETS_DIR}/$(printf '%s' "${v}" | tr '[:upper:]' '[:lower:]') (or point ${v}_FILE at it) and remove the env var."
   done < <(compgen -v | grep -E "${CONFIG_SECRET_VARS_RE}")
 }
 
@@ -60,14 +62,27 @@ apply_env_overrides() {
 
 # Populate one secret from a file only: ${VAR}_FILE if set, else ${SECRETS_DIR}/<var lower>.
 # Overrides the bundle value only when such a file exists, so a bundle-provided secret
-# survives when nothing is mounted. $(<file) trims the trailing newline editors/tools add.
+# survives when nothing is mounted — but an EXPLICITLY set <VAR>_FILE pointing nowhere is a
+# config error, not a fallback (silently ignoring it would keep a stale bundle secret).
+# $(<file) trims the trailing newline editors/tools add; the \r strip catches CRLF-edited
+# files, which otherwise fail much later as a baffling "wrong password".
 resolve_secret() {
   local var="${1}"
   local file_var="${var}_FILE"
-  local path="${!file_var:-${SECRETS_DIR}/$(printf '%s' "${var}" | tr '[:upper:]' '[:lower:]')}"
-  if [[ -f "${path}" ]]; then
-    printf -v "${var}" '%s' "$(<"${path}")"
+  local path
+  if [[ -n "${!file_var}" ]]; then
+    path="${!file_var}"
+    if [[ ! -f "${path}" ]]; then
+      handle_error "${file_var} is set to '${path}', but no such file exists."
+      exit 1
+    fi
+  else
+    path="${SECRETS_DIR}/$(printf '%s' "${var}" | tr '[:upper:]' '[:lower:]')"
+    [[ -f "${path}" ]] || return 0
   fi
+  local val
+  val="$(<"${path}")"
+  printf -v "${var}" '%s' "${val%$'\r'}"
 }
 
 resolve_secret_files() {
@@ -109,11 +124,30 @@ normalize_service_directories() {
   SERVICE_DIRECTORIES=("${out[@]}")
 }
 
+# ARCHIVER_CONFIG_IGNORE_OVERLAYS=true loads config.sh ALONE, with no env-var or secret-file
+# layering. init sets it when serializing the bundle/env-native materials it just generated:
+# there, the container's inherited environment and any mounted /run/secrets are noise that
+# would silently override the user's fresh answers (and init's own working variables would
+# leak into the snapshot). Skipping the overlay is not enough — an inherited var that
+# config.sh never assigns would survive into the effective set — so clear them outright.
+clear_env_config_vars() {
+  local v
+  while IFS= read -r v; do
+    unset "${v}"
+  done < <(compgen -v | grep -E "${CONFIG_NONSECRET_VARS_RE}")
+}
+
 purge_raw_env_secrets
-snapshot_env_overrides
+if [[ "${ARCHIVER_CONFIG_IGNORE_OVERLAYS:-}" == "true" ]]; then
+  clear_env_config_vars
+else
+  snapshot_env_overrides
+fi
 [[ -f "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
-apply_env_overrides
-resolve_secret_files
+if [[ "${ARCHIVER_CONFIG_IGNORE_OVERLAYS:-}" != "true" ]]; then
+  apply_env_overrides
+  resolve_secret_files
+fi
 normalize_service_directories
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
@@ -303,7 +337,13 @@ verify_target_settings() {
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then
-          handle_error "Missing B2 configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          # B2_ID/B2_KEY are secrets: a raw env var was purged above, so name the file path
+          # the user must provide instead — the purge is otherwise invisible at this point.
+          if [[ "${var}" == "B2_BUCKETNAME" ]]; then
+            handle_error "Missing B2 configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          else
+            handle_error "Missing B2 secret ${var} for the ${storage_name} storage. Secrets are file-only (never env vars): provide ${SECRETS_DIR}/$(printf '%s' "${config_var}" | tr '[:upper:]' '[:lower:]') or set ${config_var}_FILE."
+          fi
           exit 1
         fi
       done
@@ -313,7 +353,11 @@ verify_target_settings() {
       for var in "${config_vars[@]}"; do
         local config_var="STORAGE_TARGET_${storage_id}_${var}"
         if [[ -z "${!config_var}" ]]; then
-          handle_error "Missing S3 configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          if [[ "${var}" == "S3_ID" || "${var}" == "S3_SECRET" ]]; then
+            handle_error "Missing S3 secret ${var} for the ${storage_name} storage. Secrets are file-only (never env vars): provide ${SECRETS_DIR}/$(printf '%s' "${config_var}" | tr '[:upper:]' '[:lower:]') or set ${config_var}_FILE."
+          else
+            handle_error "Missing S3 configuration setting ${var} for the ${storage_name} storage. Please check your 'STORAGE_TARGET_${storage_id}' configuration."
+          fi
           exit 1
         fi
       done

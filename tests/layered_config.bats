@@ -110,3 +110,44 @@ run_load() {
   [ "${SERVICE_DIRECTORIES[0]}" = "/x/" ]
   [ "${SERVICE_DIRECTORIES[1]}" = "/y/" ]
 }
+
+@test "purging a raw env secret logs a warning naming the file path to use" {
+  export STORAGE_PASSWORD="sneaky-env-secret"
+  COMMON_SH_SOURCED=true
+  LOGGING_SH_SOURCED=true
+  source_if_not_sourced() { :; }
+  WARNINGS=""
+  log_message() { [ "${1}" = "WARNING" ] && WARNINGS+="${2}"$'\n'; }
+  handle_error() { echo "handle_error: $*" >&2; return 1; }
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/lib/core/config-loader.sh"
+  [ -z "${STORAGE_PASSWORD:-}" ]
+  [[ "${WARNINGS}" == *"Ignoring STORAGE_PASSWORD"* ]]
+  [[ "${WARNINGS}" == *"storage_password"* ]]
+}
+
+@test "resolve_secret strips a trailing CRLF (Windows-edited secret file)" {
+  printf 'pw-value\r\n' >"${SECRETS_DIR}/storage_password"
+  run_load
+  [ "${STORAGE_PASSWORD}" = "pw-value" ]
+}
+
+@test "an explicitly set <NAME>_FILE pointing at a missing file is a hard error" {
+  export STORAGE_PASSWORD_FILE="${BATS_TEST_TMPDIR}/does-not-exist"
+  run run_load
+  [ "${status}" -eq 1 ]
+  [[ "${output}" == *"STORAGE_PASSWORD_FILE"* ]]
+}
+
+@test "ARCHIVER_CONFIG_IGNORE_OVERLAYS loads config.sh alone (init isolation)" {
+  printf 'STORAGE_TARGET_1_NAME="fresh"\n' >"${CONFIG_FILE}"
+  export STORAGE_TARGET_1_NAME="stale-deployment-value"
+  # an inherited var config.sh never assigns must not survive into the effective set
+  export STORAGE_TARGET_1_B2_BUCKETNAME="stale-bucket"
+  printf 'stale-secret' >"${SECRETS_DIR}/storage_password"
+  export ARCHIVER_CONFIG_IGNORE_OVERLAYS=true
+  run_load
+  [ "${STORAGE_TARGET_1_NAME}" = "fresh" ]
+  [ -z "${STORAGE_TARGET_1_B2_BUCKETNAME:-}" ]
+  [ -z "${STORAGE_PASSWORD:-}" ]
+}

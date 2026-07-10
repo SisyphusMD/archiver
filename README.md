@@ -15,6 +15,12 @@ Each directory gets backed up independently, with optional pre/post-backup scrip
 
 Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible storage.
 
+## ⚠️ Breaking Change in v0.9.0
+
+**`BUNDLE_PASSWORD` is no longer read from the environment.** The bundle password is now a file-based secret: mount it at `/run/secrets/bundle_password` (a Compose or Swarm `secrets:` entry named `bundle_password`, as in the [compose template](compose.yaml)), or point `BUNDLE_PASSWORD_FILE` at another path. A container that still sets `BUNDLE_PASSWORD` via `environment:` or `env_file` fails fast at startup with a migration message.
+
+To upgrade an existing deployment: write the password to a file (for example `./secrets/bundle_password`), add the `secrets:` entries from the compose template, and remove `BUNDLE_PASSWORD` from the environment. This password decrypts the entire bundle, including the RSA private key, and an environment variable leaks through `docker inspect` and `/proc` — a file does not. See [Configuration Sources](#configuration-sources-bundle-or-env-native) for the full file-based secrets model, and [Migrating a bundle to env-native](#migrating-a-bundle-to-env-native) to move the rest of the configuration out of the bundle too (optional).
+
 ## ⚠️ Breaking Changes in v0.7.0
 
 **Direct installation on host systems is no longer supported.** All deployments must now run inside a container (Docker, Podman, Kubernetes, etc.).
@@ -194,11 +200,11 @@ You'll enter the **User Key** and **API Token** during init.
 
 > **Container image**: Examples below pull from `forgejo.bryantserver.com/sisyphusmd/archiver`. The same image is also published to `ghcr.io/sisyphusmd/archiver` if you prefer that registry — just substitute the registry hostname in any `image:` or `docker run` line.
 
-### Step 1: Generate Bundle File
+### Step 1: Generate Configuration (`init`)
 
-**Skip this step if you already have a bundle file** (e.g., `bundle.tar.enc` or `export-*.tar.enc` from a previous installation).
+**Skip this step if you already have a bundle file** (e.g., `bundle.tar.enc` or `export-*.tar.enc` from a previous installation) or existing env-native materials.
 
-For new installations, run initialization interactively to generate your configuration bundle:
+For new installations, run initialization interactively:
 
 ```bash
 docker run -it --rm \
@@ -206,11 +212,14 @@ docker run -it --rm \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 init
 ```
 
-This creates `archiver-bundle/bundle.tar.enc` with your configuration and keys.
+This writes two things into `archiver-bundle/`:
+
+- `env-native/` — `archiver.env` (non-secret settings) plus `secrets/` (one file per secret, including the keys). This is the **primary** way to deploy: load them as a Compose `environment:` block + `secrets:`, or a Kubernetes ConfigMap + Secret. **The files are plaintext — move them into your secret store and delete `env-native/` from the bundle directory.**
+- `bundle.tar.enc` — the encrypted bundle carrying the same configuration. Keep it (and its password) somewhere safe as a cold-restore artifact, or deploy from it directly (transitional; see the commented alternative in [compose.yaml](compose.yaml)).
 
 ### Step 2: Configure Docker Compose
 
-Create `compose.yaml`:
+Create `compose.yaml` (env-native, the primary mode — fill the `environment:` values from `env-native/archiver.env` and point the `secrets:` files at where you moved `env-native/secrets/`):
 
 ```yaml
 services:
@@ -222,7 +231,8 @@ services:
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
-    hostname: backup-server       # used for backup service label (optional)
+    hostname: backup-server       # forms the Duplicacy snapshot ID (<hostname>-<service>); keep it stable,
+                                  # and set it to the ORIGINAL value when restoring on a new machine
 
     cap_drop:
       - ALL
@@ -236,23 +246,44 @@ services:
     environment:
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
+      # Non-secret settings from env-native/archiver.env:
+      SERVICE_DIRECTORIES: "/mnt/backup-dir/"       # colon-delimited list
+      STORAGE_TARGET_1_NAME: "local"
+      STORAGE_TARGET_1_TYPE: "local"
+      STORAGE_TARGET_1_LOCAL_PATH: "/mnt/backup/storage"
+      ROTATE_BACKUPS: "true"
 
-    secrets:
-      - bundle_password           # Bundle password; mounted at /run/secrets/bundle_password
+    secrets:                      # each lands at /run/secrets/<name>
+      - storage_password
+      - rsa_passphrase
+      - rsa_private_key
+      - rsa_public_key
+      # - ssh_private_key         # only for sftp targets
+      # - ssh_public_key          # only for sftp targets
+      # - storage_target_1_b2_id  # only for b2 targets
+      # - storage_target_1_b2_key
+      # - storage_target_1_s3_id  # only for s3 targets
+      # - storage_target_1_s3_secret
 
     volumes:
-      - ./archiver-bundle:/opt/archiver/bundle       # Bundle file (required)
       - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
-      - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match config.sh)
+      - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match SERVICE_DIRECTORIES)
+      - /path/to/host/backup/storage:/mnt/backup/storage  # Local storage target
       # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
       # - /path/to/host/restore-dir:/mnt/restore-dir # Restore location (will be prompted)
 
 secrets:
-  bundle_password:
-    file: ./secrets/bundle_password   # a file containing ONLY the bundle password
+  storage_password: { file: ./secrets/storage_password }
+  rsa_passphrase:   { file: ./secrets/rsa_passphrase }
+  rsa_private_key:  { file: ./secrets/rsa_private_key }
+  rsa_public_key:   { file: ./secrets/rsa_public_key }
+  # ssh_private_key: { file: ./secrets/ssh_private_key }
+  # ssh_public_key:  { file: ./secrets/ssh_public_key }
 ```
 
-Update paths, write your bundle password to `secrets/bundle_password`, then start:
+To deploy from the encrypted bundle instead (transitional / cold-restore path), use the commented bundle-mode service in [compose.yaml](compose.yaml): mount `./archiver-bundle:/opt/archiver/bundle` and provide the bundle password as the `bundle_password` secret file.
+
+Update paths, then start:
 
 ```bash
 docker compose up -d
@@ -354,9 +385,9 @@ The entrypoint selects one of three modes based on the first container argument:
 
 ### Image Tags
 
-- `0.8.5` - Specific version (recommended)
-- `0.8` - Minor version (receives patches automatically)
-- `0` - Major version (receives minor/patch updates)
+- `forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12` - exact version (recommended; this line always names the current release)
+- `MAJOR.MINOR` (e.g. `0.9`) - receives patch updates automatically
+- `MAJOR` (e.g. `0`) - receives minor and patch updates automatically
 
 ---
 
@@ -368,7 +399,7 @@ The settings below define what to backup and where. They can be supplied through
 
 Archiver reads its configuration from three layers, in increasing precedence:
 
-1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`). Optional, and still the easy cold-restore path: mount the bundle and provide its password at `/run/secrets/bundle_password` and it becomes the baseline again.
+1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`). Optional and transitional: env-native is the primary configuration source, but the bundle remains fully supported and is still the easy cold-restore path — mount it and provide its password at `/run/secrets/bundle_password` and it becomes the baseline again.
 2. **Environment variables** for non-secret settings, which override the bundle.
 3. **Files** for secrets, which override the bundle.
 
@@ -380,13 +411,28 @@ With a bundle and no overrides, behavior is exactly as before. With no bundle at
 
 **Keys (files).** Keys are always files under `/opt/archiver/keys`. In env-native mode (no bundle) the RSA keypair must be provided as files at `/run/secrets/rsa_private_key` and `/run/secrets/rsa_public_key` (override the paths with `RSA_PRIVATE_KEY_FILE` / `RSA_PUBLIC_KEY_FILE`). The SFTP keypair is optional, for sftp targets, at `/run/secrets/ssh_private_key` and `/run/secrets/ssh_public_key` (override with `SSH_PRIVATE_KEY_FILE` / `SSH_PUBLIC_KEY_FILE`; restore needs both halves). When a bundle is also present, mounted key files override the bundle's keys.
 
-### Migrating a bundle to env-native
-
-To move an existing bundle deployment to env-native without hand-transcribing anything, run `archiver migrate` inside the container (with an output directory mounted):
+Starting env-native from scratch (no bundle, no `archiver init`)? Generate the RSA keypair yourself — Duplicacy needs the traditional PKCS#1 PEM format, and the passphrase must match your `rsa_passphrase` secret:
 
 ```bash
-docker exec archiver archiver migrate /opt/archiver/migrate
+openssl genrsa -aes256 -passout pass:YOUR_RSA_PASSPHRASE -traditional -out rsa_private_key 2048
+openssl rsa -in rsa_private_key -passin pass:YOUR_RSA_PASSPHRASE -pubout -out rsa_public_key
 ```
+
+(For sftp targets, also `ssh-keygen -t ed25519 -N "" -f ssh_private_key`, which writes `ssh_private_key` and `ssh_private_key.pub` — supply the latter as `ssh_public_key`.)
+
+**What to escrow for disaster recovery (env-native).** To restore after losing the host you need, stored somewhere that does not burn down with it: `STORAGE_PASSWORD` (unlocks the Duplicacy storage), `RSA_PASSPHRASE` + `rsa_private_key` (decrypt the file data), your storage-target settings (`archiver.env` or equivalents), and for sftp targets the SSH keypair. Missing any of the first three means the backups are permanently undecryptable. The simplest escrow is still a bundle: run `archiver bundle export` and keep `bundle.tar.enc` + its password — that one artifact carries everything above.
+
+### Migrating a bundle to env-native
+
+To move an existing bundle deployment to env-native without hand-transcribing anything, run `archiver migrate` inside the container and copy the result out (the default output directory `/opt/archiver/migrate` is inside the container, not on the host):
+
+```bash
+docker exec archiver archiver migrate
+docker cp archiver:/opt/archiver/migrate ./archiver-migrate
+docker exec archiver rm -rf /opt/archiver/migrate
+```
+
+The copied files hold your secrets in **plaintext** — move them into your secret store, then delete the plain copies.
 
 It writes the effective configuration as ready-to-use materials:
 
@@ -570,7 +616,9 @@ archiver restore           # Restore data from backup (interactive)
 archiver auto-restore      # Restore one snapshot from backup (non-interactive, env-driven)
 archiver auto-restore-all  # Restore every service in one pass (non-interactive)
 archiver snapshot-exists   # Check if a snapshot exists on any storage target
-archiver healthcheck       # Check system health
+archiver migrate [DIR]     # Write the effective config as env-native materials (env + secret files)
+archiver backup [prune|retain]  # Synchronous backup, exit code propagates (external schedulers/Jobs)
+archiver healthcheck       # Check system health (Docker HEALTHCHECK uses this; on Kubernetes wire it as an exec probe)
 archiver help              # Show help
 ```
 
@@ -666,21 +714,25 @@ The restore destination can be any path accessible within the container. If you 
 
 ### One-Off Restore with Temporary Container
 
-For a one-time restore without modifying your running container, use a temporary container:
+For a one-time restore without modifying your running container, start a temporary container and exec the interactive restore into it:
 
 ```bash
-# One-off restore (container exits after completion)
-docker run --rm -it \
+docker run -d --name archiver-restore \
   -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 \
-  archiver restore
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12
+
+docker exec -it archiver-restore archiver restore
+
+docker rm -f archiver-restore
 ```
 
 When prompted for the local directory path during restore, enter the container path (e.g., `/mnt/restore`). The restored files will appear on your host at `/path/to/restore/destination`.
 
 ### Non-interactive Restore (CI / Kubernetes)
+
+Snapshot IDs are `<hostname>-<service directory basename>` (e.g. `backup-server-nextcloud`). When restoring on a different machine, run the container with `hostname:` set to the ORIGINAL value or pass the full `SNAPSHOT_ID` explicitly.
 
 For automated disaster recovery flows (e.g. Kubernetes init containers), Archiver exposes two non-interactive commands driven by environment variables. Exit codes are the machine-readable answer; stdout is informational.
 

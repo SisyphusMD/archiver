@@ -78,9 +78,9 @@ If you have `service-backup-settings.sh` files in your service directories, revi
 - Backup: duplicacy, docker, openssh-client, openssl
 - Databases: sqlite3
 - Host management: systemctl, zfs
-- Network: curl, wget, iputils-ping
+- Network: curl, iputils-ping
 - Editors: nano, vim
-- Utilities: expect, procps, ca-certificates, gnupg
+- Utilities: expect, procps, ca-certificates
 - Standard Unix utilities: tar, gzip, grep, awk, sed, find, etc.
 
 ---
@@ -116,13 +116,21 @@ cp /path/to/archiver/exports/export-YYYYMMDD-HHMMSS.tar.enc ~/archiver-bundle/bu
 
 ### Step 2: Create Docker Compose Configuration
 
-Create a `compose.yaml` file in a new directory:
+Create a new directory for the deployment, and write your bundle password to a file in it (the same password you used when creating the export/bundle — the file's whole content is the password, so no quoting or `$`-escaping is needed):
+
+```bash
+mkdir -p secrets
+printf '%s' 'your-bundle-password-here' > secrets/bundle_password
+chmod 600 secrets/bundle_password
+```
+
+Then create a `compose.yaml` in the same directory:
 
 ```yaml
 services:
   archiver:
     container_name: archiver
-    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.7.0
+    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0
     restart: unless-stopped
     stop_grace_period: 2m  # Allow time for graceful shutdown and cleanup
 
@@ -131,15 +139,17 @@ services:
     hostname: YOUR_CURRENT_HOSTNAME_HERE
 
     environment:
-      # Your bundle password (same password you used to create the bundle)
-      # Note: If password contains $, escape it as $$ (e.g., my$password → my$$password)
-      BUNDLE_PASSWORD: "your-bundle-password-here"
-
       # Your cron schedule from step 3 (or omit for manual backups)
       CRON_SCHEDULE: "0 3 * * *"
 
       # Timezone for cron scheduling and timestamps
       TZ: "America/New_York"
+
+    secrets:
+      # Bundle decryption password; mounted at /run/secrets/bundle_password.
+      # It is a file-based secret, NOT an environment variable: a container that
+      # sets BUNDLE_PASSWORD in its environment fails fast at startup.
+      - bundle_password
 
     volumes:
       # Bundle directory (required) - mounts to /opt/archiver/bundle in container
@@ -158,6 +168,10 @@ services:
 
       # Docker socket (only if your scripts use docker commands)
       # - /var/run/docker.sock:/var/run/docker.sock  # SECURITY WARNING: See below
+
+secrets:
+  bundle_password:
+    file: ./secrets/bundle_password   # the file you created above
 ```
 
 **Critical Configuration Notes:**
@@ -165,7 +179,7 @@ services:
 1. **Hostname**: Must match your current host's hostname (from pre-migration step 4)
 2. **Bundle directory**: The host path (left side) is where you placed bundle.tar.enc in Step 1. The container path (right side) must be `/opt/archiver/bundle`
 3. **Volume paths for data**: Container paths (right side) must exactly match `SERVICE_DIRECTORIES` in your `config.sh`
-4. **Bundle password**: Same password you used when creating the export/bundle file
+4. **Bundle password**: Same password you used when creating the export/bundle file, provided as the secret file above — never as an environment variable
 
 **Docker Socket Security Warning:**
 

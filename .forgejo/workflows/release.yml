@@ -164,13 +164,13 @@ jobs:
           ' CHANGELOG.md > CHANGELOG.md.new
           mv CHANGELOG.md.new CHANGELOG.md
 
-      - name: Bump image tag in compose.yaml and README
+      - name: Bump image tag in compose.yaml, README, and guides
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
           sed -i -E "s|(forgejo\.bryantserver\.com/sisyphusmd/archiver:)[0-9]+\.[0-9]+\.[0-9]+|\1${VERSION}|g" \
-            compose.yaml README.md
+            compose.yaml README.md docs/guides/migration/legacy-to-docker.md docs/guides/configuration/local-storage-setup.md
 
       - name: Show diff
         run: git --no-pager diff
@@ -190,21 +190,31 @@ jobs:
       - name: Smoke test
         run: |
           set +e
-          # Run the entrypoint with no env vars set. `docker-entrypoint.sh`
-          # falls through to `prepare_bundle()`, which exits 1 with a clear
-          # error message when BUNDLE_PASSWORD is unset. We assert that exact
-          # exit + error string — confirms the image boots, sources lib code
-          # without import errors, and reaches the prepare_bundle gate.
-          # `--network none` bounds blast radius for the smoke run.
+          # Run the entrypoint with no config at all: `prepare_config()` exits 1 with the
+          # no-bundle/no-keys error — confirms the image boots, sources lib code without
+          # import errors, and reaches the config gate. Then assert the raw-env
+          # BUNDLE_PASSWORD rejection (file-only secret). Mirrors docker-publish.yml's
+          # pr-validate smoke. `--network none` bounds blast radius for the smoke run.
           OUT=$(docker run --rm --network none smoke-test:local 2>&1)
           RC=$?
           echo "$OUT"
           if [ "$RC" -eq 0 ]; then
-            echo "::error::Container exited 0; expected non-zero (BUNDLE_PASSWORD missing)"
+            echo "::error::Container exited 0; expected non-zero (no bundle and no keys)"
             exit 1
           fi
-          if ! echo "$OUT" | grep -q "BUNDLE_PASSWORD environment variable is required"; then
-            echo "::error::Expected 'BUNDLE_PASSWORD environment variable is required' in output"
+          if ! echo "$OUT" | grep -q "no bundle and no RSA key files found"; then
+            echo "::error::Expected 'no bundle and no RSA key files found' in output"
+            exit 1
+          fi
+          OUT2=$(docker run --rm --network none -e BUNDLE_PASSWORD=x smoke-test:local 2>&1)
+          RC2=$?
+          echo "$OUT2"
+          if [ "$RC2" -eq 0 ]; then
+            echo "::error::Container exited 0 with BUNDLE_PASSWORD in env; expected non-zero"
+            exit 1
+          fi
+          if ! echo "$OUT2" | grep -q "BUNDLE_PASSWORD is no longer read from the environment"; then
+            echo "::error::Expected the BUNDLE_PASSWORD env-rejection message"
             exit 1
           fi
           echo "Smoke test passed"
@@ -216,7 +226,7 @@ jobs:
           TOKEN: ${{ secrets.CLUSTER_FORGEJO_REPO_WRITE_PAT }}
         run: |
           set -euo pipefail
-          git add CHANGELOG.md compose.yaml README.md
+          git add CHANGELOG.md compose.yaml README.md docs/guides/migration/legacy-to-docker.md docs/guides/configuration/local-storage-setup.md
           git commit -m "release: ${VERSION}"
           git tag "${TAG}"
           # Pass the token via http.extraheader (HTTP Authorization header) instead

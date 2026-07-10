@@ -16,7 +16,9 @@ NET="archiver-s3-net-$$"
 MINIO="archiver-s3-minio-$$"
 ARCH="archiver-s3-arch-$$"
 CERTVOL="archiver-s3-certs-$$"
-MINIO_IMAGE="minio/minio:RELEASE.2025-04-22T22-12-26Z"
+# Digest-pinned: this test gates releases; keep deterministic. (Renovate does not scan
+# shell scripts — bump the digest by hand when updating.)
+MINIO_IMAGE="minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e"
 S3_KEY="testkey"
 S3_SECRET="testsecret123"
 BUCKET="archiver-test"

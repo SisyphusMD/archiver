@@ -115,6 +115,12 @@ configure_restore_options() {
   RESTORE_FLAGS=""
   RESTORE_THREADS="${DUPLICACY_THREADS}"
 
+  # Same env toggle the non-interactive paths honor (docs recommend IGNORE_OWNERSHIP=1 for
+  # backup-only cap sets); the prompt below can still add it interactively.
+  if [ -n "${IGNORE_OWNERSHIP}" ]; then
+    RESTORE_FLAGS="${RESTORE_FLAGS} -ignore-owner"
+  fi
+
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     # Ask about hash-based detection
     read -p "Detect file differences by hash (slower but more thorough)? (y/N): " -n 1 -r
