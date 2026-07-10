@@ -203,7 +203,7 @@ Start the container in init mode:
 docker run -it --rm \
   -v /path/to/local-backups:/mnt/backups \
   -v /path/to/bundle:/opt/archiver/bundle \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 init
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 init
 ```
 
 Follow the prompts and configure:

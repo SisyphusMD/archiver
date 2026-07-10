@@ -209,7 +209,7 @@ For new installations, run initialization interactively:
 ```bash
 docker run -it --rm \
   -v ./archiver-bundle:/opt/archiver/bundle \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 init
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 init
 ```
 
 This writes two things into `archiver-bundle/`:
@@ -227,7 +227,7 @@ services:
   archiver:
 
     container_name: archiver
-    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12
+    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
@@ -385,7 +385,7 @@ The entrypoint selects one of three modes based on the first container argument:
 
 ### Image Tags
 
-- `forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12` - exact version (recommended; this line always names the current release)
+- `forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0` - exact version (recommended; this line always names the current release)
 - `MAJOR.MINOR` (e.g. `0.9`) - receives patch updates automatically
 - `MAJOR` (e.g. `0`) - receives minor and patch updates automatically
 
@@ -645,7 +645,7 @@ docker run --rm \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
   -v /path/to/host/backup-dir:/mnt/backup-dir \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 run backup
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 run backup
 ```
 
 `/path/to/bundle_password` is a file containing only the bundle password. Accepts the same optional flags as `archiver start`: `run backup prune` forces rotation, `run backup retain` forces retention (overriding `ROTATE_BACKUPS` in `config.sh`).
@@ -667,7 +667,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: archiver
-              image: forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12
+              image: forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0
               args: ["run", "backup"]
               volumeMounts:
                 - { name: bundle,          mountPath: /opt/archiver/bundle }
@@ -721,7 +721,7 @@ docker run -d --name archiver-restore \
   -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0
 
 docker exec -it archiver-restore archiver restore
 
@@ -795,7 +795,7 @@ docker run --rm \
   -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
   -e SNAPSHOT_ID=myservice \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 run snapshot-exists
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 run snapshot-exists
 
 # Restore a snapshot into a mounted destination
 docker run --rm \
@@ -805,7 +805,7 @@ docker run --rm \
   -e OVERWRITE=1 \
   -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 run auto-restore
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 run auto-restore
 ```
 
 In Kubernetes this is typically an init container on the workload pod: probe with `run snapshot-exists`, and if a backup exists, run `run auto-restore` to seed the data volume before the main container starts. The exit-code contract means the pod's `restartPolicy` and init-container failure handling behave as expected.

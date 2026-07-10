@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-10
+
 ### Breaking
 - **`BUNDLE_PASSWORD` is no longer read from the environment and must be provided as a file** (a Docker or Kubernetes secret). Every existing deployment that passes it via `environment:` or `env_file` must migrate before upgrading: write the password to a file, mount it at `/run/secrets/bundle_password` (a Docker Compose or Swarm `secrets:` entry named `bundle_password` lands there automatically — see the `secrets:` block in the repo's `compose.yaml`), or point `BUNDLE_PASSWORD_FILE` at another path, and remove `BUNDLE_PASSWORD` from the environment. A container that still has it set fails fast at startup with this migration message rather than silently ignoring it (which would otherwise drop a bundle deployment into env-native mode and fail later with a confusing "no bundle" error). Why: the bundle password decrypts the entire bundle, including the RSA private key, and an environment variable leaks through `docker inspect` and `/proc`.
 
@@ -39,6 +41,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - The container's SIGTERM handler (`docker stop`) now waits for the interrupted backup to record its stop and release the lock before exiting, instead of racing PID-namespace teardown against that cleanup (which could SIGKILL it mid-flight and lose the stop record/notification).
 - `archiver healthcheck` no longer reports a healthy env-native deployment as UNHEALTHY: the absence of `config.sh` is only an error when there is no RSA key either. It also detected "run finished despite errors" by grepping for a log line that nothing ever emitted, so any transient error in the recent log window flipped the container UNHEALTHY; it now matches the real end-of-run marker.
 - Env-native SFTP deployments can now restore: the entrypoint places `/run/secrets/ssh_public_key` (override `SSH_PUBLIC_KEY_FILE`) alongside the private key, and `archiver migrate` exports it. The SFTP restore path requires both key halves; previously only the private key was placed, so backup worked but restore failed.
+
+### Dependencies
+
+- chore(deps): update dependency aptible/supercronic to v0.2.47
 
 ## [0.8.12] - 2026-07-07
 
