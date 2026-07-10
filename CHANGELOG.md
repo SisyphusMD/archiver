@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- `archiver init` now writes its output (the `env-native/` materials and the escrow `bundle.tar.enc`) to a neutral `/opt/archiver/setup` directory — mount that for init (`-v ./archiver-setup:/opt/archiver/setup`). Bundle-mode deployments still mount the bundle at `/opt/archiver/bundle` at run time; only the init output location moved, so the primary setup flow is no longer branded by the transitional bundle path. init also no longer claims the bundle is required to run Archiver (it is the disaster-recovery escrow).
+- Image-build robustness: the three binary downloads (duplicacy, docker-cli, supercronic) retry on transient network errors instead of failing the whole build on a single reset, and the docker-cli archive is downloaded to a file before extraction.
+
 ## [0.9.0] - 2026-07-10
 
 ### Breaking

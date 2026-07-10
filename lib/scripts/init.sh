@@ -470,14 +470,20 @@ EOL
 }
 
 create_new_bundle() {
-  print_header "Creating Encrypted Bundle"
+  print_header "Creating Disaster-Recovery Bundle"
 
   # config-loader (sourced by bundle-export below, in this same shell) must see config.sh's
   # SERVICE_DIRECTORIES, not init's leftover working array.
   unset SERVICE_DIRECTORIES
 
-  echo "Your configuration and keys will be encrypted in a bundle file."
-  echo "You'll need this bundle file and its password to run Archiver."
+  # All init output (env-native materials + the escrow bundle) lands in the neutral setup
+  # directory; bundle-export writes to BUNDLE_DIR, so point it there for this shell.
+  # Deployments that choose bundle mode mount the bundle at /opt/archiver/bundle at RUN time.
+  BUNDLE_DIR="${SETUP_DIR}"
+  mkdir -p "${SETUP_DIR}"
+
+  echo "Your configuration and keys will also be encrypted into a bundle file — a"
+  echo "self-contained escrow copy: it and its password can restore your whole setup."
   echo
 
   # Source bundle export to use its logic
@@ -493,7 +499,7 @@ create_new_bundle() {
 emit_env_native_materials() {
   print_section "Writing Env-Native Deployment Materials"
 
-  if "${MIGRATE_SCRIPT}" "${BUNDLE_DIR}/env-native"; then
+  if "${MIGRATE_SCRIPT}" "${SETUP_DIR}/env-native"; then
     print_success "Env-native materials written to env-native/ in the mounted setup directory"
   else
     echo "WARNING: could not write env-native materials. You can generate them later with 'archiver migrate'."
@@ -531,7 +537,7 @@ display_credentials() {
   echo "Next steps:"
   echo "  1. RECOMMENDED (env-native): load env-native/archiver.env as environment variables and the"
   echo "     env-native/secrets/ files as secrets mounted under /run/secrets (see the compose template),"
-  echo "     then DELETE env-native/ from the bundle directory: it holds your secrets in plaintext."
+  echo "     then DELETE env-native/ from the setup directory: it holds your secrets in plaintext."
   echo "  2. Alternative (bundle mode): mount bundle.tar.enc and provide the bundle password as a"
   echo "     secret file at /run/secrets/bundle_password (see password above)."
   echo "  3. Either way, store bundle.tar.enc and its password in a safe location (cold-restore copy)."

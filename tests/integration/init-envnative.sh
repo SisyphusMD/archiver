@@ -15,7 +15,7 @@ set -uo pipefail
 FIXTURES=/data/fixtures
 OTHER=/data/other
 STORE=/backup-store
-ENVNATIVE=/opt/archiver/bundle/env-native
+ENVNATIVE=/opt/archiver/setup/env-native
 SECRETS_DIR=/run/secrets
 
 log() { printf '>>> %s\n' "$*"; }
@@ -41,7 +41,7 @@ printf '/data/fixtures/,/data/other/\nlocal\nlocal\n/backup-store\nnntestbundlep
   | bash /opt/archiver/lib/scripts/init.sh >/tmp/init.out 2>&1 || { tail -30 /tmp/init.out; die "init exited non-zero"; }
 
 log "init must have produced the bundle AND the env-native materials"
-[ -f /opt/archiver/bundle/bundle.tar.enc ] || die "no bundle.tar.enc"
+[ -f /opt/archiver/setup/bundle.tar.enc ] || die "no bundle.tar.enc"
 [ -f "$ENVNATIVE/archiver.env" ] || die "no env-native/archiver.env"
 [ -d "$ENVNATIVE/secrets" ] || die "no env-native/secrets/"
 grep -q "RECOMMENDED (env-native)" /tmp/init.out || die "init guidance does not lead with env-native"
@@ -58,7 +58,7 @@ for f in storage_password rsa_passphrase rsa_private_key rsa_public_key ssh_priv
 done
 
 log "the bundle decrypts with the OLD-style openssl -k (compat) and records config.sh as 0600"
-openssl enc -d -aes-256-cbc -pbkdf2 -in /opt/archiver/bundle/bundle.tar.enc -out /tmp/bundle.tar -k testbundlepw \
+openssl enc -d -aes-256-cbc -pbkdf2 -in /opt/archiver/setup/bundle.tar.enc -out /tmp/bundle.tar -k testbundlepw \
   || die "bundle does not decrypt with legacy-style -k (password-derivation compat broken)"
 tar -tvf /tmp/bundle.tar | grep "config.sh" | grep -q -- "^-rw-------" || die "config.sh not 0600 inside the bundle tar"
 tar -xf /tmp/bundle.tar -C /tmp config.sh

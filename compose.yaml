@@ -96,7 +96,7 @@ secrets:
 #     secrets:
 #       - bundle_password                                            # mounted at /run/secrets/bundle_password
 #     volumes:
-#       - ./archiver-bundle:/opt/archiver/bundle                     # Bundle file (required)
+#       - ./archiver-bundle:/opt/archiver/bundle                     # Bundle file (bundle mode)
 #       - ./archiver-logs:/opt/archiver/logs                         # Persistent logs (optional)
 #       - /path/to/host/backup-dir:/mnt/backup-dir                   # Data to backup (must match config.sh)
 # secrets:
