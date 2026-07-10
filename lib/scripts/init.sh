@@ -494,7 +494,7 @@ emit_env_native_materials() {
   print_section "Writing Env-Native Deployment Materials"
 
   if "${MIGRATE_SCRIPT}" "${BUNDLE_DIR}/env-native"; then
-    print_success "Env-native materials written to env-native/ in your bundle directory"
+    print_success "Env-native materials written to env-native/ in the mounted setup directory"
   else
     echo "WARNING: could not write env-native materials. You can generate them later with 'archiver migrate'."
   fi
@@ -503,8 +503,8 @@ emit_env_native_materials() {
 display_credentials() {
   print_header "Setup Complete!"
 
-  echo "Your encrypted bundle has been created:"
-  echo "  bundle.tar.enc (in your mounted bundle directory)"
+  echo "Your disaster-recovery bundle has been created:"
+  echo "  bundle.tar.enc (in the mounted setup directory)"
   echo
   echo "IMPORTANT: Save your bundle password in a secure location!"
   echo

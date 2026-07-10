@@ -30,7 +30,7 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
 # renovate: datasource=github-releases depName=aptible/supercronic
 ARG SUPERCRONIC_VERSION=v0.2.47
 ARG SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}
-RUN curl -fsSL "$SUPERCRONIC_URL" -o /usr/local/bin/supercronic && \
+RUN curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "$SUPERCRONIC_URL" -o /usr/local/bin/supercronic && \
     chmod +x /usr/local/bin/supercronic
 
 # renovate: datasource=github-releases depName=gilbertchen/duplicacy extractVersion=^v(?<version>.+)$
@@ -55,8 +55,10 @@ RUN ARCH_SUFFIX="" && \
     else \
         echo "Unsupported architecture: $TARGETARCH" && exit 1; \
     fi && \
-    curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH_SUFFIX}/docker-${DOCKER_CLI_VERSION}.tgz" \
-        | tar -xzC /usr/local/bin --strip-components=1 docker/docker
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "https://download.docker.com/linux/static/stable/${ARCH_SUFFIX}/docker-${DOCKER_CLI_VERSION}.tgz" \
+        -o /tmp/docker-cli.tgz && \
+    tar -xzC /usr/local/bin --strip-components=1 -f /tmp/docker-cli.tgz docker/docker && \
+    rm /tmp/docker-cli.tgz
 
 RUN ARCH_SUFFIX="" && \
     if [ "$TARGETARCH" = "amd64" ]; then \
@@ -66,7 +68,7 @@ RUN ARCH_SUFFIX="" && \
     else \
         echo "Unsupported architecture: $TARGETARCH" && exit 1; \
     fi && \
-    curl -fsSL "https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/duplicacy_linux_${ARCH_SUFFIX}_${DUPLICACY_VERSION}" \
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/duplicacy_linux_${ARCH_SUFFIX}_${DUPLICACY_VERSION}" \
         -o /usr/local/bin/duplicacy && \
     chmod +x /usr/local/bin/duplicacy
 

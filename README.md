@@ -19,7 +19,7 @@ Supports local disk, SFTP (Synology NAS, etc.), BackBlaze B2, and S3-compatible 
 
 **`BUNDLE_PASSWORD` is no longer read from the environment.** The bundle password is now a file-based secret: mount it at `/run/secrets/bundle_password` (a Compose or Swarm `secrets:` entry named `bundle_password`, as in the [compose template](compose.yaml)), or point `BUNDLE_PASSWORD_FILE` at another path. A container that still sets `BUNDLE_PASSWORD` via `environment:` or `env_file` fails fast at startup with a migration message.
 
-To upgrade an existing deployment: write the password to a file (for example `./secrets/bundle_password`), add the `secrets:` entries from the compose template, and remove `BUNDLE_PASSWORD` from the environment. This password decrypts the entire bundle, including the RSA private key, and an environment variable leaks through `docker inspect` and `/proc` — a file does not. See [Configuration Sources](#configuration-sources-bundle-or-env-native) for the full file-based secrets model, and [Migrating a bundle to env-native](#migrating-a-bundle-to-env-native) to move the rest of the configuration out of the bundle too (optional).
+To upgrade an existing deployment: write the password to a file (for example `./secrets/bundle_password`), add the `secrets:` entries from the compose template, and remove `BUNDLE_PASSWORD` from the environment. This password decrypts the entire bundle, including the RSA private key, and an environment variable leaks through `docker inspect` and `/proc` — a file does not. See [Configuration Sources](#configuration-sources-env-native-or-bundle) for the full file-based secrets model, and [Migrating a bundle to env-native](#migrating-a-bundle-to-env-native) to move the rest of the configuration out of the bundle too (optional).
 
 ## ⚠️ Breaking Changes in v0.7.0
 
@@ -204,18 +204,18 @@ You'll enter the **User Key** and **API Token** during init.
 
 **Skip this step if you already have configuration** — env-native materials (`archiver.env` + secret files) or a bundle (`bundle.tar.enc` / `export-*.tar.enc`) from a previous installation.
 
-For new installations, run initialization interactively:
+For new installations, run initialization interactively (the mount is just an output directory for the generated materials):
 
 ```bash
 docker run -it --rm \
-  -v ./archiver-bundle:/opt/archiver/bundle \
+  -v ./archiver-setup:/opt/archiver/bundle \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 init
 ```
 
-This writes two things into `archiver-bundle/`:
+This writes your configuration into `archiver-setup/`:
 
-- `env-native/` — `archiver.env` (non-secret settings) plus `secrets/` (one file per secret, including the keys). This is the **primary** way to deploy: load them as a Compose `environment:` block + `secrets:`, or a Kubernetes ConfigMap + Secret. **The files are plaintext — move them into your secret store and delete `env-native/` from the bundle directory.**
-- `bundle.tar.enc` — the encrypted bundle carrying the same configuration. Keep it (and its password) somewhere safe as a cold-restore artifact, or deploy from it directly (transitional; see the commented alternative in [compose.yaml](compose.yaml)).
+- `env-native/` — `archiver.env` (non-secret settings) plus `secrets/` (one file per secret, including the keys). **This is what you deploy with**: a Compose `environment:` block + `secrets:`, or a Kubernetes ConfigMap + Secret. The files are plaintext — move them into your secret store and delete `env-native/` afterwards.
+- `bundle.tar.enc` — an encrypted, self-contained copy of the same configuration. Store it (and its password) somewhere safe as your disaster-recovery escrow. (It can also drive a deployment directly — transitional; see the commented alternative in [compose.yaml](compose.yaml).)
 
 ### Step 2: Configure Docker Compose
 
@@ -369,7 +369,7 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 | `TZ` | No | Timezone for scheduled backups and log timestamps (default: UTC) |
 | `SYSTEMCTL_FORCE_BUS` | No | Set to `1` to enable systemctl access to host services via D-Bus socket (requires socket mounts, see above) |
 
-The bundle password is **not** an environment variable. It is a file-based secret, read from `/run/secrets/bundle_password` (or the path in `BUNDLE_PASSWORD_FILE`); a container that still sets `BUNDLE_PASSWORD` in its environment fails fast at startup. Existing deployments that set it via `environment:` or `env_file` must move the value to that file and remove the env var. The rest of Archiver's configuration (service directories, storage targets, secrets, rotation) can also be supplied as environment variables and file-based secrets instead of, or on top of, the bundle. See [Configuration Sources](#configuration-sources-bundle-or-env-native).
+The bundle password is **not** an environment variable. It is a file-based secret, read from `/run/secrets/bundle_password` (or the path in `BUNDLE_PASSWORD_FILE`); a container that still sets `BUNDLE_PASSWORD` in its environment fails fast at startup. Existing deployments that set it via `environment:` or `env_file` must move the value to that file and remove the env var. The rest of Archiver's configuration (service directories, storage targets, secrets, rotation) can also be supplied as environment variables and file-based secrets instead of, or on top of, the bundle. See [Configuration Sources](#configuration-sources-env-native-or-bundle).
 
 ### Container Modes
 
@@ -377,9 +377,9 @@ The entrypoint selects one of three modes based on the first container argument:
 
 | Mode | How it's invoked | Behavior |
 |------|------------------|----------|
-| `init` | `docker run ... archiver:<tag> init` | Interactive bundle generation. Exits when done. |
-| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (bundle and/or env-native), then either runs `supercronic` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
-| `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads configuration (bundle and/or env-native), then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
+| `init` | `docker run ... archiver:<tag> init` | Interactive setup: generates env-native materials + an encrypted escrow bundle. Exits when done. |
+| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (env-native and/or bundle), then either runs `supercronic` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
+| `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads configuration (env-native and/or bundle), then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
 `run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, and `backup` (a synchronous backup path intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`. The user-facing `archiver start` command remains async and is intentionally not supported here.
 
@@ -393,17 +393,17 @@ The entrypoint selects one of three modes based on the first container argument:
 
 ## Configuration
 
-The settings below define what to backup and where. They can be supplied through the encrypted bundle's `config.sh`, through environment variables and file-based secrets, or a mix of the two (see [Configuration Sources](#configuration-sources-bundle-or-env-native) below). See [Editing Configuration](docs/guides/configuration/editing-config.md) for how to edit the bundle's `config.sh` in Docker.
+The settings below define what to backup and where. Supply them as environment variables plus file-based secrets (the primary, env-native mode), through the encrypted bundle's `config.sh` (transitional), or a mix of the two (see [Configuration Sources](#configuration-sources-env-native-or-bundle) below). Env-native settings are edited wherever they live — your compose file, ConfigMap, or secret store; for editing a bundle's `config.sh`, see [Editing Configuration](docs/guides/configuration/editing-config.md).
 
-### Configuration Sources: Bundle or Env-Native
+### Configuration Sources: Env-Native or Bundle
 
-Archiver reads its configuration from three layers, in increasing precedence:
+The primary mode is **env-native**: environment variables carry the non-secret settings and files under `/run/secrets` carry the secrets — config stays under version control (compose file / ConfigMap) and secrets stay in a secret store. Underneath, an optional, transitional baseline can exist. In increasing precedence:
 
-1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`). Optional and transitional: env-native is the primary configuration source, but the bundle remains fully supported and is still the easy cold-restore path — mount it and provide its password at `/run/secrets/bundle_password` and it becomes the baseline again.
+1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`) — optional baseline and the cold-restore escrow: mount it and provide its password at `/run/secrets/bundle_password` and it becomes the baseline again.
 2. **Environment variables** for non-secret settings, which override the bundle.
 3. **Files** for secrets, which override the bundle.
 
-With a bundle and no overrides, behavior is exactly as before. With no bundle at all, configuration is fully **env-native** (for example a Kubernetes ConfigMap for the non-secret settings plus a Secret for the files), which keeps config under version control and secrets in a secret store. Because the layers stack, you can migrate off the bundle one value at a time: set an env var or mount a secret file, confirm the backup still runs, and repeat until nothing depends on the bundle.
+With no bundle at all, configuration is fully env-native — this is the recommended deployment. With a bundle and no overrides, behavior is exactly as it was pre-0.9.0. Because the layers stack, an existing bundle deployment can migrate one value at a time: set an env var or mount a secret file, confirm the backup still runs, and repeat until nothing depends on the bundle.
 
 **Non-secret settings (plain env vars).** These override the bundle when set: `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `ROTATE_BACKUPS`, `PRUNE_KEEP`, `DUPLICACY_THREADS`, and `NOTIFICATION_SERVICE`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine). The bundle's bash-array form is still read.
 
@@ -443,14 +443,15 @@ Load those, start the container without the bundle, and you are fully env-native
 
 ### Service Directories
 
-Directories to backup. Use `*` for subdirectories:
+Directories to backup, colon-delimited. Use `*` for subdirectories:
 
 ```bash
-SERVICE_DIRECTORIES=(
-  "/srv/*/"          # Each subdirectory as separate repository
-  "/home/user/data/" # Single repository
-)
+SERVICE_DIRECTORIES=/srv/*/:/home/user/data/
+# /srv/*/           -> each subdirectory becomes its own repository
+# /home/user/data/  -> a single repository
 ```
+
+(Newlines work as separators too, so a YAML block scalar is fine. A legacy bundle `config.sh` may still declare it as a bash array — both forms are read.)
 
 ### Storage Targets
 
