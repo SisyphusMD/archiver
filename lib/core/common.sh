@@ -28,6 +28,9 @@ LOG_DIR="${ARCHIVER_DIR}/logs"
 OLD_LOG_DIR="${LOG_DIR}/prior_logs"
 KEYS_DIR="${ARCHIVER_DIR}/keys"
 BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
+# init writes its generated materials (env-native/ + the escrow bundle) here — a neutral
+# output path, so the primary flow is not branded by the transitional bundle mount.
+SETUP_DIR="${ARCHIVER_DIR}/setup"
 
 CONFIG_FILE="${ARCHIVER_DIR}/config.sh"
 # Directory holding file-based secrets (Docker/k8s convention). Each secret is one file;

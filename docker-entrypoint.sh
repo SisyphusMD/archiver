@@ -154,13 +154,13 @@ if [ "$1" = "init" ]; then
     echo "Running in INIT mode"
     echo ""
 
-    if [ -f "$BUNDLE_FILE" ]; then
-        echo "WARNING: Bundle file already exists at $BUNDLE_FILE"
-        echo "Continuing will overwrite it with a new bundle."
+    if [ -f "${SETUP_DIR}/bundle.tar.enc" ]; then
+        echo "WARNING: ${SETUP_DIR}/bundle.tar.enc already exists"
+        echo "Continuing will overwrite it."
         echo ""
     fi
 
-    mkdir -p "${BUNDLE_DIR}"
+    mkdir -p "${SETUP_DIR}"
 
     cd "${ARCHIVER_DIR}"
     exec "${SCRIPTS_DIR}/init.sh"

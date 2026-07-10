@@ -202,7 +202,7 @@ Start the container in init mode:
 ```bash
 docker run -it --rm \
   -v /path/to/local-backups:/mnt/backups \
-  -v /path/to/bundle:/opt/archiver/bundle \
+  -v /path/to/setup-output:/opt/archiver/setup \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 init
 ```
 
@@ -222,10 +222,10 @@ Follow the remaining init prompts to configure directories and notifications; in
 
 **IMPORTANT: Backup Your Bundle File**
 
-After initialization completes, copy your bundle file to a safe location outside the Docker host:
+After initialization completes, copy the bundle file from your setup output directory to a safe location outside the Docker host:
 
 ```bash
-cp ~/archiver-bundle/bundle.tar.enc /path/to/safe/location/
+cp /path/to/setup-output/bundle.tar.enc /path/to/safe/location/
 ```
 
 Keep both the bundle file and your bundle password in a secure location.

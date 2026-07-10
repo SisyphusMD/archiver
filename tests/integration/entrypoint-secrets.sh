@@ -29,10 +29,12 @@ docker volume create "$BUNVOL" >/dev/null
 docker volume create "$SECVOL" >/dev/null
 
 log "generate a REAL bundle via scripted init into the bundle volume"
-docker run --rm -v "$BUNVOL":/opt/archiver/bundle --entrypoint bash "$IMAGE" -c '
+# init writes to the neutral SETUP_DIR; runtime bundle mode mounts the same volume at
+# /opt/archiver/bundle (the bundle sits at the volume root either way).
+docker run --rm -v "$BUNVOL":/opt/archiver/setup --entrypoint bash "$IMAGE" -c '
   printf "/data/fixtures/\nlocal\nlocal\n/backup-store\nnntestbundlepw\ntestbundlepw\n" \
     | bash /opt/archiver/lib/scripts/init.sh >/dev/null 2>&1
-  test -f /opt/archiver/bundle/bundle.tar.enc
+  test -f /opt/archiver/setup/bundle.tar.enc
 ' || die "bundle generation via init failed"
 
 log "(A) bundle mounted, no password anywhere: fail fast, name the password path"

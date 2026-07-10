@@ -208,14 +208,14 @@ For new installations, run initialization interactively (the mount is just an ou
 
 ```bash
 docker run -it --rm \
-  -v ./archiver-setup:/opt/archiver/bundle \
+  -v ./archiver-setup:/opt/archiver/setup \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 init
 ```
 
 This writes your configuration into `archiver-setup/`:
 
 - `env-native/` — `archiver.env` (non-secret settings) plus `secrets/` (one file per secret, including the keys). **This is what you deploy with**: a Compose `environment:` block + `secrets:`, or a Kubernetes ConfigMap + Secret. The files are plaintext — move them into your secret store and delete `env-native/` afterwards.
-- `bundle.tar.enc` — an encrypted, self-contained copy of the same configuration. Store it (and its password) somewhere safe as your disaster-recovery escrow. (It can also drive a deployment directly — transitional; see the commented alternative in [compose.yaml](compose.yaml).)
+- `bundle.tar.enc` — an encrypted, self-contained copy of the same configuration. Store it (and its password) somewhere safe as your disaster-recovery escrow. (It can also drive a deployment directly — transitional: move it into a directory mounted at `/opt/archiver/bundle` and see the commented alternative in [compose.yaml](compose.yaml).)
 
 ### Step 2: Configure Docker Compose
 
