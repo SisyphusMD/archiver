@@ -56,7 +56,9 @@ RUN ARCH_SUFFIX="" && \
         echo "Unsupported architecture: $TARGETARCH" && exit 1; \
     fi && \
     curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "https://download.docker.com/linux/static/stable/${ARCH_SUFFIX}/docker-${DOCKER_CLI_VERSION}.tgz" \
-        | tar -xzC /usr/local/bin --strip-components=1 docker/docker
+        -o /tmp/docker-cli.tgz && \
+    tar -xzC /usr/local/bin --strip-components=1 -f /tmp/docker-cli.tgz docker/docker && \
+    rm /tmp/docker-cli.tgz
 
 RUN ARCH_SUFFIX="" && \
     if [ "$TARGETARCH" = "amd64" ]; then \
