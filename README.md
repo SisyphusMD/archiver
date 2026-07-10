@@ -202,7 +202,7 @@ You'll enter the **User Key** and **API Token** during init.
 
 ### Step 1: Generate Configuration (`init`)
 
-**Skip this step if you already have a bundle file** (e.g., `bundle.tar.enc` or `export-*.tar.enc` from a previous installation) or existing env-native materials.
+**Skip this step if you already have configuration** — env-native materials (`archiver.env` + secret files) or a bundle (`bundle.tar.enc` / `export-*.tar.enc`) from a previous installation.
 
 For new installations, run initialization interactively:
 
@@ -631,24 +631,24 @@ archiver help              # Show help
 
 For most users, a long-lived container with `CRON_SCHEDULE` set is the simplest way to get scheduled backups — the in-container scheduler fires `archiver start` on schedule, and you don't have to manage anything. Skip this section unless you specifically need to drive scheduling from *outside* the container.
 
-If your environment already owns scheduling — e.g., a Kubernetes `CronJob`, a GitHub Actions scheduled workflow, a systemd timer on the host, or any other platform that spawns a short-lived container per run and expects a meaningful exit code — use the entrypoint's `run backup` mode instead. It decrypts the bundle, runs a backup **synchronously**, and exits with the backup's result code. The container terminates when the backup finishes; your scheduler then reports success or failure based on the exit code.
+If your environment already owns scheduling — e.g., a Kubernetes `CronJob`, a GitHub Actions scheduled workflow, a systemd timer on the host, or any other platform that spawns a short-lived container per run and expects a meaningful exit code — use the entrypoint's `run backup` mode instead. It loads the configuration (env-native or bundle), runs a backup **synchronously**, and exits with the backup's result code. The container terminates when the backup finishes; your scheduler then reports success or failure based on the exit code.
 
 Exit codes:
 - `0` — backup completed
 - `1` — lock contention (another backup already in progress) or catastrophic startup failure
 - non-zero — see stderr / logs for details
 
-**Example: one-shot `docker run`**
+**Example: one-shot `docker run`** (env-native: `archiver.env` + `secrets/` as emitted by `init` or `migrate`)
 
 ```bash
 docker run --rm \
-  -v /path/to/bundle/dir:/opt/archiver/bundle \
-  -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
+  --env-file /path/to/archiver.env \
+  -v /path/to/secrets:/run/secrets:ro \
   -v /path/to/host/backup-dir:/mnt/backup-dir \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 run backup
 ```
 
-`/path/to/bundle_password` is a file containing only the bundle password. Accepts the same optional flags as `archiver start`: `run backup prune` forces rotation, `run backup retain` forces retention (overriding `ROTATE_BACKUPS` in `config.sh`).
+(Bundle mode instead: replace the first two lines with `-v /path/to/bundle/dir:/opt/archiver/bundle` and `-v /path/to/bundle_password:/run/secrets/bundle_password:ro`.) Accepts the same optional flags as `archiver start`: `run backup prune` forces rotation, `run backup retain` forces retention (overriding `ROTATE_BACKUPS`).
 
 **Example: Kubernetes CronJob**
 
@@ -669,21 +669,19 @@ spec:
             - name: archiver
               image: forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0
               args: ["run", "backup"]
+              envFrom:
+                - configMapRef: { name: archiver-config }   # the archiver.env keys (non-secret settings)
               volumeMounts:
-                - { name: bundle,          mountPath: /opt/archiver/bundle }
-                - { name: bundle-password, mountPath: /run/secrets }
-                - { name: backup-dir,      mountPath: /mnt/backup-dir }
+                - { name: archiver-secrets, mountPath: /run/secrets, readOnly: true }
+                - { name: backup-dir,       mountPath: /mnt/backup-dir }
           volumes:
-            - name: bundle
-              secret: { secretName: archiver-bundle-tar }
-            - name: bundle-password
-              secret:
-                secretName: archiver-bundle       # the bundle password Secret
-                items:
-                  - { key: password, path: bundle_password }   # -> /run/secrets/bundle_password
+            - name: archiver-secrets
+              secret: { secretName: archiver-secrets }   # storage_password, rsa_passphrase, rsa_private_key, rsa_public_key, ...
             - name: backup-dir
               persistentVolumeClaim: { claimName: backup-data }
 ```
+
+Create the ConfigMap and Secret straight from what `init` or `migrate` emitted: `kubectl create configmap archiver-config --from-env-file=archiver.env` and `kubectl create secret generic archiver-secrets --from-file=secrets/`. (Bundle mode also works: mount the bundle tar as a Secret at `/opt/archiver/bundle` plus a `bundle_password` key under `/run/secrets`.)
 
 The Pod lives for the duration of one backup and exits. If the backup fails, the Pod exits non-zero and Kubernetes marks the Job failed — the usual CronJob semantics apply.
 
@@ -718,8 +716,8 @@ For a one-time restore without modifying your running container, start a tempora
 
 ```bash
 docker run -d --name archiver-restore \
-  -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
-  -v /path/to/bundle/dir:/opt/archiver/bundle \
+  --env-file /path/to/archiver.env \
+  -v /path/to/secrets:/run/secrets:ro \
   -v /path/to/restore/destination:/mnt/restore \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0
 
@@ -727,6 +725,8 @@ docker exec -it archiver-restore archiver restore
 
 docker rm -f archiver-restore
 ```
+
+Restoring from a bundle instead (the cold-restore path): replace the first two option lines with `-v /path/to/bundle/dir:/opt/archiver/bundle` and `-v /path/to/bundle_password:/run/secrets/bundle_password:ro`.
 
 When prompted for the local directory path during restore, enter the container path (e.g., `/mnt/restore`). The restored files will appear on your host at `/path/to/restore/destination`.
 
@@ -787,26 +787,28 @@ docker exec \
 
 #### Running Without a Long-Lived Container (`run` mode)
 
-For Kubernetes Jobs, init containers, or one-shot `docker run` invocations, use the entrypoint's `run` mode (see [Container Modes](#container-modes)). The bundle is decrypted, the subcommand runs, and the container's exit code equals the subcommand's exit code:
+For Kubernetes Jobs, init containers, or one-shot `docker run` invocations, use the entrypoint's `run` mode (see [Container Modes](#container-modes)). The configuration is loaded (env-native or bundle), the subcommand runs, and the container's exit code equals the subcommand's exit code:
 
 ```bash
 # Probe whether a backup is available
 docker run --rm \
-  -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
+  --env-file /path/to/archiver.env \
+  -v /path/to/secrets:/run/secrets:ro \
   -e SNAPSHOT_ID=myservice \
-  -v /path/to/bundle/dir:/opt/archiver/bundle \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 run snapshot-exists
 
 # Restore a snapshot into a mounted destination
 docker run --rm \
-  -v /path/to/bundle_password:/run/secrets/bundle_password:ro \
+  --env-file /path/to/archiver.env \
+  -v /path/to/secrets:/run/secrets:ro \
   -e SNAPSHOT_ID=myservice \
   -e LOCAL_DIR=/mnt/restore \
   -e OVERWRITE=1 \
-  -v /path/to/bundle/dir:/opt/archiver/bundle \
   -v /path/to/restore/destination:/mnt/restore \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0 run auto-restore
 ```
+
+(Bundle mode: swap the `--env-file` + secrets mount for `-v /path/to/bundle/dir:/opt/archiver/bundle` and `-v /path/to/bundle_password:/run/secrets/bundle_password:ro`.)
 
 In Kubernetes this is typically an init container on the workload pod: probe with `run snapshot-exists`, and if a backup exists, run `run auto-restore` to seed the data volume before the main container starts. The exit-code contract means the pod's `restartPolicy` and init-container failure handling behave as expected.
 
