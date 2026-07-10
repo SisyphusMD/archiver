@@ -15,7 +15,9 @@ NET="archiver-sftp-net-$$"
 SFTP="archiver-sftp-srv-$$"
 ARCH="archiver-sftp-arch-$$"
 KEYVOL="archiver-sftp-keys-$$"
-SFTP_IMAGE="atmoz/sftp:alpine"
+# Digest-pinned: this test gates releases; a floating tag could break a cut. (Renovate does
+# not scan shell scripts — bump the digest by hand when updating.)
+SFTP_IMAGE="atmoz/sftp:alpine@sha256:a6cb3eb29202ca7f57e73bb7e527286e66e0e822fff65609207c7e0ef2d135a3"
 
 log() { printf '>>> %s\n' "$*"; }
 die() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }

@@ -1,5 +1,7 @@
 # Local Storage Setup Guide
 
+> **Env-native deployments:** This guide covers the bundle workflow. If you run Archiver env-native, supply the same values as environment variables and file-based secrets instead. See the README "Configuration Sources" section.
+
 This guide explains how to configure local disk storage as your primary backup target in Archiver. Using local storage provides faster backups, lower bandwidth usage, and better reliability compared to remote-only backups.
 
 ## Why Use Local Storage as Primary?
@@ -201,7 +203,7 @@ Start the container in init mode:
 docker run -it --rm \
   -v /path/to/local-backups:/mnt/backups \
   -v /path/to/bundle:/opt/archiver/bundle \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.7.0 init
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.8.12 init
 ```
 
 Follow the prompts and configure:
@@ -216,7 +218,7 @@ Follow the prompts and configure:
 
 ### Step 3: Complete Setup
 
-Follow the remaining init prompts to configure directories, scheduling, and export your bundle.
+Follow the remaining init prompts to configure directories and notifications; init then writes the encrypted bundle and the env-native materials (scheduling is set later via `CRON_SCHEDULE` in your compose file).
 
 **IMPORTANT: Backup Your Bundle File**
 

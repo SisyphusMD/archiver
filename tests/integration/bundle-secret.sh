@@ -65,4 +65,10 @@ log "backup using the imported config"
 archiver backup retain || die "backup exited non-zero"
 [ -d "${STORE}/snapshots" ] || die "no snapshots written to storage"
 
-echo "=== BUNDLE-SECRET OK: bundle decrypted from a file password, config imported, backup ran ==="
+log "standalone import (the documented 'docker exec ... archiver bundle import'): no ARCHIVER_* env"
+rm -f /opt/archiver/config.sh
+unset ARCHIVER_BUNDLE_PASSWORD ARCHIVER_BUNDLE_FILE BUNDLE_PASSWORD
+printf 'y' | archiver bundle import || die "standalone bundle import failed (self-resolve broken)"
+[ -f /opt/archiver/config.sh ] || die "config.sh not restored by standalone import"
+
+echo "=== BUNDLE-SECRET OK: file-password import, backup, and standalone exec import ==="

@@ -44,6 +44,7 @@ serialize_config_sh() {
 serialize_env_and_secrets() {
   local envfile="${1}" secretsdir="${2}" v lower
   mkdir -p "${secretsdir}"
+  chmod 700 "${secretsdir}"
 
   {
     printf 'SERVICE_DIRECTORIES=%s\n' "$(service_directories_scalar)"

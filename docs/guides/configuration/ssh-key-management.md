@@ -2,18 +2,13 @@
 
 This guide covers how to create and manage SSH keys for SFTP storage targets in Archiver running in Docker.
 
+> **Env-native deployments:** This guide covers the bundle workflow. If you run Archiver env-native (no bundle), supply the SSH keypair as file-based secrets instead: `/run/secrets/ssh_private_key` and `/run/secrets/ssh_public_key` (restore needs both halves). See the README "Configuration Sources" section.
+
 ## Overview
 
 When using SFTP storage, Archiver requires an SSH private key for authentication. Archiver only supports Ed25519 key pairs with no passphrase for SFTP authentication.
 
-During the initial setup (when running `docker run ... archiver:v0.7.0 init`), you are prompted:
-
-```
-Would you like to generate an SSH key pair for Duplicacy SFTP storage? (y|N):
-```
-
-- If you choose **Yes**, Archiver generates an Ed25519 key pair at `/opt/archiver/keys/id_ed25519`
-- If you choose **No**, you need to provide your own Ed25519 key pair
+During the initial setup (`archiver init`), Archiver generates an Ed25519 key pair at `/opt/archiver/keys/id_ed25519` automatically; the public key is shown at the end of init for copying to your SFTP server.
 
 This guide covers creating new keys after initial setup, replacing existing keys, and using existing keys from your host system.
 

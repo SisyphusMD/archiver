@@ -31,13 +31,26 @@ if [ "${HAS_CONFIG}" = true ] || [ "${HAS_KEYS}" = true ]; then
   echo ""
 fi
 
+# Outside the entrypoint (a 'docker exec ... archiver bundle import'), self-resolve the same
+# way the entrypoint does: default bundle path, password from its secret file.
+if [ -z "${ARCHIVER_BUNDLE_FILE}" ]; then
+  ARCHIVER_BUNDLE_FILE="${BUNDLE_DIR}/bundle.tar.enc"
+fi
 if [ -z "${ARCHIVER_BUNDLE_PASSWORD}" ]; then
-  echo "Error: ARCHIVER_BUNDLE_PASSWORD environment variable is required"
+  bundle_password_path="${BUNDLE_PASSWORD_FILE:-${SECRETS_DIR}/bundle_password}"
+  if [ -f "${bundle_password_path}" ]; then
+    ARCHIVER_BUNDLE_PASSWORD="$(<"${bundle_password_path}")"
+    ARCHIVER_BUNDLE_PASSWORD="${ARCHIVER_BUNDLE_PASSWORD%$'\r'}"
+  fi
+fi
+
+if [ -z "${ARCHIVER_BUNDLE_PASSWORD}" ]; then
+  echo "Error: no bundle password found at ${BUNDLE_PASSWORD_FILE:-${SECRETS_DIR}/bundle_password}"
   exit 1
 fi
 
-if [ -z "${ARCHIVER_BUNDLE_FILE}" ] || [ ! -f "${ARCHIVER_BUNDLE_FILE}" ]; then
-  echo "Error: ARCHIVER_BUNDLE_FILE not set or file not found"
+if [ ! -f "${ARCHIVER_BUNDLE_FILE}" ]; then
+  echo "Error: bundle file not found at ${ARCHIVER_BUNDLE_FILE}"
   exit 1
 fi
 
@@ -46,7 +59,8 @@ PASSWORD="${ARCHIVER_BUNDLE_PASSWORD}"
 
 TEMP_TAR="${SELECTED_FILE%.enc}"
 
-openssl enc -d -aes-256-cbc -pbkdf2 -in "${SELECTED_FILE}" -out "${TEMP_TAR}" -k "${PASSWORD}"
+# -pass fd: keeps the password off the openssl argv (world-readable in /proc while it runs).
+openssl enc -d -aes-256-cbc -pbkdf2 -in "${SELECTED_FILE}" -out "${TEMP_TAR}" -pass fd:3 3<<<"${PASSWORD}"
 if [ $? -ne 0 ]; then
   echo "Error: Decryption failed. Please check your password and try again."
   rm -f "${TEMP_TAR}"

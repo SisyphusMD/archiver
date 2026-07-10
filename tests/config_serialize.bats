@@ -74,6 +74,7 @@ arrange_effective_config() {
   OUTSECRETS="${BATS_TEST_TMPDIR}/out-secrets"
   serialize_env_and_secrets "${ENVFILE}" "${OUTSECRETS}"
 
+  [ "$(stat -c '%a' "${OUTSECRETS}" 2>/dev/null || stat -f '%Lp' "${OUTSECRETS}")" = "700" ]
   [ "$(cat "${OUTSECRETS}/storage_password")" = "${STORAGE_PASSWORD}" ]
   [ "$(cat "${OUTSECRETS}/storage_target_1_s3_secret")" = "${STORAGE_TARGET_1_S3_SECRET}" ]
   # -c is GNU/busybox (CI); -f is the BSD/macOS fallback. GNU must come first: BSD-style

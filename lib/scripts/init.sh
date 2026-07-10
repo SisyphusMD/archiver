@@ -5,6 +5,13 @@ INIT_SH_SOURCED=true
 
 set -e
 
+# The bundle/env-native serializers below load the effective config via config-loader, which
+# layers environment variables and /run/secrets files OVER config.sh. Inside init those layers
+# are noise: the container's inherited deployment environment (e.g. 'docker compose run ... init')
+# and init's own working variables would silently override the answers the user just gave.
+# Serialize from the freshly written config.sh ALONE.
+export ARCHIVER_CONFIG_IGNORE_OVERLAYS=true
+
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
@@ -465,6 +472,10 @@ EOL
 create_new_bundle() {
   print_header "Creating Encrypted Bundle"
 
+  # config-loader (sourced by bundle-export below, in this same shell) must see config.sh's
+  # SERVICE_DIRECTORIES, not init's leftover working array.
+  unset SERVICE_DIRECTORIES
+
   echo "Your configuration and keys will be encrypted in a bundle file."
   echo "You'll need this bundle file and its password to run Archiver."
   echo
@@ -474,6 +485,19 @@ create_new_bundle() {
 
   # Capture the password that was set by bundle-export.sh
   BUNDLE_EXPORT_PASSWORD="${PASSWORD}"
+}
+
+# Env-native (env vars + file secrets) is the primary way to deploy; the bundle is the
+# transitional / cold-restore artifact. Emit ready-to-use materials next to the bundle so a
+# new user never has to hand-transcribe the config.
+emit_env_native_materials() {
+  print_section "Writing Env-Native Deployment Materials"
+
+  if "${MIGRATE_SCRIPT}" "${BUNDLE_DIR}/env-native"; then
+    print_success "Env-native materials written to env-native/ in your bundle directory"
+  else
+    echo "WARNING: could not write env-native materials. You can generate them later with 'archiver migrate'."
+  fi
 }
 
 display_credentials() {
@@ -488,7 +512,7 @@ display_credentials() {
   echo "│ BUNDLE PASSWORD                                             │"
   echo "├─────────────────────────────────────────────────────────────┤"
   echo "│                                                             │"
-  echo "│ Use this password in your compose.yaml:                     │"
+  echo "│ Save it to a secret file (e.g. ./secrets/bundle_password):  │"
   printf "│   %-57s │\n" "${BUNDLE_EXPORT_PASSWORD}"
   echo "│                                                             │"
   echo "└─────────────────────────────────────────────────────────────┘"
@@ -505,9 +529,13 @@ display_credentials() {
   fi
 
   echo "Next steps:"
-  echo "  1. Store bundle password and bundle.tar.enc in a safe location"
-  echo "  2. Provide the bundle password as a secret file at /run/secrets/bundle_password (see password above)"
-  echo "  3. Start container: docker compose up -d"
+  echo "  1. RECOMMENDED (env-native): load env-native/archiver.env as environment variables and the"
+  echo "     env-native/secrets/ files as secrets mounted under /run/secrets (see the compose template),"
+  echo "     then DELETE env-native/ from the bundle directory: it holds your secrets in plaintext."
+  echo "  2. Alternative (bundle mode): mount bundle.tar.enc and provide the bundle password as a"
+  echo "     secret file at /run/secrets/bundle_password (see password above)."
+  echo "  3. Either way, store bundle.tar.enc and its password in a safe location (cold-restore copy)."
+  echo "  4. Start container: docker compose up -d"
   echo
 }
 
@@ -519,6 +547,7 @@ main() {
   generate_ssh_keypair
   create_config_file
   create_new_bundle
+  emit_env_native_materials
   display_credentials
 }
 
