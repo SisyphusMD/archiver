@@ -3,7 +3,7 @@ services:
   archiver:
 
     container_name: archiver
-    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0
+    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.9.1
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
@@ -78,7 +78,7 @@ secrets:
 # services:
 #   archiver:
 #     container_name: archiver
-#     image: forgejo.bryantserver.com/sisyphusmd/archiver:0.9.0
+#     image: forgejo.bryantserver.com/sisyphusmd/archiver:0.9.1
 #     restart: unless-stopped
 #     stop_grace_period: 2m
 #     hostname: backup-server
