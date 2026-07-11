@@ -233,6 +233,10 @@ jobs:
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/init-envnative.sh
+      - name: Recovery-kit lifecycle (produce/decrypt/manifest/change-detect/force/prune-safe)
+        run: |
+          docker run -i --rm --hostname rk-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/recovery-kit.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.

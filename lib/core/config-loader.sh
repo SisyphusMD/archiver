@@ -28,7 +28,7 @@ SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"
 # the load path AND the serializers in config-serialize.sh (migrate / mode-agnostic bundle
 # export): adding a field here is picked up by both, so a serializer can't silently drop it.
 CONFIG_NONSECRET_VARS_RE='^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_KEEP|DUPLICACY_THREADS|NOTIFICATION_SERVICE|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION))$'
-CONFIG_SECRET_VARS_RE='^(STORAGE_PASSWORD|RSA_PASSPHRASE|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET))$'
+CONFIG_SECRET_VARS_RE='^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET))$'
 
 # Secrets must come from the bundle or a file, never a plain env var (which would leak via
 # /proc and `docker inspect`). Drop any passed in the environment before loading, so the
@@ -88,6 +88,7 @@ resolve_secret() {
 resolve_secret_files() {
   resolve_secret STORAGE_PASSWORD
   resolve_secret RSA_PASSPHRASE
+  resolve_secret RECOVERY_PASSWORD
   resolve_secret PUSHOVER_USER_KEY
   resolve_secret PUSHOVER_API_TOKEN
 

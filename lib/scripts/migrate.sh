@@ -41,3 +41,12 @@ echo "Next steps:"
 echo "  1. Load ${ENV_FILE##*/} as environment variables (ConfigMap / compose environment)."
 echo "  2. Load the ${SECRETS_OUT##*/}/ files as secrets mounted under /run/secrets."
 echo "  3. Start the container with no bundle. See the README 'Configuration Sources' section."
+
+if [[ -z "${RECOVERY_PASSWORD}" ]]; then
+  echo
+  echo "Tip: the automatic recovery kit is not enabled on this deployment. Generate a"
+  echo "password (and save it in your password manager):"
+  echo "  openssl rand -base64 24 > secrets/recovery_password"
+  echo "Add it to your deployment's secrets and Archiver will keep an encrypted recovery kit"
+  echo "of this whole configuration on every storage target (README 'Automatic Recovery Kit')."
+fi

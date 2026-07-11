@@ -28,9 +28,13 @@ LOG_DIR="${ARCHIVER_DIR}/logs"
 OLD_LOG_DIR="${LOG_DIR}/prior_logs"
 KEYS_DIR="${ARCHIVER_DIR}/keys"
 BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
-# init writes its generated materials (env-native/ + the escrow bundle) here — a neutral
+# init writes its generated materials (env-native/ + the bundle) here — a neutral
 # output path, so the primary flow is not branded by the transitional bundle mount.
 SETUP_DIR="${ARCHIVER_DIR}/setup"
+# Conventional mount point for the user's deployment manifests (compose.yaml, .nix files,
+# k8s YAML — whatever the runtime uses). Anything mounted here is captured verbatim into
+# the recovery kit, so the kit can recreate the deployment byte-exact.
+DEPLOYMENT_DIR="${ARCHIVER_DIR}/deployment"
 
 CONFIG_FILE="${ARCHIVER_DIR}/config.sh"
 # Directory holding file-based secrets (Docker/k8s convention). Each secret is one file;
@@ -55,11 +59,13 @@ REQUIRE_CONTAINER_CORE="${CORE_DIR}/require-container.sh"
 DUPLICACY_BACKUP_FEATURE="${FEATURES_DIR}/duplicacy-backup.sh"
 DUPLICACY_RESTORE_FEATURE="${FEATURES_DIR}/duplicacy-restore.sh"
 NOTIFICATION_FEATURE="${FEATURES_DIR}/notification.sh"
+RECOVERY_KIT_FEATURE="${FEATURES_DIR}/recovery-kit.sh"
 
 AUTO_RESTORE_SCRIPT="${SCRIPTS_DIR}/auto-restore.sh"
 AUTO_RESTORE_ALL_SCRIPT="${SCRIPTS_DIR}/auto-restore-all.sh"
 BUNDLE_EXPORT_SCRIPT="${SCRIPTS_DIR}/bundle-export.sh"
 BUNDLE_IMPORT_SCRIPT="${SCRIPTS_DIR}/bundle-import.sh"
+RECOVERY_KIT_SCRIPT="${SCRIPTS_DIR}/recovery-kit.sh"
 HEALTHCHECK_SCRIPT="${SCRIPTS_DIR}/healthcheck.sh"
 INIT_SCRIPT="${SCRIPTS_DIR}/init.sh"
 LOGS_SCRIPT="${SCRIPTS_DIR}/logs.sh"

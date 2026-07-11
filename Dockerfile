@@ -93,12 +93,14 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENV CRON_SCHEDULE=""
 
 # Volumes
-# /opt/archiver/bundle/bundle.tar.enc - Optional: encrypted bundle (bundle mode / cold restore)
-# /opt/archiver/bundle/ - For setup mode: directory to save generated bundle
 # /opt/archiver/logs - Optional: persistent logs directory
 # User must also mount their service directories to backup
+# /opt/archiver/bundle is deliberately NOT declared: Compose carries the previous
+# container's mount over for image-declared volume paths on recreate, so a bundle-mode
+# deployment switching to env-native would inherit the old bundle mount and fail fast
+# (bundle present, no password).
 
-VOLUME ["/opt/archiver/logs", "/opt/archiver/bundle"]
+VOLUME ["/opt/archiver/logs"]
 
 # Health check: Use archiver's built-in healthcheck command
 # Runs comprehensive checks including config, keys, logs, and disk space

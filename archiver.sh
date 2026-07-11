@@ -10,13 +10,14 @@ fi
 source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|migrate|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help} [logs|prune|retain]"
+  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|migrate|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help} [logs|prune|retain]"
   echo "Note:"
   echo "  stop|pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments."
   echo "  start may be used in combination with logs and prune|retain."
   echo "  resume|restart may be used in combination with logs."
   echo "  bundle requires a subcommand: export or import"
   echo "  migrate takes an optional OUTPUT_DIR (default /opt/archiver/migrate): writes the effective config as an env file + secret files."
+  echo "  recovery-kit uploads the encrypted recovery kit to every storage target; 'recovery-kit force' re-uploads even if unchanged."
   echo "  auto-restore and snapshot-exists are non-interactive and driven by environment variables."
   exit 1
 }
@@ -195,6 +196,14 @@ case "${command}" in
       usage
     fi
     "${MIGRATE_SCRIPT}" "${@}"
+    ;;
+  recovery-kit)
+    if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "force" ) ]]; then
+      echo "'recovery-kit' takes at most one argument: force."
+      usage
+    fi
+    "${RECOVERY_KIT_SCRIPT}" "${@}"
+    exit $?
     ;;
   help)
     usage

@@ -215,11 +215,13 @@ docker run -it --rm \
 This writes your configuration into `archiver-setup/`:
 
 - `env-native/` — `archiver.env` (non-secret settings) plus `secrets/` (one file per secret, including the keys). **This is what you deploy with**: a Compose `environment:` block + `secrets:`, or a Kubernetes ConfigMap + Secret. The files are plaintext — move them into your secret store and delete `env-native/` afterwards.
-- `bundle.tar.enc` — an encrypted, self-contained copy of the same configuration. Store it (and its password) somewhere safe as your disaster-recovery escrow. (It can also drive a deployment directly — transitional: move it into a directory mounted at `/opt/archiver/bundle` and see the commented alternative in [compose.yaml](compose.yaml).)
+- `bundle.tar.enc` — an encrypted, self-contained copy of the same configuration (transitional bundle mode / manual cold-restore copy — see the commented alternative in [compose.yaml](compose.yaml)).
+
+`init` also generates and displays the **recovery password** — save it in your password manager; it is the one credential you personally keep. Once the deployment is running, archiver automatically maintains an encrypted recovery kit of the full configuration on every storage target, and that password recovers everything (see [Automatic Recovery Kit](#automatic-recovery-kit)).
 
 ### Step 2: Configure Docker Compose
 
-Create `compose.yaml` (env-native, the primary mode — fill the `environment:` values from `env-native/archiver.env` and point the `secrets:` files at where you moved `env-native/secrets/`):
+Create `compose.yaml` (env-native, the primary mode). Place the emitted `archiver.env` next to it — the compose file loads it directly via `env_file:`, so there is nothing to transcribe, and since it holds no secrets it can be committed to git alongside the compose file. Point the `secrets:` files at where you moved `env-native/secrets/`:
 
 ```yaml
 services:
@@ -246,18 +248,18 @@ services:
     environment:
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
-      # Non-secret settings from env-native/archiver.env:
-      SERVICE_DIRECTORIES: "/mnt/backup-dir/"       # colon-delimited list
-      STORAGE_TARGET_1_NAME: "local"
-      STORAGE_TARGET_1_TYPE: "local"
-      STORAGE_TARGET_1_LOCAL_PATH: "/mnt/backup/storage"
-      ROTATE_BACKUPS: "true"
+
+    env_file:
+      - ./archiver.env            # non-secret settings, exactly as emitted by init/migrate
+                                  # (no secrets inside, so safe to commit to git; values can
+                                  # also be inlined under environment: instead)
 
     secrets:                      # each lands at /run/secrets/<name>
       - storage_password
       - rsa_passphrase
       - rsa_private_key
       - rsa_public_key
+      - recovery_password         # enables the automatic recovery kit (init generates it)
       # - ssh_private_key         # only for sftp targets
       # - ssh_public_key          # only for sftp targets
       # - storage_target_1_b2_id  # only for b2 targets
@@ -269,6 +271,7 @@ services:
       - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
       - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match SERVICE_DIRECTORIES)
       - /path/to/host/backup/storage:/mnt/backup/storage  # Local storage target
+      - ./compose.yaml:/opt/archiver/deployment/compose.yaml:ro  # captured into the recovery kit
       # - /var/run/docker.sock:/var/run/docker.sock  # For docker exec in scripts (optional)
       # - /path/to/host/restore-dir:/mnt/restore-dir # Restore location (will be prompted)
 
@@ -277,6 +280,7 @@ secrets:
   rsa_passphrase:   { file: ./secrets/rsa_passphrase }
   rsa_private_key:  { file: ./secrets/rsa_private_key }
   rsa_public_key:   { file: ./secrets/rsa_public_key }
+  recovery_password: { file: ./secrets/recovery_password }
   # ssh_private_key: { file: ./secrets/ssh_private_key }
   # ssh_public_key:  { file: ./secrets/ssh_public_key }
 ```
@@ -377,7 +381,7 @@ The entrypoint selects one of three modes based on the first container argument:
 
 | Mode | How it's invoked | Behavior |
 |------|------------------|----------|
-| `init` | `docker run ... archiver:<tag> init` | Interactive setup: generates env-native materials + an encrypted escrow bundle. Exits when done. |
+| `init` | `docker run ... archiver:<tag> init` | Interactive setup: generates env-native materials, the recovery password, and an encrypted bundle. Exits when done. |
 | _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (env-native and/or bundle), then either runs `supercronic` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
 | `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads configuration (env-native and/or bundle), then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
@@ -399,7 +403,7 @@ The settings below define what to backup and where. Supply them as environment v
 
 The primary mode is **env-native**: environment variables carry the non-secret settings and files under `/run/secrets` carry the secrets — config stays under version control (compose file / ConfigMap) and secrets stay in a secret store. Underneath, an optional, transitional baseline can exist. In increasing precedence:
 
-1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`) — optional baseline and the cold-restore escrow: mount it and provide its password at `/run/secrets/bundle_password` and it becomes the baseline again.
+1. **The encrypted bundle** (`config.sh` + keys, decrypted from `bundle.tar.enc`) — optional baseline and manual cold-restore copy: mount it and provide its password at `/run/secrets/bundle_password` and it becomes the baseline again.
 2. **Environment variables** for non-secret settings, which override the bundle.
 3. **Files** for secrets, which override the bundle.
 
@@ -420,7 +424,7 @@ openssl rsa -in rsa_private_key -passin pass:YOUR_RSA_PASSPHRASE -pubout -out rs
 
 (For sftp targets, also `ssh-keygen -t ed25519 -N "" -f ssh_private_key`, which writes `ssh_private_key` and `ssh_private_key.pub` — supply the latter as `ssh_public_key`.)
 
-**What to escrow for disaster recovery (env-native).** To restore after losing the host you need, stored somewhere that does not burn down with it: `STORAGE_PASSWORD` (unlocks the Duplicacy storage), `RSA_PASSPHRASE` + `rsa_private_key` (decrypt the file data), your storage-target settings (`archiver.env` or equivalents), and for sftp targets the SSH keypair. Missing any of the first three means the backups are permanently undecryptable. The simplest escrow is still a bundle: run `archiver bundle export` and keep `bundle.tar.enc` + its password — that one artifact carries everything above.
+**What you must not lose (disaster recovery).** To restore after losing the host you need, stored somewhere that does not burn down with it: `STORAGE_PASSWORD` (unlocks the Duplicacy storage), `RSA_PASSPHRASE` + `rsa_private_key` (decrypt the file data), your storage-target settings (`archiver.env` or equivalents), and for sftp targets the SSH keypair. Missing any of the first three means the backups are permanently undecryptable. The [Automatic Recovery Kit](#automatic-recovery-kit) keeps all of it on every storage target for you — one password in your password manager covers everything. (A manual alternative remains: `archiver bundle export` produces `bundle.tar.enc`, which with its password carries the same material.)
 
 ### Migrating a bundle to env-native
 
@@ -439,7 +443,7 @@ It writes the effective configuration as ready-to-use materials:
 - `archiver.env`: the non-secret settings as `KEY=value`, for a Compose `environment:` block or a Kubernetes ConfigMap.
 - `secrets/`: one file per secret plus the RSA/SSH keys, to load as Docker secrets, a Kubernetes Secret, or openbao entries mounted under `/run/secrets`.
 
-Load those, start the container without the bundle, and you are fully env-native. The move is reversible: `bundle export` is mode-agnostic, so from an env-native deployment you can regenerate a portable encrypted bundle at any time for cold restore.
+Load those, start the container without the bundle, and you are fully env-native. When converting an in-place Compose deployment, recreate the container with `docker compose down && docker compose up -d` rather than `up --force-recreate`: on images through 0.9.1 (which declare `/opt/archiver/bundle` as a volume) Compose carries the previous container's bundle mount into the recreated one, which then fails fast with `bundle found ... but no bundle password`. The move is reversible: `bundle export` is mode-agnostic, so from an env-native deployment you can regenerate a portable encrypted bundle at any time for cold restore.
 
 ### Service Directories
 
@@ -496,6 +500,40 @@ STORAGE_TARGET_4_S3_SECRET="secret"
 STORAGE_PASSWORD="encryption-password-for-duplicacy-storage"
 RSA_PASSPHRASE="passphrase-for-rsa-private-key"
 ```
+
+### Automatic Recovery Kit
+
+Your configuration and secrets are the keys to every backup: lose them and the backups are unreadable. The recovery kit automates keeping them safe. It activates when the `recovery_password` secret is present (at `/run/secrets/recovery_password`, or via `RECOVERY_PASSWORD_FILE`) — the shipped compose template includes it.
+
+**Where the password comes from.** `archiver init` generates it, includes it in the emitted secrets, and displays it once — **save it in your password manager**; it is the one credential you personally keep. An existing deployment enables the kit with one command plus a `secrets:` entry:
+
+```bash
+openssl rand -base64 24 > secrets/recovery_password    # save a copy in your password manager
+```
+
+It must be at least 8 characters and **differ from `STORAGE_PASSWORD`** (it is the only thing protecting the kit at rest, and the kit contains the storage password); archiver refuses a violating configuration. To rotate it, replace the secret file and update your password manager — the next backup re-encrypts and re-uploads everywhere automatically.
+
+**What it does.** After each backup, archiver assembles the kit — the full effective configuration (every non-secret setting, every secret, and the keys, exactly what `archiver migrate` emits), generated recreation notes (`RECREATE.txt`: hostname, schedule, every container path that needs a mount, required capabilities), and your deployment manifests if mounted (below) — encrypts it to that password (AES-256, pbkdf2), and uploads it as a **plain file beside the duplicacy data on every storage target**: `archiver-recovery-kit-<hostname>.tar.enc`, with a companion `README.txt` holding the decrypt command. It is not inside duplicacy's storage format, so you can download it from any provider web UI or file browser with no tooling. The kit is re-encrypted and re-uploaded only when its content actually changes (or a new storage target appears); an unchanged config is a nightly no-op. (The name includes the hostname, so deployments sharing a storage target must have distinct hostnames — they already need that for distinct snapshot IDs.)
+
+**Capturing your deployment manifest.** The kit cannot see files outside the container, so it cannot magically include your compose file or Kubernetes YAML — instead, anything mounted (read-only) at `/opt/archiver/deployment/` is captured **verbatim** into the kit. Each runtime uses its native mechanism:
+
+- **Docker/Podman Compose**: `- ./compose.yaml:/opt/archiver/deployment/compose.yaml:ro` (in the shipped template — the manifest captures itself).
+- **Kubernetes (incl. Flux/Argo GitOps)**: put the manifests in a ConfigMap and mount it at `/opt/archiver/deployment`. With kustomize, a `configMapGenerator` entry (`files: [archiver.yaml]`) keeps the ConfigMap — and therefore the kit — current on every git change automatically.
+- **NixOS / systemd-managed containers**: bind the service definition, e.g. `"/etc/nixos/services/archiver.nix:/opt/archiver/deployment/archiver.nix:ro"`.
+
+In GitOps setups your manifest is already replicated in git; the kit's copy is for the total-loss case where the git host is gone too. Without a mounted manifest the kit still stands alone: `RECREATE.txt` lists every fact archiver knows about how the container must be put together, and the compose template covers the rest.
+
+**Recovery** happens on any machine with stock `openssl` — no archiver, no other files, just the recovery password from your password manager: reach **any one** of your storage locations, download the kit, and run
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 -in archiver-recovery-kit-<hostname>.tar.enc | tar -xvf -
+```
+
+It prompts for the password and yields `archiver.env` + `secrets/` + `RECREATE.txt` (+ `deployment/` with your manifests) — everything needed to recreate the deployment (the recovery password itself is included, so the recreated deployment maintains its kit immediately). From there, restore your data with `archiver restore` as usual.
+
+`archiver recovery-kit` uploads on demand (useful right after setup); `archiver recovery-kit force` re-uploads everywhere even if unchanged. An upload failure is logged and notified but never fails the backup; the failed target is retried on the next run. The kit is **write-only**: unlike the bundle, nothing ever reads it back at runtime, so it is never a boot dependency.
+
+On B2, each update creates a new file version; old versions age out per your bucket lifecycle rules (they are ciphertext, so lingering versions are harmless).
 
 ### Backup Rotation
 
@@ -618,6 +656,7 @@ archiver auto-restore      # Restore one snapshot from backup (non-interactive, 
 archiver auto-restore-all  # Restore every service in one pass (non-interactive)
 archiver snapshot-exists   # Check if a snapshot exists on any storage target
 archiver migrate [DIR]     # Write the effective config as env-native materials (env + secret files)
+archiver recovery-kit [force]  # Upload the encrypted recovery kit to every storage target now
 archiver backup [prune|retain]  # Synchronous backup, exit code propagates (external schedulers/Jobs)
 archiver healthcheck       # Check system health (Docker HEALTHCHECK uses this; on Kubernetes wire it as an exec probe)
 archiver help              # Show help

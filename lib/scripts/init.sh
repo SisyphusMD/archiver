@@ -20,6 +20,7 @@ source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 # Generated credentials
 GENERATED_RSA_PASSPHRASE=""
 GENERATED_STORAGE_PASSWORD=""
+GENERATED_RECOVERY_PASSWORD=""
 
 # Helper functions
 print_header() {
@@ -381,8 +382,14 @@ create_config_file() {
 
   backup_existing_file "${CONFIG_FILE}"
 
-  # Auto-generate storage password
+  # Auto-generate the storage password and the recovery-kit password. The recovery
+  # password must differ from the storage password (the kit contains it); with two
+  # 32-char random values a collision is theoretical, but the guard costs nothing.
   GENERATED_STORAGE_PASSWORD=$(generate_password)
+  GENERATED_RECOVERY_PASSWORD=$(generate_password)
+  while [ "${GENERATED_RECOVERY_PASSWORD}" = "${GENERATED_STORAGE_PASSWORD}" ]; do
+    GENERATED_RECOVERY_PASSWORD=$(generate_password)
+  done
 
   # Service directories
   prompt_service_directories
@@ -411,9 +418,10 @@ EOL
 
   # Write security section
   {
-    echo "# Duplicacy encryption credentials (auto-generated)"
+    echo "# Duplicacy encryption credentials + recovery-kit password (auto-generated)"
     printf 'STORAGE_PASSWORD="%s"\n' "${GENERATED_STORAGE_PASSWORD}"
     printf 'RSA_PASSPHRASE="%s"\n' "${GENERATED_RSA_PASSPHRASE}"
+    printf 'RECOVERY_PASSWORD="%s"\n' "${GENERATED_RECOVERY_PASSWORD}"
     echo
   } >> "${CONFIG_FILE}"
 
@@ -476,14 +484,14 @@ create_new_bundle() {
   # SERVICE_DIRECTORIES, not init's leftover working array.
   unset SERVICE_DIRECTORIES
 
-  # All init output (env-native materials + the escrow bundle) lands in the neutral setup
+  # All init output (env-native materials + the bundle) lands in the neutral setup
   # directory; bundle-export writes to BUNDLE_DIR, so point it there for this shell.
   # Deployments that choose bundle mode mount the bundle at /opt/archiver/bundle at RUN time.
   BUNDLE_DIR="${SETUP_DIR}"
   mkdir -p "${SETUP_DIR}"
 
   echo "Your configuration and keys will also be encrypted into a bundle file — a"
-  echo "self-contained escrow copy: it and its password can restore your whole setup."
+  echo "self-contained copy: it and its password can restore your whole setup."
   echo
 
   # Source bundle export to use its logic
@@ -509,10 +517,22 @@ emit_env_native_materials() {
 display_credentials() {
   print_header "Setup Complete!"
 
-  echo "Your disaster-recovery bundle has been created:"
-  echo "  bundle.tar.enc (in the mounted setup directory)"
+  echo "IMPORTANT: Save this password in your password manager NOW. Once your deployment"
+  echo "is running, Archiver keeps an encrypted recovery kit (every setting, secret, and"
+  echo "key) on EVERY storage target, refreshed automatically when anything changes. This"
+  echo "one password plus any one reachable storage location recovers everything, on any"
+  echo "machine, with no other files needed."
   echo
-  echo "IMPORTANT: Save your bundle password in a secure location!"
+  echo "┌─────────────────────────────────────────────────────────────┐"
+  echo "│ RECOVERY PASSWORD: the single key to recover everything    │"
+  echo "├─────────────────────────────────────────────────────────────┤"
+  echo "│                                                             │"
+  printf "│   %-57s │\n" "${GENERATED_RECOVERY_PASSWORD}"
+  echo "│                                                             │"
+  echo "└─────────────────────────────────────────────────────────────┘"
+  echo
+  echo "Your disaster-recovery bundle has also been created:"
+  echo "  bundle.tar.enc (in the mounted setup directory)"
   echo
   echo "┌─────────────────────────────────────────────────────────────┐"
   echo "│ BUNDLE PASSWORD                                             │"
