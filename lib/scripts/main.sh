@@ -10,6 +10,7 @@ source_if_not_sourced "${LOCKFILE_CORE}"
 source_if_not_sourced "${CONFIG_LOADER_CORE}"
 source_if_not_sourced "${NOTIFICATION_FEATURE}"
 source_if_not_sourced "${DUPLICACY_BACKUP_FEATURE}"
+source_if_not_sourced "${RECOVERY_KIT_FEATURE}"
 
 cleanup() {
   if [ "${early_exit}" != true ]; then
@@ -159,6 +160,10 @@ main() {
 
   duplicacy_wrap_up "${primary_storage_name}" || handle_error "Wrap-up failed."
   duplicacy_copy_backup
+
+  # Recovery-kit failures are reported (handle_error -> notification) but never abort the
+  # run: the state file leaves failed targets unrecorded so the next run retries them.
+  run_recovery_kit
 
   record_state_change "completed"
   send_completion_notification

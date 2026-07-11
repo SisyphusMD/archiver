@@ -68,6 +68,7 @@ docker exec "$ARCH" bash -c '
   chmod 600 /opt/archiver/keys/id_ed25519
   printf "testpassword" > /run/secrets/storage_password
   printf "testpassphrase" > /run/secrets/rsa_passphrase
+  printf "recovery-sftp-password" > /run/secrets/recovery_password
   echo "hello via sftp" > /data/fixtures/file.txt
   head -c 8192 /dev/urandom > /data/fixtures/blob.bin
   for _ in $(seq 1 30); do
@@ -80,6 +81,19 @@ docker exec "$ARCH" bash -c '
 log "backup over sftp://"
 docker exec "$ARCH" archiver backup retain || die "sftp backup exited non-zero"
 docker exec "$SFTP" test -d /home/backup/upload/snapshots || die "no snapshots directory on the sftp server"
+
+log "recovery kit must sit beside the duplicacy data on the sftp server"
+HOSTN="$(docker exec "$ARCH" hostname)"
+docker exec "$SFTP" test -f "/home/backup/upload/archiver-recovery-kit-${HOSTN}.tar.enc" || die "no recovery kit on the sftp server"
+docker exec "$SFTP" test -f "/home/backup/upload/archiver-recovery-kit-${HOSTN}.README.txt" || die "no kit README on the sftp server"
+docker exec "$ARCH" bash -c '
+  set -e
+  sftp -q -P 22 -i /opt/archiver/keys/id_ed25519 -o BatchMode=yes -b - backup@sftp-server \
+    <<< "get /upload/archiver-recovery-kit-$(hostname).tar.enc /tmp/kit.enc" >/dev/null
+  openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:recovery-sftp-password -in /tmp/kit.enc | tar -xf - -C /tmp
+  grep -q "^STORAGE_TARGET_1_SFTP_URL=sftp-server$" /tmp/archiver.env
+  [ "$(cat /tmp/secrets/storage_password)" = "testpassword" ]
+' || die "recovery kit not retrievable/decryptable from sftp"
 
 log "restore from the sftp storage"
 docker exec -e SNAPSHOT_ID="$(docker exec "$ARCH" hostname)-fixtures" -e LOCAL_DIR=/data/restore \

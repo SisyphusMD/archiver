@@ -60,7 +60,7 @@ exit
 
 ### Step 5: Backup the Bundle Externally
 
-**IMPORTANT:** Keep a copy of your bundle file and password in a safe location outside the Docker host.
+**IMPORTANT:** Keep a copy of your bundle file and password in a safe location outside the Docker host. (If you have enabled the automatic recovery kit — see the README's "Automatic Recovery Kit" section — an always-current encrypted copy of your configuration already sits on every storage target, and this manual copy is just extra insurance.)
 
 The bundle file is accessible on your host at the location you mounted in `compose.yaml`. For example, if you mounted:
 

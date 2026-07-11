@@ -77,6 +77,7 @@ docker exec "$ARCH" bash -c "
   chmod 600 /opt/archiver/keys/private.pem
   printf 'testpassword' > /run/secrets/storage_password
   printf 'testpassphrase' > /run/secrets/rsa_passphrase
+  printf 'recovery-s3-password' > /run/secrets/recovery_password
   printf '%s' '${S3_KEY}'    > /run/secrets/storage_target_1_s3_id
   printf '%s' '${S3_SECRET}' > /run/secrets/storage_target_1_s3_secret
   echo 'hello via s3' > /data/fixtures/file.txt
@@ -103,6 +104,20 @@ docker exec "$ARCH" bash -c "
 
 log "backup to MinIO over s3://"
 docker exec "$ARCH" archiver backup retain || die "s3 backup exited non-zero"
+
+log "recovery kit must be a plain object in the bucket, decryptable with only the password"
+HOSTN="$(docker exec "$ARCH" hostname)"
+docker exec "$ARCH" bash -c "
+  set -e
+  curl -fsS --aws-sigv4 'aws:amz:us-east-1:s3' --user '${S3_KEY}:${S3_SECRET}' \
+    -o /tmp/kit.enc 'https://minio:9000/${BUCKET}/archiver-recovery-kit-${HOSTN}.tar.enc'
+  curl -fsS --aws-sigv4 'aws:amz:us-east-1:s3' --user '${S3_KEY}:${S3_SECRET}' \
+    -o /tmp/kit.readme 'https://minio:9000/${BUCKET}/archiver-recovery-kit-${HOSTN}.README.txt'
+  grep -q 'openssl enc -d' /tmp/kit.readme
+  openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:recovery-s3-password -in /tmp/kit.enc | tar -xf - -C /tmp
+  grep -q '^STORAGE_TARGET_1_S3_BUCKETNAME=${BUCKET}\$' /tmp/archiver.env
+  [ \"\$(cat /tmp/secrets/storage_target_1_s3_secret)\" = '${S3_SECRET}' ]
+" || die "recovery kit missing from the bucket or not decryptable"
 
 log "restore from MinIO"
 docker exec -e SNAPSHOT_ID="$(docker exec "$ARCH" hostname)-fixtures" -e LOCAL_DIR=/data/restore \

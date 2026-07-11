@@ -24,20 +24,22 @@ services:
     environment:
       CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
-      # Non-secret configuration ('archiver init' or 'archiver migrate' writes these values
-      # as archiver.env; see the README "Configuration Sources" section):
-      SERVICE_DIRECTORIES: "/mnt/backup-dir/"        # colon-delimited list; a YAML block scalar also works
-      STORAGE_TARGET_1_NAME: "local"
-      STORAGE_TARGET_1_TYPE: "local"
-      STORAGE_TARGET_1_LOCAL_PATH: "/mnt/backup/storage"
-      ROTATE_BACKUPS: "true"
       # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
+
+    # Non-secret settings, exactly as emitted by 'archiver init' or 'archiver migrate'.
+    # The file holds no secrets, so it can be committed to git alongside this compose file.
+    # (Values can also be inlined under environment: above — same effect.)
+    env_file:
+      - ./archiver.env
 
     secrets:                      # each secret is one file mounted at /run/secrets/<name>
       - storage_password          # >= 8 characters (Duplicacy requirement)
       - rsa_passphrase
       - rsa_private_key           # RSA keypair required in env-native mode
       - rsa_public_key
+      - recovery_password         # automatic recovery kit on every storage target (README
+                                  # "Automatic Recovery Kit"); 'init' generates it — keep a
+                                  # copy in your password manager
       # - ssh_private_key         # only for sftp targets
       # - ssh_public_key          # only for sftp targets (restore needs both halves)
       # - storage_target_1_b2_id  # only for b2 targets
@@ -49,6 +51,9 @@ services:
       - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
       - /path/to/host/backup-dir:/mnt/backup-dir     # Data to backup (must match SERVICE_DIRECTORIES)
       - /path/to/host/backup/storage:/mnt/backup/storage   # Local storage target
+      # This compose file itself, captured verbatim into the recovery kit so a recovered
+      # deployment starts from your real manifest, not a reconstruction:
+      - ./compose.yaml:/opt/archiver/deployment/compose.yaml:ro
       # - /var/run/docker.sock:/var/run/docker.sock                    # Docker socket for scripts (optional)
       # - /run/podman/podman.sock:/var/run/docker.sock               # Podman socket (mount as docker.sock)
       # - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket    # systemctl start/stop/status
@@ -62,6 +67,7 @@ secrets:
   rsa_passphrase:   { file: ./secrets/rsa_passphrase }
   rsa_private_key:  { file: ./secrets/rsa_private_key }
   rsa_public_key:   { file: ./secrets/rsa_public_key }
+  recovery_password: { file: ./secrets/recovery_password }
   # ssh_private_key: { file: ./secrets/ssh_private_key }             # only for sftp targets
   # ssh_public_key:  { file: ./secrets/ssh_public_key }              # only for sftp targets
   # storage_target_1_b2_id:     { file: ./secrets/storage_target_1_b2_id }

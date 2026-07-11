@@ -71,11 +71,18 @@ docker run --rm -v "$SECVOL":/run/secrets --entrypoint bash "$IMAGE" -c 'printf 
   || die "(D) password file write failed"
 docker run -d --name "$NAME" --cap-drop ALL --cap-add DAC_OVERRIDE \
   -v "$BUNVOL":/opt/archiver/bundle -v "$SECVOL":/run/secrets "$IMAGE" >/dev/null || die "(D) container failed to start"
-for _ in $(seq 1 50); do
-  docker logs "$NAME" 2>&1 | grep -q "Container is ready" && break
+# Generous window: under a loaded docker host (CI runners, full local gates) container
+# startup can take well over the happy-path second or two.
+for _ in $(seq 1 300); do
+  docker logs "$NAME" 2>&1 | grep -q "Configuration imported successfully" && break
   sleep 0.2
 done
-docker logs "$NAME" 2>&1 | grep -q "Configuration imported successfully" || { docker logs "$NAME" | tail -6; die "(D) bundle import did not succeed"; }
+docker logs "$NAME" 2>&1 | grep -q "Configuration imported successfully" || {
+  echo "--- (D) diagnostics ---"
+  docker inspect "$NAME" --format 'state={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} started={{.State.StartedAt}}'
+  docker logs "$NAME" 2>&1 | tail -20
+  die "(D) bundle import did not succeed"
+}
 
 LEAKS=$(docker exec "$NAME" bash -c '
   found=0
