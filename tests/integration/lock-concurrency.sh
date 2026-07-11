@@ -64,9 +64,24 @@ set -e
 [ "$rc" -ne 0 ] || die "second concurrent backup was admitted (exit 0)"
 echo "$OUT" | grep -q "already running" || die "refusal carries no explanation; got: $OUT"
 
-log "stop the running backup and wait for it to wind down"
+log "async 'archiver start' must ALSO refuse visibly (it used to swallow the refusal and report success)"
+set +e
+OUT2=$(archiver start retain 2>&1)
+rc_start=$?
+set -e
+[ "$rc_start" -ne 0 ] || die "'archiver start' exited 0 while a backup is running"
+echo "$OUT2" | grep -q "already running" || die "start refusal carries no explanation; got: $OUT2"
+echo "$OUT2" | grep -q "called in the background" && die "start printed the success line while refusing"
+
+log "restart during a run must stop it, WAIT for the lock, then really start a new run"
+rm -f "$MARKER"
+OUT3=$(archiver restart retain 2>&1) || die "restart exited non-zero: $OUT3"
+for _ in $(seq 1 300); do [ -f "$MARKER" ] && break; sleep 0.2; done
+[ -f "$MARKER" ] || die "restart never started a new backup (stopped but did not start)"
+
+log "stop the restarted backup and wait for it to wind down"
 archiver stop >/dev/null 2>&1 || true
-for _ in $(seq 1 60); do [ ! -e "$LOCKFILE" ] && break; sleep 0.5; done
+for _ in $(seq 1 120); do [ ! -e "$LOCKFILE" ] && break; sleep 0.5; done
 [ ! -e "$LOCKFILE" ] || die "lock not released after stop"
 
 log "stale lock: a dead PID must be recovered AND the new run must hold the lock"
@@ -91,4 +106,4 @@ set -e
 [ "$rc2" -ne 0 ] || die "concurrent backup admitted during a stale-recovered run"
 
 archiver stop >/dev/null 2>&1 || true
-echo "=== LOCK-CONCURRENCY OK: busy refused (rc=${rc}), stale recovered and re-held (pid ${NEW_PID}), busy re-refused (rc=${rc2}) ==="
+echo "=== LOCK-CONCURRENCY OK: busy refused sync (rc=${rc}) + async start (rc=${rc_start}), restart stop-waits-starts, stale recovered and re-held (pid ${NEW_PID}), busy re-refused (rc=${rc2}) ==="

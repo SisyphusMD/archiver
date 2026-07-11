@@ -2,10 +2,15 @@
 
 LOCKFILE_SH_SOURCED=true
 
+# Deliberately sources nothing beyond common.sh. The dispatcher (archiver.sh) sources this
+# file before backgrounding main.sh, and pulling in logging drags the notification ->
+# config-loader chain along, whose load mutates the dispatcher's environment (e.g.
+# SERVICE_DIRECTORIES becomes a bash array, which does not export) — gutting the
+# environment the backgrounded child inherits. Only log_lockfile_summary needs logging;
+# its callers provide it (see the note on the function).
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
-source_if_not_sourced "${LOGGING_CORE}"
 
 get_lock_pid() {
   head -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f1
@@ -131,6 +136,8 @@ acquire_lock() {
   return 0
 }
 
+# Requires log_message/format_timestamp/format_duration from logging.sh — the caller must
+# have it loaded (main.sh does, via config-loader). Everything else in this file is pure.
 log_lockfile_summary() {
   local start_time
   local end_time
