@@ -8,6 +8,9 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
+# Safe here only because lockfile.sh is dependency-free (see its header): this dispatcher
+# backgrounds main.sh, so nothing it sources may mutate the environment the child inherits.
+source_if_not_sourced "${LOCKFILE_CORE}"
 
 usage() {
   echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|migrate|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help} [logs|prune|retain]"
@@ -34,6 +37,15 @@ command="${1}"
 shift
 
 start_archiver() {
+  # Refuse a live lock up front, visibly. main.sh refuses it anyway, but it runs
+  # backgrounded with its output discarded, so the refusal was invisible and `start`
+  # falsely reported success. A STALE lock (dead PID) is not a refusal — main.sh's
+  # acquire_lock cleans it up and proceeds.
+  if is_lock_valid; then
+    echo "A backup is already running (PID $(get_lock_pid)). Not starting another." >&2
+    exit 1
+  fi
+
   # Parse optional flags: logs, prune, retain
   if [[ -n "${1}" ]]; then
     if [[ "${1}" == "logs" ]]; then
@@ -79,6 +91,20 @@ case "${command}" in
     fi
     if [[ "${command}" == "restart" ]]; then
       "${STOP_SCRIPT}"
+      # stop signals asynchronously — a graceful stop holds the lock until the current
+      # service finishes its backup and cleanup. Wait for the release here, or the start
+      # below would be refused by the dying run's lock and restart would stop-but-not-start.
+      if is_lock_valid; then
+        echo "Waiting for the stopped backup to release its lock..."
+        for _ in $(seq 1 120); do
+          is_lock_valid || break
+          sleep 1
+        done
+        if is_lock_valid; then
+          echo "The stopped backup (PID $(get_lock_pid)) is still finishing cleanup; not starting a new one. Re-run 'archiver start' once it exits, or use 'archiver stop --immediate'." >&2
+          exit 1
+        fi
+      fi
     fi
     start_archiver "${@}"
     ;;

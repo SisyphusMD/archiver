@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- `archiver start` now refuses visibly when a backup is already running (non-zero exit and the same "A backup is already running (PID …)" message the synchronous path prints). Previously the dispatcher backgrounded `main.sh` with its output discarded and printed the success line unconditionally, so a refused start looked like a successful one. A stale lock (dead PID) still starts normally.
+- `archiver restart` now waits (up to two minutes) for the stopped backup to release its lock before starting the new run. Previously the start raced the asynchronously-stopping backup and was silently refused by its still-held lock — restart could stop a backup and never start one, with no indication. If cleanup outlasts the wait, restart says so and exits non-zero instead of pretending.
+
 ## [0.9.2] - 2026-07-11
 
 ### Added
