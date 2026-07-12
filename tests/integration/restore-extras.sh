@@ -41,14 +41,14 @@ cat >"$FIXTURES/restore-service.sh" <<'EOF'
 echo "hook ran in $PWD" > hook-marker.txt
 EOF
 chmod +x "$FIXTURES/restore-service.sh"
-archiver backup retain || die "backup 1 failed"
+archiver backup || die "backup 1 failed"
 
 log "revision 2: changed content"
 # duplicacy's quick mode skips files with unchanged size+mtime; a same-second, same-size
 # rewrite would silently reuse revision 1's chunks. Tick the clock and change the size.
 sleep 1.1
 echo "generation two (changed)" >"$FIXTURES/file.txt"
-archiver backup retain || die "backup 2 failed"
+archiver backup || die "backup 2 failed"
 
 log "restore latest: must be generation two"
 SNAPSHOT_ID="$SNAPSHOT_ID_VAL" LOCAL_DIR=/data/restore-latest OVERWRITE=1 archiver auto-restore \

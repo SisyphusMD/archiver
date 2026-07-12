@@ -53,7 +53,7 @@ WRAP
 chmod +x "$REAL"
 
 log "round 1: pause freezes duplicacy, resume unfreezes, backup then completes"
-archiver start retain >/dev/null || die "archiver start failed"
+archiver backup --detach >/dev/null || die "archiver start failed"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
 [ -f "$MARKER" ] || die "backup never started"
 DPID=$(pgrep -f "duplicacy backup" | head -1)
@@ -80,7 +80,7 @@ grep -q "Backup resumed" "$LOG" || die "resume not recorded"
 
 log "round 2: stop while paused must kill the frozen backup (SIGKILL path)"
 rm -f "$MARKER"
-archiver start retain >/dev/null || die "second archiver start failed"
+archiver backup --detach >/dev/null || die "second archiver start failed"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
 [ -f "$MARKER" ] || die "second backup never started"
 DPID=$(pgrep -f "duplicacy backup" | head -1)

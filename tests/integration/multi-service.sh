@@ -42,15 +42,15 @@ export STORAGE_TARGET_1_LOCAL_PATH="${STORE}"
 export ROTATE_BACKUPS="true"
 export PRUNE_KEEP="-keep 0:1"
 
-log "backup all three (rotation on, so wrap-up must check + prune once)"
+log "backup all three (check/prune belong to maintenance: the backup run must do NEITHER)"
 archiver backup || die "backup exited non-zero"
 
 for s in svc-a svc-b svc-c; do
   [ -d "$STORE/snapshots/${HOST}-${s}" ] || die "no snapshot for ${s} (glob expansion or per-service backup broken)"
   grep -q "Backup to local completed for ${s} service" "$LOG" || die "no completion record for ${s}"
 done
-[ "$(grep -c "Storage check completed" "$LOG")" = "1" ] || die "storage check must run exactly once, ran $(grep -c "Storage check completed" "$LOG")x"
-[ "$(grep -c "Prune completed" "$LOG")" = "1" ] || die "prune must run exactly once, ran $(grep -c "Prune completed" "$LOG")x"
+grep -q "Storage check completed" "$LOG" && die "a storage check ran inside the backup pipeline"
+grep -q "Prune completed" "$LOG" && die "a prune ran inside the backup pipeline"
 
 log "failure isolation: svc-b's backup fails, svc-a and svc-c must still complete"
 REAL="$(command -v duplicacy)" || die "duplicacy not on PATH"
@@ -67,7 +67,7 @@ chmod +x "$REAL"
 
 for s in svc-a svc-b svc-c; do echo "round two" >>"$SERVICES/$s/${s#svc-}.txt"; done
 set +e
-archiver backup retain
+archiver backup
 rc=$?
 set -e
 
@@ -77,6 +77,5 @@ set -e
 grep -q "\[ERROR\].*Backup to local failed for svc-b service" "$LOG" || die "svc-b failure not logged as ERROR"
 grep -q "Backup to local completed for svc-a service" "$LOG" || die "svc-a did not complete after svc-b's failure"
 grep -q "Backup to local completed for svc-c service" "$LOG" || die "svc-c did not complete after svc-b's failure"
-grep -q "Storage check completed" "$LOG" || die "wrap-up skipped despite two services succeeding"
 
-echo "=== MULTI-SERVICE OK: glob expands, one wrap-up, svc-b failure isolated, exit ${rc} ==="
+echo "=== MULTI-SERVICE OK: glob expands, no check/prune in backup, svc-b failure isolated, exit ${rc} ==="

@@ -466,9 +466,11 @@ EOL
 
   # Defaults
   {
-    echo "# Backup rotation (default settings)"
-    echo 'ROTATE_BACKUPS="true"'
+    echo "# Maintenance (default settings; runs on MAINTENANCE_SCHEDULE or 'archiver maintenance')"
+    echo 'CHECK_BACKUPS="true"'
+    echo 'PRUNE_BACKUPS="true"'
     echo 'PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"'
+    echo 'PRUNE_EXHAUSTIVE_FREQUENCY="monthly"'
     echo
     echo "# Performance"
     echo 'DUPLICACY_THREADS="4"'

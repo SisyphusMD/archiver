@@ -46,7 +46,7 @@ HASH_TXT="$(sha256sum "$FIXTURES/file.txt" | cut -d' ' -f1)"
 HASH_BIN="$(sha256sum "$FIXTURES/blob.bin" | cut -d' ' -f1)"
 
 log "backup -> primary, copy -> secondary"
-archiver backup retain || die "backup exited non-zero"
+archiver backup || die "backup exited non-zero"
 [ -d "$STORE1/snapshots" ] || die "no snapshots on primary"
 [ -d "$STORE2/snapshots" ] || die "no snapshots on secondary (copy did not run)"
 grep -q "Copy to secondary storage completed" "$LOG" || die "no copy-completed record in log"
@@ -57,12 +57,20 @@ SNAPSHOT_ID="$SNAPSHOT_ID" LOCAL_DIR="$RESTORE" STORAGE_TARGET=2 OVERWRITE=1 HAS
 [ "$(sha256sum "$RESTORE/file.txt" | cut -d' ' -f1)" = "$HASH_TXT" ] || die "file.txt content mismatch from secondary"
 [ "$(sha256sum "$RESTORE/blob.bin" | cut -d' ' -f1)" = "$HASH_BIN" ] || die "blob.bin content mismatch from secondary"
 
-log "now make 'duplicacy copy' fail: it must be reported, not swallowed"
+log "add a THIRD (tertiary) target so one leg can fail while the other still completes"
+STORE3=/backup-tertiary
+mkdir -p "$STORE3"
+export STORAGE_TARGET_3_NAME="tertiary"
+export STORAGE_TARGET_3_TYPE="local"
+export STORAGE_TARGET_3_LOCAL_PATH="${STORE3}"
+
+log "shadow duplicacy so ONLY the copy to 'secondary' fails; the tertiary leg must still complete"
 REAL="$(command -v duplicacy)" || die "duplicacy not on PATH"
 mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<'WRAP'
 #!/usr/bin/env bash
-if [ "${1:-}" = "copy" ]; then
+# `copy -from <p> -to secondary ...` — fail only that destination, pass everything else.
+if [ "${1:-}" = "copy" ] && printf '%s\n' "$@" | grep -qx secondary; then
   echo "SIMULATED: copy to secondary failed" >&2
   exit 1
 fi
@@ -72,10 +80,15 @@ chmod +x "$REAL"
 
 echo "new content forces a new revision" >>"$FIXTURES/file.txt"
 set +e
-archiver backup retain
+archiver backup
 rc=$?
 set -e
-[ "$rc" -ne 0 ] || die "backup exited 0 despite the copy failing"
-grep -q "\[ERROR\].*Copy to secondary storage failed" "$LOG" || die "no ERROR logged for the failed copy"
+[ "$rc" -ne 0 ] || die "backup exited 0 despite the secondary copy failing"
+grep -q "\[ERROR\].*Copy to secondary storage failed" "$LOG" || die "no ERROR logged for the failed secondary copy"
+grep -q "Copy to tertiary storage completed" "$LOG" || die "tertiary copy did not complete despite the secondary failure"
+[ -d "$STORE3/snapshots" ] || die "no snapshots on tertiary (its copy did not run)"
+# Every per-storage lock (source + destinations) must be released even after a failed leg,
+# or the next copy/maintenance would block on a dead-PID lock.
+ls /var/lock/archiver-storage-*.lock >/dev/null 2>&1 && die "storage lock left behind after the run"
 
-echo "=== COPY-PATH OK: copy runs, secondary restores, copy failure exits ${rc} ==="
+echo "=== COPY-PATH OK: copy runs, secondary restores, one leg fails (exit ${rc}) while the other completes, no lock leak ==="

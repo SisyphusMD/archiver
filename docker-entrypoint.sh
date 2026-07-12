@@ -11,18 +11,20 @@ handle_shutdown() {
 
   "${ARCHIVER_DIR}/archiver.sh" stop 2>&1 || true
 
-  # During a service backup 'archiver stop' only sets the stop flag; the backup process
-  # records the stop and releases the lock itself. Exiting before that happens tears down
-  # the PID namespace and SIGKILLs that cleanup mid-flight, so wait for the lock to clear
-  # (bounded well under the documented stop_grace_period of 2m).
+  # During a service backup 'archiver stop' only sets the stop flag; the pipeline records
+  # the stop and releases its lock itself. Exiting before that happens tears down the PID
+  # namespace and SIGKILLs that cleanup mid-flight, so wait for both pipeline locks to
+  # clear (bounded well under the documented stop_grace_period of 2m).
   for _ in $(seq 1 100); do
-    [ -e "${LOCKFILE}" ] || break
+    [ ! -e "${LOCKFILE}" ] && [ ! -e "${MAINTENANCE_LOCKFILE}" ] && break
     sleep 1
   done
 
-  if [ -n "$LOG_TAILER_PID" ] && kill -0 "$LOG_TAILER_PID" 2>/dev/null; then
-    kill "$LOG_TAILER_PID" 2>/dev/null || true
-  fi
+  for tailer_pid in "$LOG_TAILER_PID" "$MAINT_TAILER_PID"; do
+    if [ -n "$tailer_pid" ] && kill -0 "$tailer_pid" 2>/dev/null; then
+      kill "$tailer_pid" 2>/dev/null || true
+    fi
+  done
 
   # Kill supercronic or tail process if running
   if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
@@ -174,9 +176,9 @@ if [ "$1" = "run" ]; then
     fi
 
     case "$1" in
-        auto-restore|auto-restore-all|snapshot-exists|healthcheck|backup) ;;
+        auto-restore|auto-restore-all|snapshot-exists|healthcheck|backup|maintenance) ;;
         *)
-            echo "ERROR: 'run' only supports: auto-restore, auto-restore-all, snapshot-exists, healthcheck, backup" >&2
+            echo "ERROR: 'run' only supports: auto-restore, auto-restore-all, snapshot-exists, healthcheck, backup, maintenance" >&2
             echo "Received: $1" >&2
             exit 2
             ;;
@@ -191,49 +193,87 @@ fi
 
 prepare_config
 
-# Start log tailer in background to forward logs to stdout
-# This allows 'docker logs -f' to work
-# Use tail -F to follow the symlink through log rotations
-if [ -d "${LOG_DIR}" ]; then
+# Clear any lock/stop-flag state left by a prior container. These live under /var/lock (not
+# a volume/tmpfs), so they survive 'docker restart'; a fresh PID namespace cannot host a live
+# prior-boot holder, so removing them is safe and prevents (a) a recycled PID faking a live
+# lock — every scheduled backup then refusing "already running" — and (b) a leftover stop flag
+# silently aborting the first backup. 2>/dev/null swallows the no-match glob.
+rm -f "${LOCKFILE}" "${STOP_FLAG}" "${MAINTENANCE_LOCKFILE}" "${MAINTENANCE_STOP_FLAG}" \
+      "${LOCKFILE}.tmp" "${MAINTENANCE_LOCKFILE}.tmp" "${STORAGE_LOCK_PREFIX}"*.lock 2>/dev/null || true
+
+# Forward a pipeline's log file to stdout so 'docker logs -f' works. tail -F follows the
+# symlink by name through rotations; the wait loop idles harmlessly if the pipeline never
+# runs (e.g. maintenance not scheduled and never invoked).
+start_log_tailer() {
+    local file="$1" banner="$2"
     (
-        while [ ! -f "${LOG_FILE}" ]; do
+        while [ ! -f "${file}" ]; do
             sleep 1
         done
-
-        if [ -f "${LOGO_DIR}/logo.ascii" ]; then
-            cat "${LOGO_DIR}/logo.ascii"
-            echo ""
-        fi
-        echo "--- Archiver Logs ---"
-        # -F follows by name (handles log rotation), -n 0 shows only new lines from now
-        tail -F -n 0 "${LOG_FILE}" 2>/dev/null
+        echo "--- ${banner} ---"
+        tail -F -n 0 "${file}" 2>/dev/null
     ) &
+}
+
+if [ -d "${LOG_DIR}" ]; then
+    if [ -f "${LOGO_DIR}/logo.ascii" ]; then
+        cat "${LOGO_DIR}/logo.ascii"
+        echo ""
+    fi
+    start_log_tailer "${LOG_FILE}" "Archiver Logs"
     LOG_TAILER_PID=$!
+    start_log_tailer "${LOG_DIR}/maintenance.log" "Maintenance Logs"
+    MAINT_TAILER_PID=$!
 fi
 
-if [ -n "$CRON_SCHEDULE" ]; then
-    echo "Setting up scheduler (supercronic) with schedule: $CRON_SCHEDULE"
+# CRON_SCHEDULE was renamed. Refusing to start beats silently ignoring it — an ignored
+# schedule rename would mean no scheduled backups and nobody noticing.
+if [ -n "${CRON_SCHEDULE:-}" ]; then
+    echo "ERROR: CRON_SCHEDULE was renamed to BACKUP_SCHEDULE. Rename the environment variable and restart." >&2
+    exit 1
+fi
+if [ -n "${ROTATE_BACKUPS:-}" ]; then
+    echo "WARNING: ROTATE_BACKUPS is deprecated; rename it to PRUNE_BACKUPS (still honored for old bundle configs)."
+fi
 
+# Check/prune only run on MAINTENANCE_SCHEDULE (or a manual 'archiver maintenance').
+# A scheduled deployment without it would back up forever and never enforce retention
+# or verify storages — say so once, loudly, at startup.
+if [ -n "${BACKUP_SCHEDULE:-}" ] && [ -z "${MAINTENANCE_SCHEDULE:-}" ]; then
+    echo "WARNING: MAINTENANCE_SCHEDULE is not set: storage check and prune will never run automatically."
+    echo "         Set MAINTENANCE_SCHEDULE (e.g. \"0 13 * * *\") or run 'archiver maintenance' yourself."
+fi
+
+if [ -n "${BACKUP_SCHEDULE:-}" ] || [ -n "${MAINTENANCE_SCHEDULE:-}" ]; then
     CRONTAB_FILE=/tmp/archiver.crontab
-    echo "${CRON_SCHEDULE} ${ARCHIVER_DIR}/archiver.sh start" > "${CRONTAB_FILE}"
+    : > "${CRONTAB_FILE}"
+    # Synchronous verbs: supercronic then knows each job's real duration and adds its own
+    # skip-if-still-running protection on top of the pipeline locks.
+    if [ -n "${BACKUP_SCHEDULE:-}" ]; then
+        echo "${BACKUP_SCHEDULE} ${ARCHIVER_DIR}/archiver.sh backup" >> "${CRONTAB_FILE}"
+        echo "Backups scheduled: ${BACKUP_SCHEDULE}"
+    fi
+    if [ -n "${MAINTENANCE_SCHEDULE:-}" ]; then
+        echo "${MAINTENANCE_SCHEDULE} ${ARCHIVER_DIR}/archiver.sh maintenance" >> "${CRONTAB_FILE}"
+        echo "Maintenance scheduled: ${MAINTENANCE_SCHEDULE}"
+    fi
 
     # Fail fast on a malformed schedule instead of crash-looping the container.
     if ! supercronic -test "${CRONTAB_FILE}"; then
-        echo "ERROR: CRON_SCHEDULE is invalid: '$CRON_SCHEDULE'"
+        echo "ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid."
         exit 1
     fi
 
-    echo "Scheduler configured. Backups will run on schedule: $CRON_SCHEDULE"
     echo "Starting supercronic..."
 
     # Background (not exec) so the SIGTERM trap can still run 'archiver stop' and
-    # tear down the log tailer. supercronic passes TZ through for schedule evaluation.
+    # tear down the log tailers. supercronic passes TZ through for schedule evaluation.
     supercronic -passthrough-logs "${CRONTAB_FILE}" &
     MAIN_PID=$!
     wait $MAIN_PID
 else
-    echo "No CRON_SCHEDULE set. Container will wait for manual commands."
-    echo "Use 'docker exec <container> archiver start' to run backups manually"
+    echo "No BACKUP_SCHEDULE set. Container will wait for manual commands."
+    echo "Use 'docker exec <container> archiver backup' to run backups manually ('archiver backup --detach' to background)"
     echo ""
     echo "Container is ready and will stay running."
 

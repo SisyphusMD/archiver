@@ -52,7 +52,36 @@ terminate_process() {
 }
 
 IMMEDIATE_MODE=false
-[ "$1" = "--immediate" ] && IMMEDIATE_MODE=true
+TARGET="all"
+for arg in "$@"; do
+  case "${arg}" in
+    --immediate) IMMEDIATE_MODE=true ;;
+    backup|maintenance|all) TARGET="${arg}" ;;
+  esac
+done
+
+# Maintenance pipeline: setting its stop flag is enough for a graceful stop (its runner
+# polls the flag every second and terminates the current duplicacy command itself);
+# --immediate additionally TERMs the process tree now.
+if [ "${TARGET}" = "maintenance" ] || [ "${TARGET}" = "all" ]; then
+  (
+    ARCHIVER_LOCKFILE="${MAINTENANCE_LOCKFILE}"
+    ARCHIVER_STOP_FLAG_FILE="${MAINTENANCE_STOP_FLAG}"
+    if is_lock_valid; then
+      MAINT_PID=$(get_lock_pid)
+      echo "Stopping maintenance (PID: ${MAINT_PID}, stage: $(get_lock_stage), $(get_lock_context))..."
+      request_stop
+      if [ "${IMMEDIATE_MODE}" = true ]; then
+        record_state_change "stopped"
+        pkill -TERM -P "${MAINT_PID}" 2>/dev/null || true
+        kill -TERM "${MAINT_PID}" 2>/dev/null || true
+      fi
+    elif [ "${TARGET}" = "maintenance" ]; then
+      echo "No running maintenance found."
+    fi
+  )
+  [ "${TARGET}" = "maintenance" ] && exit 0
+fi
 
 if ! is_lock_valid; then
   echo "No running backup found."

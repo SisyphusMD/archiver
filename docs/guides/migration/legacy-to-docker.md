@@ -139,8 +139,9 @@ services:
     hostname: YOUR_CURRENT_HOSTNAME_HERE
 
     environment:
-      # Your cron schedule from step 3 (or omit for manual backups)
-      CRON_SCHEDULE: "0 3 * * *"
+      # Your backup schedule from step 3 (or omit for manual backups)
+      BACKUP_SCHEDULE: "0 3 * * *"
+      MAINTENANCE_SCHEDULE: "0 13 * * *"  # check + prune, opposite the backup window
 
       # Timezone for cron scheduling and timestamps
       TZ: "America/New_York"
@@ -216,7 +217,7 @@ The container will automatically:
 Run a test backup manually:
 
 ```bash
-docker exec archiver archiver start
+docker exec archiver archiver backup --detach
 ```
 
 Monitor the backup:

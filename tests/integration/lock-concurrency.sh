@@ -51,43 +51,54 @@ WRAP
 chmod +x "$REAL"
 
 log "start a backup, wait until it holds the lock in the backup stage"
-archiver start retain >/dev/null || die "archiver start failed"
+archiver backup --detach >/dev/null || die "archiver start failed"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
 [ -f "$MARKER" ] || die "backup never reached the duplicacy backup stage"
 [ -e "$LOCKFILE" ] || die "no lockfile while a backup is running"
 
 log "a second backup must be refused with an explanation"
 set +e
-OUT=$(archiver backup retain 2>&1)
+OUT=$(archiver backup 2>&1)
 rc=$?
 set -e
 [ "$rc" -ne 0 ] || die "second concurrent backup was admitted (exit 0)"
 echo "$OUT" | grep -q "already running" || die "refusal carries no explanation; got: $OUT"
 
-log "async 'archiver start' must ALSO refuse visibly (it used to swallow the refusal and report success)"
+log "detached 'archiver backup --detach' must ALSO refuse visibly (never a false success line)"
 set +e
-OUT2=$(archiver start retain 2>&1)
+OUT2=$(archiver backup --detach 2>&1)
 rc_start=$?
 set -e
-[ "$rc_start" -ne 0 ] || die "'archiver start' exited 0 while a backup is running"
-echo "$OUT2" | grep -q "already running" || die "start refusal carries no explanation; got: $OUT2"
-echo "$OUT2" | grep -q "called in the background" && die "start printed the success line while refusing"
+[ "$rc_start" -ne 0 ] || die "'backup --detach' exited 0 while a backup is running"
+echo "$OUT2" | grep -q "already running" || die "detach refusal carries no explanation; got: $OUT2"
+echo "$OUT2" | grep -q "started in the background" && die "detach printed the success line while refusing"
 
-log "restart during a run must stop it, WAIT for the lock, then really start a new run"
-rm -f "$MARKER"
-OUT3=$(archiver restart retain 2>&1) || die "restart exited non-zero: $OUT3"
-for _ in $(seq 1 300); do [ -f "$MARKER" ] && break; sleep 0.2; done
-[ -f "$MARKER" ] || die "restart never started a new backup (stopped but did not start)"
+log "removed commands must error with guidance, not act"
+set +e
+OUT3=$(archiver start 2>&1); rc3=$?
+OUT4=$(archiver restart 2>&1); rc4=$?
+OUT5=$(archiver backup retain 2>&1); rc5=$?
+set -e
+[ "$rc3" -ne 0 ] && echo "$OUT3" | grep -q "was removed" || die "'start' did not error with removal guidance"
+[ "$rc4" -ne 0 ] && echo "$OUT4" | grep -q "was removed" || die "'restart' did not error with removal guidance"
+[ "$rc5" -ne 0 ] && echo "$OUT5" | grep -q "was removed" || die "'backup retain' did not error with removal guidance"
 
-log "stop the restarted backup and wait for it to wind down"
-archiver stop >/dev/null 2>&1 || true
+log "stop the running backup with an explicit target + --immediate, wait for it to wind down"
+archiver stop backup --immediate >/dev/null 2>&1 || true
 for _ in $(seq 1 120); do [ ! -e "$LOCKFILE" ] && break; sleep 0.5; done
-[ ! -e "$LOCKFILE" ] || die "lock not released after stop"
+[ ! -e "$LOCKFILE" ] || die "lock not released after 'stop backup --immediate'"
+
+log "'archiver stop backup maintenance' (two targets) must be rejected, not silently drop one"
+set +e
+OUT_MT=$(archiver stop backup maintenance 2>&1); rc_mt=$?
+set -e
+[ "$rc_mt" -ne 0 ] || die "'stop backup maintenance' was accepted (should reject multiple targets)"
+echo "$OUT_MT" | grep -q "at most one target" || die "no guidance rejecting multiple stop targets; got: $OUT_MT"
 
 log "stale lock: a dead PID must be recovered AND the new run must hold the lock"
 echo "999999 duplicacy pre-backup" >"$LOCKFILE"
 rm -f "$MARKER"
-archiver start retain >/dev/null || die "archiver start failed on stale lock"
+archiver backup --detach >/dev/null || die "archiver start failed on stale lock"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
 [ -f "$MARKER" ] || die "backup never started after stale-lock recovery"
 
@@ -100,10 +111,10 @@ grep -rq "Stale lock file found" /opt/archiver/logs/ || die "stale-lock recovery
 
 log "and the recovered run must again refuse a concurrent backup"
 set +e
-archiver backup retain >/dev/null 2>&1
+archiver backup >/dev/null 2>&1
 rc2=$?
 set -e
 [ "$rc2" -ne 0 ] || die "concurrent backup admitted during a stale-recovered run"
 
 archiver stop >/dev/null 2>&1 || true
-echo "=== LOCK-CONCURRENCY OK: busy refused sync (rc=${rc}) + async start (rc=${rc_start}), restart stop-waits-starts, stale recovered and re-held (pid ${NEW_PID}), busy re-refused (rc=${rc2}) ==="
+echo "=== LOCK-CONCURRENCY OK: busy refused sync (rc=${rc}) + detach (rc=${rc_start}) + removals, stale recovered and re-held (pid ${NEW_PID}), busy re-refused (rc=${rc2}) ==="

@@ -55,7 +55,7 @@ WRAP
 chmod +x "$REAL"
 
 log "start, wait for svc-a's backup stage, then stop"
-archiver start >/dev/null || die "archiver start failed"
+archiver backup --detach >/dev/null || die "archiver start failed"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
 [ -f "$MARKER" ] || die "svc-a backup never started"
 archiver stop || die "archiver stop failed"

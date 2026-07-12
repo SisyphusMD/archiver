@@ -108,7 +108,7 @@ B2_LIST_JSON='{
   d1="${BATS_TEST_TMPDIR}/p1"; mkdir -p "$d1"
   f1="$(build_recovery_kit_payload "$d1")"
 
-  # Simulate what `archiver backup retain` + the rotation check do at runtime.
+  # Simulate what `archiver backup` + the rotation check do at runtime.
   ROTATE_BACKUPS="false"
   PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
   d2="${BATS_TEST_TMPDIR}/p2"; mkdir -p "$d2"

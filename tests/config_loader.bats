@@ -48,3 +48,34 @@ setup() {
   run check_required_secrets
   [ "$status" -ne 0 ]
 }
+
+@test "check_maintenance_settings rejects an invalid PRUNE_EXHAUSTIVE_FREQUENCY" {
+  PRUNE_EXHAUSTIVE_FREQUENCY="fortnightly"
+  PRUNE_KEEP=""
+  run check_maintenance_settings
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q "must be one of"
+}
+
+@test "check_maintenance_settings applies defaults when unset" {
+  PRUNE_EXHAUSTIVE_FREQUENCY=""
+  PRUNE_KEEP=""
+  CHECK_BACKUPS=""
+  PRUNE_BACKUPS=""
+  check_maintenance_settings
+  [ "${PRUNE_EXHAUSTIVE_FREQUENCY}" = "monthly" ]
+  [ "${CHECK_BACKUPS}" = "true" ]
+  [ "${PRUNE_BACKUPS}" = "true" ]
+  [ "${PRUNE_KEEP}" = "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1" ]
+}
+
+@test "check_maintenance_settings lowercases toggle and frequency values" {
+  CHECK_BACKUPS="TRUE"
+  PRUNE_BACKUPS="False"
+  PRUNE_EXHAUSTIVE_FREQUENCY="WEEKLY"
+  PRUNE_KEEP="-keep 0:1"
+  check_maintenance_settings
+  [ "${CHECK_BACKUPS}" = "true" ]
+  [ "${PRUNE_BACKUPS}" = "false" ]
+  [ "${PRUNE_EXHAUSTIVE_FREQUENCY}" = "weekly" ]
+}

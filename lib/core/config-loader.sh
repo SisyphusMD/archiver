@@ -27,7 +27,7 @@ SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"
 # The user-config var surface, as two regexes over variable names. Single source of truth for
 # the load path AND the serializers in config-serialize.sh (migrate / mode-agnostic bundle
 # export): adding a field here is picked up by both, so a serializer can't silently drop it.
-CONFIG_NONSECRET_VARS_RE='^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_KEEP|DUPLICACY_THREADS|NOTIFICATION_SERVICE|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION))$'
+CONFIG_NONSECRET_VARS_RE='^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|DUPLICACY_THREADS|NOTIFICATION_SERVICE|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION))$'
 CONFIG_SECRET_VARS_RE='^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET))$'
 
 # Secrets must come from the bundle or a file, never a plain env var (which would leak via
@@ -150,6 +150,14 @@ if [[ "${ARCHIVER_CONFIG_IGNORE_OVERLAYS:-}" != "true" ]]; then
   resolve_secret_files
 fi
 normalize_service_directories
+# Deprecated-name translation, silent (the entrypoint warns once at container start;
+# warning here would spam the log from every command, incl. the 5-minute healthcheck).
+# Translating before anything reads the value means the serializers and the recovery kit
+# emit only the canonical name.
+if [[ -z "${PRUNE_BACKUPS:-}" && -n "${ROTATE_BACKUPS:-}" ]]; then
+  PRUNE_BACKUPS="${ROTATE_BACKUPS}"
+fi
+unset ROTATE_BACKUPS
 DUPLICACY_THREADS="${DUPLICACY_THREADS:-4}"
 
 # Converts storage names to valid Bash variable format
@@ -414,27 +422,29 @@ check_notification_config() {
   export PUSHOVER_API_TOKEN
 }
 
-check_backup_rotation_settings() {
-  if [[ -z "${ROTATE_BACKUPS}" ]]; then
-    ROTATE_BACKUPS="true"
-  fi
+check_maintenance_settings() {
+  PRUNE_BACKUPS="$(echo "${PRUNE_BACKUPS:-true}" | tr '[:upper:]' '[:lower:]')"
+  CHECK_BACKUPS="$(echo "${CHECK_BACKUPS:-true}" | tr '[:upper:]' '[:lower:]')"
 
   if [ -z "${PRUNE_KEEP}" ]; then
     PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
   fi
 
-  if [[ "${ROTATION_OVERRIDE}" == "prune" ]]; then
-    log_message "INFO" "Prune flag set, will perform backup rotation on this run."
-    ROTATE_BACKUPS="true"
-  elif [[ "${ROTATION_OVERRIDE}" == "retain" ]]; then
-    log_message "INFO" "Retain flag set, will not perform backup rotation on this run."
-    ROTATE_BACKUPS="false"
-  fi
+  PRUNE_EXHAUSTIVE_FREQUENCY="$(echo "${PRUNE_EXHAUSTIVE_FREQUENCY:-monthly}" | tr '[:upper:]' '[:lower:]')"
+  case "${PRUNE_EXHAUSTIVE_FREQUENCY}" in
+    off|daily|weekly|monthly) ;;
+    *)
+      handle_error "PRUNE_EXHAUSTIVE_FREQUENCY must be one of: off, daily, weekly, monthly (got '${PRUNE_EXHAUSTIVE_FREQUENCY}')."
+      exit 1
+      ;;
+  esac
 
-  export ROTATE_BACKUPS
+  export PRUNE_BACKUPS
+  export CHECK_BACKUPS
   export PRUNE_KEEP
+  export PRUNE_EXHAUSTIVE_FREQUENCY
 
-  log_message "INFO" "Backup rotation settings: ROTATE_BACKUPS=${ROTATE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}."
+  log_message "INFO" "Maintenance settings: CHECK_BACKUPS=${CHECK_BACKUPS}, PRUNE_BACKUPS=${PRUNE_BACKUPS}, PRUNE_KEEP=${PRUNE_KEEP}, PRUNE_EXHAUSTIVE_FREQUENCY=${PRUNE_EXHAUSTIVE_FREQUENCY}."
 }
 
 verify_config(){
@@ -443,5 +453,5 @@ verify_config(){
   verify_target_settings
   check_required_secrets
   check_notification_config
-  check_backup_rotation_settings
+  check_maintenance_settings
 }

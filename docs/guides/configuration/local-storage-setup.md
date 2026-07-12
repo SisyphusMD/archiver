@@ -121,7 +121,7 @@ Keep both the bundle file and your bundle password in a secure location. Without
 Run a backup to initialize and populate the local storage:
 
 ```bash
-docker exec archiver archiver start
+docker exec archiver archiver backup --detach
 ```
 
 Monitor the backup:
@@ -177,7 +177,7 @@ cp ~/archiver-bundle/bundle.tar.enc /path/to/safe/location/
 Run a test backup:
 
 ```bash
-docker exec archiver archiver start
+docker exec archiver archiver backup
 ```
 
 Verify that:
@@ -218,7 +218,7 @@ Follow the prompts and configure:
 
 ### Step 3: Complete Setup
 
-Follow the remaining init prompts to configure directories and notifications; init then writes the encrypted bundle and the env-native materials (scheduling is set later via `CRON_SCHEDULE` in your compose file).
+Follow the remaining init prompts to configure directories and notifications; init then writes the encrypted bundle and the env-native materials (scheduling is set later via `BACKUP_SCHEDULE` and `MAINTENANCE_SCHEDULE` in your compose file).
 
 **IMPORTANT: Backup Your Bundle File**
 

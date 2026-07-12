@@ -52,8 +52,8 @@ exec "\$0.real" "\$@"
 WRAP
 chmod +x "$REAL"
 
-log "start backup (background mode, rotation on so wrap-up would prune), wait for the backup stage"
-archiver start >/dev/null || die "archiver start failed"
+log "start backup (background mode, stop must halt the run before the copy phase), wait for the backup stage"
+archiver backup --detach >/dev/null || die "backup --detach failed"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
 [ -f "$MARKER" ] || die "backup never reached the duplicacy backup stage"
 

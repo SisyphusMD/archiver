@@ -246,7 +246,8 @@ services:
       - no-new-privileges:true
 
     environment:
-      CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
+      BACKUP_SCHEDULE: "0 3 * * *"       # backups: daily at 3am (omit for manual mode)
+      MAINTENANCE_SCHEDULE: "0 13 * * *" # check+prune: daily at 1pm, opposite the backup window
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
 
     env_file:
@@ -354,7 +355,7 @@ services:
 
 **Backup-only least privilege:** `CHOWN` and `FOWNER` are used only by restore, so a container that only takes scheduled backups can drop both and run with just `DAC_OVERRIDE`. Add them back when you need to restore with original ownership. Restoring without them does not fail: the data is restored correctly, but files land owned by root and Archiver logs a warning. To restore without preserving ownership on purpose, set `IGNORE_OWNERSHIP=1`.
 
-**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with `DAC_OVERRIDE`, `CHOWN`, and `FOWNER`, and is recommended for defense in depth. Scheduled backups (`CRON_SCHEDULE`) no longer need `SETGID` — Archiver uses [supercronic](https://github.com/aptible/supercronic), which runs jobs as the container user rather than forking with `setgid` like Debian's cron.
+**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with `DAC_OVERRIDE`, `CHOWN`, and `FOWNER`, and is recommended for defense in depth. Scheduled backups (`BACKUP_SCHEDULE`) no longer need `SETGID` — Archiver uses [supercronic](https://github.com/aptible/supercronic), which runs jobs as the container user rather than forking with `setgid` like Debian's cron.
 
 ### Graceful Shutdown
 
@@ -369,7 +370,8 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `CRON_SCHEDULE` | No | Standard 5-field cron expression for automatic backups (empty = manual mode) |
+| `BACKUP_SCHEDULE` | No | Standard 5-field cron expression for the backup pipeline (empty = manual mode) |
+| `MAINTENANCE_SCHEDULE` | No | Cron expression for the maintenance pipeline (check + prune); unset = maintenance only runs via `archiver maintenance` |
 | `TZ` | No | Timezone for scheduled backups and log timestamps (default: UTC) |
 | `SYSTEMCTL_FORCE_BUS` | No | Set to `1` to enable systemctl access to host services via D-Bus socket (requires socket mounts, see above) |
 
@@ -382,10 +384,10 @@ The entrypoint selects one of three modes based on the first container argument:
 | Mode | How it's invoked | Behavior |
 |------|------------------|----------|
 | `init` | `docker run ... archiver:<tag> init` | Interactive setup: generates env-native materials, the recovery password, and an encrypted bundle. Exits when done. |
-| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (env-native and/or bundle), then either runs `supercronic` (if `CRON_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
+| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (env-native and/or bundle), then either runs `supercronic` (if `BACKUP_SCHEDULE` and/or `MAINTENANCE_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
 | `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads configuration (env-native and/or bundle), then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
-`run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, and `backup` (a synchronous backup path intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`. The user-facing `archiver start` command remains async and is intentionally not supported here.
+`run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, `backup`, and `maintenance` (synchronous paths intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`.
 
 ### Image Tags
 
@@ -409,7 +411,7 @@ The primary mode is **env-native**: environment variables carry the non-secret s
 
 With no bundle at all, configuration is fully env-native — this is the recommended deployment. With a bundle and no overrides, behavior is exactly as it was pre-0.9.0. Because the layers stack, an existing bundle deployment can migrate one value at a time: set an env var or mount a secret file, confirm the backup still runs, and repeat until nothing depends on the bundle.
 
-**Non-secret settings (plain env vars).** These override the bundle when set: `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `ROTATE_BACKUPS`, `PRUNE_KEEP`, `DUPLICACY_THREADS`, and `NOTIFICATION_SERVICE`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine). The bundle's bash-array form is still read.
+**Non-secret settings (plain env vars).** These override the bundle when set: `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `CHECK_BACKUPS`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, and `NOTIFICATION_SERVICE`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine). The bundle's bash-array form is still read.
 
 **Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `BUNDLE_PASSWORD` (the bundle decryption password, read from `/run/secrets/bundle_password` or `BUNDLE_PASSWORD_FILE`), `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`, `B2_KEY`, `S3_ID`, and `S3_SECRET`. For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `bundle_password`) is picked up with no extra configuration.
 
@@ -535,12 +537,19 @@ It prompts for the password and yields `archiver.env` + `secrets/` + `RECREATE.t
 
 On B2, each update creates a new file version; old versions age out per your bucket lifecycle rules (they are ciphertext, so lingering versions are harmless).
 
-### Backup Rotation
+### Maintenance (check + prune)
+
+Storage verification and retention run as their own pipeline, on their own schedule, so they can never extend or block a backup run:
 
 ```bash
-ROTATE_BACKUPS="true"  # Enable automatic pruning after backups
+MAINTENANCE_SCHEDULE="0 13 * * *"   # container env var (compose/K8s), NOT config.sh; unset = only via 'archiver maintenance'
+CHECK_BACKUPS="true"                # verify each storage (duplicacy check -all -fossils -resurrect)
+PRUNE_BACKUPS="true"                # enforce retention on each storage
 PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
+PRUNE_EXHAUSTIVE_FREQUENCY="monthly"  # off | daily | weekly | monthly
 ```
+
+The two pipelines coordinate through per-storage locks: maintenance never checks/prunes a storage while a copy is writing to it (and vice versa — the loser waits, visibly, in the log). Backups to the primary are never blocked, and if maintenance overruns, the next backup still starts on time.
 
 **Default retention policy** keeps:
 - All backups younger than 1 day old
@@ -551,25 +560,16 @@ PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
 
 **Format:** `-keep n:m` means keep 1 snapshot every `n` days if the snapshot is at least `m` days old.
 
-#### Per-Run Override
+#### Exhaustive prune frequency
 
-You can override `ROTATE_BACKUPS` for individual backup runs:
-
-```bash
-docker exec archiver archiver start prune   # Force pruning this run
-docker exec archiver archiver start retain  # Skip pruning this run
-```
+A normal prune is snapshot-metadata work (fast); `-exhaustive` additionally lists every chunk on the storage to garbage-collect orphans — expensive on remote storages (a full sftp listing can take hours) while orphans are rare, so it runs on its own interval. `PRUNE_EXHAUSTIVE_FREQUENCY` is evaluated per storage at each maintenance run: once the interval has elapsed since the last exhaustive success, that run's prune includes `-exhaustive`. An infrequent maintenance schedule simply fires it belatedly at the next opportunity. Force it any time with `archiver maintenance exhaustive`.
 
 #### Multi-Repository Shared Storage
 
-If multiple repositories backup to the same storage target, **only ONE should run prune** to avoid race conditions:
+If multiple archiver deployments back up to the same storage target, **only ONE should maintain it** to avoid duplicate work and prune races:
 
-1. Set `ROTATE_BACKUPS="false"` in all but one repository's config
-2. The designated repository will prune for all snapshot IDs using the `-all` flag
-3. Prune uses `-exhaustive` flag to remove ALL unreferenced chunks, including:
-   - Orphaned chunks from manually deleted snapshots
-   - Incomplete backup chunks from interrupted operations
-   - Unreferenced chunks from any source
+1. Set `PRUNE_BACKUPS="false"` and `CHECK_BACKUPS="false"` in all but one deployment
+2. The designated deployment maintains all snapshot IDs on the shared storage via the `-all` flag
 
 See the [Duplicacy prune documentation](https://forum.duplicacy.com/t/prune-command-details/1005) for more details on the two-step fossil collection algorithm.
 
@@ -595,7 +595,7 @@ PUSHOVER_API_TOKEN="apiToken"
 <details>
 <summary><h2>Manual Commands</h2></summary>
 
-With `CRON_SCHEDULE` set, backups run automatically. Without it, run commands manually.
+With `BACKUP_SCHEDULE`/`MAINTENANCE_SCHEDULE` set, the pipelines run automatically. Without them, run commands manually.
 
 ### View logs
 
@@ -614,10 +614,9 @@ docker exec archiver archiver healthcheck
 ### Start backup
 
 ```bash
-docker exec archiver archiver start
-docker exec archiver archiver start logs    # with log viewing
-docker exec archiver archiver start prune   # force rotation
-docker exec archiver archiver start retain  # force retention
+docker exec archiver archiver backup --detach   # run a backup in the background
+docker exec archiver archiver logs              # follow it
+docker exec archiver archiver maintenance       # run check + prune now
 ```
 
 ### Manage active backups
@@ -638,17 +637,16 @@ docker exec -it archiver archiver bundle import
 ### Full Command Reference
 
 ```bash
-archiver start             # Run backup now
-archiver start logs        # Run backup and follow logs
-archiver start prune       # Run backup and force prune (ignore config)
-archiver start retain      # Run backup without pruning (ignore config)
-archiver stop              # Stop backup gracefully (completes cleanup)
-archiver stop --immediate  # Stop backup immediately (skip cleanup)
-archiver restart           # Stop then start backup
+archiver backup            # Run the backup pipeline now (synchronous, exit code propagates)
+archiver backup --detach   # Run it in the background (follow with 'archiver logs')
+archiver maintenance       # Run per-storage check + prune now (synchronous)
+archiver maintenance exhaustive  # Same, forcing the full-listing exhaustive prune
+archiver stop [backup|maintenance|all]  # Stop a pipeline gracefully (default all: both pipelines)
+archiver stop --immediate  # Stop immediately (skip cleanup); combine with a target
 archiver pause             # Pause backup (experimental)
 archiver resume            # Resume paused backup (experimental)
 archiver logs              # Follow backup logs
-archiver status            # Check if backup is running
+archiver status            # Both pipelines' state + per-storage last check/prune ages
 archiver bundle export     # Create encrypted config/keys bundle
 archiver bundle import     # Import from encrypted bundle
 archiver restore           # Restore data from backup (interactive)
@@ -657,7 +655,6 @@ archiver auto-restore-all  # Restore every service in one pass (non-interactive)
 archiver snapshot-exists   # Check if a snapshot exists on any storage target
 archiver migrate [DIR]     # Write the effective config as env-native materials (env + secret files)
 archiver recovery-kit [force]  # Upload the encrypted recovery kit to every storage target now
-archiver backup [prune|retain]  # Synchronous backup, exit code propagates (external schedulers/Jobs)
 archiver healthcheck       # Check system health (Docker HEALTHCHECK uses this; on Kubernetes wire it as an exec probe)
 archiver help              # Show help
 ```
@@ -669,7 +666,7 @@ archiver help              # Show help
 
 ### Running a Backup from an External Scheduler (`run backup`)
 
-For most users, a long-lived container with `CRON_SCHEDULE` set is the simplest way to get scheduled backups — the in-container scheduler fires `archiver start` on schedule, and you don't have to manage anything. Skip this section unless you specifically need to drive scheduling from *outside* the container.
+For most users, a long-lived container with `BACKUP_SCHEDULE` set is the simplest way to get scheduled backups — the in-container scheduler runs `archiver backup` on schedule, and you don't have to manage anything. Skip this section unless you specifically need to drive scheduling from *outside* the container.
 
 If your environment already owns scheduling — e.g., a Kubernetes `CronJob`, a GitHub Actions scheduled workflow, a systemd timer on the host, or any other platform that spawns a short-lived container per run and expects a meaningful exit code — use the entrypoint's `run backup` mode instead. It loads the configuration (env-native or bundle), runs a backup **synchronously**, and exits with the backup's result code. The container terminates when the backup finishes; your scheduler then reports success or failure based on the exit code.
 
@@ -688,7 +685,7 @@ docker run --rm \
   forgejo.bryantserver.com/sisyphusmd/archiver:0.9.2 run backup
 ```
 
-(Bundle mode instead: replace the first two lines with `-v /path/to/bundle/dir:/opt/archiver/bundle` and `-v /path/to/bundle_password:/run/secrets/bundle_password:ro`.) Accepts the same optional flags as `archiver start`: `run backup prune` forces rotation, `run backup retain` forces retention (overriding `ROTATE_BACKUPS`).
+(Bundle mode instead: replace the first two lines with `-v /path/to/bundle/dir:/opt/archiver/bundle` and `-v /path/to/bundle_password:/run/secrets/bundle_password:ro`.) The same pattern drives maintenance from an external scheduler: `run maintenance` blocks through the per-storage check + prune and propagates its exit code.
 
 **Example: Kubernetes CronJob**
 
@@ -725,7 +722,7 @@ Create the ConfigMap and Secret straight from what `init` or `migrate` emitted: 
 
 The Pod lives for the duration of one backup and exits. If the backup fails, the Pod exits non-zero and Kubernetes marks the Job failed — the usual CronJob semantics apply.
 
-> **Why `run backup` instead of `run start`?** `archiver start` is asynchronous — it backgrounds the backup and returns exit `0` immediately, before the backup has done any real work. That's the right behavior for the in-container scheduler (which fires and forgets), but it would cause an external scheduler to always report "success" regardless of what actually happened. `run backup` blocks until the backup finishes so the exit code is meaningful. For this reason `start` is deliberately not whitelisted in `run` mode.
+> **Why not `--detach` here?** A detached backup returns exit `0` immediately, before any real work happens — fine interactively, useless to an external scheduler that needs a meaningful exit code. `run backup` blocks until the backup finishes.
 
 </details>
 

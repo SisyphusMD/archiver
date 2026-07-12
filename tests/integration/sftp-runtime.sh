@@ -79,7 +79,7 @@ docker exec "$ARCH" bash -c '
 ' || die "in-container setup failed"
 
 log "backup over sftp://"
-docker exec "$ARCH" archiver backup retain || die "sftp backup exited non-zero"
+docker exec "$ARCH" archiver backup || die "sftp backup exited non-zero"
 docker exec "$SFTP" test -d /home/backup/upload/snapshots || die "no snapshots directory on the sftp server"
 
 log "recovery kit must sit beside the duplicacy data on the sftp server"

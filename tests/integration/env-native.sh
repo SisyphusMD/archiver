@@ -70,7 +70,7 @@ log "originals: $(for f in "${FILES[@]}"; do printf '%s(%s,%s) ' "$f" "${OWN[$f]
   || die "fixtures lack expected ownership (run with --cap-add CHOWN --cap-add FOWNER): u1000=${OWN[sub/u1000.txt]} u5000=${OWN[sub/u5000.bin]}"
 
 log "backup (blocking, no prune) -> ${STORE}"
-archiver backup retain || die "backup exited non-zero"
+archiver backup || die "backup exited non-zero"
 [ -d "$STORE/snapshots" ] || die "no snapshots written to storage"
 
 log "restore latest of ${SNAPSHOT_ID} -> ${RESTORE}"

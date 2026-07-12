@@ -80,5 +80,5 @@ while [ ${retry} -gt 0 ]; do
   fi
 done
 
-echo "Archiver is not running."
+echo "No running backup found (for maintenance output use 'docker logs' or logs/maintenance.log)."
 exit 1

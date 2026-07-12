@@ -51,7 +51,7 @@ export STORAGE_TARGET_1_TYPE="local"
 export STORAGE_TARGET_1_LOCAL_PATH="${STORE}"
 export ROTATE_BACKUPS="false"
 echo "some content" >"$FIXTURES/file.txt"
-archiver backup retain || die "backup failed"
+archiver backup || die "backup failed"
 
 set +e
 archiver healthcheck >/tmp/hc2.out 2>&1
@@ -66,7 +66,7 @@ mv "$REAL" "${REAL}.real"
 printf '#!/usr/bin/env bash\nif [ "${1:-}" = backup ]; then echo boom >&2; exit 1; fi\nexec "$0.real" "$@"\n' >"$REAL"
 chmod +x "$REAL"
 set +e
-archiver backup retain >/dev/null 2>&1
+archiver backup >/dev/null 2>&1
 set -e
 mv "${REAL}.real" "$REAL"
 

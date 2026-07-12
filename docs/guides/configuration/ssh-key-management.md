@@ -108,7 +108,7 @@ Keep both the bundle file and your bundle password in a secure location.
 Run a test backup to confirm SFTP connectivity:
 
 ```bash
-docker exec archiver archiver start
+docker exec archiver archiver backup --detach
 ```
 
 Monitor the logs to ensure SFTP connection succeeds:
@@ -181,7 +181,7 @@ cp ~/archiver-bundle/bundle.tar.enc /path/to/safe/location/
 Test a backup with the new key:
 
 ```bash
-docker exec archiver archiver start
+docker exec archiver archiver backup
 ```
 
 After confirming the new key works, remove the old public key from your SFTP server's `~/.ssh/authorized_keys` file.

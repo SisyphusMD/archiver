@@ -48,7 +48,7 @@ export STORAGE_TARGET_1_LOCAL_PATH="${STORE}"
 export ROTATE_BACKUPS="false"
 
 log "backup both services"
-archiver backup retain || die "backup exited non-zero"
+archiver backup || die "backup exited non-zero"
 
 log "hooks ran in order for svc-a only (no leak into svc-b)"
 [ -f "$HOOKLOG" ] || die "hooks never ran"
