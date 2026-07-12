@@ -43,8 +43,8 @@ validate_recovery_password() {
 }
 
 # The kit must capture the configuration AS PROVIDED, not the process's runtime state:
-# `archiver backup prune|retain` temporarily overrides ROTATE_BACKUPS, and the rotation/
-# notification checks inject defaults — serializing those would make the fingerprint (and
+# the maintenance/notification checks inject runtime defaults (PRUNE_KEEP, CHECK_BACKUPS,
+# NOTIFICATION_SERVICE normalization) — serializing those would make the fingerprint (and
 # the kit's config) depend on which command happened to run last. Snapshot the pristine
 # values when this file is sourced, which both consumers (main.sh and the recovery-kit
 # script) do immediately after config-loader finishes and before any mutation.
@@ -82,7 +82,8 @@ write_recovery_kit_recreate_notes() {
     echo
     echo "Facts this deployment depended on:"
     echo "  - hostname: $(hostname)   (keep it: snapshot IDs and this kit's filename derive from it)"
-    [[ -n "${CRON_SCHEDULE:-}" ]] && echo "  - CRON_SCHEDULE: ${CRON_SCHEDULE}"
+    [[ -n "${BACKUP_SCHEDULE:-}" ]] && echo "  - BACKUP_SCHEDULE: ${BACKUP_SCHEDULE}"
+    [[ -n "${MAINTENANCE_SCHEDULE:-}" ]] && echo "  - MAINTENANCE_SCHEDULE: ${MAINTENANCE_SCHEDULE}"
     [[ -n "${TZ:-}" ]] && echo "  - TZ: ${TZ}"
     echo "  - container paths that need host mounts:"
     local IFS=':'

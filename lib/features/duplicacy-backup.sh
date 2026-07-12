@@ -7,6 +7,7 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOGGING_CORE}"
+source_if_not_sourced "${LOCKFILE_CORE}"
 DUPLICACY_BIN="duplicacy"
 
 set_duplicacy_variables() {
@@ -132,6 +133,8 @@ duplicacy_primary_backup() {
   duplicacy_filters
 
   log_message "INFO" "Starting backup to ${STORAGE_TARGET_1_NAME} for ${SERVICE} service."
+  local backup_phase_start
+  backup_phase_start="$(date +%s)"
 
   # Run backup in the background so stop requests can be honored mid-backup. Process
   # substitution (not a backgrounded pipeline) keeps duplicacy itself as $! and as a direct
@@ -171,7 +174,7 @@ duplicacy_primary_backup() {
     return 1
   fi
 
-  log_message "INFO" "Backup to ${STORAGE_TARGET_1_NAME} completed for ${SERVICE} service."
+  log_message "INFO" "Backup to ${STORAGE_TARGET_1_NAME} completed for ${SERVICE} service in $(format_duration $(( $(date +%s) - backup_phase_start )))."
 }
 
 duplicacy_add_backup() {
@@ -277,71 +280,95 @@ duplicacy_add_backup() {
   fi
 }
 
+# Copy the primary to every secondary, ALL SECONDARIES IN PARALLEL. The wins compound:
+# with an upload-capped link, one storage's (bandwidth-free) destination enumeration
+# overlaps another's upload, so wall-clock approaches max(legs) instead of sum(legs).
+# Each duplicacy stays a DIRECT child (plain `cmd > >(log_output) &`, no subshell wrapper)
+# so pause/stop's pkill -P still reaches every copy. This process holds the PRIMARY's lock
+# for the whole phase (every leg reads from it, and a concurrent prune could fossilize chunks
+# a copy is still enumerating) plus each destination's lock around its leg, excluding
+# maintenance (check/prune) from any storage a copy touches. Checks and prunes themselves
+# live in the maintenance pipeline now.
 duplicacy_copy_backup() {
   if [[ "${STORAGE_TARGET_COUNT}" -gt 1 ]]; then
     local primary_storage_name
     primary_storage_name="$(sanitize_storage_name "${STORAGE_TARGET_1_NAME}")"
 
-    for i in $(seq 2 "${STORAGE_TARGET_COUNT}"); do
-      local exit_status
-      local storage_id
-      local storage_name_var
-      local storage_name
+    SERVICE="${primary_storage_name}"
+    if ! try_acquire_storage_lock "${primary_storage_name}" "backup-copy-source"; then
+      log_message "INFO" "Storage '${primary_storage_name}' is held by: $(get_storage_lock_holder "${primary_storage_name}") — waiting for it to be released."
+      local acquire_rc=0
+      acquire_storage_lock "${primary_storage_name}" "backup-copy-source" || acquire_rc=$?
+      if [ "${acquire_rc}" -eq 130 ]; then
+        log_message "INFO" "Stop requested while waiting for storage '${primary_storage_name}'; skipping copies."
+        unset SERVICE
+        return
+      elif [ "${acquire_rc}" -ne 0 ]; then
+        handle_error "Timed out waiting for storage '${primary_storage_name}'; skipping all copies this run."
+        unset SERVICE
+        return
+      fi
+    fi
+    unset SERVICE
 
-      storage_id="${i}"
-      storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
+    local i storage_name storage_name_var
+    local copy_pids=() copy_names=() copy_starts=()
+
+    for i in $(seq 2 "${STORAGE_TARGET_COUNT}"); do
+      storage_name_var="STORAGE_TARGET_${i}_NAME"
       storage_name="$(sanitize_storage_name "${!storage_name_var}")"
 
-      # Set SERVICE to storage name for logging context
       SERVICE="${storage_name}"
 
-      log_message "INFO" "Copying backup to ${storage_name} storage."
-
-      "${DUPLICACY_BIN}" copy -from "${primary_storage_name}" -to "${storage_name}" \
-        -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" -threads "${DUPLICACY_THREADS}" -download-threads "${DUPLICACY_THREADS}" 2>&1 | log_output
-      exit_status="${PIPESTATUS[0]}"
-
-      if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Copy to ${storage_name} storage failed."
-      else
-        log_message "INFO" "Copy to ${storage_name} storage completed."
+      if ! try_acquire_storage_lock "${storage_name}" "backup-copy"; then
+        log_message "INFO" "Storage '${storage_name}' is held by: $(get_storage_lock_holder "${storage_name}") — waiting for it to be released."
+        local acquire_rc=0
+        acquire_storage_lock "${storage_name}" "backup-copy" || acquire_rc=$?
+        if [ "${acquire_rc}" -eq 130 ]; then
+          log_message "INFO" "Stop requested while waiting for storage '${storage_name}'; skipping remaining copies."
+          break
+        elif [ "${acquire_rc}" -ne 0 ]; then
+          handle_error "Timed out waiting for storage '${storage_name}'; skipping its copy this run."
+          continue
+        fi
       fi
 
-      duplicacy_wrap_up "${storage_name}"
+      log_message "INFO" "Copying backup to ${storage_name} storage."
+      "${DUPLICACY_BIN}" copy -from "${primary_storage_name}" -to "${storage_name}" \
+        -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" -threads "${DUPLICACY_THREADS}" -download-threads "${DUPLICACY_THREADS}" \
+        > >(log_output) 2>&1 &
+      copy_pids+=($!)
+      copy_names+=("${storage_name}")
+      copy_starts+=("$(date +%s)")
     done
+    unset SERVICE
+
+    # Reap completions as they finish (wait -n), not in launch order, so each leg's logged
+    # duration is accurate and its destination lock frees the instant it is done rather than
+    # waiting for a slower earlier-launched leg (which would keep maintenance blocked on an
+    # idle storage).
+    local finished_pid exit_status idx
+    local remaining=${#copy_pids[@]}
+    while [ "${remaining}" -gt 0 ]; do
+      finished_pid=""
+      wait -n -p finished_pid "${copy_pids[@]}"
+      exit_status=$?
+      for idx in "${!copy_pids[@]}"; do
+        [ "${copy_pids[${idx}]}" = "${finished_pid}" ] || continue
+        SERVICE="${copy_names[${idx}]}"
+        if [ "${exit_status}" -ne 0 ]; then
+          handle_error "Copy to ${copy_names[${idx}]} storage failed."
+        else
+          log_message "INFO" "Copy to ${copy_names[${idx}]} storage completed in $(format_duration $(( $(date +%s) - copy_starts[idx] )))."
+        fi
+        release_storage_lock "${copy_names[${idx}]}"
+        unset SERVICE
+        unset 'copy_pids[idx]'
+        break
+      done
+      remaining=$((remaining - 1))
+    done
+
+    release_storage_lock "${primary_storage_name}"
   fi
-}
-
-duplicacy_wrap_up() {
-  local exit_status
-  local storage_name
-
-  storage_name="${1}"
-
-  # Set SERVICE to storage name for logging context
-  SERVICE="${storage_name}"
-
-  "${DUPLICACY_BIN}" check -all -storage "${storage_name}" -fossils -resurrect -stats -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
-  exit_status="${PIPESTATUS[0]}"
-  if [[ "${exit_status}" -ne 0 ]]; then
-    handle_error "Storage check failed for ${storage_name}."
-  else
-    log_message "INFO" "Storage check completed for ${storage_name}."
-  fi
-
-  if [[ "$(echo "${ROTATE_BACKUPS}" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
-    declare -a PRUNE_KEEP_ARRAY
-    PRUNE_KEEP_ARRAY=()
-    read -r -a PRUNE_KEEP_ARRAY <<< "${PRUNE_KEEP}"
-
-    "${DUPLICACY_BIN}" prune -all -storage "${storage_name}" "${PRUNE_KEEP_ARRAY[@]}" -exhaustive -threads "${DUPLICACY_THREADS}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [[ "${exit_status}" -ne 0 ]]; then
-      handle_error "Prune failed for ${storage_name} storage. Review the Duplicacy logs for details."
-    else
-      log_message "INFO" "Prune completed for ${storage_name} storage."
-    fi
-  fi
-
-  unset SERVICE
 }

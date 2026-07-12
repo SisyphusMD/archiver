@@ -16,6 +16,15 @@ cleanup() {
   if [ "${early_exit}" != true ]; then
     log_lockfile_summary
     release_lock
+    # An interrupted copy phase (e.g. 'archiver stop' during copy) leaves this process holding
+    # storage locks that release_lock does not touch. release_storage_lock is owner-guarded, so
+    # this only reaps locks we actually hold.
+    local f n
+    for f in "${STORAGE_LOCK_PREFIX}"*.lock; do
+      [ -f "${f}" ] || continue
+      n="${f#"${STORAGE_LOCK_PREFIX}"}"
+      release_storage_lock "${n%.lock}"
+    done
     log_message "INFO" "Main backup script exited."
   fi
 }
@@ -24,8 +33,6 @@ trap cleanup EXIT
 
 initialize() {
   local lock_status
-
-  ROTATION_OVERRIDE="${1}"
 
   acquire_lock
   lock_status=$?
@@ -85,10 +92,12 @@ process_service() {
 
   update_lock_stage "duplicacy" "backup"
 
-  # If stop was requested, call stop script to handle kill + notifications
+  # If stop was requested, call stop script to handle kill + notifications. Target 'backup'
+  # explicitly: the argless default is 'all', which would also stop a concurrently-running
+  # maintenance run the user never asked to stop.
   if is_stop_requested; then
     log_message "INFO" "Stop requested. Service cleanup complete, invoking stop handler."
-    "${STOP_SCRIPT}"
+    "${STOP_SCRIPT}" backup
     # Should not reach here, but exit just in case
     exit 0
   fi
@@ -137,28 +146,24 @@ main() {
   # its stop handler; honor it here or the wrap-up below would run a destructive prune.
   if is_stop_requested; then
     log_message "INFO" "Stop requested. Skipping storage wrap-up, invoking stop handler."
-    "${STOP_SCRIPT}"
+    "${STOP_SCRIPT}" backup
     # Should not reach here, but exit just in case
     exit 0
   fi
 
   # cd "" is a silent no-op, so guard explicitly: with no successful service there is
-  # nothing to wrap up, and prune would run from an arbitrary repository directory.
+  # nothing to copy, and duplicacy would run from an arbitrary repository directory.
   if [ -z "${last_working_dir}" ]; then
-    handle_error "No service completed a backup. Skipping storage wrap-up."
+    handle_error "No service completed a backup. Skipping storage copies."
     record_state_change "completed"
     send_completion_notification
     return
   fi
 
-  # Run prune from the final service directory
-  # Per https://forum.duplicacy.com/t/prune-command-details/1005 only one repository should run prune
-  cd "${last_working_dir}" || handle_error "Failed to change to ${last_working_dir} for prune."
+  # Copies are repository-context commands; run them from the final service directory.
+  cd "${last_working_dir}" || handle_error "Failed to change to ${last_working_dir} for copies."
 
-  local primary_storage_name
-  primary_storage_name="$(sanitize_storage_name "${STORAGE_TARGET_1_NAME}")"
-
-  duplicacy_wrap_up "${primary_storage_name}" || handle_error "Wrap-up failed."
+  update_lock_stage "duplicacy" "copy"
   duplicacy_copy_backup
 
   # Recovery-kit failures are reported (handle_error -> notification) but never abort the
@@ -169,15 +174,15 @@ main() {
   send_completion_notification
 }
 
-initialize "${1}"
+initialize
 main
 
-# Exit non-zero if any per-service errors accumulated. Mode A (`archiver start`)
-# backgrounds this script via `setsid nohup` so its exit code is discarded —
-# logs and the optional Pushover notification remain the signal there. Mode B
-# (`archiver run backup` / `archiver backup`) runs synchronously and propagates
-# this exit through `archiver.sh` to the container, so K8s Jobs / CI pipelines
-# see Failed on per-service errors.
+# Exit non-zero if any per-service errors accumulated. Detached mode
+# (`archiver backup --detach`) backgrounds this script via `setsid nohup` so the exit
+# code is discarded — logs and the optional Pushover notification are the signal there.
+# Synchronous mode (`archiver backup`, or the entrypoint's `run backup`) propagates this
+# exit through `archiver.sh` to the container, so K8s Jobs / CI pipelines see Failed on
+# per-service errors.
 if [ "${ERROR_COUNT:-0}" -gt 0 ]; then
   exit 1
 fi

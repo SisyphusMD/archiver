@@ -8,6 +8,9 @@ fi
 source_if_not_sourced "${ERROR_CORE}"
 source_if_not_sourced "${NOTIFICATION_FEATURE}"
 
+# Each pipeline logs to its own file set: the backup pipeline to archiver.log (default),
+# maintenance to maintenance.log (it sets ARCHIVER_LOG_BASENAME). Separate symlinks keep
+# concurrent runs from rotating each other's active log out from under them.
 log_message() {
   local log_level="${1}"
   local message="${2}"
@@ -17,7 +20,7 @@ log_message() {
 
   timestamp="$(date +'%Y-%m-%d %H:%M:%S')"
   service_name="${SERVICE:-archiver}"
-  target_log_file="${LOG_DIR}/archiver.log"
+  target_log_file="${LOG_DIR}/${ARCHIVER_LOG_BASENAME:-archiver}.log"
 
   echo "[${timestamp}] [${log_level}] [Service: ${service_name}] ${message}" >> "${target_log_file}" || \
     handle_error "Failed to log message for ${service_name} service to ${target_log_file}. Check if the log file is writable and disk space is available."
@@ -27,7 +30,9 @@ log_message() {
   fi
 
   if [[ "${log_level}" == "ERROR" ]]; then
-    notify "Backup Error" "[${service_name}] ${message}"
+    local title="Backup Error"
+    [ "${ARCHIVER_LOG_BASENAME:-archiver}" = "maintenance" ] && title="Maintenance Error"
+    notify "${title}" "[${service_name}] ${message}"
   fi
 }
 
@@ -45,19 +50,22 @@ rotate_logs() {
   local new_log_file
   local datetime
   local relative_log_path
+  local basename_prefix
+
+  basename_prefix="${ARCHIVER_LOG_BASENAME:-archiver}"
 
   mkdir -p "${OLD_LOG_DIR}" || handle_error "Unable to create log directory ${OLD_LOG_DIR}."
 
   datetime="$(date +'%Y-%m-%d_%H%M%S')"
-  new_log_file="${OLD_LOG_DIR}/archiver-${datetime}.log"
+  new_log_file="${OLD_LOG_DIR}/${basename_prefix}-${datetime}.log"
 
   touch "${new_log_file}" || handle_error "Could not create log file ${new_log_file}."
   log_message "INFO" "Log file created: ${new_log_file}."
 
   relative_log_path="$(basename "${OLD_LOG_DIR}")/$(basename "${new_log_file}")"
-  ln -sf "${relative_log_path}" "${LOG_DIR}/archiver.log" || \
-    handle_error "Could not update/create symlink for 'archiver.log' to ${new_log_file}."
-  log_message "INFO" "Symlink 'archiver.log' updated to point to ${new_log_file}."
+  ln -sf "${relative_log_path}" "${LOG_DIR}/${basename_prefix}.log" || \
+    handle_error "Could not update/create symlink for '${basename_prefix}.log' to ${new_log_file}."
+  log_message "INFO" "Symlink '${basename_prefix}.log' updated to point to ${new_log_file}."
 
   find "${OLD_LOG_DIR}" -name "*.log" -type f -mtime +7 -exec rm -f {} \; || \
     handle_error "Failed to delete old 'archiver' log files."

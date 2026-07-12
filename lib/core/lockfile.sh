@@ -12,16 +12,23 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 
+# Every function below operates on ${ARCHIVER_LOCKFILE}/${ARCHIVER_STOP_FLAG_FILE}, which
+# default to the backup pipeline's files. The maintenance pipeline (and any caller that
+# needs to inspect the OTHER pipeline) points these at its own files — set them in a
+# subshell for a one-off query: (ARCHIVER_LOCKFILE="${MAINTENANCE_LOCKFILE}"; is_lock_valid).
+ARCHIVER_LOCKFILE="${ARCHIVER_LOCKFILE:-${LOCKFILE}}"
+ARCHIVER_STOP_FLAG_FILE="${ARCHIVER_STOP_FLAG_FILE:-${STOP_FLAG}}"
+
 get_lock_pid() {
-  head -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f1
+  head -n 1 "${ARCHIVER_LOCKFILE}" 2>/dev/null | cut -d' ' -f1
 }
 
 get_lock_context() {
-  head -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f2
+  head -n 1 "${ARCHIVER_LOCKFILE}" 2>/dev/null | cut -d' ' -f2
 }
 
 get_lock_stage() {
-  head -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f3
+  head -n 1 "${ARCHIVER_LOCKFILE}" 2>/dev/null | cut -d' ' -f3
 }
 
 update_lock_stage() {
@@ -31,15 +38,15 @@ update_lock_stage() {
   local temp_file
 
   pid=$(get_lock_pid)
-  temp_file="${LOCKFILE}.tmp"
+  temp_file="${ARCHIVER_LOCKFILE}.tmp"
 
   echo "${pid} ${context} ${stage}" > "${temp_file}"
-  tail -n +2 "${LOCKFILE}" 2>/dev/null >> "${temp_file}"
-  mv "${temp_file}" "${LOCKFILE}"
+  tail -n +2 "${ARCHIVER_LOCKFILE}" 2>/dev/null >> "${temp_file}"
+  mv "${temp_file}" "${ARCHIVER_LOCKFILE}"
 }
 
 get_current_state() {
-  tail -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f2
+  tail -n 1 "${ARCHIVER_LOCKFILE}" 2>/dev/null | cut -d' ' -f2
 }
 
 is_paused() {
@@ -52,11 +59,11 @@ record_state_change() {
   local new_state="${1}"
   local timestamp
   timestamp=$(date +%s)
-  echo "${timestamp} ${new_state}" >> "${LOCKFILE}"
+  echo "${timestamp} ${new_state}" >> "${ARCHIVER_LOCKFILE}"
 }
 
 get_backup_start_time() {
-  sed -n '2p' "${LOCKFILE}" 2>/dev/null | cut -d' ' -f1
+  sed -n '2p' "${ARCHIVER_LOCKFILE}" 2>/dev/null | cut -d' ' -f1
 }
 
 calculate_total_pause_time() {
@@ -64,7 +71,7 @@ calculate_total_pause_time() {
   local pause_start=""
   local total_pause=0
 
-  lines=$(tail -n +2 "${LOCKFILE}" 2>/dev/null)
+  lines=$(tail -n +2 "${ARCHIVER_LOCKFILE}" 2>/dev/null)
 
   while IFS=' ' read -r timestamp state; do
     if [ "${state}" = "paused" ]; then
@@ -103,7 +110,7 @@ calculate_elapsed_time() {
 is_lock_valid() {
   local lock_pid
 
-  [ -e "${LOCKFILE}" ] || return 1
+  [ -e "${ARCHIVER_LOCKFILE}" ] || return 1
 
   lock_pid=$(get_lock_pid)
 
@@ -114,7 +121,7 @@ acquire_lock() {
   local lock_pid
   local stale=false
 
-  if [ -e "${LOCKFILE}" ]; then
+  if [ -e "${ARCHIVER_LOCKFILE}" ]; then
     lock_pid=$(get_lock_pid)
 
     if [ -n "${lock_pid}" ] && kill -0 "${lock_pid}" 2>/dev/null; then
@@ -123,11 +130,11 @@ acquire_lock() {
     # Stale lock (dead or missing PID): clean it up and still take the lock below —
     # returning without acquiring would leave the whole run lockless (stop/status/pause
     # blind to it, and a concurrent backup would be admitted).
-    rm -f "${LOCKFILE}"
+    rm -f "${ARCHIVER_LOCKFILE}"
     stale=true
   fi
 
-  echo "$$ duplicacy pre-backup" > "${LOCKFILE}"
+  echo "$$ duplicacy pre-backup" > "${ARCHIVER_LOCKFILE}"
   record_state_change "running"
 
   if [ "${stale}" = true ]; then
@@ -138,7 +145,9 @@ acquire_lock() {
 
 # Requires log_message/format_timestamp/format_duration from logging.sh — the caller must
 # have it loaded (main.sh does, via config-loader). Everything else in this file is pure.
+# $1 labels the session in the summary ("Backup" default; maintenance passes "Maintenance").
 log_lockfile_summary() {
+  local label="${1:-Backup}"
   local start_time
   local end_time
   local end_state
@@ -148,22 +157,22 @@ log_lockfile_summary() {
   local status_message
 
   start_time=$(get_backup_start_time)
-  end_time=$(tail -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f1)
-  end_state=$(tail -n 1 "${LOCKFILE}" 2>/dev/null | cut -d' ' -f2)
+  end_time=$(tail -n 1 "${ARCHIVER_LOCKFILE}" 2>/dev/null | cut -d' ' -f1)
+  end_state=$(tail -n 1 "${ARCHIVER_LOCKFILE}" 2>/dev/null | cut -d' ' -f2)
 
   total_time=$((end_time - start_time))
   total_pause=$(calculate_total_pause_time)
   active_time=$((total_time - total_pause))
 
   if [ "${end_state}" = "completed" ]; then
-    status_message="Backup completed successfully"
+    status_message="${label} completed successfully"
   elif [ "${end_state}" = "stopped" ]; then
-    status_message="Backup stopped before completion"
+    status_message="${label} stopped before completion"
   else
-    status_message="Backup ended with state: ${end_state}"
+    status_message="${label} ended with state: ${end_state}"
   fi
 
-  log_message "INFO" "Backup session summary: ${status_message}"
+  log_message "INFO" "${label} session summary: ${status_message}"
   log_message "INFO" "  Start time: $(format_timestamp "${start_time}")"
   log_message "INFO" "  End time: $(format_timestamp "${end_time}")"
   log_message "INFO" "  Total time: $(format_duration "${total_time}")"
@@ -172,14 +181,85 @@ log_lockfile_summary() {
 }
 
 release_lock() {
-  rm -f "${LOCKFILE}"
-  rm -f "${STOP_FLAG}"
+  rm -f "${ARCHIVER_LOCKFILE}"
+  rm -f "${ARCHIVER_STOP_FLAG_FILE}"
 }
 
 is_stop_requested() {
-  [ -f "${STOP_FLAG}" ]
+  [ -f "${ARCHIVER_STOP_FLAG_FILE}" ]
 }
 
 request_stop() {
-  touch "${STOP_FLAG}"
+  touch "${ARCHIVER_STOP_FLAG_FILE}"
+}
+
+# ── Per-storage locks ─────────────────────────────────────────────────────────
+# Serialize the two pipelines on a single storage: the backup pipeline holds a storage
+# while copying to it; maintenance holds it while checking/pruning it. This structurally
+# excludes the copy-vs-prune concurrency duplicacy does not document as safe. Exclusive,
+# PID-live, atomically created via noclobber. Callers do the logging around waits (this
+# file stays dependency-free).
+
+storage_lock_file() {
+  printf '%s%s.lock' "${STORAGE_LOCK_PREFIX}" "${1}"
+}
+
+# One attempt: 0 = acquired (or already held by this process), 1 = held by a live holder.
+try_acquire_storage_lock() {
+  local name="${1}" label="${2:-unknown}"
+  local file pid reaped
+  file="$(storage_lock_file "${name}")"
+  if [ -e "${file}" ]; then
+    pid=$(head -n 1 "${file}" 2>/dev/null | cut -d' ' -f1)
+    if [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null; then
+      [ "${pid}" = "$$" ] && return 0
+      return 1
+    fi
+    # Stale holder (dead or empty PID). Claim the file by rename before removing it so only
+    # one contender can reap a given lock: rename(2) within a directory is atomic, so a racer
+    # that already read the same dead PID loses the rename and retries instead of deleting a
+    # lock another contender may have just recreated.
+    reaped="${file}.reap.$$"
+    mv "${file}" "${reaped}" 2>/dev/null || return 1
+    rm -f "${reaped}"
+  fi
+  # Create atomically WITH content via a hardlink: ln fails if the target exists, and the
+  # temp already holds "PID label", so there is no empty-file window a racer could misread as
+  # a stale (dead-PID) lock. A raced loser reports busy and retries.
+  local tmp="${file}.$$"
+  echo "$$ ${label}" > "${tmp}"
+  if ln "${tmp}" "${file}" 2>/dev/null; then
+    rm -f "${tmp}"
+    return 0
+  fi
+  rm -f "${tmp}"
+  return 1
+}
+
+get_storage_lock_holder() {
+  head -n 1 "$(storage_lock_file "${1}")" 2>/dev/null | cut -d' ' -f2-
+}
+
+# Bounded wait (default 12h, poll 5s): 0 = acquired, 1 = timed out, 130 = stop requested
+# while waiting. is_stop_requested reads the caller's ARCHIVER_STOP_FLAG_FILE, so a graceful
+# stop of either pipeline breaks out of the wait instead of blocking up to the full timeout.
+acquire_storage_lock() {
+  local name="${1}" label="${2:-unknown}" timeout="${3:-43200}"
+  local waited=0
+  while ! try_acquire_storage_lock "${name}" "${label}"; do
+    is_stop_requested && return 130
+    [ "${waited}" -ge "${timeout}" ] && return 1
+    sleep 5
+    waited=$((waited + 5))
+  done
+  return 0
+}
+
+release_storage_lock() {
+  local name="${1}"
+  local file pid
+  file="$(storage_lock_file "${name}")"
+  pid=$(head -n 1 "${file}" 2>/dev/null | cut -d' ' -f1)
+  # Only the owning process releases; stale locks are reaped inside try_acquire.
+  [ "${pid}" = "$$" ] && rm -f "${file}"
 }

@@ -13,20 +13,21 @@ source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 source_if_not_sourced "${LOCKFILE_CORE}"
 
 usage() {
-  echo "Usage: $0 {start|stop|pause|resume|restart|logs|status|bundle|migrate|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help} [logs|prune|retain]"
+  echo "Usage: $0 {backup|maintenance|stop|pause|resume|logs|status|bundle|migrate|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
   echo "Note:"
-  echo "  stop|pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments."
-  echo "  start may be used in combination with logs and prune|retain."
-  echo "  resume|restart may be used in combination with logs."
+  echo "  backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background."
+  echo "  maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune."
+  echo "  stop takes an optional target (backup|maintenance|all, default all) and --immediate."
+  echo "  resume may be used in combination with logs."
   echo "  bundle requires a subcommand: export or import"
   echo "  migrate takes an optional OUTPUT_DIR (default /opt/archiver/migrate): writes the effective config as an env file + secret files."
   echo "  recovery-kit uploads the encrypted recovery kit to every storage target; 'recovery-kit force' re-uploads even if unchanged."
+  echo "  pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments."
   echo "  auto-restore and snapshot-exists are non-interactive and driven by environment variables."
   exit 1
 }
 
 logs="false"
-args=()
 
 if [[ $# -lt 1 ]]; then
   echo "No arguments provided."
@@ -36,84 +37,32 @@ fi
 command="${1}"
 shift
 
-start_archiver() {
-  # Refuse a live lock up front, visibly. main.sh refuses it anyway, but it runs
-  # backgrounded with its output discarded, so the refusal was invisible and `start`
-  # falsely reported success. A STALE lock (dead PID) is not a refusal — main.sh's
-  # acquire_lock cleans it up and proceeds.
-  if is_lock_valid; then
-    echo "A backup is already running (PID $(get_lock_pid)). Not starting another." >&2
-    exit 1
-  fi
-
-  # Parse optional flags: logs, prune, retain
-  if [[ -n "${1}" ]]; then
-    if [[ "${1}" == "logs" ]]; then
-      logs="true"
-      if [[ -n "${2}" ]]; then
-        args=("${2}")
-      fi
-    elif [[ "${1}" == "prune" ]] || [[ "${1}" == "retain" ]]; then
-      args=("${1}")
-      if [[ -n "${2}" ]]; then
-        logs="true"
-      fi
-    fi
-  fi
-
-  # setsid + nohup prevents issues with exported env vars when log view is closed
-  setsid nohup "${MAIN_SCRIPT}" "${args[@]}" &>/dev/null &
-  echo "Archiver main script called in the background."
-}
-
 # Route commands to their respective scripts
 case "${command}" in
   start|restart)
-    if [[ $# -gt 0 ]]; then
-      case "${1}" in
-        logs)
-          if [[ $# -gt 2 || ( $# -eq 2 && ! ( "${2}" == "prune" || "${2}" == "retain" ) ) ]]; then
-            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
-            usage
-          fi
-          ;;
-        prune|retain)
-          if [[ $# -gt 2 || ( $# -eq 2 && "${2}" != "logs" ) ]]; then
-            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
-            usage
-          fi
-          ;;
+    echo "'${command}' was removed. Use 'archiver backup --detach' to run a backup in the background" >&2
+    echo "(and 'archiver stop backup' first if you were restarting). Pruning moved to 'archiver maintenance'." >&2
+    exit 1
+    ;;
+  stop)
+    targets=0
+    for a in "${@}"; do
+      case "${a}" in
+        backup|maintenance|all) targets=$((targets + 1)) ;;
+        --immediate) ;;
         *)
-          echo "'${*:1}' is not valid for 'archiver ${command}'."
+          echo "'${a}' is not valid for 'archiver stop' (allowed: backup, maintenance, all, --immediate)."
           usage
           ;;
       esac
-    fi
-    if [[ "${command}" == "restart" ]]; then
-      "${STOP_SCRIPT}"
-      # stop signals asynchronously — a graceful stop holds the lock until the current
-      # service finishes its backup and cleanup. Wait for the release here, or the start
-      # below would be refused by the dying run's lock and restart would stop-but-not-start.
-      if is_lock_valid; then
-        echo "Waiting for the stopped backup to release its lock..."
-        for _ in $(seq 1 120); do
-          is_lock_valid || break
-          sleep 1
-        done
-        if is_lock_valid; then
-          echo "The stopped backup (PID $(get_lock_pid)) is still finishing cleanup; not starting a new one. Re-run 'archiver start' once it exits, or use 'archiver stop --immediate'." >&2
-          exit 1
-        fi
-      fi
-    fi
-    start_archiver "${@}"
-    ;;
-  stop)
-    if [[ $# -gt 0 ]]; then
-      echo "'${command}' cannot have further arguments."
+    done
+    # More than one target is ambiguous and would silently take only the last (backup/maintenance
+    # short-circuit); require exactly one (or none, defaulting to all).
+    if [[ "${targets}" -gt 1 ]]; then
+      echo "'archiver stop' takes at most one target (backup|maintenance|all)."
       usage
     fi
-    "${STOP_SCRIPT}"
+    "${STOP_SCRIPT}" "${@}"
     ;;
   pause)
     if [[ $# -gt 0 ]]; then
@@ -182,22 +131,34 @@ case "${command}" in
     exec "${HEALTHCHECK_SCRIPT}"
     ;;
   backup)
-    if [[ $# -gt 0 ]]; then
-      case "${1}" in
+    detach=false
+    for a in "${@}"; do
+      case "${a}" in
+        --detach|-d) detach=true ;;
         prune|retain)
-          if [[ $# -gt 1 ]]; then
-            echo "'${*:2}' is not valid for 'archiver ${command} ${1}'."
-            usage
-          fi
-          args=("${1}")
+          echo "'${a}' was removed: backups no longer prune. Pruning runs on MAINTENANCE_SCHEDULE or via 'archiver maintenance'." >&2
+          exit 1
           ;;
         *)
-          echo "'${*:1}' is not valid for 'archiver ${command}'."
+          echo "'${a}' is not valid for 'archiver backup' (allowed: --detach)."
           usage
           ;;
       esac
+    done
+    if [[ "${detach}" == "true" ]]; then
+      # Refuse a live lock up front, visibly: the backgrounded main.sh discards its
+      # output, so its own refusal would be invisible and detach would falsely report
+      # success. A STALE lock (dead PID) is not a refusal — acquire_lock cleans it up.
+      if is_lock_valid; then
+        echo "A backup is already running (PID $(get_lock_pid)). Not starting another." >&2
+        exit 1
+      fi
+      # setsid + nohup detaches from this exec session entirely.
+      setsid nohup "${MAIN_SCRIPT}" &>/dev/null &
+      echo "Backup started in the background (follow with 'archiver logs')."
+      exit 0
     fi
-    "${MAIN_SCRIPT}" "${args[@]}"
+    "${MAIN_SCRIPT}"
     exit $?
     ;;
   bundle)
@@ -229,6 +190,14 @@ case "${command}" in
       usage
     fi
     "${RECOVERY_KIT_SCRIPT}" "${@}"
+    exit $?
+    ;;
+  maintenance)
+    if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "exhaustive" ) ]]; then
+      echo "'maintenance' takes at most one argument: exhaustive."
+      usage
+    fi
+    "${MAINTENANCE_SCRIPT}" "${@}"
     exit $?
     ;;
   help)

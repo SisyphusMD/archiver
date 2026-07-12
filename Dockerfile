@@ -90,7 +90,7 @@ RUN chmod +x /opt/archiver/archiver.sh && \
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-ENV CRON_SCHEDULE=""
+ENV BACKUP_SCHEDULE=""
 
 # Volumes
 # /opt/archiver/logs - Optional: persistent logs directory
