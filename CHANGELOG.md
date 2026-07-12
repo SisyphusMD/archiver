@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-07-12
+
 ### Breaking
 - **Backups and maintenance are now two independent pipelines.** The backup run is hooks → backup → copies, nothing else; storage check and prune moved to a separate maintenance pipeline with its own schedule, lock, and log (`maintenance.log`). Nightly-cost consequence: the multi-hour storage-wide chunk listings that used to run inside every backup (check on every storage plus `prune -exhaustive` on every storage — up to three full sftp/B2 enumerations per storage per night) are gone from the backup path entirely; secondaries are verified by the copy itself (its destination enumeration re-uploads anything missing, healing instead of just reporting). The two pipelines coordinate through per-storage locks, so a check/prune never overlaps a copy on the same storage (the copy-vs-prune concurrency duplicacy does not document as safe is excluded structurally); the waiting side logs who holds the storage. A maintenance overrun can never delay the next backup.
 - **`CRON_SCHEDULE` was renamed to `BACKUP_SCHEDULE`**, and the new `MAINTENANCE_SCHEDULE` drives the maintenance pipeline (unset = maintenance only runs via `archiver maintenance`). A container started with `CRON_SCHEDULE` set fails fast with a rename message — silently ignoring it would mean no scheduled backups. The scheduled crontab now invokes the synchronous verbs (`archiver backup` / `archiver maintenance`), so supercronic sees real job durations and adds its own overlap-skip on top of the pipeline locks. A scheduled deployment without `MAINTENANCE_SCHEDULE` gets a prominent startup warning, and healthcheck warns when any storage has gone more than 8 days without a successful check or prune.
@@ -24,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver backup --detach` (the background form, formerly `archiver start`) now refuses visibly when a backup is already running (non-zero exit and the same "A backup is already running (PID …)" message the synchronous path prints). Previously the dispatcher backgrounded `main.sh` with its output discarded and printed the success line unconditionally, so a refused start looked like a successful one. A stale lock (dead PID) still starts normally.
 - The copy phase now holds the primary storage's lock (as source) for its whole duration, not just each destination's lock, so a maintenance prune can no longer fossilize chunks a concurrent copy is still reading from the primary — closing the one copy-vs-prune overlap the per-storage locks had left open.
 - The container clears any leftover pipeline lock and stop-flag files at startup, so a lock left by an unclean prior shutdown can neither fake a live holder (which would refuse every scheduled backup after a PID recycle) nor abort the first backup via a stale stop flag. A stale pipeline lock now reports as a healthcheck warning (self-healing, reaped on the next run) rather than flipping the container UNHEALTHY.
+
+### Dependencies
+
+- chore(deps): update docker/login-action action to v4.4.0
 
 ## [0.9.2] - 2026-07-11
 
