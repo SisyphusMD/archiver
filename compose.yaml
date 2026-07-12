@@ -22,7 +22,8 @@ services:
       - no-new-privileges:true
 
     environment:
-      CRON_SCHEDULE: "0 3 * * *"  # Ex: daily at 3am, or omit for manual mode
+      BACKUP_SCHEDULE: "0 3 * * *"        # backup pipeline: daily at 3am (omit for manual mode)
+      MAINTENANCE_SCHEDULE: "0 13 * * *"  # check + prune: daily at 1pm, opposite the backup window
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
       # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
 
@@ -97,7 +98,8 @@ secrets:
 #     security_opt:
 #       - no-new-privileges:true
 #     environment:
-#       CRON_SCHEDULE: "0 3 * * *"
+#       BACKUP_SCHEDULE: "0 3 * * *"
+#       MAINTENANCE_SCHEDULE: "0 13 * * *"
 #       TZ: "America/New_York"
 #     secrets:
 #       - bundle_password                                            # mounted at /run/secrets/bundle_password

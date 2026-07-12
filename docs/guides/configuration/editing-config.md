@@ -82,7 +82,7 @@ Without both, you cannot recover your configuration.
 Run a test backup to verify your configuration changes:
 
 ```bash
-docker exec archiver archiver start
+docker exec archiver archiver backup
 ```
 
 ---
@@ -91,4 +91,4 @@ docker exec archiver archiver start
 
 - **No restart needed**: Configuration changes take effect immediately on the next backup run
 - **Backup retention**: The `.old` bundle is kept in the same directory, but only the most recent bundle is retained
-- **Schedule changes**: The backup schedule (`CRON_SCHEDULE`) is set in `compose.yaml`, not `config.sh`. Changing it requires `docker compose restart`
+- **Schedule changes**: The backup and maintenance schedules (`BACKUP_SCHEDULE`, `MAINTENANCE_SCHEDULE`) are set in `compose.yaml`, not `config.sh`. Changing them requires `docker compose up -d` to recreate the container

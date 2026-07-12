@@ -81,10 +81,13 @@
   # PUSHOVER_USER_KEY="" # Pushover user key (not email address), viewable when logged into Pushover dashboard
   # PUSHOVER_API_TOKEN="" # Pushover application API token/key
 
-# Backup Rotation
-  # ROTATE_BACKUPS="" # Default: "true". Set to 'true' to enable automatic pruning after backups.
-  #                     Set to 'false' if multiple repositories share storage (only one should prune).
-  #                     Can be overridden per-run: 'archiver start prune' or 'archiver start retain'
+# Maintenance (check + prune — runs on MAINTENANCE_SCHEDULE or 'archiver maintenance',
+# never inside a backup run)
+  # CHECK_BACKUPS="" # Default: "true". Verify each storage (duplicacy check -all -fossils -resurrect).
+  #
+  # PRUNE_BACKUPS="" # Default: "true". Enforce retention on each storage.
+  #                    Set to 'false' (with CHECK_BACKUPS="false") if multiple deployments
+  #                    share a storage: only ONE should maintain it.
   #
   # PRUNE_KEEP="" # Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
   #                 Retention policy for old revisions. Must be sorted by age (descending).
@@ -96,15 +99,11 @@
   #                   -keep 0:180  = Delete all backups older than 180 days
   #                 See: https://forum.duplicacy.com/t/prune-command-details/1005
   #
-  # IMPORTANT: Prune operation behavior
-  #   - Runs with -all flag (prunes across ALL snapshot IDs in storage)
-  #   - Uses -exhaustive flag (removes ALL unreferenced chunks, including orphaned chunks
-  #     from manually deleted snapshots or incomplete backups)
-  #   - Only ONE repository should run prune per shared storage to avoid race conditions
-  #   - If multiple repositories backup to the same storage:
-  #     * Set ROTATE_BACKUPS="false" in all but one repository's config
-  #     * The designated repository will prune for all snapshot IDs
-  #   - See: https://forum.duplicacy.com/t/prune-command-details/1005
+  # PRUNE_EXHAUSTIVE_FREQUENCY="" # Default: "monthly". One of: off, daily, weekly, monthly.
+  #                                 How often prune additionally lists every chunk on the
+  #                                 storage (-exhaustive) to garbage-collect orphans —
+  #                                 expensive on remote storages, and orphans are rare.
+  #                                 Force it any time with 'archiver maintenance exhaustive'.
 
 # Performance
   # DUPLICACY_THREADS="" # Default: "4". Number of parallel upload/download threads for duplicacy operations.
