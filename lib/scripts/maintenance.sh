@@ -27,15 +27,6 @@ cleanup() {
   if [ "${early_exit}" != true ]; then
     log_lockfile_summary "Maintenance"
     release_lock
-    # 'archiver stop maintenance --immediate' TERMs this process mid-check/prune, leaving the
-    # current storage's lock held. release_storage_lock is owner-guarded, so this only reaps
-    # locks we actually hold.
-    local f n
-    for f in "${STORAGE_LOCK_PREFIX}"*.lock; do
-      [ -f "${f}" ] || continue
-      n="${f#"${STORAGE_LOCK_PREFIX}"}"
-      release_storage_lock "${n%.lock}"
-    done
     log_message "INFO" "Maintenance script exited."
   fi
 }
