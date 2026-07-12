@@ -51,7 +51,7 @@ chmod +x "$REAL"
 
 log "run a backup that must fail"
 set +e
-archiver backup retain
+archiver backup
 rc=$?
 set -e
 

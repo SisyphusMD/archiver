@@ -13,12 +13,13 @@ set -uo pipefail
 
 IMAGE="${IMAGE:?set IMAGE to the archiver image under test}"
 NAME="archiver-sigterm-$$"
+NAME_MAINT="archiver-sigterm-maint-$$"
 VOL="archiver-sigterm-secrets-$$"
 
 log() { printf '>>> %s\n' "$*"; }
 die() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 cleanup() {
-  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  docker rm -f "$NAME" "$NAME_MAINT" >/dev/null 2>&1 || true
   docker volume rm "$VOL" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -64,7 +65,7 @@ docker exec "$NAME" bash -c '
 ' || die "in-container setup failed"
 
 log "kick off a backup, wait for the backup stage"
-docker exec "$NAME" archiver start >/dev/null || die "archiver start failed"
+docker exec "$NAME" archiver backup --detach >/dev/null || die "archiver start failed"
 for _ in $(seq 1 100); do
   docker exec "$NAME" test -f /tmp/backup-started 2>/dev/null && break
   sleep 0.2
@@ -94,4 +95,62 @@ grep -rq "Prune completed" "$LOGDIR" && die "prune ran after docker stop"
 [ "$ELAPSED" -lt 110 ] || die "stop took ${ELAPSED}s; the grace period nearly ran out"
 rm -rf "$LOGDIR"
 
-echo "=== SIGTERM-STOP OK: graceful stop in ${ELAPSED}s, stop recorded, no check/prune, exit 0 ==="
+# ── Second phase: docker stop must ALSO drain a live MAINTENANCE run ────────────
+# handle_shutdown runs 'archiver stop' (target all) and waits on BOTH pipeline locks, so a
+# SIGTERM during check/prune must stop it gracefully — not SIGKILL duplicacy mid-prune.
+log "phase 2: start a fresh container, do one real backup, then a maintenance-SIGTERM test"
+docker run -d --name "$NAME_MAINT" \
+  --cap-drop ALL --cap-add DAC_OVERRIDE \
+  -v "$VOL":/run/secrets \
+  -e SERVICE_DIRECTORIES=/data/fixtures/ \
+  -e STORAGE_TARGET_1_NAME=local \
+  -e STORAGE_TARGET_1_TYPE=local \
+  -e STORAGE_TARGET_1_LOCAL_PATH=/backup-store \
+  -e PRUNE_KEEP="-keep 0:1" \
+  "$IMAGE" >/dev/null || die "phase-2 container failed to start"
+
+for _ in $(seq 1 50); do
+  docker logs "$NAME_MAINT" 2>&1 | grep -q "Container is ready" && break
+  sleep 0.2
+done
+docker logs "$NAME_MAINT" 2>&1 | grep -q "Container is ready" || die "phase-2 entrypoint never became ready"
+
+log "fixture + one real backup (so a repository exists for maintenance), then shadow 'check' to block"
+docker exec "$NAME_MAINT" bash -c '
+  set -e
+  mkdir -p /data/fixtures /backup-store
+  echo "maint content" > /data/fixtures/file.txt
+' || die "phase-2 fixture setup failed"
+docker exec "$NAME_MAINT" archiver backup >/dev/null 2>&1 || die "phase-2 initial backup failed"
+docker exec "$NAME_MAINT" bash -c '
+  set -e
+  REAL="$(command -v duplicacy)"
+  mv "$REAL" "${REAL}.real"
+  printf "#!/usr/bin/env bash\nif [ \"\${1:-}\" = check ]; then touch /tmp/check-started; sleep 60; exit 0; fi\nexec \"\$0.real\" \"\$@\"\n" > "$REAL"
+  chmod +x "$REAL"
+' || die "phase-2 duplicacy shadow failed"
+
+log "kick off maintenance, wait for the check stage"
+docker exec -d "$NAME_MAINT" archiver maintenance || die "archiver maintenance failed to start"
+for _ in $(seq 1 100); do
+  docker exec "$NAME_MAINT" test -f /tmp/check-started 2>/dev/null && break
+  sleep 0.2
+done
+docker exec "$NAME_MAINT" test -f /tmp/check-started || die "maintenance never reached the check stage"
+
+log "docker stop during maintenance must drain it gracefully, exit 0"
+T0=$(date +%s)
+docker stop -t 120 "$NAME_MAINT" >/dev/null || die "docker stop (maintenance) failed"
+ELAPSED_M=$(( $(date +%s) - T0 ))
+EXIT_M=$(docker inspect -f '{{.State.ExitCode}}' "$NAME_MAINT")
+LOGS_M=$(docker logs "$NAME_MAINT" 2>&1)
+LOGDIR_M=$(mktemp -d)
+docker cp "$NAME_MAINT":/opt/archiver/logs/. "$LOGDIR_M"/ >/dev/null 2>&1 || die "could not copy phase-2 logs out"
+
+echo "$LOGS_M" | grep -q "Received shutdown signal" || die "phase-2 SIGTERM trap never fired"
+grep -rq "Maintenance session summary: Maintenance stopped" "$LOGDIR_M" || die "maintenance did not record a graceful stop"
+[ "$EXIT_M" = "0" ] || die "phase-2 container exited ${EXIT_M}, expected 0"
+[ "$ELAPSED_M" -lt 110 ] || die "phase-2 stop took ${ELAPSED_M}s; grace period nearly ran out"
+rm -rf "$LOGDIR_M"
+
+echo "=== SIGTERM-STOP OK: backup stop in ${ELAPSED}s + maintenance stop in ${ELAPSED_M}s, both recorded, exit 0 ==="

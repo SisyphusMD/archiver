@@ -9,10 +9,13 @@ setup() {
   LOGGING_SH_SOURCED=true
   source_if_not_sourced() { :; }
   log_message() { :; }
-  # shellcheck source=/dev/null
-  source "${REPO_ROOT}/lib/core/lockfile.sh"
+  # The functions operate on ARCHIVER_LOCKFILE/ARCHIVER_STOP_FLAG_FILE (captured from
+  # LOCKFILE/STOP_FLAG at source time), so point them at the tmpdir BEFORE sourcing.
   LOCKFILE="${BATS_TEST_TMPDIR}/archiver-main.lock"
   STOP_FLAG="${BATS_TEST_TMPDIR}/archiver-stop-requested"
+  STORAGE_LOCK_PREFIX="${BATS_TEST_TMPDIR}/archiver-storage-"
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/lib/core/lockfile.sh"
 }
 
 @test "acquire_lock: fresh acquisition writes PID, context, stage, and a running record" {
@@ -106,4 +109,81 @@ setup() {
   release_lock
   [ ! -e "${LOCKFILE}" ]
   ! is_stop_requested
+}
+
+# ── Per-storage locks ──────────────────────────────────────────────────────────
+
+@test "try_acquire_storage_lock: fresh acquisition writes 'PID label' with content" {
+  run_status=0; try_acquire_storage_lock "s1" "backup-copy" || run_status=$?
+  [ "${run_status}" -eq 0 ]
+  [ "$(cat "${STORAGE_LOCK_PREFIX}s1.lock")" = "$$ backup-copy" ]
+}
+
+@test "try_acquire_storage_lock: refused (returns 1) while a live holder owns it, file untouched" {
+  sleep 5 &
+  holder=$!
+  echo "${holder} maintenance" >"${STORAGE_LOCK_PREFIX}s2.lock"
+  run_status=0; try_acquire_storage_lock "s2" "backup-copy" || run_status=$?
+  [ "${run_status}" -eq 1 ]
+  [ "$(cat "${STORAGE_LOCK_PREFIX}s2.lock")" = "${holder} maintenance" ]
+  kill "${holder}" 2>/dev/null || true
+}
+
+@test "try_acquire_storage_lock: dead-PID lock is reaped and re-taken by us" {
+  echo "999999 maintenance" >"${STORAGE_LOCK_PREFIX}s3.lock"
+  run_status=0; try_acquire_storage_lock "s3" "backup-copy" || run_status=$?
+  [ "${run_status}" -eq 0 ]
+  [ "$(cat "${STORAGE_LOCK_PREFIX}s3.lock")" = "$$ backup-copy" ]
+}
+
+@test "try_acquire_storage_lock: empty/malformed lock counts as stale and is re-taken" {
+  printf '\n' >"${STORAGE_LOCK_PREFIX}s4.lock"
+  run_status=0; try_acquire_storage_lock "s4" "backup-copy" || run_status=$?
+  [ "${run_status}" -eq 0 ]
+  [ "$(cat "${STORAGE_LOCK_PREFIX}s4.lock")" = "$$ backup-copy" ]
+}
+
+@test "try_acquire_storage_lock: re-acquire by the same process returns 0 (reentrant)" {
+  try_acquire_storage_lock "s5" "backup-copy"
+  run_status=0; try_acquire_storage_lock "s5" "maintenance" || run_status=$?
+  [ "${run_status}" -eq 0 ]
+  # unchanged: still our original label, not rewritten
+  [ "$(cat "${STORAGE_LOCK_PREFIX}s5.lock")" = "$$ backup-copy" ]
+}
+
+@test "get_storage_lock_holder returns the (multi-word) label" {
+  echo "4242 backup-copy-source" >"${STORAGE_LOCK_PREFIX}s6.lock"
+  [ "$(get_storage_lock_holder "s6")" = "backup-copy-source" ]
+}
+
+@test "release_storage_lock: no-op for a foreign live holder, removes our own" {
+  sleep 5 &
+  holder=$!
+  echo "${holder} maintenance" >"${STORAGE_LOCK_PREFIX}s7.lock"
+  release_storage_lock "s7" || true       # owner-guard makes this a no-op (non-owner)
+  [ -e "${STORAGE_LOCK_PREFIX}s7.lock" ]   # foreign lock preserved
+  kill "${holder}" 2>/dev/null || true
+
+  try_acquire_storage_lock "s8" "backup-copy"
+  release_storage_lock "s8"
+  [ ! -e "${STORAGE_LOCK_PREFIX}s8.lock" ] # our own lock removed
+}
+
+@test "acquire_storage_lock: returns 1 after a short timeout while a live holder owns it" {
+  sleep 10 &
+  holder=$!
+  echo "${holder} maintenance" >"${STORAGE_LOCK_PREFIX}s9.lock"
+  run_status=0; acquire_storage_lock "s9" "backup-copy" 0 || run_status=$?
+  [ "${run_status}" -eq 1 ]
+  kill "${holder}" 2>/dev/null || true
+}
+
+@test "acquire_storage_lock: returns 130 when a stop is requested while waiting" {
+  sleep 10 &
+  holder=$!
+  echo "${holder} maintenance" >"${STORAGE_LOCK_PREFIX}s10.lock"
+  request_stop
+  run_status=0; acquire_storage_lock "s10" "backup-copy" 43200 || run_status=$?
+  [ "${run_status}" -eq 130 ]
+  kill "${holder}" 2>/dev/null || true
 }

@@ -21,7 +21,7 @@ die() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 command -v supercronic >/dev/null 2>&1 || die "supercronic is not installed in the image"
 
 # The exact schedule format the entrypoint writes must parse.
-echo '0 3 * * * /opt/archiver/archiver.sh start' > /tmp/real.crontab
+echo '0 3 * * * /opt/archiver/archiver.sh backup' > /tmp/real.crontab
 supercronic -test /tmp/real.crontab >/dev/null 2>&1 \
   || die "supercronic rejected archiver's crontab format ('m h dom mon dow <cmd>')"
 

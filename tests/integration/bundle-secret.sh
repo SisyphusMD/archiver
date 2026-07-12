@@ -62,7 +62,7 @@ export ARCHIVER_BUNDLE_FILE="${BUNDLE_DIR}/bundle.tar.enc"
 [ -f /opt/archiver/keys/private.pem ] || die "keys were not restored from the bundle"
 
 log "backup using the imported config"
-archiver backup retain || die "backup exited non-zero"
+archiver backup || die "backup exited non-zero"
 [ -d "${STORE}/snapshots" ] || die "no snapshots written to storage"
 
 log "standalone import (the documented 'docker exec ... archiver bundle import'): no ARCHIVER_* env"

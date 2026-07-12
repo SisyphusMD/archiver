@@ -103,7 +103,7 @@ docker exec "$ARCH" bash -c "
 " || die "bucket creation failed"
 
 log "backup to MinIO over s3://"
-docker exec "$ARCH" archiver backup retain || die "s3 backup exited non-zero"
+docker exec "$ARCH" archiver backup || die "s3 backup exited non-zero"
 
 log "recovery kit must be a plain object in the bucket, decryptable with only the password"
 HOSTN="$(docker exec "$ARCH" hostname)"

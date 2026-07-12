@@ -87,7 +87,7 @@ while IFS= read -r line; do
 done <"$ENVNATIVE/archiver.env"
 
 log "backup must run BOTH services from env-native materials alone (no bundle, no config.sh)"
-archiver backup retain || die "env-native backup from init materials failed"
+archiver backup || die "env-native backup from init materials failed"
 [ -d "$STORE/snapshots/$(hostname)-fixtures" ] || die "no snapshot for fixtures"
 [ -d "$STORE/snapshots/$(hostname)-other" ] || die "no snapshot for other (multi-dir lost)"
 

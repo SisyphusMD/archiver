@@ -237,6 +237,10 @@ jobs:
         run: |
           docker run -i --rm --hostname rk-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/recovery-kit.sh
+      - name: Maintenance pipeline (check/prune split, exhaustive frequency, lock waits, stop)
+        run: |
+          docker run -i --rm --hostname mt-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/maintenance.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.
@@ -265,7 +269,7 @@ jobs:
       # workspace bind mounts land empty (same reason the tests above pipe via stdin).
       - name: docker stop during a backup stops gracefully (SIGTERM, no prune, exit 0)
         run: IMAGE=hosttests:local bash tests/integration/sigterm-stop.sh
-      - name: Malformed CRON_SCHEDULE fails the container fast
+      - name: Malformed BACKUP_SCHEDULE fails the container fast
         run: IMAGE=hosttests:local bash tests/integration/invalid-cron.sh
       - name: s3 runtime against MinIO (backup + restore over the s3 wire, TLS)
         run: IMAGE=hosttests:local bash tests/integration/s3-minio.sh
@@ -346,7 +350,9 @@ jobs:
           push: false
           outputs: type=oci,dest=${{ github.workspace }}/image.tar
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0.8
+          # Moving major tag (metadata-action's {{major}} pattern) so the cache ref stays
+          # current across minor releases without a manual bump. Cache miss is non-fatal.
+          cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0
           cache-to: type=inline
 
       # Skopeo walks the OCI index manifests serially and `TryReusingBlob`-

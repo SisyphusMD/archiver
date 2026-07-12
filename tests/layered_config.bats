@@ -74,9 +74,16 @@ run_load() {
 }
 
 @test "bundle non-secret survives when no env override is set" {
+  echo 'PRUNE_BACKUPS="false"' >"${CONFIG_FILE}"
+  run_load
+  [ "${PRUNE_BACKUPS}" = "false" ]
+}
+
+@test "deprecated ROTATE_BACKUPS in a bundle config translates to PRUNE_BACKUPS" {
   echo 'ROTATE_BACKUPS="false"' >"${CONFIG_FILE}"
   run_load
-  [ "${ROTATE_BACKUPS}" = "false" ]
+  [ "${PRUNE_BACKUPS}" = "false" ]
+  [ -z "${ROTATE_BACKUPS:-}" ]
 }
 
 @test "pure env-native: no bundle file, config comes entirely from env + secrets" {

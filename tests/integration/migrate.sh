@@ -58,7 +58,7 @@ cp "${SECRETS_DIR}/rsa_private_key" /opt/archiver/keys/private.pem && chmod 600 
 cp "${SECRETS_DIR}/rsa_public_key" /opt/archiver/keys/public.pem && chmod 644 /opt/archiver/keys/public.pem
 cp "${SECRETS_DIR}/ssh_private_key" /opt/archiver/keys/id_ed25519 && chmod 600 /opt/archiver/keys/id_ed25519
 set -a; source "${MIG}/archiver.env"; set +a
-archiver backup retain || die "env-native backup from migrated materials failed"
+archiver backup || die "env-native backup from migrated materials failed"
 [ -d "${STORE}/snapshots" ] || die "no snapshots after the env-native backup"
 
 log "env-native -> bundle export (mode-agnostic), password from a file"
