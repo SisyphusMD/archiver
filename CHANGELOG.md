@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-07-12
+
 ### Changed
 - The backup and maintenance pipelines no longer serialize on per-storage locks — they run concurrently, relying on Duplicacy's own lock-free design. Its two-step fossil collection makes a non-exclusive `check`/`prune` safe alongside a `copy` reading or writing the same storage (verified against the Duplicacy v3.2.5 source: a copy reads a mid-prune fossil via a `.fsl` fallback and writes the destination snapshot last, so a concurrent non-exclusive prune can at worst make a copy abort loudly — never corrupt a storage, delete referenced data, or leave a partial secondary). The practical win: maintenance now runs on its own schedule without waiting for an in-progress copy to finish (previously a copy held the primary storage for its whole duration, so maintenance serialized behind it), and a copy never waits on maintenance. A copy leg that loses that rare race is retried once automatically before being reported as an error. The per-storage lock files (`/var/lock/archiver-storage-*`) and their healthcheck reporting are removed. Note: this relies on the maintenance pipeline never using `prune -exclusive` (it uses non-exclusive prune, and `-exhaustive` — which is safe — never implies `-exclusive`).
 
