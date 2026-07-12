@@ -108,16 +108,6 @@ check_lock_liveness() {
 }
 check_lock_liveness "${LOCKFILE}" "Backup"
 check_lock_liveness "${MAINTENANCE_LOCKFILE}" "Maintenance"
-for storage_lock in "${STORAGE_LOCK_PREFIX}"*.lock; do
-  [ -f "${storage_lock}" ] || continue
-  pid="$(head -n 1 "${storage_lock}" 2>/dev/null | cut -d' ' -f1)"
-  if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-    info "Storage lock held (live): ${storage_lock}"
-  else
-    # Self-healing: try_acquire reaps dead-PID storage locks, so this is only a note.
-    warn "Stale storage lock (will be reaped on next use): ${storage_lock}"
-  fi
-done
 
 # Maintenance staleness: the maintenance pipeline records per-storage last-success times.
 # 8 days covers daily and weekly cadences with margin; if you maintain less often than

@@ -87,8 +87,30 @@ set -e
 grep -q "\[ERROR\].*Copy to secondary storage failed" "$LOG" || die "no ERROR logged for the failed secondary copy"
 grep -q "Copy to tertiary storage completed" "$LOG" || die "tertiary copy did not complete despite the secondary failure"
 [ -d "$STORE3/snapshots" ] || die "no snapshots on tertiary (its copy did not run)"
-# Every per-storage lock (source + destinations) must be released even after a failed leg,
-# or the next copy/maintenance would block on a dead-PID lock.
-ls /var/lock/archiver-storage-*.lock >/dev/null 2>&1 && die "storage lock left behind after the run"
 
-echo "=== COPY-PATH OK: copy runs, secondary restores, one leg fails (exit ${rc}) while the other completes, no lock leak ==="
+log "a copy leg that fails ONCE then succeeds is retried, and the run completes clean"
+ATTEMPTS=/tmp/secondary-copy-attempts
+rm -f "$ATTEMPTS"
+cat >"$REAL" <<'WRAP'
+#!/usr/bin/env bash
+# Fail the FIRST `copy -to secondary`, pass the retry (and everything else).
+if [ "${1:-}" = "copy" ] && printf '%s\n' "$@" | grep -qx secondary; then
+  n=$(( $(cat /tmp/secondary-copy-attempts 2>/dev/null || echo 0) + 1 ))
+  echo "$n" >/tmp/secondary-copy-attempts
+  if [ "$n" -eq 1 ]; then
+    echo "SIMULATED: copy to secondary failed (attempt 1)" >&2
+    exit 1
+  fi
+fi
+exec "$0.real" "$@"
+WRAP
+chmod +x "$REAL"
+
+echo "more new content forces another revision" >>"$FIXTURES/file.txt"
+archiver backup || die "backup exited non-zero although the retry should have succeeded"
+grep -q "Retrying failed copies once" "$LOG" || die "no retry attempted for the failed leg"
+grep -q "Copy to secondary storage completed" "$LOG" || die "retry did not complete the secondary copy"
+grep -q "Copy to secondary storage failed after retry" "$LOG" && die "leg reported failed although the retry succeeded"
+[ "$(cat "$ATTEMPTS" 2>/dev/null)" = "2" ] || die "expected 2 secondary attempts (fail + retry), got '$(cat "$ATTEMPTS" 2>/dev/null)'"
+
+echo "=== COPY-PATH OK: copy runs, secondary restores, one leg fails (exit ${rc}) while the other completes, and a transient leg failure is retried to success ==="

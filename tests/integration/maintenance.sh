@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# Maintenance pipeline, end to end (env-native, two local targets so the copy path and
-# per-storage locks are exercised too). Proves: maintenance refuses to run before any
-# backup exists; check+prune run per storage and record last-success state; exhaustive
-# prune fires when due (never-run -> due) and NOT when fresh; CHECK_BACKUPS/PRUNE_BACKUPS
-# toggles skip their phases; maintenance WAITS on a held storage lock (and the backup
-# pipeline's copy waits likewise, in the other direction); healthcheck warns on stale
-# maintenance; `archiver backup` warns deprecation; `archiver stop maintenance`
-# ends a running maintenance gracefully.
+# Maintenance pipeline, end to end (env-native, two local targets so the copy path is
+# exercised too). Proves: maintenance refuses to run before any backup exists; check+prune
+# run per storage and record last-success state; exhaustive prune fires when due
+# (never-run -> due) and NOT when fresh; CHECK_BACKUPS/PRUNE_BACKUPS toggles skip their
+# phases; healthcheck warns on stale maintenance; removed rotation args hard-error;
+# `archiver stop maintenance` ends a running maintenance gracefully.
 #
 #   docker run -i --rm --hostname mt-host --cap-drop ALL --cap-add DAC_OVERRIDE \
 #     --entrypoint bash archiver:dev -s < tests/integration/maintenance.sh
@@ -86,79 +84,6 @@ grep -q "PRUNE_BACKUPS=false" "$MLOG" || die "alias did not translate"
 grep -q "Prune completed" "$MLOG" && die "prune ran despite ROTATE_BACKUPS=false"
 grep -q "Storage check completed for local" "$MLOG" || die "check skipped although only prune was off"
 
-log "maintenance must WAIT on a held storage lock, then proceed after release"
-sleep 300 &
-HOLDER_PID=$!
-echo "${HOLDER_PID} test-holder" > /var/lock/archiver-storage-local.lock
-archiver maintenance > /tmp/maint-wait.out 2>&1 &
-MAINT_BG=$!
-for _ in $(seq 1 60); do
-  grep -q "held by: test-holder" "$MLOG" 2>/dev/null && break
-  sleep 1
-done
-grep -q "held by: test-holder" "$MLOG" || die "maintenance did not report waiting on the storage lock"
-kill "$HOLDER_PID" 2>/dev/null; rm -f /var/lock/archiver-storage-local.lock
-wait "$MAINT_BG" || die "maintenance failed after lock release"
-grep -q "Prune completed for local" "$MLOG" || die "maintenance did not finish primary after waiting"
-
-log "a graceful 'archiver stop maintenance' interrupts a storage-lock WAIT (does not block 12h)"
-sleep 300 &
-HOLDER_PID=$!
-# Distinct holder label from the previous scenario: the maintenance log still holds that run's
-# "held by: test-holder" line, so polling the same string would match it on the first iteration
-# and race ahead before this run has taken its lock. A unique label matches only once THIS run
-# reaches its wait, which is strictly after it acquires the maintenance lock.
-echo "${HOLDER_PID} stopwait-holder" > /var/lock/archiver-storage-local.lock
-archiver maintenance >/dev/null 2>&1 &
-MAINT_BG=$!
-for _ in $(seq 1 60); do
-  grep -q "held by: stopwait-holder" "$MLOG" 2>/dev/null && break
-  sleep 1
-done
-grep -q "held by: stopwait-holder" "$MLOG" || die "maintenance did not reach the lock wait"
-# Storage lock stays held; only the stop flag should break the wait.
-archiver stop maintenance | grep -q "Stopping maintenance" || die "stop did not target maintenance"
-wait "$MAINT_BG" 2>/dev/null || true
-grep -q "Stop requested while waiting for storage 'local'" "$MLOG" || die "stop did not interrupt the lock wait"
-grep -q "Maintenance session summary: Maintenance stopped" "$MLOG" || die "no stopped summary after lock-wait stop"
-kill "$HOLDER_PID" 2>/dev/null; rm -f /var/lock/archiver-storage-local.lock /var/lock/archiver-maintenance-stop-requested
-
-log "the copy leg must likewise WAIT when maintenance holds a storage"
-sleep 300 &
-HOLDER_PID=$!
-echo "${HOLDER_PID} maintenance" > /var/lock/archiver-storage-second.lock
-echo "more content" >>"$FIXTURES/file.txt"
-archiver backup > /tmp/backup-wait.out 2>&1 &
-BACKUP_BG=$!
-for _ in $(seq 1 90); do
-  grep -rq "Storage 'second' is held by: maintenance" /opt/archiver/logs/archiver.log 2>/dev/null && break
-  sleep 1
-done
-grep -rq "Storage 'second' is held by: maintenance" /opt/archiver/logs/archiver.log || die "copy did not report waiting"
-kill "$HOLDER_PID" 2>/dev/null; rm -f /var/lock/archiver-storage-second.lock
-wait "$BACKUP_BG" || die "backup failed after lock release"
-grep -rq "Copy to second storage completed" /opt/archiver/logs/archiver.log || die "copy did not complete after waiting"
-
-log "a stop requested during a copy lock-WAIT skips cleanly, not logged as a timeout error"
-sleep 300 &
-HOLDER_PID=$!
-# Unique label so the poll matches THIS run's wait, not the previous copy-wait scenario's line.
-echo "${HOLDER_PID} stopwait-copy" > /var/lock/archiver-storage-second.lock
-echo "still more content" >>"$FIXTURES/file.txt"
-archiver backup > /tmp/backup-stopwait.out 2>&1 &
-BACKUP_BG=$!
-for _ in $(seq 1 90); do
-  grep -rq "Storage 'second' is held by: stopwait-copy" /opt/archiver/logs/archiver.log 2>/dev/null && break
-  sleep 1
-done
-grep -rq "Storage 'second' is held by: stopwait-copy" /opt/archiver/logs/archiver.log || die "copy did not reach the lock wait"
-# The storage lock stays held; only the stop flag should break the wait (rc=130 path).
-touch /var/lock/archiver-stop-requested
-wait "$BACKUP_BG" 2>/dev/null || true
-grep -rq "Stop requested while waiting for storage 'second'" /opt/archiver/logs/archiver.log || die "stop during copy lock-wait was not honored"
-grep -rq "Timed out waiting for storage 'second'" /opt/archiver/logs/archiver.log && die "copy lock-wait stop mislabeled as a timeout error"
-kill "$HOLDER_PID" 2>/dev/null; rm -f /var/lock/archiver-storage-second.lock /var/lock/archiver-stop-requested
-
 log "healthcheck warns on stale maintenance state"
 printf 'local 1000 1000 1000\nsecond 1000 1000 1000\n' > "$STATE"
 set +e
@@ -227,4 +152,4 @@ for _ in $(seq 1 30); do [ ! -e /var/lock/archiver-maintenance.lock ] && break; 
 grep -q "Maintenance session summary: Maintenance stopped" "$MLOG" || die "no stopped summary"
 mv "${REAL}.real" "$REAL"
 
-echo "=== MAINTENANCE OK: pre-backup-refusal/check+prune/exhaustive-frequency/toggles/alias/lock-waits-both-ways/staleness/deprecation/stop ==="
+echo "=== MAINTENANCE OK: pre-backup-refusal/check+prune/exhaustive-frequency/toggles/alias/staleness/deprecation/stop ==="

@@ -199,7 +199,7 @@ prepare_config
 # lock — every scheduled backup then refusing "already running" — and (b) a leftover stop flag
 # silently aborting the first backup. 2>/dev/null swallows the no-match glob.
 rm -f "${LOCKFILE}" "${STOP_FLAG}" "${MAINTENANCE_LOCKFILE}" "${MAINTENANCE_STOP_FLAG}" \
-      "${LOCKFILE}.tmp" "${MAINTENANCE_LOCKFILE}.tmp" "${STORAGE_LOCK_PREFIX}"*.lock 2>/dev/null || true
+      "${LOCKFILE}.tmp" "${MAINTENANCE_LOCKFILE}.tmp" 2>/dev/null || true
 
 # Forward a pipeline's log file to stdout so 'docker logs -f' works. tail -F follows the
 # symlink by name through rotations; the wait loop idles harmlessly if the pipeline never

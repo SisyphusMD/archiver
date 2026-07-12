@@ -549,7 +549,7 @@ PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
 PRUNE_EXHAUSTIVE_FREQUENCY="monthly"  # off | daily | weekly | monthly
 ```
 
-The two pipelines coordinate through per-storage locks: maintenance never checks/prunes a storage while a copy is writing to it (and vice versa — the loser waits, visibly, in the log). Backups to the primary are never blocked, and if maintenance overruns, the next backup still starts on time.
+The two pipelines run concurrently and rely on Duplicacy's own lock-free design — its two-step fossil collection makes a non-exclusive check/prune safe alongside a copy reading or writing the same storage — so neither blocks the other: a backup never waits on maintenance, and maintenance runs on its schedule regardless of an in-progress copy. In the rare case a copy leg loses a race with a concurrent prune (a retryable error, never corruption or a partial copy, since Duplicacy writes the destination snapshot last), the copy is retried once automatically.
 
 **Default retention policy** keeps:
 - All backups younger than 1 day old

@@ -93,7 +93,9 @@ run_duplicacy_stoppable() {
   return $?
 }
 
-# Full maintenance pass for one storage-target id: lock -> check -> prune -> unlock.
+# Full maintenance pass for one storage-target id: check -> prune. Runs LOCK-FREE against the
+# storage — duplicacy's two-step fossil collection makes a non-exclusive prune/check safe
+# alongside a concurrent copy, so the pipelines no longer serialize per storage.
 # Phase timings are logged; last-success timestamps recorded for healthcheck staleness.
 maintain_storage() {
   local storage_id="${1}"
@@ -105,28 +107,13 @@ maintain_storage() {
 
   export_duplicacy_storage_secrets "${storage_id}"
 
-  if ! try_acquire_storage_lock "${storage_name}" "maintenance"; then
-    log_message "INFO" "Storage '${storage_name}' is held by: $(get_storage_lock_holder "${storage_name}") — waiting for it to be released."
-    local acquire_rc=0
-    acquire_storage_lock "${storage_name}" "maintenance" || acquire_rc=$?
-    if [ "${acquire_rc}" -eq 130 ]; then
-      log_message "INFO" "Stop requested while waiting for storage '${storage_name}'."
-      unset SERVICE
-      return 130
-    elif [ "${acquire_rc}" -ne 0 ]; then
-      handle_error "Timed out waiting for storage '${storage_name}'; skipping its maintenance this run."
-      unset SERVICE
-      return 1
-    fi
-  fi
-
   if [[ "${CHECK_BACKUPS}" == "true" ]]; then
     update_lock_stage "storage:${storage_name}" "check"
     phase_start="$(date +%s)"
     run_duplicacy_stoppable check -all -storage "${storage_name}" -fossils -resurrect -stats -threads "${DUPLICACY_THREADS}"
     exit_status=$?
     if [ "${exit_status}" -eq 130 ]; then
-      release_storage_lock "${storage_name}"; unset SERVICE; return 130
+      unset SERVICE; return 130
     elif [ "${exit_status}" -ne 0 ]; then
       handle_error "Storage check failed for ${storage_name}."
     else
@@ -136,7 +123,7 @@ maintain_storage() {
   fi
 
   if is_stop_requested; then
-    release_storage_lock "${storage_name}"; unset SERVICE; return 130
+    unset SERVICE; return 130
   fi
 
   if [[ "${PRUNE_BACKUPS}" == "true" ]]; then
@@ -156,7 +143,7 @@ maintain_storage() {
     run_duplicacy_stoppable "${prune_args[@]}"
     exit_status=$?
     if [ "${exit_status}" -eq 130 ]; then
-      release_storage_lock "${storage_name}"; unset SERVICE; return 130
+      unset SERVICE; return 130
     elif [ "${exit_status}" -ne 0 ]; then
       handle_error "Prune failed for ${storage_name} storage. Review the Duplicacy logs for details."
     else
@@ -166,7 +153,6 @@ maintain_storage() {
     fi
   fi
 
-  release_storage_lock "${storage_name}"
   unset SERVICE
   return 0
 }
