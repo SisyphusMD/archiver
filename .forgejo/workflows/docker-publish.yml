@@ -22,7 +22,7 @@ jobs:
     name: Shellcheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run shellcheck
         # Pinned koalaman/shellcheck image; Renovate (github-actions manager)
         # tracks both tag and digest. warning+ severity only — info-level
@@ -39,7 +39,7 @@ jobs:
     name: Validate CHANGELOG structure
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Lint CHANGELOG
         run: |
           set -euo pipefail
@@ -64,7 +64,7 @@ jobs:
     name: Bats unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run unit tests
         # Pinned bats image; Renovate (github-actions manager) tracks tag + digest.
         uses: docker://bats/bats:1.13.0
@@ -77,7 +77,7 @@ jobs:
     needs: [shellcheck, validate-changelog, bats]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Detect Dockerfile change (gates the slow arm64 emulation build)
         id: dockerfile
         # arm64 buildability can only break via the Dockerfile (arch-specific
@@ -151,7 +151,7 @@ jobs:
     needs: [shellcheck, validate-changelog, bats]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - name: Build amd64 (load locally)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -254,7 +254,7 @@ jobs:
     needs: [shellcheck, validate-changelog, bats]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - name: Build amd64 (load locally)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -290,7 +290,7 @@ jobs:
       mirror-nas: ${{ steps.mirror-nas.outcome }}
       mirror-ghcr: ${{ steps.mirror-ghcr.outcome }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Verify version refs match tag
         env:
@@ -485,7 +485,7 @@ jobs:
       nas-failures: ${{ steps.reconcile.outputs.nas-failures }}
       github-failures: ${{ steps.reconcile.outputs.github-failures }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # all tags needed for reconciliation loop
 
