@@ -25,6 +25,12 @@ source_if_not_sourced "${CONFIG_SERIALIZE_CORE}"
 # redundant re-upload.
 RECOVERY_KIT_STATE_FILE="${LOG_DIR}/.recovery-kit-state"
 
+# Placement-scheme version, folded into the uploaded-state fingerprint (see run_recovery_kit).
+# Bump it whenever the way the kit is written to a target changes — e.g. its ownership/permission
+# handling — so every existing deployment re-stamps its already-placed kit exactly once on the
+# first run after upgrade, even when the kit content itself is unchanged.
+RECOVERY_KIT_STATE_VERSION="2"
+
 recovery_kit_configured() { [[ -n "${RECOVERY_PASSWORD}" ]]; }
 
 recovery_kit_file_name()   { printf 'archiver-recovery-kit-%s.tar.enc'   "$(hostname)"; }
@@ -156,7 +162,9 @@ encrypt_recovery_kit() {
     tar -C "${workdir}" -cf - "${members[@]}" \
       | openssl enc -aes-256-cbc -pbkdf2 -pass fd:3 -out "${out}" 3<<<"${RECOVERY_PASSWORD}"
   ) || return 1
-  chmod 600 "${out}"
+  # No chmod here: the kit is already encrypted and lives inside the datastore, so its outer-file
+  # ownership/permissions are stamped at placement time to match the storage target's own
+  # duplicacy files rather than being a locked-down root:600 outlier — see recovery_kit_upload_*.
 }
 
 write_recovery_kit_readme() {
@@ -193,9 +201,19 @@ recovery_kit_upload_local() {
   local storage_id="${1}" kit="${2}" readme="${3}"
   local path_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
   local dest="${!path_var}"
-  cp -f "${kit}" "${dest}/$(recovery_kit_file_name)" || return 1
-  chmod 600 "${dest}/$(recovery_kit_file_name)" || return 1
-  cp -f "${readme}" "${dest}/$(recovery_kit_readme_name)" || return 1
+  local kit_dst="${dest}/$(recovery_kit_file_name)"
+  local readme_dst="${dest}/$(recovery_kit_readme_name)"
+  cp -f "${kit}" "${kit_dst}" || return 1
+  cp -f "${readme}" "${readme_dst}" || return 1
+  # Match the storage's own duplicacy files (owner:group and mode of its 'config') instead of
+  # forcing root:600: the kit is already encrypted and sits beside the chunks, so it should share
+  # their access model. Best-effort — a perms mismatch must not fail an otherwise-good upload.
+  local ref="${dest}/config"
+  if [[ -e "${ref}" ]]; then
+    chown "$(stat -c '%u:%g' "${ref}")" "${kit_dst}" "${readme_dst}" \
+      && chmod "$(stat -c '%a' "${ref}")" "${kit_dst}" "${readme_dst}" \
+      || log_message "WARNING" "Recovery kit uploaded to '${dest}' but could not match perms of ${ref}."
+  fi
 }
 
 recovery_kit_upload_sftp() {
@@ -208,7 +226,9 @@ recovery_kit_upload_sftp() {
   # match that so the kit lands beside the duplicacy chunks.
   local remote_dir="/${!path_var}"
   # -b - aborts on the first failed transfer and exits non-zero; accept-new is the same
-  # trust-on-first-use posture duplicacy itself has toward this host.
+  # trust-on-first-use posture duplicacy itself has toward this host. The kit is put with the
+  # connecting user's own umask and ownership — the same access model duplicacy's chunks get
+  # over this connection — rather than a forced root:600 (see encrypt_recovery_kit).
   sftp -q -P "${!port_var}" -i "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" \
     -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
     -b - "${!user_var}@${!url_var}" >/dev/null <<EOF
@@ -337,6 +357,9 @@ run_recovery_kit() {
   fingerprint="$(build_recovery_kit_payload "${workdir}")" || {
     rm -rf "${workdir}"; handle_error "Recovery kit: payload serialization failed."; return 1
   }
+  # Version-tag the fingerprint so a placement-scheme change invalidates the recorded state and
+  # forces a one-time re-stamp on upgrade, independent of whether the kit content changed.
+  fingerprint="v${RECOVERY_KIT_STATE_VERSION}:${fingerprint}"
 
   local state_hash="" state_names=""
   if [[ -f "${RECOVERY_KIT_STATE_FILE}" ]]; then

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- The automatic recovery kit is no longer written as a locked-down `root:600` file. It is already encrypted and lives inside the datastore, so on local and SFTP storage targets it now takes the same ownership and permissions as that storage's own Duplicacy files (matched from the storage's `config` file on local targets; inherited from the connecting user's umask on SFTP) rather than being a permissions outlier a backup or mirror user cannot read. Object-store targets (B2/S3) are unaffected — they have no POSIX permissions. Existing deployments correct their already-placed kit automatically on the first backup (or `archiver recovery-kit`) run after upgrade: the kit's placement-scheme version is folded into the change-detection fingerprint, so the one-time re-stamp fires even though the kit content is unchanged — no `recovery-kit force` needed.
+
 ## [0.10.1] - 2026-07-12
 
 ### Changed
