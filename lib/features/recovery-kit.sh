@@ -29,7 +29,7 @@ RECOVERY_KIT_STATE_FILE="${LOG_DIR}/.recovery-kit-state"
 # Bump it whenever the way the kit is written to a target changes — e.g. its ownership/permission
 # handling — so every existing deployment re-stamps its already-placed kit exactly once on the
 # first run after upgrade, even when the kit content itself is unchanged.
-RECOVERY_KIT_STATE_VERSION="2"
+RECOVERY_KIT_STATE_VERSION="3"
 
 recovery_kit_configured() { [[ -n "${RECOVERY_PASSWORD}" ]]; }
 
@@ -216,6 +216,42 @@ recovery_kit_upload_local() {
   fi
 }
 
+# Convert a 10-char ls-style permission string (e.g. -rwxr-xr-x) to a plain octal mode (e.g.
+# 755). Set-uid/gid/sticky high bits are intentionally dropped — they have no business on the
+# kit files. Prints nothing on malformed input so callers can fall back.
+symbolic_mode_to_octal() {
+  local perms="${1#?}"                    # drop the leading file-type character
+  [[ ${#perms} -eq 9 ]] || return 0
+  local out=0 i base
+  for i in 0 3 6; do
+    base=0
+    [[ "${perms:i:1}"   == r ]] && base=$((base + 4))
+    [[ "${perms:i+1:1}" == w ]] && base=$((base + 2))
+    case "${perms:i+2:1}" in x|s|t) base=$((base + 1)) ;; esac
+    out=$((out * 8 + base))
+  done
+  printf '%o' "${out}"
+}
+
+# Octal mode of a remote file, read over sftp (ls -l -> symbolic -> octal). The perms column is
+# formatted by the local sftp client from the returned attributes, so its shape is server-
+# independent. Falls back to 644 (readable by a mirror/backup user) when the reference cannot be
+# read or parsed, so the kit is never left an owner-only outlier. Extra args are sftp options.
+recovery_kit_sftp_ref_mode() {
+  local ref="${1}" target="${2}"; shift 2
+  local listing perms mode
+  listing="$(sftp "$@" -b - "${target}" 2>/dev/null <<EOF
+ls -l ${ref}
+EOF
+  )"
+  perms="$(printf '%s\n' "${listing}" | grep -m1 -oE '^[-dbclps][-rwxsStT]{9}')"
+  mode="$(symbolic_mode_to_octal "${perms}")"
+  # An empty parse or a bare 0 means the server reported no usable mode (e.g. an object-store
+  # sftp gateway): fall back to 644 rather than stamping the kit unreadable.
+  [[ -n "${mode}" && "${mode}" != 0 ]] || mode=644
+  printf '%s' "${mode}"
+}
+
 recovery_kit_upload_sftp() {
   local storage_id="${1}" kit="${2}" readme="${3}"
   local user_var="STORAGE_TARGET_${storage_id}_SFTP_USER"
@@ -225,15 +261,28 @@ recovery_kit_upload_sftp() {
   # build_storage_url always emits sftp://user@host:port//path, i.e. an absolute path —
   # match that so the kit lands beside the duplicacy chunks.
   local remote_dir="/${!path_var}"
+  local kit_name readme_name
+  kit_name="$(recovery_kit_file_name)"
+  readme_name="$(recovery_kit_readme_name)"
+  local sftp_opts=(-q -P "${!port_var}" -i "${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
+    -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
+  local target="${!user_var}@${!url_var}"
+
+  # Stamp the kit with the mode duplicacy's own files carry on this storage (read from its
+  # 'config'), matching recovery_kit_upload_local — rather than leaving it at the connecting
+  # user's umask, which can be owner-only and lock a mirror/backup user out. The kit is already
+  # encrypted, so its outer-file mode should mirror the chunks, not be a locked-down outlier.
+  local mode
+  mode="$(recovery_kit_sftp_ref_mode "${remote_dir}/config" "${target}" "${sftp_opts[@]}")"
+
   # -b - aborts on the first failed transfer and exits non-zero; accept-new is the same
-  # trust-on-first-use posture duplicacy itself has toward this host. The kit is put with the
-  # connecting user's own umask and ownership — the same access model duplicacy's chunks get
-  # over this connection — rather than a forced root:600 (see encrypt_recovery_kit).
-  sftp -q -P "${!port_var}" -i "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" \
-    -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-    -b - "${!user_var}@${!url_var}" >/dev/null <<EOF
-put ${kit} ${remote_dir}/$(recovery_kit_file_name)
-put ${readme} ${remote_dir}/$(recovery_kit_readme_name)
+  # trust-on-first-use posture duplicacy itself has toward this host. The puts are strict; the
+  # chmods are best-effort (leading '-') so a server that forbids SETSTAT is still a good upload.
+  sftp "${sftp_opts[@]}" -b - "${target}" >/dev/null <<EOF
+put ${kit} ${remote_dir}/${kit_name}
+put ${readme} ${remote_dir}/${readme_name}
+-chmod ${mode} ${remote_dir}/${kit_name}
+-chmod ${mode} ${remote_dir}/${readme_name}
 EOF
 }
 
