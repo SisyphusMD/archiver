@@ -87,6 +87,21 @@ B2_LIST_JSON='{
   [ "$(recovery_kit_json_field "${B2_LIST_JSON}" "bucketId")" = "b2bucketid001122334455" ]
 }
 
+@test "symbolic_mode_to_octal converts ls-style perms and drops special bits" {
+  load_recovery_kit
+  [ "$(symbolic_mode_to_octal -rwxrwxrwx)" = "777" ]
+  [ "$(symbolic_mode_to_octal -rwxr-xr-x)" = "755" ]
+  [ "$(symbolic_mode_to_octal -rw-r--r--)" = "644" ]
+  [ "$(symbolic_mode_to_octal -rw-r-----)" = "640" ]
+  [ "$(symbolic_mode_to_octal -rw-------)" = "600" ]
+  [ "$(symbolic_mode_to_octal drwxrwxrwx)" = "777" ]
+  # set-uid/gid/sticky are dropped; their execute bit is still reflected.
+  [ "$(symbolic_mode_to_octal -rwsr-sr-t)" = "755" ]
+  # malformed input yields nothing, so the caller falls back.
+  [ -z "$(symbolic_mode_to_octal garbage)" ]
+  [ -z "$(symbolic_mode_to_octal '')" ]
+}
+
 @test "validate_recovery_password rejects short and storage-equal passwords" {
   load_recovery_kit
   arrange_config

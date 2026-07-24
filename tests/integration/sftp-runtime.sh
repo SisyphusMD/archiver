@@ -105,4 +105,15 @@ docker exec "$ARCH" bash -c '
   cmp /data/fixtures/blob.bin /data/restore/blob.bin
 ' || die "restored content differs from source"
 
-echo "=== SFTP-RUNTIME OK: backup + restore over ssh ==="
+log "the sftp kit is stamped to match duplicacy's own access model, not the connecting umask"
+# Give the storage's own config a distinctive mode, force a re-push, and confirm the kit and its
+# README follow it — the regression was the kit landing owner-only (a mirror user could not read
+# it) because the sftp path relied on the connecting user's umask instead of matching config.
+docker exec "$SFTP" chmod 640 "/home/backup/upload/config" || die "could not set config mode on the sftp server"
+docker exec "$ARCH" archiver recovery-kit force || die "recovery-kit force over sftp exited non-zero"
+KIT_MODE="$(docker exec "$SFTP" stat -c '%a' "/home/backup/upload/archiver-recovery-kit-${HOSTN}.tar.enc")"
+README_MODE="$(docker exec "$SFTP" stat -c '%a' "/home/backup/upload/archiver-recovery-kit-${HOSTN}.README.txt")"
+[ "$KIT_MODE" = "640" ] || die "kit mode ($KIT_MODE) not stamped to match the storage config (640)"
+[ "$README_MODE" = "640" ] || die "kit README mode ($README_MODE) not stamped to match the storage config (640)"
+
+echo "=== SFTP-RUNTIME OK: backup + restore over ssh + kit perms match storage config ==="
