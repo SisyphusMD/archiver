@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-07-24
+
 ### Fixed
 - The recovery-kit permissions change in 0.10.2 only took effect on **local** storage targets; on **SFTP** targets the kit was still placed with the connecting user's umask, so where that user's umask is restrictive (e.g. `server` with `077`) the kit landed owner-only and a separate mirror/backup user still could not read it — the very outlier 0.10.2 set out to eliminate. The SFTP upload now reads the mode of the storage's own `config` file and applies it to the kit and its README with a best-effort `chmod` after upload (a server that forbids `SETSTAT` still yields a successful upload), matching what the local path already does. The placement-scheme version is bumped again, so existing deployments re-stamp their already-placed kit once on the first backup (or `archiver recovery-kit`) run after upgrade — no `recovery-kit force` needed.
 
