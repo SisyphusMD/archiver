@@ -5,7 +5,6 @@
     "customManagers:dockerfileVersions"
   ],
   "gitAuthor": "Renovate Bot <renovate@bryantserver.local>",
-  "assignees": ["cody"],
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
   "separateMinorPatch": true,
