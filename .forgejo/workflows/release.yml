@@ -20,8 +20,6 @@ jobs:
   release:
     name: Cut release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       # workflow_dispatch fires from whatever branch the user picked in the
       # UI. The bump pushes back to ${github.ref_name}, so dispatching from a

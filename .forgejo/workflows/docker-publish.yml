@@ -284,8 +284,6 @@ jobs:
     needs: [shellcheck, validate-changelog, bats, integration, integration-host]
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: read
     outputs:
       mirror-nas: ${{ steps.mirror-nas.outcome }}
       mirror-ghcr: ${{ steps.mirror-ghcr.outcome }}
@@ -478,8 +476,6 @@ jobs:
     needs: build-and-push
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
       forgejo-failures: ${{ steps.reconcile.outputs.cluster-failures }}
       nas-failures: ${{ steps.reconcile.outputs.nas-failures }}
