@@ -29,7 +29,7 @@ RECOVERY_KIT_STATE_FILE="${LOG_DIR}/.recovery-kit-state"
 # Bump it whenever the way the kit is written to a target changes — e.g. its ownership/permission
 # handling — so every existing deployment re-stamps its already-placed kit exactly once on the
 # first run after upgrade, even when the kit content itself is unchanged.
-RECOVERY_KIT_STATE_VERSION="3"
+RECOVERY_KIT_STATE_VERSION="4"
 
 recovery_kit_configured() { [[ -n "${RECOVERY_PASSWORD}" ]]; }
 
@@ -197,23 +197,88 @@ recovery_kit_json_field() {
     | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"$/\1/'
 }
 
+# Placement outcome shared by the per-backend uploaders: 0 verified, 1 failed (any kit already
+# on the target is left intact), 2 placed but less readable than the datastore's own files.
+# 2 keeps the target out of the uploaded-state record so the next run retries it — recording an
+# owner-only kit as done freezes it silently and locks the mirror user out until someone forces
+# a rewrite.
+RECOVERY_KIT_UNVERIFIED=2
+
+# Does octal mode $1 grant every group/other read bit that octal mode $2 grants? Only those bits
+# matter: they are the access a mirror/backup user copies the store with, and an owner-only kit
+# shuts it out of the one file it needs in a disaster. A more permissive placement passes.
+recovery_kit_mode_grants() {
+  (( ( (0${2} & 044) & ~(0${1}) ) == 0 ))
+}
+
+# The kit has to be at least as readable as the datastore's own 'config', which is the mode the
+# rest of the store carries.
+recovery_kit_access_matches() {
+  local placed="${1}" ref="${2}"
+  [[ -e "${ref}" ]] || return 0
+  local want have
+  want="$(stat -c '%a' "${ref}" 2>/dev/null)" || return 0
+  have="$(stat -c '%a' "${placed}" 2>/dev/null)" || return 1
+  recovery_kit_mode_grants "${have}" "${want}"
+}
+
+# Stage, verify, then rename — the target is never left without a kit. The copy lands on a temp
+# name beside the destination and only replaces the live file once it hashes equal to the source,
+# so a failed or truncated copy leaves the previous kit in place. The temp is also a fresh inode,
+# so it inherits the directory's ACLs; an in-place overwrite keeps the original inode and its
+# (possibly owner-only) ACL state forever, which is what left the kit unreadable to the mirror
+# user on ACL-backed shares.
+recovery_kit_place_local() {
+  local src="${1}" dst="${2}" ref="${3}"
+  local tmp="${dst}.tmp.$$"
+  rm -f "${tmp}"
+  if ! cp -f "${src}" "${tmp}"; then
+    rm -f "${tmp}"
+    return 1
+  fi
+  # Match the storage's own duplicacy files (owner:group and mode of its 'config') instead of
+  # forcing root:600: the kit is already encrypted and sits beside the chunks, so it should share
+  # their access model. Best-effort — the verification below is what actually decides.
+  if [[ -e "${ref}" ]]; then
+    chown "$(stat -c '%u:%g' "${ref}")" "${tmp}" 2>/dev/null
+    chmod "$(stat -c '%a' "${ref}")" "${tmp}" 2>/dev/null
+  fi
+  # Both hashes must actually be produced: if sha256sum itself fails, the substitutions would
+  # both expand to the empty string and compare equal, replacing the live kit on no evidence.
+  local src_hash tmp_hash
+  src_hash="$(sha256sum <"${src}")" || { rm -f "${tmp}"; return 1; }
+  tmp_hash="$(sha256sum <"${tmp}")" || { rm -f "${tmp}"; return 1; }
+  if [[ -z "${src_hash}" || "${src_hash}" != "${tmp_hash}" ]]; then
+    rm -f "${tmp}"
+    return 1
+  fi
+  local status=0
+  recovery_kit_access_matches "${tmp}" "${ref}" || status="${RECOVERY_KIT_UNVERIFIED}"
+  if ! mv -f "${tmp}" "${dst}"; then
+    rm -f "${tmp}"
+    return 1
+  fi
+  return "${status}"
+}
+
 recovery_kit_upload_local() {
   local storage_id="${1}" kit="${2}" readme="${3}"
   local path_var="STORAGE_TARGET_${storage_id}_LOCAL_PATH"
   local dest="${!path_var}"
-  local kit_dst="${dest}/$(recovery_kit_file_name)"
-  local readme_dst="${dest}/$(recovery_kit_readme_name)"
-  cp -f "${kit}" "${kit_dst}" || return 1
-  cp -f "${readme}" "${readme_dst}" || return 1
-  # Match the storage's own duplicacy files (owner:group and mode of its 'config') instead of
-  # forcing root:600: the kit is already encrypted and sits beside the chunks, so it should share
-  # their access model. Best-effort — a perms mismatch must not fail an otherwise-good upload.
   local ref="${dest}/config"
-  if [[ -e "${ref}" ]]; then
-    chown "$(stat -c '%u:%g' "${ref}")" "${kit_dst}" "${readme_dst}" \
-      && chmod "$(stat -c '%a' "${ref}")" "${kit_dst}" "${readme_dst}" \
-      || log_message "WARNING" "Recovery kit uploaded to '${dest}' but could not match perms of ${ref}."
-  fi
+  local status=0 rc
+
+  rc=0; recovery_kit_place_local "${kit}" "${dest}/$(recovery_kit_file_name)" "${ref}" || rc=$?
+  [[ ${rc} -eq 1 ]] && return 1
+  [[ ${rc} -eq 0 ]] || status="${rc}"
+
+  rc=0; recovery_kit_place_local "${readme}" "${dest}/$(recovery_kit_readme_name)" "${ref}" || rc=$?
+  [[ ${rc} -eq 1 ]] && return 1
+  [[ ${rc} -eq 0 ]] || status="${rc}"
+
+  [[ ${status} -eq 0 ]] \
+    || log_message "WARNING" "Recovery kit in '${dest}' is less readable than ${ref}; retrying on the next run."
+  return "${status}"
 }
 
 # Convert a 10-char ls-style permission string (e.g. -rwxr-xr-x) to a plain octal mode (e.g.
@@ -235,9 +300,10 @@ symbolic_mode_to_octal() {
 
 # Octal mode of a remote file, read over sftp (ls -l -> symbolic -> octal). The perms column is
 # formatted by the local sftp client from the returned attributes, so its shape is server-
-# independent. Falls back to 644 (readable by a mirror/backup user) when the reference cannot be
-# read or parsed, so the kit is never left an owner-only outlier. Extra args are sftp options.
-recovery_kit_sftp_ref_mode() {
+# independent. Prints nothing and returns non-zero when no usable mode came back — an empty parse
+# or a bare 0 means the server reported none (e.g. an object-store sftp gateway). Extra args are
+# sftp options.
+recovery_kit_sftp_mode() {
   local ref="${1}" target="${2}"; shift 2
   local listing perms mode
   listing="$(sftp "$@" -b - "${target}" 2>/dev/null <<EOF
@@ -246,9 +312,18 @@ EOF
   )"
   perms="$(printf '%s\n' "${listing}" | grep -m1 -oE '^[-dbclps][-rwxsStT]{9}')"
   mode="$(symbolic_mode_to_octal "${perms}")"
-  # An empty parse or a bare 0 means the server reported no usable mode (e.g. an object-store
-  # sftp gateway): fall back to 644 rather than stamping the kit unreadable.
-  [[ -n "${mode}" && "${mode}" != 0 ]] || mode=644
+  [[ -n "${mode}" && "${mode}" != 0 ]] || return 1
+  printf '%s' "${mode}"
+}
+
+# The mode to stamp the kit with, falling back to 644 (readable by a mirror/backup user) when the
+# reference cannot be read, so the kit is never left an owner-only outlier. Deliberately
+# fail-open: this only decides what to apply. Verification must use recovery_kit_sftp_mode
+# directly — reading the placed file through this fallback would report an unread mode as 644 and
+# pass any check, freezing the very kit the check exists to catch.
+recovery_kit_sftp_ref_mode() {
+  local mode
+  mode="$(recovery_kit_sftp_mode "$@")" || mode=644
   printf '%s' "${mode}"
 }
 
@@ -272,18 +347,33 @@ recovery_kit_upload_sftp() {
   # 'config'), matching recovery_kit_upload_local — rather than leaving it at the connecting
   # user's umask, which can be owner-only and lock a mirror/backup user out. The kit is already
   # encrypted, so its outer-file mode should mirror the chunks, not be a locked-down outlier.
-  local mode
+  local mode rc placed
   mode="$(recovery_kit_sftp_ref_mode "${remote_dir}/config" "${target}" "${sftp_opts[@]}")"
 
   # -b - aborts on the first failed transfer and exits non-zero; accept-new is the same
   # trust-on-first-use posture duplicacy itself has toward this host. The puts are strict; the
   # chmods are best-effort (leading '-') so a server that forbids SETSTAT is still a good upload.
-  sftp "${sftp_opts[@]}" -b - "${target}" >/dev/null <<EOF
+  rc=0
+  sftp "${sftp_opts[@]}" -b - "${target}" >/dev/null <<EOF || rc=$?
 put ${kit} ${remote_dir}/${kit_name}
 put ${readme} ${remote_dir}/${readme_name}
 -chmod ${mode} ${remote_dir}/${kit_name}
 -chmod ${mode} ${remote_dir}/${readme_name}
 EOF
+  [[ ${rc} -eq 0 ]] || return 1
+
+  # Read the mode back: the chmods above are best-effort, so a server that forbids SETSTAT (or
+  # silently keeps the connecting user's umask) still reports a clean upload while leaving the
+  # kit owner-only. Reporting that as done is what freezes an unreadable kit in place. A mode
+  # that cannot be read at all counts as unverified rather than as a pass.
+  if ! placed="$(recovery_kit_sftp_mode "${remote_dir}/${kit_name}" "${target}" "${sftp_opts[@]}")"; then
+    log_message "WARNING" "Recovery kit uploaded to '${target}' but its mode could not be read back; re-placing on the next run."
+    return "${RECOVERY_KIT_UNVERIFIED}"
+  fi
+  if ! recovery_kit_mode_grants "${placed}" "${mode}"; then
+    log_message "WARNING" "Recovery kit on '${target}' is mode ${placed}, less readable than ${mode}; re-placing on the next run."
+    return "${RECOVERY_KIT_UNVERIFIED}"
+  fi
 }
 
 # Native B2 API via curl (duplicacy cannot upload arbitrary files). Credentials and auth
@@ -387,8 +477,10 @@ recovery_kit_upload_to_target() {
 }
 
 # Main entry. $1 = "force" to re-upload everywhere regardless of recorded state.
-# Returns non-zero (after handle_error) when any target failed; a failed target is left
-# out of the state record so the next run retries it automatically.
+# Returns 0 when every target is placed and verified, 1 when any target failed (after
+# handle_error), and RECOVERY_KIT_UNVERIFIED when the kit is placed everywhere but at least one
+# placement could not be verified readable. Failed and unverified targets are both left out of
+# the state record, so the next run retries them automatically.
 run_recovery_kit() {
   local force="${1:-}"
 
@@ -440,13 +532,20 @@ run_recovery_kit() {
   }
   write_recovery_kit_readme "${readme}"
 
-  local failures=0
+  local failures=0 unverified=0 rc
   for i in "${pending[@]}"; do
     name_var="STORAGE_TARGET_${i}_NAME"
     name="$(sanitize_storage_name "${!name_var}")"
-    if recovery_kit_upload_to_target "${i}" "${kit}" "${readme}"; then
+    rc=0; recovery_kit_upload_to_target "${i}" "${kit}" "${readme}" || rc=$?
+    if [[ ${rc} -eq 0 ]]; then
       log_message "INFO" "Recovery kit updated on storage '${name}' ($(recovery_kit_file_name))."
       done_names+=("${name}")
+    elif [[ ${rc} -eq ${RECOVERY_KIT_UNVERIFIED} ]]; then
+      # The kit is placed and current, so this is not an upload failure — but it is deliberately
+      # kept out of the state record so the next run re-places it instead of freezing a kit the
+      # mirror user cannot read.
+      log_message "INFO" "Recovery kit placed on storage '${name}' but not verified readable; re-placing on the next run."
+      unverified=$((unverified + 1))
     else
       handle_error "Recovery-kit upload to storage '${name}' failed; will retry on the next run."
       failures=$((failures + 1))
@@ -460,5 +559,7 @@ run_recovery_kit() {
   chmod 600 "${RECOVERY_KIT_STATE_FILE}"
 
   rm -rf "${workdir}"
-  [[ ${failures} -eq 0 ]]
+  [[ ${failures} -eq 0 ]] || return 1
+  # Distinct from success: the kit is placed, but a caller must not report it current everywhere.
+  [[ ${unverified} -eq 0 ]] || return "${RECOVERY_KIT_UNVERIFIED}"
 }

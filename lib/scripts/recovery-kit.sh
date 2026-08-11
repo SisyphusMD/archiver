@@ -23,8 +23,13 @@ count_storage_targets
 verify_target_settings
 check_required_secrets
 
-if run_recovery_kit "${1:-}"; then
+rc=0
+run_recovery_kit "${1:-}" || rc=$?
+if [[ ${rc} -eq 0 ]]; then
   echo "Recovery kit complete: $(recovery_kit_file_name) is current on all storage targets."
+elif [[ ${rc} -eq ${RECOVERY_KIT_UNVERIFIED} ]]; then
+  echo "Recovery kit placed, but at least one target could not be verified readable by a mirror/backup user; see the log. It will be re-placed on the next run." >&2
+  exit 1
 else
   echo "Recovery kit finished with errors; see the log. Failed targets will be retried on the next run." >&2
   exit 1
