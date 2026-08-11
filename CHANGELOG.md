@@ -6,8 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-08-11
+
 ### Fixed
 - The recovery kit is now staged beside its destination and renamed over the live kit only after it verifies byte-for-byte, so a failed or truncated copy can never leave a storage target without a kit. The staged file is also a **fresh inode**, so it inherits the destination directory's ACLs — the previous in-place overwrite reused the original inode and its owner-only ACL state indefinitely, which is how a kit stayed unreadable to a mirror/backup user on an ACL-backed share (e.g. a Synology volume) even after 0.10.2 and 0.10.3 matched its POSIX mode from the storage's `config`. A placement that ends up less readable than that `config` is no longer recorded as uploaded: it is reported and re-placed on the next run rather than frozen as up to date, which is what previously let a single bad placement persist silently until someone ran `recovery-kit force`. SFTP uploads now read the mode back after their best-effort `chmod` and are held to the same check. The placement-scheme version is bumped, so existing deployments re-place their already-placed kit once on the first backup (or `archiver recovery-kit`) run after upgrade — no `recovery-kit force` needed.
+
+### Dependencies
+
+- chore(deps): update docker/login-action action to v4.5.2
+- chore(deps): update dependency aptible/supercronic to v0.2.48
+- chore(deps): update docker/login-action action to v4.5.1
+- chore(deps): update bats/bats docker tag to v1.14.0
 
 ## [0.10.3] - 2026-07-24
 
