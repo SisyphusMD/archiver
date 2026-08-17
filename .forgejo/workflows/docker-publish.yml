@@ -507,11 +507,69 @@ jobs:
         run: |
           set -uo pipefail
 
+          # Write a release payload, retrying the transient rejections. On failure
+          # API_WRITE_ERROR carries the status and a slice of the response body:
+          # the previous `curl -f ... >/dev/null` discarded both, so a failed
+          # reconcile printed a bare "FAILED" and could not be diagnosed afterwards
+          # (15 GitHub releases failed for months with no recoverable reason).
+          api_write() {
+            local method=$1 url=$2 auth_header=$3 payload_file=$4
+            local attempt http delay hinted
+            API_WRITE_ERROR=""
+            for attempt in 1 2 3; do
+              http=$(curl -sSL -k -o /tmp/write-response.json -D /tmp/write-headers.txt -w "%{http_code}" \
+                -X "${method}" \
+                -H "${auth_header}" \
+                -H "Content-Type: application/json" \
+                -d @"${payload_file}" \
+                "${url}")
+              case "${http}" in
+                2??) return 0 ;;
+                429|5??) ;;
+                # GitHub answers its secondary rate limit with 403; a genuine
+                # permission failure wears the same status and is not retryable.
+                403)
+                  grep -qiE 'secondary rate limit|abuse detection' /tmp/write-response.json || break
+                  ;;
+                *) break ;;
+              esac
+              if [ "${attempt}" -lt 3 ]; then
+                # Prefer the server's own backoff: retrying inside a rate-limit window
+                # can extend the block, and the delays GitHub asks for are longer than
+                # this ladder. Retry-After may also be an HTTP-date, which parses to
+                # nonsense, so only a plausible delta is honoured.
+                delay=$((attempt * 10))
+                hinted=$(grep -i '^retry-after:' /tmp/write-headers.txt | tail -1 | tr -cd '0-9')
+                if [ -n "${hinted}" ] && [ "${hinted}" -gt "${delay}" ] && [ "${hinted}" -le 120 ]; then
+                  delay="${hinted}"
+                fi
+                sleep "${delay}"
+              fi
+            done
+            API_WRITE_ERROR="http=${http} body=$(tr -d '\r\n' < /tmp/write-response.json | cut -c1-400)"
+            return 1
+          }
+
+          # Is the live release already exactly what we would write? The loop
+          # revisits every tag on every run, so without this each release rewrote
+          # every tag on all three registries — write volume that grows with the tag
+          # list, spent re-sending content that last changed when the tag was cut.
+          # target_commitish is deliberately not compared: it cannot change for an
+          # existing tag, and a host that echoed it in another form (a branch name
+          # rather than the sha) would make every release look stale.
+          release_matches() {
+            local existing=$1 payload=$2
+            local live want
+            live=$(jq -S '{name, body, draft, prerelease}' "${existing}") || return 1
+            want=$(jq -S '{name, body, draft, prerelease}' "${payload}") || return 1
+            [ "${live}" = "${want}" ]
+          }
+
           # Reconcile a single release on a single registry. Uses Forgejo
           # auth scheme (`Authorization: token`) by default; pass
           # auth_scheme=bearer for GitHub.
-          # POSTs if the release is missing, PATCHes if it exists (keeps
-          # the body in sync with the latest CHANGELOG).
+          # POSTs if the release is missing, PATCHes if it exists and differs
+          # (keeps the body in sync with the latest CHANGELOG).
           # Returns 0 on success, 1 on failure.
           reconcile_release() {
             local label=$1 api=$2 token=$3 auth_scheme=$4 tag=$5 payload_file=$6
@@ -529,29 +587,35 @@ jobs:
 
             if [ "$http" = "200" ]; then
               id=$(jq -r .id /tmp/existing.json)
-              if curl -fsSL -k -X PATCH \
-                  -H "${auth_header}" \
-                  -H "Content-Type: application/json" \
-                  -d @"${payload_file}" \
-                  "${api}/${id}" >/dev/null; then
+              if release_matches /tmp/existing.json "${payload_file}"; then
+                echo "  [${label}] ${tag} already current (id=${id})"
+                return 0
+              fi
+              if api_write PATCH "${api}/${id}" "${auth_header}" "${payload_file}"; then
                 echo "  [${label}] ${tag} updated (id=${id})"
                 return 0
               fi
-              echo "  [${label}] ${tag} update FAILED" >&2
+              echo "  [${label}] ${tag} update FAILED ${API_WRITE_ERROR}" >&2
               return 1
             elif [ "$http" = "404" ]; then
-              if curl -fsSL -k -X POST \
-                  -H "${auth_header}" \
-                  -H "Content-Type: application/json" \
-                  -d @"${payload_file}" \
-                  "${api}" >/dev/null; then
+              if api_write POST "${api}" "${auth_header}" "${payload_file}"; then
                 echo "  [${label}] ${tag} created"
                 return 0
               fi
-              echo "  [${label}] ${tag} create FAILED" >&2
+              # A create is not idempotent: a 5xx returned after the host already
+              # committed the release turns the retry into a 409/422, which would be
+              # reported as a failure even though the release now exists and is right.
+              http=$(curl -sSL -k -o /tmp/existing.json -w "%{http_code}" \
+                -H "${auth_header}" \
+                "${api}/tags/${tag}")
+              if [ "$http" = "200" ] && release_matches /tmp/existing.json "${payload_file}"; then
+                echo "  [${label}] ${tag} created (confirmed after a retried create)"
+                return 0
+              fi
+              echo "  [${label}] ${tag} create FAILED ${API_WRITE_ERROR}" >&2
               return 1
             else
-              echo "  [${label}] ${tag} unexpected HTTP ${http}" >&2
+              echo "  [${label}] ${tag} unexpected HTTP ${http} body=$(tr -d '\r\n' < /tmp/existing.json | cut -c1-400)" >&2
               return 1
             fi
           }
