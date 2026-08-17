@@ -6,8 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-08-17
+
 ### Fixed
 - The recovery kit still landed unreadable to a mirror/backup user on an ACL-backed share (e.g. a Synology volume) after 0.10.4: the staged copy did inherit the destination directory's ACL, and the `chmod` that stamps the kit with the storage's own mode then discarded it. On such a share the ACL *is* the access model — from inside the container every file in the store reads as a plain owner-only mode with no ACL visible at all — so the kit was chmod'ed to the mode it already carried, lost the inherited ACL for nothing, and verified clean because its mode still equalled that of the storage's `config`. The kit is now chmod'ed only when that would actually change its mode, so a placement already matching the storage keeps whatever access the directory granted it. The placement-scheme version is bumped, so existing deployments re-place their already-placed kit once on the first backup (or `archiver recovery-kit`) run after upgrade — no `recovery-kit force` needed.
+
+### Dependencies
+
+- chore(deps): update dependency aptible/supercronic to v0.2.49
 
 ## [0.10.4] - 2026-08-11
 
