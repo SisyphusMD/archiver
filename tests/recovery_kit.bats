@@ -136,6 +136,32 @@ B2_LIST_JSON='{
   [ ! -e "$d/kit.tmp.$$" ]
 }
 
+@test "a placement already carrying the reference's mode is left un-chmod'ed" {
+  load_recovery_kit
+  d="${BATS_TEST_TMPDIR}/store"; mkdir -p "$d"
+  printf 'config\n' >"$d/config"; chmod 600 "$d/config"
+  printf 'new\n' >"${BATS_TEST_TMPDIR}/src"; chmod 600 "${BATS_TEST_TMPDIR}/src"
+  chmod() { printf '%s\n' "$*" >>"${BATS_TEST_TMPDIR}/chmod.calls"; command chmod "$@"; }
+
+  recovery_kit_place_local "${BATS_TEST_TMPDIR}/src" "$d/kit" "$d/config"
+
+  # On an ACL-backed share the fresh inode's real access comes from the directory's inherited
+  # ACL, which is invisible here; a chmod to the mode already shown discards it for nothing.
+  [ ! -e "${BATS_TEST_TMPDIR}/chmod.calls" ]
+  [ "$(stat -c '%a' "$d/kit")" = "600" ]
+}
+
+@test "a placement less readable than the reference is still chmod'ed up to it" {
+  load_recovery_kit
+  d="${BATS_TEST_TMPDIR}/store"; mkdir -p "$d"
+  printf 'config\n' >"$d/config"; chmod 644 "$d/config"
+  printf 'new\n' >"${BATS_TEST_TMPDIR}/src"; chmod 600 "${BATS_TEST_TMPDIR}/src"
+
+  recovery_kit_place_local "${BATS_TEST_TMPDIR}/src" "$d/kit" "$d/config"
+
+  [ "$(stat -c '%a' "$d/kit")" = "644" ]
+}
+
 @test "a kit that cannot be staged leaves the previous one intact" {
   load_recovery_kit
   d="${BATS_TEST_TMPDIR}/store"; mkdir -p "$d"

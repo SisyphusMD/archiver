@@ -29,7 +29,7 @@ RECOVERY_KIT_STATE_FILE="${LOG_DIR}/.recovery-kit-state"
 # Bump it whenever the way the kit is written to a target changes — e.g. its ownership/permission
 # handling — so every existing deployment re-stamps its already-placed kit exactly once on the
 # first run after upgrade, even when the kit content itself is unchanged.
-RECOVERY_KIT_STATE_VERSION="4"
+RECOVERY_KIT_STATE_VERSION="5"
 
 recovery_kit_configured() { [[ -n "${RECOVERY_PASSWORD}" ]]; }
 
@@ -240,8 +240,18 @@ recovery_kit_place_local() {
   # forcing root:600: the kit is already encrypted and sits beside the chunks, so it should share
   # their access model. Best-effort — the verification below is what actually decides.
   if [[ -e "${ref}" ]]; then
+    local want have
     chown "$(stat -c '%u:%g' "${ref}")" "${tmp}" 2>/dev/null
-    chmod "$(stat -c '%a' "${ref}")" "${tmp}" 2>/dev/null
+    want="$(stat -c '%a' "${ref}" 2>/dev/null)"
+    have="$(stat -c '%a' "${tmp}" 2>/dev/null)"
+    # Only chmod when it would actually change the mode. Where the store lives on an ACL-backed
+    # share (Synology's, for one) the access that matters is the ACL the fresh inode inherited
+    # from the directory — invisible from in here, where every file reads as a plain mode — and
+    # ANY chmod discards it, including one to the mode already shown. That left an owner-only
+    # kit whose mode still equalled the reference, so the placement verified clean.
+    if [[ -n "${want}" && "${want}" != "${have}" ]]; then
+      chmod "${want}" "${tmp}" 2>/dev/null
+    fi
   fi
   # Both hashes must actually be produced: if sha256sum itself fails, the substitutions would
   # both expand to the empty string and compare equal, replacing the live kit on no evidence.
