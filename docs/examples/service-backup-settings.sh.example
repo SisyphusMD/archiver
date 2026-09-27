@@ -29,6 +29,9 @@
 # Define service-specific pre-backup functions.
 # This can include service shutdown, database dump, etc.
 # By default, Archiver will not run any service-specific functions before backup.
+# If this function returns non-zero, this service is not backed up this run (its newest
+# revision stays the last good one) and the run reports an error. The post-backup function
+# below still runs. To back up anyway when a step fails, handle it here and return 0.
 # Uncomment the below to use.
 #
 # service_specific_pre_backup_function() {
@@ -40,6 +43,8 @@
 # Define service-specific post-backup functions.
 # This can include service startup, cleanup actions, etc.
 # By default, Archiver will not run any service-specific functions after backup.
+# It runs whenever the pre-backup function ran, even if that or the backup failed, so it
+# can restart whatever the pre-backup function stopped. A non-zero return is reported.
 # Uncomment the below to use.
 #
 # service_specific_post_backup_function() {

@@ -241,6 +241,14 @@ jobs:
         run: |
           docker run -i --rm --hostname mt-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/maintenance.sh
+      - name: Post-backup hook runs after a failed or stopped backup
+        run: |
+          docker run -i --rm --hostname hp-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/hooks-always-post.sh
+      - name: Hook exit codes count (failed pre hook skips its service; post hook still runs)
+        run: |
+          docker run -i --rm --hostname hf-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/hook-failures.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.

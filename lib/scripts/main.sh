@@ -58,25 +58,43 @@ process_service() {
   service_specific_pre_backup_function() { :; }
   service_specific_post_backup_function() { :; }
 
-  if [ -f "${service_dir}/service-backup-settings.sh" ]; then
-    source "${service_dir}/service-backup-settings.sh" || \
+  local settings="${service_dir}/service-backup-settings.sh" syntax_error
+  if [ -f "${settings}" ]; then
+    # A settings file that does not parse would leave the defaults in place: everything
+    # backed up with no pre hook (so no database dump), reported as a success.
+    if ! syntax_error="$(bash -n "${settings}" 2>&1)"; then
+      handle_error "service-backup-settings.sh does not parse, so this service's backup is skipped: ${syntax_error}"
+      return 1
+    fi
+    source "${settings}" || \
       log_message "WARNING" "Failed to import service-backup-settings.sh for ${SERVICE} service."
   fi
 
   log_message "INFO" "Starting backup for ${SERVICE} service."
 
+  local pre_status=0 backup_status=0 post_status=0
   update_lock_stage "service:${service_dir}" "pre-backup"
-  service_specific_pre_backup_function
+  service_specific_pre_backup_function || pre_status=$?
 
-  if ! is_stop_requested; then
+  if [ "${pre_status}" -ne 0 ]; then
+    # The service's files are in an unknown state (a half-written or stale dump). Backing
+    # them up would make that the newest revision, the one auto-restore picks.
+    handle_error "Pre-backup hook failed for ${SERVICE} service (exit ${pre_status}); skipping its backup so the newest revision stays the last good one."
+    backup_status=1
+  elif ! is_stop_requested; then
     update_lock_stage "service:${service_dir}" "backup"
     # duplicacy_primary_backup reports its own failures; a stop-triggered return is not an error.
-    duplicacy_primary_backup || return 1
+    duplicacy_primary_backup || backup_status=1
   fi
 
-  # Always run post-backup hook after pre-backup
+  # The post hook undoes the pre hook (restarts what it stopped), so it runs whenever the
+  # pre hook ran: after a failed pre hook, a failed backup, or a stop, not only a clean run.
   update_lock_stage "service:${service_dir}" "post-backup"
-  service_specific_post_backup_function
+  service_specific_post_backup_function || post_status=$?
+  if [ "${post_status}" -ne 0 ]; then
+    handle_error "Post-backup hook failed for ${SERVICE} service (exit ${post_status}); check that whatever its pre hook stopped is running again."
+  fi
+  [ "${backup_status}" -eq 0 ] || return 1
   if ! is_stop_requested; then
     duplicacy_add_backup || { handle_error "Add backup failed for ${SERVICE} service."; return 1; }
   fi
@@ -126,6 +144,9 @@ main() {
   local last_working_dir=""
 
   for service_dir in "${EXPANDED_SERVICE_DIRECTORIES[@]}"; do
+    # Once a stop is requested, starting another service would run its pre hook (stopping
+    # its database, say) for a backup that will never happen.
+    is_stop_requested && break
     if process_service "${service_dir}"; then
       last_working_dir="${service_dir}"
     fi
