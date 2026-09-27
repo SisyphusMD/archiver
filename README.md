@@ -459,6 +459,8 @@ SERVICE_DIRECTORIES=/srv/*/:/home/user/data/
 
 (Newlines work as separators too, so a YAML block scalar is fine. A legacy bundle `config.sh` may still declare it as a bash array — both forms are read.)
 
+Each directory's name becomes part of its snapshot ID (`<hostname>-<name>`), which Duplicacy restricts to letters, digits, `_` and `-`: a directory named with a space or a dot cannot be backed up, so rename it. An entry that matches no directory (a typo or an unmounted volume) is reported as an error on every backup, and so is a directory whose name breaks that rule; the other directories still back up.
+
 ### Storage Targets
 
 Define multiple storage locations (local disk, SFTP, B2, S3):

@@ -40,6 +40,11 @@ initialize() {
   log_message "INFO" "Main backup script started."
   duplicacy_binary_check
   verify_config
+
+  local unmatched
+  for unmatched in "${UNMATCHED_SERVICE_DIRECTORIES[@]}"; do
+    handle_error "SERVICE_DIRECTORIES entry '${unmatched}' matches no directory, so nothing there is backed up. Fix the path or the volume mount."
+  done
 }
 
 process_service() {
@@ -52,6 +57,13 @@ process_service() {
   log_message "INFO" "Processing ${SERVICE} service."
 
   set_duplicacy_variables
+
+  # Checked before any hook runs: duplicacy rejects the ID at init, and by then the pre hook
+  # has already stopped whatever it stops.
+  if [[ ! "${DUPLICACY_SNAPSHOT_ID}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    handle_error "Cannot back up ${service_dir}: its snapshot ID '${DUPLICACY_SNAPSHOT_ID}' may contain only letters, digits, '_' and '-' (a Duplicacy rule). Rename the directory or the host."
+    return 1
+  fi
 
   # Set defaults before sourcing service-specific settings
   DUPLICACY_FILTERS_PATTERNS=("+*")

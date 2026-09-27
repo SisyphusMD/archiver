@@ -50,12 +50,38 @@ run_load() {
   [ "${EXPANDED_SERVICE_DIRECTORIES[2]}" = "${SVC}/other" ]
 }
 
-@test "a pattern matching nothing contributes nothing (no literal-glob entry)" {
-  export SERVICE_DIRECTORIES="${SVC}/nomatch*/:${SVC}/app1/"
+@test "a pattern matching nothing contributes nothing, and is recorded as unmatched" {
+  export SERVICE_DIRECTORIES="${SVC}/nomatch*/:${SVC}/app1/:${SVC}/missing/"
   run_load
   expand_service_directories
   [ "${#EXPANDED_SERVICE_DIRECTORIES[@]}" -eq 1 ]
   [ "${EXPANDED_SERVICE_DIRECTORIES[0]}" = "${SVC}/app1" ]
+  [ "${#UNMATCHED_SERVICE_DIRECTORIES[@]}" -eq 2 ]
+  [ "${UNMATCHED_SERVICE_DIRECTORIES[0]}" = "${SVC}/nomatch*/" ]
+  [ "${UNMATCHED_SERVICE_DIRECTORIES[1]}" = "${SVC}/missing/" ]
+}
+
+@test "expansion keeps glob order and a literal path containing glob characters" {
+  mkdir -p "${SVC}/customer[1]"
+  export SERVICE_DIRECTORIES="${SVC}/*/:${SVC}/customer[1]/"
+  run_load
+  expand_service_directories
+  [ "${EXPANDED_SERVICE_DIRECTORIES[0]}" = "${SVC}/app1" ]
+  [ "${EXPANDED_SERVICE_DIRECTORIES[1]}" = "${SVC}/app2" ]
+  [ "${EXPANDED_SERVICE_DIRECTORIES[2]}" = "${SVC}/customer[1]" ]
+  [ "${EXPANDED_SERVICE_DIRECTORIES[3]}" = "${SVC}/other" ]
+  [ "${EXPANDED_SERVICE_DIRECTORIES[4]}" = "${SVC}/customer[1]" ]
+  [ "${#UNMATCHED_SERVICE_DIRECTORIES[@]}" -eq 0 ]
+}
+
+@test "a directory whose path contains a space stays one entry" {
+  mkdir -p "${SVC}/with space"
+  export SERVICE_DIRECTORIES="${SVC}/with space/:${SVC}/*/"
+  run_load
+  expand_service_directories
+  [ "${EXPANDED_SERVICE_DIRECTORIES[0]}" = "${SVC}/with space" ]
+  printf '%s\n' "${EXPANDED_SERVICE_DIRECTORIES[@]}" | grep -qx "${SVC}/app1"
+  [ "${#UNMATCHED_SERVICE_DIRECTORIES[@]}" -eq 0 ]
 }
 
 @test "unset SERVICE_DIRECTORIES is a hard error" {

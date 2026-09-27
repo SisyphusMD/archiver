@@ -272,21 +272,32 @@ export_duplicacy_storage_secrets() {
   esac
 }
 
-# Expands glob patterns in SERVICE_DIRECTORIES (e.g., /srv/*/ -> /srv/app1/ /srv/app2/)
+# Expands glob patterns in SERVICE_DIRECTORIES (e.g., /srv/*/ -> /srv/app1/ /srv/app2/).
+# Entries that match no directory land in UNMATCHED_SERVICE_DIRECTORIES; the backup
+# pipeline reports them, since each one is data that is silently not being backed up.
 expand_service_directories() {
-  local expanded_service_directories=()
+  local expanded_service_directories=() pattern dir matched
+  UNMATCHED_SERVICE_DIRECTORIES=()
 
   if [[ -z "${SERVICE_DIRECTORIES[*]}" ]]; then
     handle_error "SERVICE_DIRECTORIES is not set. Provide it via config.sh or the SERVICE_DIRECTORIES environment variable (colon-delimited)."
     exit 1
   fi
 
+  # An empty IFS keeps pathname expansion (sorted, and a pattern matching nothing stays
+  # literal, so a real directory named with glob characters still works) but stops word
+  # splitting, which turned a path containing a space into two paths that do not exist.
+  local IFS=
   for pattern in "${SERVICE_DIRECTORIES[@]}"; do
+    matched=false
+    # shellcheck disable=SC2086  # unquoted on purpose: glob expansion is the point
     for dir in ${pattern}; do
       if [[ -d "${dir}" ]]; then
         expanded_service_directories+=("${dir%/}")
+        matched=true
       fi
     done
+    [[ "${matched}" == true ]] || UNMATCHED_SERVICE_DIRECTORIES+=("${pattern}")
   done
 
   export EXPANDED_SERVICE_DIRECTORIES=("${expanded_service_directories[@]}")
