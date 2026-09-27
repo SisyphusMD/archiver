@@ -1,5 +1,5 @@
 #!/bin/bash
-# Duplicacy backup operations: init, backup, add storage, copy, prune
+# Duplicacy backup operations: init, backup, add storage, copy
 
 DUPLICACY_BACKUP_SH_SOURCED=true
 
@@ -71,58 +71,6 @@ duplicacy_primary_backup() {
   exit_status="${PIPESTATUS[0]}"
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Primary storage initialization failed for ${SERVICE} service."
-  fi
-
-  # Persist type-specific credentials to the storage's preferences file.
-  if [[ "${backup_type}" == "sftp" ]]; then
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Failed to set SSH key file for ${SERVICE} service. Verify the SSH key file path and permissions."
-    fi
-
-  elif [[ "${backup_type}" == "b2" ]]; then
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
-      -value "${STORAGE_TARGET_1_B2_ID}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Failed to set BackBlaze key ID for ${SERVICE} service."
-    fi
-
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
-      -value "${STORAGE_TARGET_1_B2_KEY}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Failed to set BackBlaze application key for ${SERVICE} service."
-    fi
-
-  elif [[ "${backup_type}" == "s3" ]]; then
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key s3_id \
-      -value "${STORAGE_TARGET_1_S3_ID}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Failed to set S3 ID for ${SERVICE} service."
-    fi
-
-    "${DUPLICACY_BIN}" set -storage "${storage_name}" -key s3_secret \
-      -value "${STORAGE_TARGET_1_S3_SECRET}" 2>&1 | log_output
-    exit_status="${PIPESTATUS[0]}"
-    if [ "${exit_status}" -ne 0 ]; then
-      handle_error "Failed to set S3 secret for ${SERVICE} service."
-    fi
-  fi
-
-  "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" 2>&1 | log_output
-  exit_status="${PIPESTATUS[0]}"
-  if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Failed to set storage password for ${SERVICE} service."
-  fi
-
-  "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
-    -value "${RSA_PASSPHRASE}" 2>&1 | log_output
-  exit_status="${PIPESTATUS[0]}"
-  if [ "${exit_status}" -ne 0 ]; then
-    handle_error "Failed to set RSA passphrase for ${SERVICE} service."
   fi
 
   if ! duplicacy_verify "${storage_name}"; then
@@ -216,65 +164,6 @@ duplicacy_add_backup() {
       exit_status="${PIPESTATUS[0]}"
       if [ "${exit_status}" -ne 0 ]; then
         handle_error "Failed to add ${backup_type} storage ${storage_name} for ${SERVICE} service."
-      fi
-
-      # Persist type-specific credentials to the storage's preferences file.
-      if [[ "${backup_type}" == "sftp" ]]; then
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" 2>&1 | log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to set SSH key file for SFTP storage ${storage_name} for ${SERVICE} service. Verify the SSH key file path and permissions."
-        fi
-
-      elif [[ "${backup_type}" == "b2" ]]; then
-        local config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
-        local config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
-
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_id \
-          -value "${!config_b2_id_var}" 2>&1 | log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to set BackBlaze key ID for storage ${storage_name} for ${SERVICE} service."
-        fi
-
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key b2_key \
-          -value "${!config_b2_key_var}" 2>&1 | log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to set BackBlaze application key for storage ${storage_name} for ${SERVICE} service."
-        fi
-
-      elif [[ "${backup_type}" == "s3" ]]; then
-        local config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
-        local config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
-
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key s3_id \
-          -value "${!config_s3_id_var}" 2>&1 | log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to set S3 ID for storage ${storage_name} for ${SERVICE} service."
-        fi
-
-        "${DUPLICACY_BIN}" set -storage "${storage_name}" -key s3_secret \
-          -value "${!config_s3_secret_var}" 2>&1 | log_output
-        exit_status="${PIPESTATUS[0]}"
-        if [ "${exit_status}" -ne 0 ]; then
-          handle_error "Failed to set S3 secret for storage ${storage_name} for ${SERVICE} service."
-        fi
-      fi
-
-      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key password \
-        -value "${STORAGE_PASSWORD}" 2>&1 | log_output
-      exit_status="${PIPESTATUS[0]}"
-      if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Failed to set storage password for ${SERVICE} service."
-      fi
-
-      "${DUPLICACY_BIN}" set -storage "${storage_name}" -key rsa_passphrase \
-        -value "${RSA_PASSPHRASE}" 2>&1 | log_output
-      exit_status="${PIPESTATUS[0]}"
-      if [ "${exit_status}" -ne 0 ]; then
-        handle_error "Failed to set RSA passphrase for ${SERVICE} service."
       fi
     done
   fi

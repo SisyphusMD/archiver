@@ -77,16 +77,35 @@ setup() {
 # Called directly (not via `run`): `run` executes in a subshell, so its exports
 # would vanish before we could assert them.
 
-@test "export_duplicacy_storage_secrets: local exports only the password" {
+@test "export_duplicacy_storage_secrets: local exports only the password and RSA passphrase" {
   STORAGE_TARGET_1_NAME="localdisk"
   STORAGE_TARGET_1_TYPE="local"
   STORAGE_PASSWORD="s3cret"
+  RSA_PASSPHRASE="rsa-pass"
 
   export_duplicacy_storage_secrets 1
 
   [ "${DUPLICACY_LOCALDISK_PASSWORD}" = "s3cret" ]
+  [ "${DUPLICACY_LOCALDISK_RSA_PASSPHRASE}" = "rsa-pass" ]
   [ -z "${DUPLICACY_LOCALDISK_S3_ID:-}" ]
   [ -z "${DUPLICACY_LOCALDISK_B2_ID:-}" ]
+}
+
+@test "export_duplicacy_storage_secrets: a storage named default uses duplicacy's unprefixed names" {
+  STORAGE_TARGET_1_NAME="default"
+  STORAGE_TARGET_1_TYPE="b2"
+  STORAGE_PASSWORD="pw"
+  RSA_PASSPHRASE="rp"
+  STORAGE_TARGET_1_B2_ID="keyid"
+  STORAGE_TARGET_1_B2_KEY="appkey"
+
+  export_duplicacy_storage_secrets 1
+
+  [ "${DUPLICACY_PASSWORD}" = "pw" ]
+  [ "${DUPLICACY_RSA_PASSPHRASE}" = "rp" ]
+  [ "${DUPLICACY_B2_ID}" = "keyid" ]
+  [ "${DUPLICACY_B2_KEY}" = "appkey" ]
+  [ -z "${DUPLICACY_DEFAULT_PASSWORD:-}" ]
 }
 
 @test "export_duplicacy_storage_secrets: hyphenated s3 name maps to DUPLICACY_DO_SPACES_* (do-spaces incident lock)" {

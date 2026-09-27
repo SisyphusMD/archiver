@@ -220,12 +220,12 @@ build_storage_url() {
 }
 
 # Exports the DUPLICACY_<NAME>_* credential env vars the duplicacy binary reads for a
-# storage-target numeric ID: the storage password (every type) plus the type-specific
-# secrets. Centralizes the sanitize -> UPPER -> DUPLICACY_<NAME>_ mapping that the two
-# do-spaces field incidents (0.8.10 hyphen, 0.8.11 log-leak) traced back to. Exports as
-# a side effect, so call it as a plain statement — NOT inside "$(...)", whose subshell
-# would discard the exports. Unknown types export only the password; the caller's own
-# type dispatch reports the unsupported type.
+# storage-target numeric ID: the storage password and RSA passphrase (every type) plus the
+# type-specific secrets. Centralizes the sanitize -> UPPER -> DUPLICACY_<NAME>_ mapping that
+# the two do-spaces field incidents (0.8.10 hyphen, 0.8.11 log-leak) traced back to. Exports
+# as a side effect, so call it as a plain statement — NOT inside "$(...)", whose subshell
+# would discard the exports. Unknown types export only the password and passphrase; the
+# caller's own type dispatch reports the unsupported type.
 export_duplicacy_storage_secrets() {
   local storage_id="${1}"
   local storage_name_var="STORAGE_TARGET_${storage_id}_NAME"
@@ -239,32 +239,35 @@ export_duplicacy_storage_secrets() {
   storage_name_upper="$(echo "${storage_name}" | tr '[:lower:]' '[:upper:]')"
   storage_type="${!storage_type_var}"
 
-  password_var="DUPLICACY_${storage_name_upper}_PASSWORD"
+  # These env vars are the ONLY way credentials reach duplicacy: `duplicacy set -value`
+  # would persist them in plaintext .duplicacy/preferences inside the backed-up data.
+  # duplicacy reads a storage named exactly `default` without the name prefix.
+  local prefix="DUPLICACY_${storage_name_upper}_"
+  [[ "${storage_name}" == "default" ]] && prefix="DUPLICACY_"
+
+  password_var="${prefix}PASSWORD"
   export "${password_var}"="${STORAGE_PASSWORD}"
+  # -key private.pem (copy, restore) decrypts the RSA private key with this.
+  export "${prefix}RSA_PASSPHRASE"="${RSA_PASSPHRASE}"
 
   case "${storage_type}" in
     local)
       # local storage takes no credentials
       ;;
     sftp)
-      local ssh_key_file_var="DUPLICACY_${storage_name_upper}_SSH_KEY_FILE"
-      export "${ssh_key_file_var}"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
+      export "${prefix}SSH_KEY_FILE"="${DUPLICACY_SSH_PRIVATE_KEY_FILE}"
       ;;
     b2)
       local config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
       local config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
-      local duplicacy_b2_id_var="DUPLICACY_${storage_name_upper}_B2_ID"
-      local duplicacy_b2_key_var="DUPLICACY_${storage_name_upper}_B2_KEY"
-      export "${duplicacy_b2_id_var}"="${!config_b2_id_var}"
-      export "${duplicacy_b2_key_var}"="${!config_b2_key_var}"
+      export "${prefix}B2_ID"="${!config_b2_id_var}"
+      export "${prefix}B2_KEY"="${!config_b2_key_var}"
       ;;
     s3)
       local config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
       local config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
-      local duplicacy_s3_id_var="DUPLICACY_${storage_name_upper}_S3_ID"
-      local duplicacy_s3_secret_var="DUPLICACY_${storage_name_upper}_S3_SECRET"
-      export "${duplicacy_s3_id_var}"="${!config_s3_id_var}"
-      export "${duplicacy_s3_secret_var}"="${!config_s3_secret_var}"
+      export "${prefix}S3_ID"="${!config_s3_id_var}"
+      export "${prefix}S3_SECRET"="${!config_s3_secret_var}"
       ;;
   esac
 }
