@@ -703,6 +703,9 @@ spec:
     spec:
       template:
         spec:
+          # Required: snapshot IDs are <hostname>-<service>, and a Job pod's default
+          # hostname is its random pod name — every run would start a new snapshot ID.
+          hostname: backup-server
           restartPolicy: OnFailure
           containers:
             - name: archiver
