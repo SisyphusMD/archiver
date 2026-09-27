@@ -71,40 +71,6 @@ duplicacy_init_for_restore() {
     -storage-name "${storage_name}" "${SNAPSHOT_ID}" \
     "${storage_url}" || \
     { handle_error "Duplicacy ${storage_type} storage initialization failed for '${storage_name}'."; return 1; }
-
-  # Persist type-specific credentials to the storage's preferences file.
-  case "${storage_type}" in
-    sftp)
-      duplicacy set -storage "${storage_name}" -key ssh_key_file -value "${DUPLICACY_SSH_PRIVATE_KEY_FILE}" || \
-        { handle_error "Setting the Duplicacy SFTP key file failed for '${storage_name}'."; return 1; }
-      ;;
-    b2)
-      local config_b2_id_var="STORAGE_TARGET_${storage_id}_B2_ID"
-      local config_b2_key_var="STORAGE_TARGET_${storage_id}_B2_KEY"
-
-      duplicacy set -storage "${storage_name}" -key b2_id -value "${!config_b2_id_var}" || \
-        { handle_error "Setting the Duplicacy B2 keyID failed for '${storage_name}'."; return 1; }
-
-      duplicacy set -storage "${storage_name}" -key b2_key -value "${!config_b2_key_var}" || \
-        { handle_error "Setting the Duplicacy B2 applicationKey failed for '${storage_name}'."; return 1; }
-      ;;
-    s3)
-      local config_s3_id_var="STORAGE_TARGET_${storage_id}_S3_ID"
-      local config_s3_secret_var="STORAGE_TARGET_${storage_id}_S3_SECRET"
-
-      duplicacy set -storage "${storage_name}" -key s3_id -value "${!config_s3_id_var}" || \
-        { handle_error "Setting the Duplicacy S3 ID failed for '${storage_name}'."; return 1; }
-
-      duplicacy set -storage "${storage_name}" -key s3_secret -value "${!config_s3_secret_var}" || \
-        { handle_error "Setting the Duplicacy S3 Secret failed for '${storage_name}'."; return 1; }
-      ;;
-  esac
-
-  duplicacy set -storage "${storage_name}" -key password -value "${STORAGE_PASSWORD}" || \
-    { handle_error "Setting the Duplicacy storage password failed for '${storage_name}'."; return 1; }
-
-  duplicacy set -storage "${storage_name}" -key rsa_passphrase -value "${RSA_PASSPHRASE}" || \
-    { handle_error "Setting the Duplicacy RSA Passphrase failed for '${storage_name}'."; return 1; }
 }
 
 # Echo revision numbers for SNAPSHOT_ID on stdout (highest first, one per line).

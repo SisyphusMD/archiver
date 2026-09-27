@@ -60,6 +60,14 @@ jobs:
             END { exit (failed ? 1 : 0) }
           ' CHANGELOG.md
 
+  dockerfile-downloads:
+    name: Dockerfile download integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Every download is checksum-verified
+        run: bash tests/lint/dockerfile-downloads.sh
+
   bats:
     name: Bats unit tests
     runs-on: ubuntu-latest
@@ -74,7 +82,7 @@ jobs:
   pr-validate:
     name: PR build & smoke test
     if: github.event_name == 'pull_request'
-    needs: [shellcheck, validate-changelog, bats]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -148,7 +156,7 @@ jobs:
 
   integration:
     name: Round-trip + scheduler smoke
-    needs: [shellcheck, validate-changelog, bats]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -241,6 +249,22 @@ jobs:
         run: |
           docker run -i --rm --hostname mt-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/maintenance.sh
+      - name: Post-backup hook runs after a failed or stopped backup
+        run: |
+          docker run -i --rm --hostname hp-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/hooks-always-post.sh
+      - name: Hook exit codes count (failed pre hook skips its service; post hook still runs)
+        run: |
+          docker run -i --rm --hostname hf-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/hook-failures.sh
+      - name: No storage secrets written into the backed-up data
+        run: |
+          docker run -i --rm --hostname sr-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/secrets-at-rest.sh
+      - name: Unbackupable SERVICE_DIRECTORIES entries are errors
+        run: |
+          docker run -i --rm --hostname sd-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/service-dirs-reported.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.
@@ -251,7 +275,7 @@ jobs:
 
   integration-host:
     name: Host-driven integration (entrypoint + storage sidecars)
-    needs: [shellcheck, validate-changelog, bats]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -281,7 +305,7 @@ jobs:
   build-and-push:
     name: Build multi-arch and push
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [shellcheck, validate-changelog, bats, integration, integration-host]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats, integration, integration-host]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

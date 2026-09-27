@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+- Storage credentials (the storage password, the RSA passphrase, and B2/S3 keys) are no longer written in plaintext to `.duplicacy/preferences` inside every backed-up service directory and every restore destination, and no longer passed on a `duplicacy set` command line that any process could read from `/proc`. They now reach Duplicacy only through its `DUPLICACY_<NAME>_*` environment variables. Service directories are rewritten without them on the next backup. A directory restored by an older version keeps its old `.duplicacy/preferences` until you delete it, so delete it.
+- Image builds now verify every downloaded binary (Duplicacy, supercronic, and the docker CLI) against a pinned SHA-256 for each architecture instead of trusting HTTPS alone, so a replaced release asset fails the build.
+
+### Fixed
+- The post-backup hook now runs whenever the pre-backup hook ran, including after a failed backup and after a stop (`archiver stop` or `docker stop`) that lands mid-backup. Both cases used to skip it, leaving whatever the pre-backup hook had stopped (a database, a stack) stopped. Once a stop is requested, no further service's pre-backup hook starts.
+- A `SERVICE_DIRECTORIES` entry that matches no directory now logs an error and fails the run instead of being dropped silently, and a path containing a space is no longer split into two paths that do not exist. A directory whose name cannot form a Duplicacy snapshot ID (only letters, digits, `_` and `-` are allowed) is reported with a clear error before its hooks run. Runs that used to skip such a directory without a word now exit non-zero until the entry is fixed.
+- Hook exit codes now count. A pre-backup function that returns non-zero (a database dump that failed) skips that service's backup for the run, so its newest revision stays the last good one instead of one auto-restore would pick with a broken dump inside; the run reports an error and every other service still backs up. It used to be ignored, and the run reported success. A non-zero post-backup function is reported as an error, and a `service-backup-settings.sh` with a syntax error is an error that skips its service instead of silently backing it up with no hooks. Hooks that deliberately swallow a failure (log a warning and return 0) behave exactly as before.
+- The README's Kubernetes CronJob example now sets a stable pod `hostname`. Without it, every Job run backed up under a new snapshot ID.
+
 ## [0.10.5] - 2026-08-17
 
 ### Fixed

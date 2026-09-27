@@ -459,6 +459,8 @@ SERVICE_DIRECTORIES=/srv/*/:/home/user/data/
 
 (Newlines work as separators too, so a YAML block scalar is fine. A legacy bundle `config.sh` may still declare it as a bash array — both forms are read.)
 
+Each directory's name becomes part of its snapshot ID (`<hostname>-<name>`), which Duplicacy restricts to letters, digits, `_` and `-`: a directory named with a space or a dot cannot be backed up, so rename it. An entry that matches no directory (a typo or an unmounted volume) is reported as an error on every backup, and so is a directory whose name breaks that rule; the other directories still back up.
+
 ### Storage Targets
 
 Define multiple storage locations (local disk, SFTP, B2, S3):
@@ -701,6 +703,9 @@ spec:
     spec:
       template:
         spec:
+          # Required: snapshot IDs are <hostname>-<service>, and a Job pod's default
+          # hostname is its random pod name — every run would start a new snapshot ID.
+          hostname: backup-server
           restartPolicy: OnFailure
           containers:
             - name: archiver
@@ -880,6 +885,8 @@ service_specific_post_backup_function() {
   rm -f backup.sql
 }
 ```
+
+Exit codes count. If the pre-backup function returns non-zero (the dump above failing, say), that service is **not** backed up that run: its newest revision stays the last good one instead of one holding a broken dump, and the run reports an error while every other service still backs up. The post-backup function always runs once the pre-backup function has, even after a failed pre hook, a failed backup, or a stop, so it can restart whatever the pre hook stopped; a non-zero return from it is reported as an error. A settings file with a syntax error is an error too, and that service is skipped. To keep backing up when a step fails, handle the failure inside the function and return 0.
 
 ### Custom Restore Scripts
 
