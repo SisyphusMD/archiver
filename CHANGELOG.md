@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- Pull skopeo for the publish steps through the NAS image mirror, which keeps every quay.io/skopeo digest it has served. quay garbage-collects a tag's previous digest when it re-pushes the tag, so a direct pin could 404 and fail a publish after its release tag was cut.
+
 ## [0.11.0] - 2026-09-27
 
 ### Security
