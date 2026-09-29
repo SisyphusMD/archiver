@@ -8,4 +8,5 @@ WORKDIR /src
 COPY go.mod ./
 COPY tests/e2e ./tests/e2e
 RUN go vet ./tests/e2e/...
-ENTRYPOINT ["go", "test", "-count=1", "./tests/e2e/..."]
+# The suite runs 7-9 minutes; go test's 10-minute default fails it on a busy runner.
+ENTRYPOINT ["go", "test", "-count=1", "-timeout=30m", "./tests/e2e/..."]
