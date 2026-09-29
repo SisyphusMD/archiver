@@ -9,7 +9,7 @@ LOG_FILE="${LOG_DIR}/archiver.log"
 handle_shutdown() {
   echo "Received shutdown signal, attempting graceful stop..."
 
-  "${ARCHIVER_DIR}/archiver.sh" stop 2>&1 || true
+  archiver stop 2>&1 || true
 
   # During a service backup 'archiver stop' only sets the stop flag; the pipeline records
   # the stop and releases its lock itself. Exiting before that happens tears down the PID
@@ -165,7 +165,7 @@ if [ "$1" = "init" ]; then
     mkdir -p "${SETUP_DIR}"
 
     cd "${ARCHIVER_DIR}"
-    exec "${SCRIPTS_DIR}/init.sh"
+    exec archiver init
 fi
 
 if [ "$1" = "run" ]; then
@@ -188,7 +188,7 @@ if [ "$1" = "run" ]; then
     echo ""
     prepare_config
     cd "${ARCHIVER_DIR}"
-    exec "${ARCHIVER_DIR}/archiver.sh" "$@"
+    exec archiver "$@"
 fi
 
 prepare_config
@@ -250,11 +250,11 @@ if [ -n "${BACKUP_SCHEDULE:-}" ] || [ -n "${MAINTENANCE_SCHEDULE:-}" ]; then
     # Synchronous verbs: supercronic then knows each job's real duration and adds its own
     # skip-if-still-running protection on top of the pipeline locks.
     if [ -n "${BACKUP_SCHEDULE:-}" ]; then
-        echo "${BACKUP_SCHEDULE} ${ARCHIVER_DIR}/archiver.sh backup" >> "${CRONTAB_FILE}"
+        echo "${BACKUP_SCHEDULE} /usr/local/bin/archiver backup" >> "${CRONTAB_FILE}"
         echo "Backups scheduled: ${BACKUP_SCHEDULE}"
     fi
     if [ -n "${MAINTENANCE_SCHEDULE:-}" ]; then
-        echo "${MAINTENANCE_SCHEDULE} ${ARCHIVER_DIR}/archiver.sh maintenance" >> "${CRONTAB_FILE}"
+        echo "${MAINTENANCE_SCHEDULE} /usr/local/bin/archiver maintenance" >> "${CRONTAB_FILE}"
         echo "Maintenance scheduled: ${MAINTENANCE_SCHEDULE}"
     fi
 

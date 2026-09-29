@@ -13,7 +13,7 @@ source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 source_if_not_sourced "${LOCKFILE_CORE}"
 
 usage() {
-  echo "Usage: $0 {backup|maintenance|stop|pause|resume|logs|status|bundle|migrate|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
+  echo "Usage: archiver {backup|maintenance|stop|pause|resume|logs|status|bundle|migrate|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
   echo "Note:"
   echo "  backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background."
   echo "  maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune."

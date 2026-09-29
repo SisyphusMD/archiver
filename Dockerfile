@@ -1,6 +1,16 @@
 # Multi-architecture Dockerfile for Archiver
 # Supports: linux/amd64, linux/arm64
 
+# The Go CLI cross-compiles on the build platform, so an arm64 image is not built under
+# emulation. Pure Go with CGO off: the binary needs nothing from the runtime image.
+FROM --platform=$BUILDPLATFORM golang:1.27.1-trixie@sha256:433790e515d27dc6003e847e644cc0af956985cf315c1c58a3b73ee2dd305183 AS cli
+ARG TARGETOS
+ARG TARGETARCH
+WORKDIR /src
+COPY go.mod ./
+COPY cmd/ ./cmd/
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/archiver ./cmd/archiver
+
 FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0
 
 ARG TARGETARCH
@@ -104,8 +114,9 @@ RUN mkdir -p /opt/archiver/logs \
     /opt/archiver/import
 
 RUN chmod +x /opt/archiver/archiver.sh && \
-    chmod +x /opt/archiver/lib/scripts/*.sh && \
-    ln -s /opt/archiver/archiver.sh /usr/local/bin/archiver
+    chmod +x /opt/archiver/lib/scripts/*.sh
+
+COPY --from=cli /out/archiver /usr/local/bin/archiver
 
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

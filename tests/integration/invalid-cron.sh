@@ -122,8 +122,8 @@ OK_LOGS=$(docker logs "$NAME_OK" 2>&1)
 echo "$OK_LOGS" | grep -q "Backups scheduled: 0 3 \* \* \*" || die "backup schedule not announced"
 echo "$OK_LOGS" | grep -q "Maintenance scheduled: 0 13 \* \* \*" || die "maintenance schedule not announced"
 CRONTAB=$(docker exec "$NAME_OK" cat /tmp/archiver.crontab 2>&1) || die "could not read crontab"
-echo "$CRONTAB" | grep -q "archiver.sh backup$" || die "crontab missing the backup job"
-echo "$CRONTAB" | grep -q "archiver.sh maintenance$" || die "crontab missing the maintenance job"
-[ "$(printf '%s\n' "$CRONTAB" | grep -c 'archiver.sh')" -eq 2 ] || die "crontab does not have exactly two jobs"
+echo "$CRONTAB" | grep -q "/usr/local/bin/archiver backup$" || die "crontab missing the backup job"
+echo "$CRONTAB" | grep -q "/usr/local/bin/archiver maintenance$" || die "crontab missing the maintenance job"
+[ "$(printf '%s\n' "$CRONTAB" | grep -c '/usr/local/bin/archiver ')" -eq 2 ] || die "crontab does not have exactly two jobs"
 
 echo "=== INVALID-CRON OK: fail-fast on bad backup/maintenance schedule + CRON_SCHEDULE rename; valid pair registers both jobs ==="

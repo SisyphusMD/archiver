@@ -83,6 +83,20 @@ jobs:
           tar -c . | docker run --rm -i --entrypoint sh "$BATS_IMAGE" -c \
             'apk add --no-cache git >/dev/null && mkdir /w && cd /w && tar -x && bats --print-output-on-failure tests'
 
+  go:
+    name: Go vet, format, and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: gofmt, go vet, go test -race
+        # The tree is piped in: runner workspace bind mounts land empty in sibling containers.
+        run: |
+          set -euo pipefail
+          # renovate: datasource=docker depName=golang
+          GO_IMAGE=golang:1.27.1-trixie@sha256:433790e515d27dc6003e847e644cc0af956985cf315c1c58a3b73ee2dd305183
+          tar -c . | docker run --rm -i --entrypoint sh "$GO_IMAGE" -c \
+            'mkdir /w && cd /w && tar -x && test -z "$(gofmt -l cmd tests/e2e)" && go vet ./... && go test -race ./cmd/...'
+
   pr-validate:
     name: PR build & smoke test
     if: github.event_name == 'pull_request'
@@ -326,7 +340,7 @@ jobs:
   build-and-push:
     name: Build multi-arch and push
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats, integration, integration-host, e2e]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats, go, integration, integration-host, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

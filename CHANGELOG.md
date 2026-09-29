@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- `archiver` is now a small Go program, the first step of the v1 rewrite. For now it runs the same bash commands as before, so every command, flag, exit code, and output is unchanged; scheduled runs, `docker stop`, and `init` go through it too. `archiver init` also works inside a running container.
+
 ## [0.11.1] - 2026-09-29
 
 ### Security
