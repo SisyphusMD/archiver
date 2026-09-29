@@ -9,6 +9,7 @@ ARG TARGETARCH
 WORKDIR /src
 COPY go.mod ./
 COPY cmd/ ./cmd/
+COPY internal/ ./internal/
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/archiver ./cmd/archiver
 
 FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0
