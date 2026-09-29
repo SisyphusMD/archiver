@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Fixed
 - Ctrl+C now ends `archiver logs` at once. It used to leave the viewer running when attached with `docker exec -it`.
 
+## [0.11.2] - 2026-09-29
+
+### Fixed
+- A backup that is refused because the previous run still holds the lock now sends a notification with the running backup's PID, stage, and start time. A scheduled backup could be skipped this way when offsite copies ran past the next scheduled start, and the only trace was a line in `docker logs`.
+
 ## [0.11.1] - 2026-09-29
 
 ### Security

@@ -49,6 +49,8 @@ initialize() {
 
   if [ "${lock_status}" -eq 1 ]; then
     echo "A backup is already running (PID $(get_lock_pid)). Not starting another." >&2
+    # A refused scheduled run is a day without a backup, so it must not pass silently.
+    notify "Backup Skipped" "A backup was not started because the previous run is still going (PID $(get_lock_pid), stage $(get_lock_stage), started $(format_timestamp "$(get_backup_start_time)"))."
     early_exit=true
     exit 1
   elif [ "${lock_status}" -eq 2 ]; then
