@@ -33,8 +33,11 @@ RECOVERY_KIT_STATE_VERSION="5"
 
 recovery_kit_configured() { [[ -n "${RECOVERY_PASSWORD}" ]]; }
 
-recovery_kit_file_name()   { printf 'archiver-recovery-kit-%s.tar.enc'   "$(hostname)"; }
-recovery_kit_readme_name() { printf 'archiver-recovery-kit-%s.README.txt' "$(hostname)"; }
+# Named after the same host as the snapshot IDs: an inherited HOSTNAME (a Kubernetes Job's
+# stable name) wins over the kernel's, or every Job run would leave a new kit behind.
+recovery_kit_host()        { printf '%s' "${HOSTNAME:-$(hostname)}"; }
+recovery_kit_file_name()   { printf 'archiver-recovery-kit-%s.tar.enc'   "$(recovery_kit_host)"; }
+recovery_kit_readme_name() { printf 'archiver-recovery-kit-%s.README.txt' "$(recovery_kit_host)"; }
 
 validate_recovery_password() {
   if (( ${#RECOVERY_PASSWORD} < 8 )); then
@@ -87,7 +90,7 @@ write_recovery_kit_recreate_notes() {
     fi
     echo
     echo "Facts this deployment depended on:"
-    echo "  - hostname: $(hostname)   (keep it: snapshot IDs and this kit's filename derive from it)"
+    echo "  - hostname: $(recovery_kit_host)   (keep it: snapshot IDs and this kit's filename derive from it)"
     [[ -n "${BACKUP_SCHEDULE:-}" ]] && echo "  - BACKUP_SCHEDULE: ${BACKUP_SCHEDULE}"
     [[ -n "${MAINTENANCE_SCHEDULE:-}" ]] && echo "  - MAINTENANCE_SCHEDULE: ${MAINTENANCE_SCHEDULE}"
     [[ -n "${TZ:-}" ]] && echo "  - TZ: ${TZ}"
@@ -169,7 +172,7 @@ encrypt_recovery_kit() {
 
 write_recovery_kit_readme() {
   local out="${1}" host
-  host="$(hostname)"
+  host="$(recovery_kit_host)"
   cat >"${out}" <<EOF
 This is the automatic recovery kit for the Archiver deployment on host '${host}'.
 
