@@ -109,11 +109,10 @@ resolve_latest_revision() {
   echo "${latest}"
 }
 
-# Warn (never block) if an ownership-preserving restore is running without the capabilities it
-# needs. Without CAP_CHOWN / CAP_FOWNER, duplicacy still restores the data correctly, but it
-# cannot recreate the original UID/GID or set modes on other-UID files, so those land owned by
-# root. A disaster-recovery restore must never be refused, so this only warns; add the caps (see
-# cap_add in compose.yaml) or set IGNORE_OWNERSHIP=1 to silence it.
+# A disaster-recovery restore must never be refused, but without CAP_CHOWN / CAP_FOWNER
+# duplicacy aborts on the first file it cannot chown. So when either is missing, restore
+# without preserving ownership (files land owned by root) and warn; add the caps (see cap_add
+# in compose.yaml) to keep ownership, or set IGNORE_OWNERSHIP=1 to silence the warning.
 warn_if_restore_caps_missing() {
   case " ${RESTORE_FLAGS} " in
     *" -ignore-owner "*) return 0 ;;   # ownership intentionally not preserved
@@ -125,7 +124,8 @@ warn_if_restore_caps_missing() {
   (( 0x${capeff} & 0x1 )) || missing+=("CHOWN")    # CAP_CHOWN  = bit 0
   (( 0x${capeff} & 0x8 )) || missing+=("FOWNER")   # CAP_FOWNER = bit 3
   if [ "${#missing[@]}" -gt 0 ]; then
-    log_message "WARN" "Restore preserves original ownership, but the ${missing[*]} capability is not granted: restored files will be owned by root. Add CHOWN and FOWNER to the container's cap_add, or set IGNORE_OWNERSHIP=1 to restore without preserving ownership."
+    log_message "WARN" "The ${missing[*]} capability is not granted, so this restore cannot preserve original ownership: restored files will be owned by root. Add CHOWN and FOWNER to the container's cap_add to keep ownership, or set IGNORE_OWNERSHIP=1 to silence this warning."
+    RESTORE_FLAGS="${RESTORE_FLAGS} -ignore-owner"
   fi
 }
 
