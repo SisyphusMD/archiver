@@ -11,6 +11,7 @@ on:
           - patch
           - minor
           - major
+          - alpha
 
 concurrency:
   group: release
@@ -21,17 +22,6 @@ jobs:
     name: Cut release
     runs-on: ubuntu-latest
     steps:
-      # workflow_dispatch fires from whatever branch the user picked in the
-      # UI. The bump pushes back to ${github.ref_name}, so dispatching from a
-      # non-main branch would land the CHANGELOG/example bump on that branch.
-      # Refuse early; cutting a release from anything but main is never right.
-      - name: Refuse non-main dispatches
-        run: |
-          if [ "${{ github.ref_name }}" != "main" ]; then
-            echo "::error::Release must be dispatched from main; got '${{ github.ref_name }}'"
-            exit 1
-          fi
-
       - name: Checkout (full history + tags)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -43,31 +33,22 @@ jobs:
           git config user.name "forgejo-actions[bot]"
           git config user.email "forgejo-actions[bot]@users.noreply.bryantserver.com"
 
+      # The branch rules live in the script, tested by tests/next_version.bats: main cuts 0.x
+      # releases until its first 1.0.0 alpha, then alphas and 1.0.0; release/<major>.<minor>
+      # cuts that line's patches. The bump commit is pushed back to the dispatching branch.
       - name: Compute next version
         id: ver
         env:
+          BRANCH: ${{ github.ref_name }}
           BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
-          PREV_TAG=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n1 || true)
-          if [ -z "$PREV_TAG" ]; then
-            CURRENT="0.0.0"
-          else
-            CURRENT="${PREV_TAG#v}"
-          fi
-          MAJOR=$(echo "$CURRENT" | cut -d. -f1)
-          MINOR=$(echo "$CURRENT" | cut -d. -f2)
-          PATCH=$(echo "$CURRENT" | cut -d. -f3)
-          case "$BUMP" in
-            patch) PATCH=$((PATCH + 1)) ;;
-            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
-            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
-          esac
-          NEXT="${MAJOR}.${MINOR}.${PATCH}"
+          NEXT=$(bash .forgejo/scripts/next-version.sh "$BRANCH" "$BUMP")
+          PREV_TAG=$(git describe --tags --abbrev=0 --match 'v*.*.*' 2>/dev/null || true)
           echo "version=${NEXT}" >> "$GITHUB_OUTPUT"
           echo "tag=v${NEXT}" >> "$GITHUB_OUTPUT"
           echo "previous=${PREV_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Releasing ${NEXT} (bump=${BUMP}, previous=${PREV_TAG:-none})"
+          echo "Releasing ${NEXT} from ${BRANCH} (bump=${BUMP}, previous=${PREV_TAG:-none})"
 
       - name: Sanity guards
         env:
@@ -162,7 +143,9 @@ jobs:
           ' CHANGELOG.md > CHANGELOG.md.new
           mv CHANGELOG.md.new CHANGELOG.md
 
+      # An alpha leaves the documented image on the newest stable release (ADR 9).
       - name: Bump image tag in compose.yaml, README, and guides
+        if: inputs.bump != 'alpha'
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
