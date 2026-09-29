@@ -14,6 +14,10 @@ type Storage struct {
 	Dir  string // host path of a local storage
 }
 
+// MinimalCaps is every capability archiver may need: DAC_OVERRIDE to read and write files
+// of other owners, CHOWN and FOWNER for a restore to recreate owners, modes, and times.
+var MinimalCaps = []string{"DAC_OVERRIDE", "CHOWN", "FOWNER"}
+
 // Deployment is one archiver installation: an image, a hostname (which fixes the snapshot
 // IDs), service directories, storages, and secrets. Two Deployments that share hostname,
 // services, storages, and keys are the same installation run by different images, which
@@ -30,6 +34,9 @@ type Deployment struct {
 	Extra map[string]string
 	// RestoreRoot is a host directory mounted for restores; see Restore.
 	RestoreRoot string
+	// Caps are the only capabilities the container gets on top of --cap-drop ALL; nil
+	// means MinimalCaps, the set archiver documents.
+	Caps []string
 
 	name       string
 	secretsDir string
@@ -47,9 +54,15 @@ func (d *Deployment) Start(t testing.TB) {
 	d.name = "archiver-e2e-" + randomSuffix()
 	d.writeSecrets(t)
 
-	args := []string{"run", "-d", "--name", d.name, "--hostname", d.Hostname,
-		"--cap-drop", "ALL", "--cap-add", "DAC_OVERRIDE", "--cap-add", "CHOWN", "--cap-add", "FOWNER",
-		"-v", d.secretsDir + ":/run/secrets:ro"}
+	args := []string{"run", "-d", "--name", d.name, "--hostname", d.Hostname, "--cap-drop", "ALL"}
+	caps := d.Caps
+	if caps == nil {
+		caps = MinimalCaps
+	}
+	for _, c := range caps {
+		args = append(args, "--cap-add", c)
+	}
+	args = append(args, "-v", d.secretsDir+":/run/secrets:ro")
 	for _, svc := range d.serviceNames() {
 		args = append(args, "-v", d.Services[svc]+":"+containerServiceDir(svc))
 	}
