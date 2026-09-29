@@ -88,7 +88,11 @@ DPID=$(pgrep -f "duplicacy backup" | head -1)
 archiver pause >/dev/null || die "second pause failed"
 sleep 1
 archiver stop >/dev/null 2>&1 || true
-sleep 3
+# The stop handler waits out a grace period before its SIGKILL, so poll rather than guess it.
+for _ in $(seq 1 75); do
+  ! kill -0 "$DPID" 2>/dev/null && grep -rq "Backup stopped\." /opt/archiver/logs/ && break
+  sleep 0.2
+done
 kill -0 "$DPID" 2>/dev/null && die "duplicacy survived stop-while-paused (left frozen forever)"
 grep -rq "Backup stopped\." /opt/archiver/logs/ || die "stop-while-paused not recorded"
 
