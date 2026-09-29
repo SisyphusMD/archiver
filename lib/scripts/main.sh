@@ -22,6 +22,25 @@ cleanup() {
 
 trap cleanup EXIT
 
+# Hooks are sourced into this shell, so they can read its variables, but nothing they start
+# may inherit a credential: the storage secrets exported for duplicacy are un-exported for
+# the call and exported again after it, since the copy step still needs them.
+run_hook() {
+  local v rc hidden=()
+  while IFS= read -r v; do
+    # shellcheck disable=SC2163  # v holds the variable's name
+    export -n "${v}"
+    hidden+=("${v}")
+  done < <(compgen -e | grep -E "${CONFIG_SECRET_VARS_RE}|^DUPLICACY_([A-Z0-9_]+_)?(PASSWORD|RSA_PASSPHRASE|B2_ID|B2_KEY|S3_ID|S3_SECRET)$")
+  "$@"
+  rc=$?
+  for v in "${hidden[@]}"; do
+    # shellcheck disable=SC2163
+    export "${v}"
+  done
+  return "${rc}"
+}
+
 initialize() {
   local lock_status
 
@@ -86,7 +105,7 @@ process_service() {
 
   local pre_status=0 backup_status=0 post_status=0
   update_lock_stage "service:${service_dir}" "pre-backup"
-  service_specific_pre_backup_function || pre_status=$?
+  run_hook service_specific_pre_backup_function || pre_status=$?
 
   if [ "${pre_status}" -ne 0 ]; then
     # The service's files are in an unknown state (a half-written or stale dump). Backing
@@ -102,7 +121,7 @@ process_service() {
   # The post hook undoes the pre hook (restarts what it stopped), so it runs whenever the
   # pre hook ran: after a failed pre hook, a failed backup, or a stop, not only a clean run.
   update_lock_stage "service:${service_dir}" "post-backup"
-  service_specific_post_backup_function || post_status=$?
+  run_hook service_specific_post_backup_function || post_status=$?
   if [ "${post_status}" -ne 0 ]; then
     handle_error "Post-backup hook failed for ${SERVICE} service (exit ${post_status}); check that whatever its pre hook stopped is running again."
   fi

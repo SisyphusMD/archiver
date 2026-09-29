@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+- Hooks no longer inherit storage credentials. The storage password, the RSA passphrase, and B2/S3 keys that are exported for Duplicacy used to stay in the environment of every post-backup hook and of every pre-backup hook after the first service, so any program a hook started could read them. They are now withheld from hooks and still reach Duplicacy.
+
 ### Fixed
 - Pull skopeo for the publish steps through the NAS image mirror, which keeps every quay.io/skopeo digest it has served. quay garbage-collects a tag's previous digest when it re-pushes the tag, so a direct pin could 404 and fail a publish after its release tag was cut.
 
