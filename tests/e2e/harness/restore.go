@@ -16,6 +16,18 @@ const containerRestoreRoot = "/restore"
 // second surface when v1 changes it.
 func (d *Deployment) Restore(t testing.TB, service string, revision int, storage string) string {
 	t.Helper()
+	r, dir := d.TryRestore(t, service, revision, storage)
+	if r.Code != 0 {
+		t.Fatalf("restore %s rev %d from %s with %s exited %d:\n%s",
+			d.SnapshotID(service), revision, storage, d.Image, r.Code, r.Output())
+	}
+	return dir
+}
+
+// TryRestore is Restore for a restore that may fail: it returns the command's result and
+// the host directory it restored into, whatever happened.
+func (d *Deployment) TryRestore(t testing.TB, service string, revision int, storage string) (Result, string) {
+	t.Helper()
 	if d.RestoreRoot == "" {
 		t.Fatal("Restore needs Deployment.RestoreRoot set before Start")
 	}
@@ -26,11 +38,7 @@ func (d *Deployment) Restore(t testing.TB, service string, revision int, storage
 		"REVISION":       strconv.Itoa(revision),
 		"STORAGE_TARGET": storage,
 	}
-	if r := d.Archiver(t, env, "auto-restore"); r.Code != 0 {
-		t.Fatalf("restore %s rev %d from %s with %s exited %d:\n%s",
-			d.SnapshotID(service), revision, storage, d.Image, r.Code, r.Output())
-	}
-	return filepath.Join(d.RestoreRoot, sub)
+	return d.Archiver(t, env, "auto-restore"), filepath.Join(d.RestoreRoot, sub)
 }
 
 // KitPath is where a local storage holds the recovery kit of a host.
