@@ -138,8 +138,9 @@ process_service() {
   if is_stop_requested; then
     log_message "INFO" "Stop requested. Service cleanup complete, invoking stop handler."
     "${STOP_SCRIPT}" backup
-    # Should not reach here, but exit just in case
-    exit 0
+    # Reached when the stop handler's own signal took it down before it could end this
+    # run; a stopped run is still not a successful one.
+    exit 1
   fi
 
   unset SERVICE
@@ -190,8 +191,9 @@ main() {
   if is_stop_requested; then
     log_message "INFO" "Stop requested. Skipping storage wrap-up, invoking stop handler."
     "${STOP_SCRIPT}" backup
-    # Should not reach here, but exit just in case
-    exit 0
+    # Reached when the stop handler's own signal took it down before it could end this
+    # run; a stopped run is still not a successful one.
+    exit 1
   fi
 
   # cd "" is a silent no-op, so guard explicitly: with no successful service there is
