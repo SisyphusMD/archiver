@@ -7,7 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Changed
+- `archiver status`, `archiver healthcheck`, and `archiver logs` now run in Go instead of bash. `status` and `healthcheck` print exactly what they did before, with the same exit codes; `logs` shows the same log without `tail`'s `==> file <==` headers. They only read the state the bash backup and maintenance pipelines keep.
 - `archiver` is now a small Go program, the first step of the v1 rewrite. For now it runs the same bash commands as before, so every command, flag, exit code, and output is unchanged; scheduled runs, `docker stop`, and `init` go through it too. `archiver init` also works inside a running container.
+
+### Fixed
+- Ctrl+C now ends `archiver logs` at once. It used to leave the viewer running when attached with `docker exec -it`.
 
 ## [0.11.1] - 2026-09-29
 
