@@ -111,6 +111,7 @@ main() {
       log_message "INFO" "Stop requested; ending maintenance early."
       record_state_change "stopped"
       notify "Maintenance Stopped" "Stopped before completing all storages."
+      MAINTENANCE_STOPPED=true
       return
     fi
     maintain_storage "${i}"
@@ -119,6 +120,7 @@ main() {
       log_message "INFO" "Stop requested; ending maintenance early."
       record_state_change "stopped"
       notify "Maintenance Stopped" "Stopped before completing all storages."
+      MAINTENANCE_STOPPED=true
       return
     fi
   done
@@ -130,8 +132,9 @@ main() {
 initialize
 main
 
-# Synchronous verb: cron (supercronic) and external schedulers see real failures.
-if [ "${ERROR_COUNT:-0}" -gt 0 ]; then
+# Synchronous verb: cron (supercronic) and external schedulers see real failures, and a
+# stopped pass is not a completed one.
+if [ "${ERROR_COUNT:-0}" -gt 0 ] || [ "${MAINTENANCE_STOPPED:-false}" = true ]; then
   exit 1
 fi
 exit 0
