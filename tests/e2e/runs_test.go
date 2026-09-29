@@ -150,6 +150,44 @@ func TestRunsSecondBackupRefused(t *testing.T) {
 	in.wantRevisions(t, "after the first backup finished", 1)
 }
 
+// TestRunsRefusedBackupNotifies: a backup refused because another still holds the lock is
+// reported, not silent. A scheduled run that never happens must reach whoever relies on it
+// (ADR 13).
+func TestRunsRefusedBackupNotifies(t *testing.T) {
+	in := newRunsInstall(t)
+	writeSmall(t, in.svc, "one")
+	gate := in.GatePreHook(t, "app")
+	n := harness.NewNotifier(t)
+	notifierDir, err := os.MkdirTemp(filepath.Dir(in.Keys.PrivatePath), "notifier-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.NotifyTo(t, n, notifierDir)
+	in.Start(t)
+
+	first := in.StartBackup(t)
+	harness.Poll(t, time.Minute, "the first backup to reach its pre-backup hook", func() bool {
+		return first.Done() || gate.Entered(t) == 1
+	})
+	if first.Done() {
+		t.Fatalf("first backup ended at the gate: %+v", first.Wait(t, 0))
+	}
+
+	// The first run is parked in its hook, so anything that arrives now is about the refusal.
+	before := n.Arrived()
+	if r := in.Backup(t); r.Code == 0 {
+		t.Fatalf("second backup exited 0 while one was running:\n%s", r.Output())
+	}
+	harness.Poll(t, 30*time.Second, "a notification about the refused backup", func() bool {
+		return n.Arrived() > before
+	})
+
+	gate.Open(t)
+	if r := first.Wait(t, 2*time.Minute); r.Code != 0 {
+		t.Fatalf("first backup exited %d:\n%s", r.Code, r.Output())
+	}
+}
+
 // TestRunsMaintenanceAlongsideBackup: maintenance succeeds while a backup is in progress,
 // and the backup still completes.
 func TestRunsMaintenanceAlongsideBackup(t *testing.T) {
