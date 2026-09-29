@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-09-29
+
 ### Security
 - Hooks no longer inherit storage credentials. The storage password, the RSA passphrase, and B2/S3 keys that are exported for Duplicacy used to stay in the environment of every post-backup hook and of every pre-backup hook after the first service, so any program a hook started could read them. They are now withheld from hooks and still reach Duplicacy.
 
@@ -15,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - A stopped maintenance run now exits non-zero instead of 0.
 - The recovery kit is now named after the same host as the snapshot IDs, so an inherited `HOSTNAME` (a Kubernetes Job's stable name) wins over the pod's kernel hostname. Each Job run used to leave a kit under a new name. Kits left under old pod names can be deleted.
 - Pull skopeo for the publish steps through the NAS image mirror, which keeps every quay.io/skopeo digest it has served. quay garbage-collects a tag's previous digest when it re-pushes the tag, so a direct pin could 404 and fail a publish after its release tag was cut.
+
+### Dependencies
+
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to a45bb18
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 3f6fe53
 
 ## [0.11.0] - 2026-09-27
 
