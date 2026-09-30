@@ -7,6 +7,8 @@ FROM --platform=$BUILDPLATFORM golang:1.27.1-trixie@sha256:3b77fc618ec235a1ab412
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
+# CI points this at the NAS artifact cache; the default keeps the image buildable anywhere.
+ARG GOPROXY=https://proxy.golang.org,direct
 COPY go.mod ./
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
@@ -16,7 +18,9 @@ FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd
 
 ARG TARGETARCH
 
+ARG DEBIAN_MIRROR=http://deb.debian.org
 RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.list.d/contrib.list && \
+    { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/contrib.list 2>/dev/null || true; } && \
     apt-get update && apt-get install -y \
     expect \
     openssh-client \
@@ -31,6 +35,7 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
     iputils-ping \
     systemd \
     zfsutils-linux \
+    && { sed -i "s#${DEBIAN_MIRROR}#http://deb.debian.org#g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/contrib.list 2>/dev/null || true; } \
     && rm -rf /var/lib/apt/lists/*
 
 # Every download below is checked against a pinned SHA-256 per architecture: HTTPS
@@ -46,7 +51,8 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
 ARG SUPERCRONIC_VERSION=v0.2.49
 ARG SUPERCRONIC_SHA256_AMD64=a53ae236602c7338aba3fbaff40bda6300eae3b9fedb8261eb06cfe3724430c1
 ARG SUPERCRONIC_SHA256_ARM64=02aa0cb229ba09050cba6638059dadb9eedc2276632ea43d6a57a2f8c1629dd5
-ARG SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}
+ARG GITHUB_MIRROR=https://github.com
+ARG SUPERCRONIC_URL=${GITHUB_MIRROR}/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}
 RUN case "$TARGETARCH" in \
         amd64) SHA256="$SUPERCRONIC_SHA256_AMD64" ;; \
         arm64) SHA256="$SUPERCRONIC_SHA256_ARM64" ;; \
@@ -76,6 +82,7 @@ ARG DOCKER_CLI_SHA256_ARM64=8d16d8b3b158c132a9fb9963d4b4345746f925e287e154c9ed88
 # instead of installing the docker-ce-cli debian package. The apt path
 # uses a Debian-package version (`5:29.x.y-1~debian.13~trixie`) which has
 # no clean Renovate datasource; the static binary uses plain SemVer.
+ARG DOCKER_DOWNLOAD_MIRROR=https://download.docker.com
 RUN ARCH_SUFFIX="" && \
     if [ "$TARGETARCH" = "amd64" ]; then \
         ARCH_SUFFIX="x86_64"; SHA256="$DOCKER_CLI_SHA256_AMD64"; \
@@ -84,7 +91,7 @@ RUN ARCH_SUFFIX="" && \
     else \
         echo "Unsupported architecture: $TARGETARCH" && exit 1; \
     fi && \
-    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "https://download.docker.com/linux/static/stable/${ARCH_SUFFIX}/docker-${DOCKER_CLI_VERSION}.tgz" \
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "${DOCKER_DOWNLOAD_MIRROR}/linux/static/stable/${ARCH_SUFFIX}/docker-${DOCKER_CLI_VERSION}.tgz" \
         -o /tmp/docker-cli.tgz && \
     echo "$SHA256  /tmp/docker-cli.tgz" | sha256sum -c - && \
     tar -xzC /usr/local/bin --strip-components=1 -f /tmp/docker-cli.tgz docker/docker && \
@@ -98,7 +105,7 @@ RUN ARCH_SUFFIX="" && \
     else \
         echo "Unsupported architecture: $TARGETARCH" && exit 1; \
     fi && \
-    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "https://github.com/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/duplicacy_linux_${ARCH_SUFFIX}_${DUPLICACY_VERSION}" \
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "${GITHUB_MIRROR}/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/duplicacy_linux_${ARCH_SUFFIX}_${DUPLICACY_VERSION}" \
         -o /usr/local/bin/duplicacy && \
     echo "$SHA256  /usr/local/bin/duplicacy" | sha256sum -c - && \
     chmod +x /usr/local/bin/duplicacy
