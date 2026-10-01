@@ -13,6 +13,7 @@
   "postUpdateOptions": ["gomodTidy"],
   "includePaths": [
     "Dockerfile",
+    "tests/e2e/Dockerfile",
     "go.mod",
     ".forgejo/workflows/docker-publish.yml",
     ".forgejo/workflows/release.yml"
