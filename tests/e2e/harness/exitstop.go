@@ -155,6 +155,11 @@ func (d *Deployment) NotifyTo(t testing.TB, n *Notifier, dir string) {
 	d.Extra["PUSHOVER_USER_KEY_FILE"] = inContainer + "/pushover_user_key"
 }
 
+// Secrets are the notifier credentials the deployment sends, by name.
+func (n *Notifier) Secrets() map[string]string {
+	return map[string]string{"Pushover API token": n.token, "Pushover user key": n.user}
+}
+
 // Arrived is how many notifications from the configured deployment n has received.
 func (n *Notifier) Arrived() int {
 	n.mu.Lock()
