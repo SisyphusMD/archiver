@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Schedule handling at startup: a malformed BACKUP_SCHEDULE (or MAINTENANCE_SCHEDULE) must
-# fail the container fast (supercronic -test) with a clear message — not crash-loop or
+# fail the container fast (archiver daemon --check) with a clear message — not crash-loop or
 # silently run without a scheduler; a legacy CRON_SCHEDULE must fail fast with the rename
 # message; and a valid pair of schedules must register both jobs and announce them.
 #
@@ -115,15 +115,14 @@ docker run -d --name "$NAME_OK" \
   -e STORAGE_TARGET_1_LOCAL_PATH=/backup-store \
   "$IMAGE" >/dev/null || die "valid-schedule container failed to start"
 for _ in $(seq 1 30); do
-  docker logs "$NAME_OK" 2>&1 | grep -q "Starting supercronic" && break
+  docker logs "$NAME_OK" 2>&1 | grep -q "next maintenance at" && break
   sleep 1
 done
 OK_LOGS=$(docker logs "$NAME_OK" 2>&1)
 echo "$OK_LOGS" | grep -q "Backups scheduled: 0 3 \* \* \*" || die "backup schedule not announced"
 echo "$OK_LOGS" | grep -q "Maintenance scheduled: 0 13 \* \* \*" || die "maintenance schedule not announced"
-CRONTAB=$(docker exec "$NAME_OK" cat /tmp/archiver.crontab 2>&1) || die "could not read crontab"
-echo "$CRONTAB" | grep -q "/usr/local/bin/archiver backup$" || die "crontab missing the backup job"
-echo "$CRONTAB" | grep -q "/usr/local/bin/archiver maintenance$" || die "crontab missing the maintenance job"
-[ "$(printf '%s\n' "$CRONTAB" | grep -c '/usr/local/bin/archiver ')" -eq 2 ] || die "crontab does not have exactly two jobs"
+echo "$OK_LOGS" | grep -Eq "archiver daemon: next backup at [0-9-]+T03:00:00" || { echo "$OK_LOGS" | tail -5; die "daemon did not schedule the backup for 03:00"; }
+echo "$OK_LOGS" | grep -Eq "archiver daemon: next maintenance at [0-9-]+T13:00:00" || die "daemon did not schedule maintenance for 13:00"
+[ "$(docker inspect -f '{{.State.Running}}' "$NAME_OK")" = "true" ] || die "valid-schedule container is not running"
 
 echo "=== INVALID-CRON OK: fail-fast on bad backup/maintenance schedule + CRON_SCHEDULE rename; valid pair registers both jobs ==="

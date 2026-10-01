@@ -132,7 +132,7 @@ main() {
 initialize
 main
 
-# Synchronous verb: cron (supercronic) and external schedulers see real failures, and a
+# Synchronous verb: the scheduler and external schedulers see real failures, and a
 # stopped pass is not a completed one.
 if [ "${ERROR_COUNT:-0}" -gt 0 ] || [ "${MAINTENANCE_STOPPED:-false}" = true ]; then
   exit 1

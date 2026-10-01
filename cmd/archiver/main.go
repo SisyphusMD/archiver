@@ -8,10 +8,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/health"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/logview"
@@ -21,6 +23,7 @@ import (
 const (
 	bashCLI    = "/opt/archiver/archiver.sh"
 	initScript = "/opt/archiver/lib/scripts/init.sh"
+	selfPath   = "/usr/local/bin/archiver"
 )
 
 // ported maps each command implemented in Go to its entry point, which returns the exit
@@ -41,6 +44,9 @@ var ported = map[string]func() int{
 }
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "daemon" {
+		os.Exit(runDaemon(os.Args[2:]))
+	}
 	if len(os.Args) == 2 {
 		if run, ok := ported[os.Args[1]]; ok {
 			os.Exit(run())
@@ -88,4 +94,38 @@ func followLogs() int {
 		}
 	}
 	return code
+}
+
+// runDaemon runs the schedules until SIGTERM or SIGINT. With --check it only validates
+// them, so the entrypoint can refuse to start before anything else comes up.
+func runDaemon(args []string) int {
+	check := len(args) == 1 && args[0] == "--check"
+	if len(args) > 0 && !check {
+		fmt.Fprintln(os.Stderr, "usage: archiver daemon [--check]")
+		return 2
+	}
+	jobs, err := daemon.Jobs(os.Getenv, time.Now())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "archiver:", err)
+		return 1
+	}
+	if check {
+		return 0
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, func(j daemon.Job) int {
+		// A fresh process per run, as under cron: the bash pipeline keeps its own state.
+		cmd := exec.Command(selfPath, j.Name)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Run(); err != nil {
+			if exit, ok := err.(*exec.ExitError); ok {
+				return exit.ExitCode()
+			}
+			fmt.Fprintf(os.Stderr, "archiver daemon: cannot run %s: %v\n", j.Name, err)
+			return 127
+		}
+		return 0
+	})
+	return 0
 }

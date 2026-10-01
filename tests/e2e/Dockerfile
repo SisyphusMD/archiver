@@ -7,7 +7,8 @@ COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 WORKDIR /src
 # CI points this at the NAS artifact cache; the default keeps the runner buildable anywhere.
 ARG GOPROXY=https://proxy.golang.org,direct
-COPY go.mod ./
+COPY go.mod go.sum ./
+RUN go mod download
 COPY tests/e2e ./tests/e2e
 RUN go vet ./tests/e2e/...
 # The suite runs 7-9 minutes; go test's 10-minute default fails it on a busy runner.

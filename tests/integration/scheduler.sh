@@ -1,55 +1,40 @@
 #!/usr/bin/env bash
-# Proves supercronic (the Debian-cron replacement) actually executes scheduled jobs
-# WITHOUT the SETGID capability — the guarantee that let Phase 2 drop SETGID from the
-# documented cap set. Runs INSIDE the archiver image as root under `--cap-drop ALL`
-# (only DAC_OVERRIDE/CHOWN/FOWNER added back, NO SETGID), e.g.:
+# Proves the daemon actually runs scheduled jobs under the documented cap set, with no
+# SETGID (Debian's cron needed it to fork jobs; the daemon runs them as the container
+# user). Runs INSIDE the archiver image as root under `--cap-drop ALL`, e.g.:
 #   docker run -i --rm --cap-drop ALL \
 #     --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
 #     --entrypoint bash archiver:sched -s < tests/integration/scheduler.sh
 #
-# Debian's cron forks setgid to exec jobs, so without SETGID its jobs silently never
-# run. supercronic runs jobs as the container user — if that assumption were wrong,
-# the marker file below would never appear and this test fails.
-#
-# supercronic's granularity here is one MINUTE (this build supports neither `@every`
-# nor a seconds field — a 6-field line is parsed as ordinary per-minute cron), so the
-# job fires on the next minute boundary and the test waits up to ~70s for it.
+# A seven-field schedule has a seconds field, so the job fires within seconds. With no
+# configuration the backup itself fails, which is fine: the point is that it was started,
+# and that a run is reported with its exit status.
 
 set -uo pipefail
 die() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
-command -v supercronic >/dev/null 2>&1 || die "supercronic is not installed in the image"
+archiver daemon --check || die "--check failed with no schedules set (nothing to validate is valid)"
+BACKUP_SCHEDULE='0 3 * * *' archiver daemon --check || die "the daemon rejected a plain five-field schedule"
+BACKUP_SCHEDULE='not a cron line' archiver daemon --check 2>/dev/null && die "the daemon accepted a malformed schedule"
 
-# The exact schedule format the entrypoint writes must parse.
-echo '0 3 * * * /usr/local/bin/archiver backup' > /tmp/real.crontab
-supercronic -test /tmp/real.crontab >/dev/null 2>&1 \
-  || die "supercronic rejected archiver's crontab format ('m h dom mon dow <cmd>')"
+LOG=/tmp/daemon.log
+echo ">>> starting the daemon with an every-2-seconds backup schedule"
+BACKUP_SCHEDULE='*/2 * * * * * *' archiver daemon >"$LOG" 2>&1 &
+pid=$!
 
-# An every-minute job whose only effect is to append to a marker file.
-MARKER=/tmp/fired
-CT=/tmp/smoke.crontab
-rm -f "$MARKER"
-echo '* * * * * echo fired >> /tmp/fired' > "$CT"
-supercronic -test "$CT" >/dev/null 2>&1 || die "supercronic rejected an every-minute crontab"
-
-echo ">>> starting supercronic under the current cap set (no SETGID); waiting for the next minute tick"
-supercronic "$CT" >/tmp/supercronic.log 2>&1 &
-sc_pid=$!
-
-# Wait up to ~70s (one minute boundary + margin) for the first fire, breaking as soon
-# as the marker lands.
-for _ in $(seq 1 140); do
-  [ -s "$MARKER" ] && break
+for _ in $(seq 1 60); do
+  grep -qs 'archiver daemon: backup exited' "$LOG" && break
   sleep 0.5
 done
 
-kill "$sc_pid" 2>/dev/null || true
-wait "$sc_pid" 2>/dev/null || true
+kill -TERM "$pid" 2>/dev/null
+for _ in $(seq 1 60); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+kill -0 "$pid" 2>/dev/null && die "the daemon did not exit on SIGTERM"
+wait "$pid"; code=$?
 
-if [ ! -s "$MARKER" ]; then
-  echo "--- supercronic log ---" >&2
-  cat /tmp/supercronic.log >&2 || true
-  die "supercronic did not execute the job within 70s (does it still need SETGID?)"
-fi
+grep -q 'archiver daemon: starting backup' "$LOG" || { cat "$LOG" >&2; die "the daemon never started the scheduled backup"; }
+grep -q 'archiver daemon: backup exited' "$LOG" || { cat "$LOG" >&2; die "the daemon did not report the run's exit status"; }
+[ "$code" -eq 0 ] || die "the daemon exited $code on SIGTERM, want 0"
 
-echo "=== SCHEDULER OK: supercronic fired a scheduled job under cap-drop ALL, no SETGID ==="
+cat "$LOG"
+echo "=== SCHEDULER OK: the daemon fired a scheduled job under cap-drop ALL, no SETGID, and stopped cleanly ==="
