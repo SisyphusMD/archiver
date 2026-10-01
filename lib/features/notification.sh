@@ -13,13 +13,17 @@ send_pushover_notification() {
   local message="${2}"
   local exit_status
 
-  curl -s \
-    --form-string "token=${PUSHOVER_API_TOKEN}" \
-    --form-string "user=${PUSHOVER_USER_KEY}" \
-    --form-string "title=${title}" \
-    --form-string "message=${message}" \
-    https://api.pushover.net/1/messages.json | log_output
-  exit_status="${PIPESTATUS[0]}"
+  # The credentials reach curl as a config file on stdin (-K -), never as arguments, which
+  # any process can read from /proc. Inside its double quotes \ and " must be escaped.
+  local token="${PUSHOVER_API_TOKEN//\\/\\\\}" user="${PUSHOVER_USER_KEY//\\/\\\\}"
+  token="${token//\"/\\\"}"
+  user="${user//\"/\\\"}"
+  printf 'form-string = "token=%s"\nform-string = "user=%s"\n' "${token}" "${user}" | \
+    curl -s -K - \
+      --form-string "title=${title}" \
+      --form-string "message=${message}" \
+      https://api.pushover.net/1/messages.json | log_output
+  exit_status="${PIPESTATUS[1]}"
 
   if [ "${exit_status}" -ne 0 ]; then
     handle_error "Failed to send pushover notification. Check Pushover variables in the secrets file."
