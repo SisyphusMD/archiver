@@ -9,7 +9,7 @@ ARG TARGETARCH
 WORKDIR /src
 # CI points this at the NAS artifact cache; the default keeps the image buildable anywhere.
 ARG GOPROXY=https://proxy.golang.org,direct
-COPY go.mod ./
+COPY go.mod go.sum ./
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/archiver ./cmd/archiver
@@ -43,24 +43,7 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
 # would otherwise land in every image. A version bump must bring new digests with it, or
 # the build fails closed (tests/lint/dockerfile-downloads.sh guards the pattern).
 
-# Scheduler: supercronic replaces Debian cron so scheduled backups run without the
-# SETGID capability (cron forks setgid to exec jobs; supercronic runs them as the
-# container user) and without cron's env-scrubbing. Digests match GitHub's asset digests.
-# Renovate tracks the pin via the comment below (dockerfileVersions preset).
-# renovate: datasource=github-releases depName=aptible/supercronic
-ARG SUPERCRONIC_VERSION=v0.2.49
-ARG SUPERCRONIC_SHA256_AMD64=a53ae236602c7338aba3fbaff40bda6300eae3b9fedb8261eb06cfe3724430c1
-ARG SUPERCRONIC_SHA256_ARM64=02aa0cb229ba09050cba6638059dadb9eedc2276632ea43d6a57a2f8c1629dd5
 ARG GITHUB_MIRROR=https://github.com
-ARG SUPERCRONIC_URL=${GITHUB_MIRROR}/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}
-RUN case "$TARGETARCH" in \
-        amd64) SHA256="$SUPERCRONIC_SHA256_AMD64" ;; \
-        arm64) SHA256="$SUPERCRONIC_SHA256_ARM64" ;; \
-        *) echo "Unsupported architecture: $TARGETARCH" && exit 1 ;; \
-    esac && \
-    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "$SUPERCRONIC_URL" -o /usr/local/bin/supercronic && \
-    echo "$SHA256  /usr/local/bin/supercronic" | sha256sum -c - && \
-    chmod +x /usr/local/bin/supercronic
 
 # Duplicacy publishes no checksums; these are the digests of the reviewed downloads.
 # renovate: datasource=github-releases depName=gilbertchen/duplicacy extractVersion=^v(?<version>.+)$

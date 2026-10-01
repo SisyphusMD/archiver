@@ -26,7 +26,7 @@ handle_shutdown() {
     fi
   done
 
-  # Kill supercronic or tail process if running
+  # Stop the scheduler or the idle tail
   if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
     kill "$MAIN_PID" 2>/dev/null || true
   fi
@@ -95,7 +95,7 @@ import_bundle() {
     fi
 
     # The password's job is done; keeping it exported would hand it to every child process
-    # (supercronic, backups, user hooks) via /proc — the leak the file-only rule exists for.
+    # (the scheduler, backups, user hooks) via /proc — the leak the file-only rule exists for.
     unset ARCHIVER_BUNDLE_PASSWORD ARCHIVER_BUNDLE_FILE BUNDLE_PASSWORD
 
     if [ ! -f "${CONFIG_FILE}" ]; then
@@ -245,30 +245,24 @@ if [ -n "${BACKUP_SCHEDULE:-}" ] && [ -z "${MAINTENANCE_SCHEDULE:-}" ]; then
 fi
 
 if [ -n "${BACKUP_SCHEDULE:-}" ] || [ -n "${MAINTENANCE_SCHEDULE:-}" ]; then
-    CRONTAB_FILE=/tmp/archiver.crontab
-    : > "${CRONTAB_FILE}"
-    # Synchronous verbs: supercronic then knows each job's real duration and adds its own
-    # skip-if-still-running protection on top of the pipeline locks.
     if [ -n "${BACKUP_SCHEDULE:-}" ]; then
-        echo "${BACKUP_SCHEDULE} /usr/local/bin/archiver backup" >> "${CRONTAB_FILE}"
         echo "Backups scheduled: ${BACKUP_SCHEDULE}"
     fi
     if [ -n "${MAINTENANCE_SCHEDULE:-}" ]; then
-        echo "${MAINTENANCE_SCHEDULE} /usr/local/bin/archiver maintenance" >> "${CRONTAB_FILE}"
         echo "Maintenance scheduled: ${MAINTENANCE_SCHEDULE}"
     fi
 
     # Fail fast on a malformed schedule instead of crash-looping the container.
-    if ! supercronic -test "${CRONTAB_FILE}"; then
+    if ! archiver daemon --check; then
         echo "ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid."
         exit 1
     fi
 
-    echo "Starting supercronic..."
+    echo "Starting scheduler..."
 
     # Background (not exec) so the SIGTERM trap can still run 'archiver stop' and
-    # tear down the log tailers. supercronic passes TZ through for schedule evaluation.
-    supercronic -passthrough-logs "${CRONTAB_FILE}" &
+    # tear down the log tailers. Schedules are evaluated in the container's TZ.
+    archiver daemon &
     MAIN_PID=$!
     wait $MAIN_PID
 else

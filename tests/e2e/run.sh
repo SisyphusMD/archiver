@@ -12,7 +12,7 @@ cd "$(dirname "$0")/../.."
 WORK=/tmp/archiver-e2e
 RUNNER=archiver-e2e-runner:local
 
-docker build -q -f tests/e2e/Dockerfile -t "$RUNNER" . >/dev/null
+docker build -q ${GOPROXY:+--build-arg GOPROXY="$GOPROXY"} -f tests/e2e/Dockerfile -t "$RUNNER" . >/dev/null
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "$WORK:$WORK" \

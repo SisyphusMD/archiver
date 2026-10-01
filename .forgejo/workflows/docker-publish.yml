@@ -94,7 +94,7 @@ jobs:
           set -euo pipefail
           # renovate: datasource=docker depName=golang
           GO_IMAGE=golang:1.27.1-trixie@sha256:3b77fc618ec235a1ab412de7737f120dd507c57e8d87de4cbb7994fb94275ed5
-          tar -c . | docker run --rm -i --entrypoint sh "$GO_IMAGE" -c \
+          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct --entrypoint sh "$GO_IMAGE" -c \
             'mkdir /w && cd /w && tar -x && test -z "$(gofmt -l cmd internal tests/e2e)" && go vet ./... && go test -race ./cmd/... ./internal/...'
 
   pr-validate:
@@ -324,7 +324,7 @@ jobs:
         run: |
           docker run -i --rm --hostname sd-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/service-dirs-reported.sh
-      - name: Scheduler smoke test (supercronic fires a job without SETGID)
+      - name: Scheduler smoke test (the daemon fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.
         run: |
@@ -412,6 +412,8 @@ jobs:
             GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
             DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
       - name: Go black-box tests (upgrade from the last bash release, restore, rollback, recovery kit)
+        env:
+          GOPROXY: https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
         run: ARCHIVER_IMAGE=e2e:local bash tests/e2e/run.sh -v
 
   build-and-push:

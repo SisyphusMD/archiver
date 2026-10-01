@@ -9,9 +9,11 @@
   "prHourlyLimit": 0,
   "separateMinorPatch": true,
   "fetchChangeLogs": "pr",
-  "enabledManagers": ["dockerfile", "github-actions", "custom.regex"],
+  "enabledManagers": ["dockerfile", "github-actions", "gomod", "custom.regex"],
+  "postUpdateOptions": ["gomodTidy"],
   "includePaths": [
     "Dockerfile",
+    "go.mod",
     ".forgejo/workflows/docker-publish.yml",
     ".forgejo/workflows/release.yml"
   ],

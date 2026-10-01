@@ -355,7 +355,7 @@ services:
 
 **Backup-only least privilege:** `CHOWN` and `FOWNER` are used only by restore, so a container that only takes scheduled backups can drop both and run with just `DAC_OVERRIDE`. Add them back when you need to restore with original ownership. Restoring without them does not fail: the data is restored correctly, but files land owned by root and Archiver logs a warning. To restore without preserving ownership on purpose, set `IGNORE_OWNERSHIP=1`.
 
-**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with `DAC_OVERRIDE`, `CHOWN`, and `FOWNER`, and is recommended for defense in depth. Scheduled backups (`BACKUP_SCHEDULE`) no longer need `SETGID` — Archiver uses [supercronic](https://github.com/aptible/supercronic), which runs jobs as the container user rather than forking with `setgid` like Debian's cron.
+**Note**: `no-new-privileges` is a kernel security option, not a Linux capability. It is compatible with `DAC_OVERRIDE`, `CHOWN`, and `FOWNER`, and is recommended for defense in depth. Scheduled backups (`BACKUP_SCHEDULE`) no longer need `SETGID` — Archiver's own scheduler runs jobs as the container user rather than forking with `setgid` like Debian's cron.
 
 ### Graceful Shutdown
 
@@ -384,7 +384,7 @@ The entrypoint selects one of three modes based on the first container argument:
 | Mode | How it's invoked | Behavior |
 |------|------------------|----------|
 | `init` | `docker run ... archiver:<tag> init` | Interactive setup: generates env-native materials, the recovery password, and an encrypted bundle. Exits when done. |
-| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (env-native and/or bundle), then either runs `supercronic` (if `BACKUP_SCHEDULE` and/or `MAINTENANCE_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
+| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (env-native and/or bundle), then either runs the scheduler, `archiver daemon` (if `BACKUP_SCHEDULE` and/or `MAINTENANCE_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
 | `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads configuration (env-native and/or bundle), then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
 `run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, `backup`, and `maintenance` (synchronous paths intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`.

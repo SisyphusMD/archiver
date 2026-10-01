@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// Schedules in the 0.11 syntax (supercronic, which takes an optional seconds field). The
+// Schedules in the 0.11 syntax (supercronic's cron parser, which takes an optional seconds field). The
 // syntax is incidental (ADR 1); only "invalid fails start, valid runs" is contract.
 const (
 	InvalidSchedule  = "not a cron line"
