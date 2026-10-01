@@ -1,0 +1,16 @@
+# Storage name <TAB> Duplicacy storage name <TAB> prefix of its DUPLICACY_*_ credential variables.
+# Existing storages are addressed by these; bash (tests/sanitize_storage_name.bats) and Go
+# (internal/config) must both produce every row exactly.
+do-spaces	do_spaces	DUPLICACY_DO_SPACES_
+5tb-archive	_5tb_archive	DUPLICACY__5TB_ARCHIVE_
+s3.us east	s3_us_east	DUPLICACY_S3_US_EAST_
+b2primary	b2primary	DUPLICACY_B2PRIMARY_
+my_store	my_store	DUPLICACY_MY_STORE_
+default	default	DUPLICACY_
+Default	Default	DUPLICACY_DEFAULT_
+naïve	na__ve	DUPLICACY_NA__VE_
+9	_9	DUPLICACY__9_
+_x	_x	DUPLICACY__X_
+a/b	a_b	DUPLICACY_A_B_
+do-spaces.1	do_spaces_1	DUPLICACY_DO_SPACES_1_
+cowanserver	cowanserver	DUPLICACY_COWANSERVER_
