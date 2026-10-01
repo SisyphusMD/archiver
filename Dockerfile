@@ -57,7 +57,7 @@ ARG DUPLICACY_SHA256_ARM64=9c27d8ba149e67d0bc58406c6b3218661d870cb07e265aec31563
 # is published shortly after each engine release, without checksums; these are the
 # digests of the reviewed archives.
 # renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.+)$
-ENV DOCKER_CLI_VERSION=29.6.2
+ENV DOCKER_CLI_VERSION=29.8.2
 ARG DOCKER_CLI_SHA256_AMD64=d6204aea92238e2453d5445c885b9d2e5eb8f82915568ec50edf9dbe12a3ac74
 ARG DOCKER_CLI_SHA256_ARM64=8d16d8b3b158c132a9fb9963d4b4345746f925e287e154c9ed880ac257baf292
 
