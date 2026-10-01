@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+- The Pushover API token and user key no longer appear on `curl`'s command line, where any process in the container could read them from `/proc`. They now reach `curl` on stdin, like every other secret.
+
 ### Changed
 - Scheduled runs are started by `archiver daemon` instead of supercronic, which is no longer in the image. Schedules are read by the same parser, so every `BACKUP_SCHEDULE` and `MAINTENANCE_SCHEDULE` keeps its meaning, a run still never overlaps itself, and a run that overruns its next slot still skips it. A schedule that can never fire (such as `0 0 30 2 *`) now fails container start instead of being accepted. `docker logs` shows `archiver daemon:` lines with each next run time and each run's exit status in place of supercronic's, and `/tmp/archiver.crontab` no longer exists.
 - `archiver status`, `archiver healthcheck`, and `archiver logs` now run in Go instead of bash. `status` and `healthcheck` print exactly what they did before, with the same exit codes; `logs` shows the same log without `tail`'s `==> file <==` headers. They only read the state the bash backup and maintenance pipelines keep.

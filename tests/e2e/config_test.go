@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -84,7 +85,7 @@ func TestConfigServiceDirectoryErrors(t *testing.T) {
 	}
 }
 
-// TestConfigSecretsStayHidden: no secret ever appears on a process's argv while archiver
+// TestConfigSecretsStayHidden: no secret, the notifier's included, ever appears on a process's argv while archiver
 // backs up (primary, copy, recovery kit) and restores, and none is left in plaintext on
 // disk afterwards: not in the service directories, the storages, the restore targets, or
 // anything the container wrote. The recovery kit is encrypted, so it must not match either.
@@ -111,9 +112,18 @@ func TestConfigSecretsStayHidden(t *testing.T) {
 		RestoreRoot:      restores,
 	}
 	secrets := d.Secrets()
+	// A configured notifier sends its own credentials on every notification.
+	n := harness.NewNotifier(t)
+	notifierDir := filepath.Join(work, "notifier")
+	if err := os.MkdirAll(notifierDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d.NotifyTo(t, n, notifierDir)
+	watched := maps.Clone(secrets)
+	maps.Copy(watched, n.Secrets())
 	d.Start(t)
 
-	watch := harness.WatchArgv(t, d, secrets)
+	watch := harness.WatchArgv(t, d, watched)
 	writeFixtures(t, svc, 1)
 	if r := d.Archiver(t, nil, "backup"); r.Code != 0 {
 		t.Fatalf("first backup exited %d:\n%s", r.Code, r.Output())
@@ -126,6 +136,9 @@ func TestConfigSecretsStayHidden(t *testing.T) {
 		d.Restore(t, "app", 2, storage)
 	}
 	started, leaks := watch.Stop(t)
+	if n.Arrived() == 0 {
+		t.Error("no notification arrived, so the notifier's credentials were never sent while watched")
+	}
 	if started == 0 {
 		t.Fatal("the argv watch saw no process start during the backups and restores, so it proves nothing")
 	}
