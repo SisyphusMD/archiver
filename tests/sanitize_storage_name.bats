@@ -53,3 +53,17 @@ setup() {
   name="$(sanitize_storage_name "do-spaces")"
   [ "$name" = "do_spaces" ]
 }
+
+@test "every row of the shared storage-name table (the Go loader checks the same rows)" {
+  local name want prefix got v
+  while IFS=$'\t' read -r name want prefix; do
+    [[ -z "${name}" || "${name}" == \#* ]] && continue
+    got="$(sanitize_storage_name "${name}")"
+    [ "${got}" = "${want}" ] || { echo "sanitize '${name}': got '${got}', want '${want}'"; return 1; }
+    for v in $(compgen -e | grep '^DUPLICACY_'); do unset "${v}"; done
+    STORAGE_TARGET_1_NAME="${name}" STORAGE_TARGET_1_TYPE="local" STORAGE_PASSWORD="pw" RSA_PASSPHRASE="rp"
+    export_duplicacy_storage_secrets 1
+    v="${prefix}PASSWORD"
+    [ "${!v:-}" = "pw" ] || { echo "'${name}': ${v} not exported; got: $(compgen -e | grep '^DUPLICACY_' | tr '\n' ' ')"; return 1; }
+  done < "${REPO_ROOT}/tests/fixtures/storage-names.tsv"
+}
