@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -107,9 +108,12 @@ func followLogs() int {
 // runDaemon runs the schedules until SIGTERM or SIGINT. With --check it only validates
 // them, so the entrypoint can refuse to start before anything else comes up.
 func runDaemon(args []string) int {
+	if len(args) == 2 && args[0] == "ctl" {
+		return daemonCtl(args[1])
+	}
 	check := len(args) == 1 && args[0] == "--check"
 	if len(args) > 0 && !check {
-		fmt.Fprintln(os.Stderr, "usage: archiver daemon [--check]")
+		fmt.Fprintln(os.Stderr, "usage: archiver daemon [--check | ctl local-changed|stop|pause|resume]")
 		return 2
 	}
 	jobs, err := daemon.Jobs(os.Getenv, time.Now())
@@ -122,6 +126,19 @@ func runDaemon(args []string) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	l := layout.Default()
+	workers := &copyWorkers{}
+	workers.decide(l)
+	if ln, err := daemon.Serve(l.DaemonSocket(), workers.handle); errors.Is(err, daemon.ErrRunning) {
+		fmt.Fprintln(os.Stderr, "archiver daemon:", err)
+		return 1
+	} else if err != nil {
+		fmt.Fprintln(os.Stderr, "archiver daemon: no control socket, so backups copy for themselves:", err)
+	} else {
+		defer func() { ln.Close(); os.Remove(l.DaemonSocket()) }()
+		workers.start(ctx.Done())
+		defer workers.shutdown()
+	}
 	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, func(j daemon.Job) int {
 		// A fresh process per run, as under cron: the bash pipeline keeps its own state.
 		cmd := exec.Command(selfPath, j.Name)
@@ -135,5 +152,19 @@ func runDaemon(args []string) int {
 		}
 		return 0
 	})
+	return 0
+}
+
+// daemonCtl sends one command to a running daemon. With no daemon it exits 1 quietly:
+// the bash stop, pause and resume call it whether or not one runs.
+func daemonCtl(cmd string) int {
+	reply, err := daemon.Send(layout.Default().DaemonSocket(), cmd)
+	if err != nil {
+		return 1
+	}
+	fmt.Println(reply)
+	if reply != daemon.ReplyOK && reply != daemon.ReplyNoWorkers {
+		return 1
+	}
 	return 0
 }

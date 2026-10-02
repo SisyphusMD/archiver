@@ -83,6 +83,15 @@ if [ "${TARGET}" = "maintenance" ] || [ "${TARGET}" = "all" ]; then
   [ "${TARGET}" = "maintenance" ] && exit 0
 fi
 
+# Copy workers stop too (ADR 15): no retry until a backup next changes the primary. Sent
+# again after the backup is dealt with: a stopping backup may hand its copies off (waking
+# the workers) between the first stop and its own.
+stop_copies() { /usr/local/bin/archiver daemon ctl stop >/dev/null 2>&1; }
+trap stop_copies EXIT
+if stop_copies; then
+  echo "Copies to the secondary storages stopped."
+fi
+
 if ! is_lock_valid; then
   echo "No running backup found."
   exit 0

@@ -6,17 +6,22 @@
 package pipeline
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/copier"
+	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/logging"
@@ -41,6 +46,14 @@ type Backup struct {
 	lock   *runlock.Lock
 	notify *notify.Notifier
 	env    []string // the environment duplicacy runs with: no raw secrets, every credential
+	// workers: a daemon's copy workers keep the secondaries caught up and report their
+	// health, so a secondary's failure here is not this run's.
+	workers        bool
+	failingTargets map[string]bool // secondaries the workers report retrying or down
+	oldPrefs       []byte          // the service's preferences before this run rebuilt them
+	kitMarker      string          // created by the recovery-kit step once the primary holds the kit
+	ctx            context.Context // ended by a signal or a stop request
+	cancel         context.CancelFunc
 
 	mu       sync.Mutex
 	running  []*proc.Proc
@@ -91,6 +104,24 @@ func (b *Backup) Run() int {
 	}
 	b.lock = lock
 	defer b.finish()
+	// A wait on a storage-creation lock ends on a signal or a stop request, like the rest.
+	b.mu.Lock()
+	b.ctx, b.cancel = context.WithCancel(context.Background())
+	b.mu.Unlock()
+	defer b.cancel()
+	go func() {
+		for {
+			select {
+			case <-b.ctx.Done():
+				return
+			case <-time.After(time.Second):
+				if b.lock.StopRequested() {
+					b.cancel()
+					return
+				}
+			}
+		}
+	}()
 
 	b.log.Rotate()
 	if stale {
@@ -102,7 +133,9 @@ func (b *Backup) Run() int {
 	if !ok {
 		return 1
 	}
-	b.env = b.duplicacyEnv()
+	b.env = b.cfg.DuplicacyEnviron(b.Environ, b.Layout.SSHPrivateKey())
+	b.workers = b.copyWorkersRun()
+	b.refreshFailing()
 
 	if b.stopped() {
 		return b.handleStop()
@@ -137,22 +170,6 @@ func (b *Backup) verifyConfig() ([]string, bool) {
 	return dirs, true
 }
 
-// duplicacyEnv is the inherited environment without raw secrets, plus every target's
-// credentials: the only way they reach duplicacy.
-func (b *Backup) duplicacyEnv() []string {
-	var env []string
-	for _, kv := range b.Environ {
-		name, _, _ := strings.Cut(kv, "=")
-		if !config.IsSecret(name) {
-			env = append(env, kv)
-		}
-	}
-	for _, t := range b.cfg.Targets {
-		env = append(env, b.cfg.DuplicacyEnv(t, b.Layout.SSHPrivateKey())...)
-	}
-	return env
-}
-
 func (b *Backup) main(dirs []string) int {
 	lastWorking := ""
 	for _, dir := range dirs {
@@ -181,10 +198,14 @@ func (b *Backup) main(dirs []string) int {
 		return b.exitCode()
 	}
 
-	b.lock.SetStage("duplicacy", "copy")
-	b.copies(lastWorking)
-	if b.stopped() {
-		return b.handleStop()
+	if b.workers {
+		b.handOffCopies()
+	} else {
+		b.lock.SetStage("duplicacy", "copy")
+		b.copies(lastWorking)
+		if b.stopped() {
+			return b.handleStop()
+		}
 	}
 	b.recoveryKit()
 	if b.stopped() {
@@ -321,6 +342,64 @@ func (b *Backup) run(s proc.Spec) int {
 	return code
 }
 
+// runInit runs a duplicacy init or add under the storage-creation lock the copy workers
+// also take: duplicacy 3.2.5 has no create-if-absent, so two creating one storage at once
+// can leave it with two configurations.
+func (b *Backup) runInit(storage string, s proc.Spec) int {
+	release, err := runlock.Exclusive(b.ctx, b.Layout.StorageInit(storage))
+	if err != nil {
+		b.log.Message(logging.Error, s.Service, "Cannot take the storage-creation lock: "+err.Error())
+		return -1
+	}
+	defer release()
+	return b.run(s)
+}
+
+// AddLimit bounds a secondary's registration when copy workers own the copies.
+var AddLimit = 5 * time.Minute
+
+// runAddBounded registers a secondary without letting it hold up the backup: it does not
+// wait for a worker that is creating the storage (the worker owns it), and the add itself
+// is ended after AddLimit.
+func (b *Backup) runAddBounded(storage string, s proc.Spec) int {
+	ctx, cancel := context.WithTimeout(b.ctx, time.Second)
+	release, err := runlock.Exclusive(ctx, b.Layout.StorageInit(storage))
+	cancel()
+	if err != nil {
+		return -1
+	}
+	defer release()
+	p, err := b.start(s)
+	if err != nil {
+		return -1
+	}
+	defer b.forget(p)
+	if b.waitBounded(p, AddLimit) {
+		p.Terminate(false)
+	}
+	code, _ := p.Wait()
+	return code
+}
+
+// waitBounded waits for p, counting only time the run is not paused toward limit (a
+// paused run stays resumable); true means the limit was reached.
+func (b *Backup) waitBounded(p *proc.Proc, limit time.Duration) bool {
+	var active time.Duration
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for active < limit {
+		select {
+		case <-p.Done():
+			return false
+		case <-tick.C:
+			if !b.lock.State().Paused() {
+				active += time.Second
+			}
+		}
+	}
+	return true
+}
+
 func (b *Backup) start(s proc.Spec) (*proc.Proc, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -354,11 +433,12 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 		return hooks.Failed
 	}
 	repo := filepath.Join(svc.Dir, ".duplicacy")
+	b.oldPrefs, _ = os.ReadFile(filepath.Join(repo, "preferences"))
 	if err := os.Remove(filepath.Join(repo, "preferences")); err != nil && !os.IsNotExist(err) {
 		log(logging.Error, fmt.Sprintf("Error removing preferences file for the %s service.", svc.Name))
 	}
 	log(logging.Info, fmt.Sprintf("Initializing primary storage for %s service.", svc.Name))
-	if b.run(b.duplicacy(svc.Dir, svc.Name, "init", "-e", "-key", filepath.Join(b.Layout.Root, "keys", "public.pem"),
+	if b.runInit(storage, b.duplicacy(svc.Dir, svc.Name, "init", "-e", "-key", filepath.Join(b.Layout.Root, "keys", "public.pem"),
 		"-storage-name", storage, svc.SnapshotID, url)) != 0 {
 		log(logging.Error, fmt.Sprintf("Primary storage initialization failed for %s service.", svc.Name))
 	}
@@ -416,19 +496,80 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 // addStorages adds every secondary storage to the service's repository: copy-compatible
 // with the primary (bit-identical) and RSA-encrypted, as every existing secondary was made.
 func (b *Backup) addStorages(svc hooks.Service, log func(string, string)) {
+	b.refreshFailing()
 	primary := b.cfg.Targets[0].StorageName()
+	prefs := filepath.Join(svc.Dir, ".duplicacy", "preferences")
 	for _, t := range b.cfg.Targets[1:] {
 		url, err := t.URL()
 		if err != nil {
 			log(logging.Error, err.Error()+".")
 			continue
 		}
+		if b.workers {
+			// With copy workers the backup never needs to reach a secondary: maintenance only
+			// needs it registered here, and the last run's registration is carried over while
+			// its URL is unchanged. Only a new or changed one is contacted.
+			if carryOverStorage(prefs, b.oldPrefs, t.StorageName(), url) == nil {
+				continue
+			}
+			if b.failingTargets[t.StorageName()] {
+				log(logging.Warning, fmt.Sprintf("Not adding %s storage %s for %s service: its copy worker reports it failing.", t.Type, t.StorageName(), svc.Name))
+				continue
+			}
+		}
 		log(logging.Info, fmt.Sprintf("Adding %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
-		if b.run(b.duplicacy(svc.Dir, svc.Name, "add", "-e", "-copy", primary, "-bit-identical", "-key",
-			filepath.Join(b.Layout.Root, "keys", "public.pem"), t.StorageName(), svc.SnapshotID, url)) != 0 {
-			log(logging.Error, fmt.Sprintf("Failed to add %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
+		spec := b.duplicacy(svc.Dir, svc.Name, "add", "-e", "-copy", primary, "-bit-identical", "-key",
+			filepath.Join(b.Layout.Root, "keys", "public.pem"), t.StorageName(), svc.SnapshotID, url)
+		var code int
+		if b.workers {
+			code = b.runAddBounded(t.StorageName(), spec)
+		} else {
+			code = b.runInit(t.StorageName(), spec)
+		}
+		if code != 0 {
+			if b.workers {
+				log(logging.Warning, fmt.Sprintf("Could not add %s storage %s for %s service; its copy worker reports that storage's health.", t.Type, t.StorageName(), svc.Name))
+			} else {
+				log(logging.Error, fmt.Sprintf("Failed to add %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
+			}
 		}
 	}
+}
+
+// refreshFailing re-reads which secondaries the workers report failing; it runs before
+// each step that would contact them, so an outage that began mid-backup is avoided too.
+func (b *Backup) refreshFailing() {
+	if !b.workers {
+		return
+	}
+	b.failingTargets = map[string]bool{}
+	for name, st := range (&copier.Store{Path: b.Layout.CopyWorkersState()}).Load() {
+		if st.Status == copier.Retrying || st.Status == copier.Down || st.DownSince != 0 {
+			b.failingTargets[name] = true
+		}
+	}
+}
+
+// copyWorkersRun asks the daemon whether copy workers keep the secondaries caught up.
+func (b *Backup) copyWorkersRun() bool {
+	if len(b.cfg.Targets) < 2 {
+		return false
+	}
+	reply, err := daemon.Send(b.Layout.DaemonSocket(), daemon.CmdWorkers+" "+b.cfg.StorageFingerprint())
+	return err == nil && reply == daemon.ReplyOK
+}
+
+// handOffCopies tells the daemon's copy workers that local changed (ADR 11), so this run
+// ends with the local backup instead of waiting on slow targets. It never copies inline
+// instead: a wake that timed out may still arrive, and two copiers would share a target.
+// An undelivered wake is caught up by the workers' periodic check.
+func (b *Backup) handOffCopies() {
+	reply, err := daemon.Send(b.Layout.DaemonSocket(), daemon.CmdLocalChanged+" "+b.cfg.StorageFingerprint())
+	if err != nil || reply != daemon.ReplyOK {
+		b.log.Message(logging.Warning, "", fmt.Sprintf("Could not wake the copy workers (%v %s); they copy at their next periodic check.", err, reply))
+		return
+	}
+	b.log.Message(logging.Info, "", "Copies to the secondary storages run in the background; follow them in copies.log or with 'archiver status'.")
 }
 
 // copies copies the primary to every secondary in parallel, from dir's repository, and
@@ -460,7 +601,21 @@ func (b *Backup) copyLegs(dir string, names []string) (failed []string) {
 		began time.Time
 	}
 	var legs []leg
+	var locks []func()
+	defer func() {
+		for _, release := range locks {
+			release()
+		}
+	}()
 	for _, n := range names {
+		// Shared with the copy workers of a daemon that started meanwhile.
+		release, err := runlock.Exclusive(b.ctx, b.Layout.CopyLock(n))
+		if err != nil {
+			b.log.Message(logging.Warning, n, fmt.Sprintf("Copy to %s storage failed: %v.", n, err))
+			failed = append(failed, n)
+			continue
+		}
+		locks = append(locks, release)
 		b.log.Message(logging.Info, n, fmt.Sprintf("Copying backup to %s storage.", n))
 		p, err := b.start(b.duplicacy(dir, n, "copy", "-from", primary, "-to", n,
 			"-key", b.Layout.RSAPrivateKey(), "-threads", b.cfg.Threads, "-download-threads", b.cfg.Threads))
@@ -493,6 +648,9 @@ func (b *Backup) copyLegs(dir string, names []string) (failed []string) {
 	return failed
 }
 
+// KitDeadline bounds the recovery-kit step when copy workers keep the secondaries.
+var KitDeadline = 30 * time.Minute
+
 // recoveryKit refreshes the recovery kit through the bash step. Its errors were logged and
 // notified there; one is counted here so the run still fails.
 func (b *Backup) recoveryKit() {
@@ -500,15 +658,42 @@ func (b *Backup) recoveryKit() {
 		b.log.Message(logging.Info, "", "Recovery kit not configured (no recovery_password secret); skipping.")
 		return
 	}
+	b.refreshFailing()
+	marker, merr := os.CreateTemp("", "archiver-kit-primary-")
+	if merr == nil {
+		marker.Close()
+		os.Remove(marker.Name())
+		defer os.Remove(marker.Name())
+		b.kitMarker = marker.Name()
+	}
 	p, err := b.startPlain(b.RecoveryKitStep)
 	if err != nil {
 		b.log.Message(logging.Error, "", "Recovery kit: cannot run its step: "+err.Error())
 		return
 	}
-	code, _ := p.Wait()
+	// With copy workers, the backup must not wait indefinitely on a stalled offsite (SFTP
+	// uploads have no timeout of their own): the step gets a deadline, and a kit it did not
+	// finish is placed by a later run.
+	var code int
+	if b.workers && b.waitBounded(p, KitDeadline) {
+		b.log.Message(logging.Warning, "", fmt.Sprintf("Recovery kit: still placing after %s; ending it so the backup does not wait on an offsite. A later run places it.", KitDeadline))
+		p.Terminate(false)
+	}
+	code, _ = p.Wait()
 	b.forget(p)
-	switch code {
-	case 0, 2: // 2: placed, but not verified readable on every target; retried next run
+	if b.workers && code != 0 && code != 2 && b.kitMarker != "" {
+		// The step marks when the primary holds the kit; a failure or timeout after that
+		// is a secondary's, which is not this run's.
+		if _, err := os.Stat(b.kitMarker); err == nil {
+			code = 3
+		}
+	}
+	switch {
+	case code == 0, code == 2: // 2: placed, but not verified readable on every target; retried next run
+	// 3: only secondary uploads failed, each already logged as an error, notified, and
+	// retried at the next run. With copy workers, offsite trouble is reported but does not
+	// fail the local backup.
+	case code == 3 && b.workers:
 	default:
 		if !b.isSignaled() {
 			b.log.AddErrors(1)
@@ -519,7 +704,19 @@ func (b *Backup) recoveryKit() {
 // startPlain runs a program with its output passed through, not logged: the recovery-kit
 // step logs for itself.
 func (b *Backup) startPlain(path string) (*proc.Proc, error) {
-	return b.start(proc.Spec{Path: path, Env: b.Environ, Output: b.Stdout})
+	env := b.Environ
+	if b.kitMarker != "" {
+		env = append(append([]string(nil), env...), "ARCHIVER_KIT_PRIMARY_MARKER="+b.kitMarker)
+	}
+	if len(b.failingTargets) > 0 {
+		var names []string
+		for n := range b.failingTargets {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		env = append(append([]string(nil), env...), "ARCHIVER_KIT_SKIP_TARGETS="+strings.Join(names, " "))
+	}
+	return b.start(proc.Spec{Path: path, Env: env, Output: b.Stdout, Group: true})
 }
 
 func (b *Backup) complete() {
@@ -580,6 +777,9 @@ func (b *Backup) Watch(stop <-chan struct{}) {
 func (b *Backup) onSignal() {
 	b.mu.Lock()
 	b.signaled = true
+	if b.cancel != nil {
+		b.cancel()
+	}
 	dup := append([]*proc.Proc(nil), b.running...)
 	b.mu.Unlock()
 	for _, p := range dup {
@@ -642,4 +842,45 @@ func Hostname(getenv func(string) string) string {
 	}
 	h, _ := os.Hostname()
 	return h
+}
+
+// carryOverStorage copies storage's entry from the old preferences into the new ones, if
+// it is there with the same URL.
+func carryOverStorage(prefsPath string, old []byte, storage, url string) error {
+	var before, now []map[string]any
+	if len(old) == 0 {
+		return fmt.Errorf("no previous registration")
+	}
+	if err := json.Unmarshal(old, &before); err != nil {
+		return err
+	}
+	cur, err := os.ReadFile(prefsPath)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(cur, &now); err != nil {
+		return err
+	}
+	for _, e := range now {
+		if e["name"] == storage {
+			return nil
+		}
+	}
+	for _, e := range before {
+		if e["name"] == storage && e["storage"] == url {
+			// Preferences written before credentials moved to environment variables can
+			// hold them in plain text here; the rebuilt file must not.
+			e["keys"] = nil
+			out, err := json.MarshalIndent(append(now, e), "", "    ")
+			if err != nil {
+				return err
+			}
+			tmp := prefsPath + ".tmp"
+			if err := os.WriteFile(tmp, out, 0o600); err != nil {
+				return err
+			}
+			return os.Rename(tmp, prefsPath)
+		}
+	}
+	return fmt.Errorf("no previous registration")
 }

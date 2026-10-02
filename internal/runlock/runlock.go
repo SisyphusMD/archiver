@@ -6,6 +6,7 @@
 package runlock
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -26,6 +27,9 @@ type Lock struct {
 	now      func() time.Time
 }
 
+// releaseWait is how long Acquire waits for a run that is releasing the lock.
+var releaseWait = 5 * time.Second
+
 // Busy is returned when another run holds the lock.
 type Busy struct{ Holder lockstate.Lock }
 
@@ -38,13 +42,25 @@ func Acquire(path, stopFlag, context, stage string) (l *Lock, stale bool, err er
 	if err != nil {
 		return nil, false, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		holder, _, _ := lockstate.ReadLock(path)
-		if errors.Is(err, syscall.EWOULDBLOCK) {
+	// A run releases by removing its lock file and then dropping the kernel lock, so a lock
+	// held with no live holder in the file is being released: wait for it briefly rather
+	// than refusing a backup over a run that has already finished.
+	deadline := time.Now().Add(releaseWait)
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			f.Close()
+			return nil, false, err
+		}
+		holder, ok, _ := lockstate.ReadLock(path)
+		if (ok && holder.Alive()) || time.Now().After(deadline) {
+			f.Close()
 			return nil, false, &Busy{Holder: holder}
 		}
-		return nil, false, err
+		time.Sleep(50 * time.Millisecond)
 	}
 	// A bash run holds no flock; its live PID in the lock file is what excludes it.
 	if prev, ok, _ := lockstate.ReadLock(path); ok {
@@ -153,3 +169,46 @@ func Summarize(s lockstate.Lock) Summary {
 
 // PID is the holder's process ID, for messages.
 func (l *Lock) PID() string { return strconv.Itoa(l.pid) }
+
+// Exclusive waits until it holds the kernel lock at path, or ctx ends, and returns its
+// release. It serializes work that must never overlap within the container, such as
+// creating a storage, without a lock file anyone reads.
+func Exclusive(ctx context.Context, path string) (func(), error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			return func() { f.Close() }, nil
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			f.Close()
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			f.Close()
+			return nil, ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+// Hold takes the kernel lock at path without waiting and keeps it until the returned
+// file is closed or the process ends; ok is false when another process holds it.
+func Hold(path string) (f *os.File, ok bool, err error) {
+	f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return f, true, nil
+}

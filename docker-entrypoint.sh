@@ -20,7 +20,7 @@ handle_shutdown() {
     sleep 1
   done
 
-  for tailer_pid in "$LOG_TAILER_PID" "$MAINT_TAILER_PID"; do
+  for tailer_pid in "$LOG_TAILER_PID" "$MAINT_TAILER_PID" "${COPIES_TAILER_PID:-}"; do
     if [ -n "$tailer_pid" ] && kill -0 "$tailer_pid" 2>/dev/null; then
       kill "$tailer_pid" 2>/dev/null || true
     fi
@@ -224,6 +224,8 @@ if [ -d "${LOG_DIR}" ]; then
     LOG_TAILER_PID=$!
     start_log_tailer "${LOG_DIR}/maintenance.log" "Maintenance Logs"
     MAINT_TAILER_PID=$!
+    start_log_tailer "${LOG_DIR}/copies.log" "Copy Logs"
+    COPIES_TAILER_PID=$!
 fi
 
 # CRON_SCHEDULE was renamed. Refusing to start beats silently ignoring it — an ignored

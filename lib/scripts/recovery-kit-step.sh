@@ -1,7 +1,8 @@
 #!/bin/bash
 # The Go backup pipeline's recovery-kit step while the kit is still bash. Exits 0, 1 for
-# errors (each already logged and notified), or 2 when the kit was placed but a target
-# could not be verified readable, which a backup has never counted as an error.
+# errors (each already logged and notified), 2 when the kit was placed but a target could
+# not be verified readable (never counted as an error), or 3 when only secondary uploads
+# failed (the copy workers report those storages).
 
 # shellcheck disable=SC2034  # source_if_not_sourced gates on this
 RECOVERY_KIT_STEP_SH_SOURCED=true

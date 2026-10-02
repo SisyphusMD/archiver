@@ -2,7 +2,9 @@ package proc
 
 import (
 	"os"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -45,4 +47,40 @@ func TestTerminate(t *testing.T) {
 	if code != 128+9 || time.Since(began) > 10*time.Second {
 		t.Fatalf("code %d after %v", code, time.Since(began))
 	}
+}
+
+// Terminating a group ends grandchildren too.
+func TestTerminateGroup(t *testing.T) {
+	log := &logging.Log{Dir: t.TempDir(), Basename: "archiver"}
+	pidFile := t.TempDir() + "/grandchild"
+	p, err := Start(Spec{Path: "/bin/sh", Args: []string{"-c", "sh -c 'echo $$ > " + pidFile + "; sleep 30' & wait"}, Env: os.Environ(), Log: log, Group: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pid int
+	for i := 0; i < 50 && pid == 0; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if b, err := os.ReadFile(pidFile); err == nil {
+			pid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
+		}
+	}
+	if pid == 0 {
+		t.Fatal("grandchild never started")
+	}
+	p.Terminate(false)
+	p.Wait()
+	time.Sleep(200 * time.Millisecond)
+	if syscall.Kill(pid, 0) == nil && !zombie(pid) {
+		t.Fatal("the grandchild outlived Terminate")
+	}
+}
+
+func zombie(pid int) bool {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return true
+	}
+	s := string(b)
+	i := strings.LastIndexByte(s, ')')
+	return i >= 0 && i+2 < len(s) && s[i+2] == 'Z'
 }

@@ -135,3 +135,25 @@ func TestRunWaitsForRunningJob(t *testing.T) {
 		t.Fatal("job did not finish")
 	}
 }
+
+func TestSocket(t *testing.T) {
+	path := t.TempDir() + "/d.sock"
+	var got []string
+	ln, err := Serve(path, func(cmd string) string { got = append(got, cmd); return ReplyOK })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	if r, err := Send(path, CmdLocalChanged); err != nil || r != ReplyOK {
+		t.Fatalf("reply %q, %v", r, err)
+	}
+	if len(got) != 1 || got[0] != CmdLocalChanged {
+		t.Fatalf("handled %q", got)
+	}
+	if _, err := Serve(path, func(string) string { return ReplyOK }); err == nil {
+		t.Fatal("a second daemon replaced a live socket")
+	}
+	if _, err := Send(t.TempDir()+"/none.sock", CmdStop); err == nil {
+		t.Fatal("no daemon must be an error")
+	}
+}

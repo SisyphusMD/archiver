@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestAcquireAndFormat(t *testing.T) {
@@ -73,6 +75,20 @@ func TestBashLockFile(t *testing.T) {
 	l, stale, err := Acquire(path, flag, "duplicacy", "pre-backup")
 	if err != nil || !stale {
 		t.Fatalf("dead bash lock: %v stale=%v", err, stale)
+	}
+	l.Release()
+}
+
+// A lock still held by a run that already removed its lock file is waited for, not refused.
+func TestAcquireWaitsForRelease(t *testing.T) {
+	dir := t.TempDir()
+	path, flag := filepath.Join(dir, "main.lock"), filepath.Join(dir, "stop")
+	f, _ := os.OpenFile(path+".flock", os.O_RDWR|os.O_CREATE, 0o644)
+	syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+	go func() { time.Sleep(300 * time.Millisecond); f.Close() }()
+	l, _, err := Acquire(path, flag, "duplicacy", "pre-backup")
+	if err != nil {
+		t.Fatalf("a releasing holder made Acquire fail: %v", err)
 	}
 	l.Release()
 }
