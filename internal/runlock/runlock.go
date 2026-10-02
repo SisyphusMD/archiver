@@ -6,6 +6,7 @@
 package runlock
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -153,3 +154,46 @@ func Summarize(s lockstate.Lock) Summary {
 
 // PID is the holder's process ID, for messages.
 func (l *Lock) PID() string { return strconv.Itoa(l.pid) }
+
+// Exclusive waits until it holds the kernel lock at path, or ctx ends, and returns its
+// release. It serializes work that must never overlap within the container, such as
+// creating a storage, without a lock file anyone reads.
+func Exclusive(ctx context.Context, path string) (func(), error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			return func() { f.Close() }, nil
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			f.Close()
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			f.Close()
+			return nil, ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+// Hold takes the kernel lock at path without waiting and keeps it until the returned
+// file is closed or the process ends; ok is false when another process holds it.
+func Hold(path string) (f *os.File, ok bool, err error) {
+	f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+	if err != nil {
+		return nil, false, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return f, true, nil
+}
