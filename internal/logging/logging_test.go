@@ -95,3 +95,20 @@ func TestHookLinesLevels(t *testing.T) {
 		t.Errorf("errors = %d, want the [ERROR] line counted", l.Errors())
 	}
 }
+
+// Two runs starting in the same second each get their own file.
+func TestRotateSameSecond(t *testing.T) {
+	dir := t.TempDir()
+	clock := time.Date(2026, 10, 2, 12, 0, 0, 0, time.Local)
+	l := &Log{Dir: dir, Basename: "archiver", Now: func() time.Time { return clock }}
+	l.Rotate()
+	l.Message(Error, "", "first run failed")
+	l.Rotate()
+	b, _ := os.ReadFile(l.Path())
+	if strings.Contains(string(b), "first run failed") {
+		t.Fatalf("the second run's log carries the first run's error:\n%s", b)
+	}
+	if target, _ := os.Readlink(l.Path()); target != "prior_logs/archiver-2026-10-02_120000-1.log" {
+		t.Fatalf("symlink -> %q", target)
+	}
+}

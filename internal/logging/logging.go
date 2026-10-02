@@ -178,12 +178,25 @@ func (l *Log) Rotate() {
 	if err := os.MkdirAll(old, 0o755); err != nil {
 		l.Message(Error, "", "Unable to create log directory "+old+".")
 	}
-	name := l.Basename + "-" + l.now().Format("2006-01-02_150405") + ".log"
-	file := filepath.Join(old, name)
-	if f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE, 0o644); err != nil {
-		l.Message(Error, "", "Could not create log file "+file+".")
-	} else {
-		f.Close()
+	// Each run gets a file of its own, even when two start within the same second: a run's
+	// log must not carry an earlier run's errors.
+	stamp := l.Basename + "-" + l.now().Format("2006-01-02_150405")
+	name, file := "", ""
+	for i := 0; ; i++ {
+		name = stamp + ".log"
+		if i > 0 {
+			name = fmt.Sprintf("%s-%d.log", stamp, i)
+		}
+		file = filepath.Join(old, name)
+		f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			f.Close()
+			break
+		}
+		if !os.IsExist(err) || i > 100 {
+			l.Message(Error, "", "Could not create log file "+file+".")
+			break
+		}
 	}
 	l.Message(Info, "", "Log file created: "+file+".")
 	link := l.Path()
