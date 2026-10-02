@@ -861,32 +861,40 @@ In Kubernetes this is typically an init container on the workload pod: probe wit
 
 ### Custom Service Scripts
 
-Create `service-backup-settings.sh` in any service directory:
+Any service directory may hold up to three optional files:
+
+- `filters`: [Duplicacy include/exclude patterns](https://forum.duplicacy.com/t/filters-include-exclude-patterns/1089), one per line, first match wins. Without it, everything is backed up.
+- `pre-backup`: an executable run before the backup, for example to dump a database.
+- `post-backup`: an executable run after it, for example to clean up or restart what `pre-backup` stopped.
+
+```bash
+# filters
++backup.sql
++data/
++data/*
++filters
++pre-backup
++post-backup
+-*
+```
 
 ```bash
 #!/bin/bash
-
-# Custom file filters
-DUPLICACY_FILTERS_PATTERNS=(
-  "+*.txt"
-  "-*.tmp"
-  "+*"
-)
-
-# Run before backup
-service_specific_pre_backup_function() {
-  echo "Dumping database..."
-  docker exec postgres-container pg_dump -U user dbname > backup.sql
-}
-
-# Run after backup
-service_specific_post_backup_function() {
-  echo "Cleaning up..."
-  rm -f backup.sql
-}
+# pre-backup (chmod +x)
+docker exec postgres-container pg_dump -U user dbname > backup.sql
 ```
 
-Exit codes count. If the pre-backup function returns non-zero (the dump above failing, say), that service is **not** backed up that run: its newest revision stays the last good one instead of one holding a broken dump, and the run reports an error while every other service still backs up. The post-backup function always runs once the pre-backup function has, even after a failed pre hook, a failed backup, or a stop, so it can restart whatever the pre hook stopped; a non-zero return from it is reported as an error. A settings file with a syntax error is an error too, and that service is skipped. To keep backing up when a step fails, handle the failure inside the function and return 0.
+```bash
+#!/bin/bash
+# post-backup (chmod +x)
+rm -f backup.sql
+```
+
+A hook can be any program the container can run (most are shell scripts). It runs in the service directory, and its output goes to the Archiver log; a line starting `[ERROR] ` or `[WARNING] ` is logged at that level, and an `[ERROR]` line counts as an error of the run (with a notification) without skipping the service. A background process a hook starts must redirect its own output: Archiver stops reading a hook's output two seconds after the hook exits. It receives `ARCHIVER_SERVICE`, `ARCHIVER_SERVICE_DIR`, `ARCHIVER_SNAPSHOT_ID`, and `ARCHIVER_STATE_DIR`, a scratch directory shared by that run's `pre-backup` and `post-backup` (to pass a value from one to the other). `post-backup` also receives `ARCHIVER_BACKUP_RESULT`: `success`, `failed`, `skipped`, or `stopped`. Hooks never receive storage credentials or the RSA passphrase.
+
+Exit codes count. If `pre-backup` exits non-zero (the dump above failing, say), that service is **not** backed up that run: its newest revision stays the last good one instead of one holding a broken dump, and the run reports an error while every other service still backs up. `post-backup` always runs once `pre-backup` has, even after a failed `pre-backup`, a failed backup, or a stop, so it can restart whatever `pre-backup` stopped; a non-zero exit from it is reported as an error. A hook file that exists but is not executable is an error, and that service is skipped.
+
+**Upgrading from `service-backup-settings.sh`:** run `archiver migrate hooks` once. For every configured service it writes `pre-backup` and `post-backup` wrappers that call your existing functions, writes your `DUPLICACY_FILTERS_PATTERNS` to `filters` (a pattern naming the old file is rewritten to name the new ones), and keeps the old file as `service-backup-settings.legacy.sh`, which the wrappers source. It warns if a post-backup function reads a variable its pre-backup function sets, which no longer carries over between the two processes. Until a deployment is migrated it keeps running on the previous (bash) backup pipeline.
 
 ### Custom Restore Scripts
 

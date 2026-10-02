@@ -53,22 +53,16 @@ func (d *Deployment) WaitStopped(t testing.TB, timeout time.Duration) bool {
 // ServiceHooks are shell snippets a service runs before and after its backup.
 type ServiceHooks struct{ Pre, Post string }
 
-// InstallServiceHooks gives the service at serviceDir its hooks. The 0.11 form, functions
-// in a sourced service-backup-settings.sh, is incidental (ADR 1): v1 may make hooks
-// executables, and only this function changes.
-func InstallServiceHooks(t testing.TB, serviceDir string, h ServiceHooks) {
+// InstallServiceHooks gives the service at serviceDir its hooks, in the form image runs.
+func InstallServiceHooks(t testing.TB, image, serviceDir string, h ServiceHooks) {
 	t.Helper()
-	body := func(s string) string {
+	body := func(s string) *string {
 		if strings.TrimSpace(s) == "" {
-			return "  :"
+			s = "  :"
 		}
-		return s
+		return &s
 	}
-	src := fmt.Sprintf("service_specific_pre_backup_function() {\n%s\n}\n\nservice_specific_post_backup_function() {\n%s\n}\n",
-		body(h.Pre), body(h.Post))
-	if err := os.WriteFile(filepath.Join(serviceDir, "service-backup-settings.sh"), []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeServiceFiles(t, image, serviceDir, serviceFiles{pre: body(h.Pre), post: body(h.Post)})
 }
 
 // BreakStorage makes a local storage unable to take or give chunks while its config and

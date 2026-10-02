@@ -178,7 +178,7 @@ func TestRestoreFiltersSelectExactFiles(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		harness.SetFilters(t, dir, c.patterns)
+		harness.SetFilters(t, image, dir, c.patterns)
 		all := harness.Snapshot(t, dir)
 		want := harness.Tree{}
 		for _, rel := range c.want {

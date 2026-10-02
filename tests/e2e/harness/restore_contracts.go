@@ -2,35 +2,22 @@ package harness
 
 import (
 	"io/fs"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
-// filterSettingsFile is where 0.11 reads a service's filters: a bash file inside the
-// service directory. Incidental (ADR 1); v1 may take filters from its own config.
-const filterSettingsFile = "service-backup-settings.sh"
-
 // SetFilters makes a service back up exactly the paths Duplicacy's include/exclude
-// patterns select. The patterns keep Duplicacy's syntax (first match wins, "+"/"-" prefix,
-// trailing "/" for directories), which is the contract; how they reach archiver is not.
-// Whatever file carries them is itself excluded, so the service's backed-up set is
-// decided by patterns alone.
-func SetFilters(t testing.TB, serviceDir string, patterns []string) {
+// patterns select, written in the form image reads them. The patterns keep Duplicacy's
+// syntax (first match wins, "+"/"-" prefix, trailing "/" for directories), which is the
+// contract; how they reach archiver is not. Whatever file carries them is itself excluded,
+// so the service's backed-up set is decided by patterns alone.
+func SetFilters(t testing.TB, image, serviceDir string, patterns []string) {
 	t.Helper()
-	var b strings.Builder
-	b.WriteString("DUPLICACY_FILTERS_PATTERNS=(\n")
-	for _, p := range append([]string{"-" + filterSettingsFile}, patterns...) {
-		if strings.Contains(p, "'") {
-			t.Fatalf("filter pattern %q: single quotes are not supported", p)
-		}
-		b.WriteString("  '" + p + "'\n")
+	var all []string
+	for _, f := range filterFiles(t, image) {
+		all = append(all, "-"+f)
 	}
-	b.WriteString(")\n")
-	if err := os.WriteFile(filepath.Join(serviceDir, filterSettingsFile), []byte(b.String()), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeServiceFiles(t, image, serviceDir, serviceFiles{filters: append(all, patterns...)})
 }
 
 // Files keeps only the non-directory entries: which directories a restore recreates

@@ -130,7 +130,7 @@ func TestExitStopStoppedBackup(t *testing.T) {
 	in := newExitStopInstall(t, "a", "b")
 	// A deployment that maintains its storages, so a prune after the stop could happen.
 	in.d.SetMaintenance(harness.MaintenanceConfig{Check: true, Prune: true, Exhaustive: harness.ExhaustiveDaily})
-	harness.InstallServiceHooks(t, in.svc["b"], harness.ServiceHooks{
+	harness.InstallServiceHooks(t, in.d.Image, in.svc["b"], harness.ServiceHooks{
 		Pre: `  if [ -e ` + harness.SignalDir + `/block ]; then
     touch ` + harness.SignalDir + `/pre-started
     while [ ! -e ` + harness.SignalDir + `/release ]; do sleep 0.2; done
@@ -181,7 +181,7 @@ func TestExitStopSIGTERM(t *testing.T) {
 	in := newExitStopInstall(t, "app")
 	// The pre hook outlives any immediate exit by far, so an entrypoint that does not wait
 	// for the run is caught deterministically.
-	harness.InstallServiceHooks(t, in.svc["app"], harness.ServiceHooks{
+	harness.InstallServiceHooks(t, in.d.Image, in.svc["app"], harness.ServiceHooks{
 		Pre:  `  touch ` + harness.SignalDir + `/pre-started; sleep 8`,
 		Post: `  touch ` + harness.SignalDir + `/post-ran`,
 	})

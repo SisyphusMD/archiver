@@ -26,8 +26,7 @@ type HookSpec struct {
 }
 
 // Hooks installs hooks into a deployment's services and reads back what they recorded.
-// The 0.11 hook surface (a sourced service-backup-settings.sh defining two functions) is
-// incidental (ADR 1): v1's executable hooks become a second rendering of the same spec.
+// They are written in whichever form the deployment's image runs (writeServiceFiles).
 type Hooks struct {
 	d   *Deployment
 	dir string // host side of containerHookDir
@@ -54,20 +53,17 @@ func (h *Hooks) Install(t testing.TB, service string, spec HookSpec) {
 	if !ok {
 		t.Fatalf("no service %q", service)
 	}
-	fn := func(phase string, fail bool) string {
-		body := fmt.Sprintf("  echo '%s %s' >> %s/calls\n", service, phase, containerHookDir)
+	body := func(phase string, fail bool) *string {
+		b := fmt.Sprintf("  echo '%s %s' >> %s/calls\n", service, phase, containerHookDir)
 		if spec.RecordEnv {
-			body += fmt.Sprintf("  env > %s/%s-%s.env\n", containerHookDir, service, phase)
+			b += fmt.Sprintf("  env > %s/%s-%s.env\n", containerHookDir, service, phase)
 		}
 		if fail {
-			body += "  return 7\n"
+			b += "  return 7\n"
 		}
-		return fmt.Sprintf("service_specific_%s_backup_function() {\n%s}\n", phase, body)
+		return &b
 	}
-	script := fn("pre", spec.Pre == PreFails) + fn("post", false)
-	if err := os.WriteFile(filepath.Join(svcDir, "service-backup-settings.sh"), []byte(script), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeServiceFiles(t, h.d.Image, svcDir, serviceFiles{pre: body("pre", spec.Pre == PreFails), post: body("post", false)})
 }
 
 // Calls lists the hook calls so far, in order, as "<service> pre" and "<service> post".

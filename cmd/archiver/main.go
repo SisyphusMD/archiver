@@ -47,6 +47,14 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "daemon" {
 		os.Exit(runDaemon(os.Args[2:]))
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "backup" {
+		if code, ok := backupCommand(os.Args[2:]); ok {
+			os.Exit(code)
+		}
+	}
+	if len(os.Args) >= 3 && os.Args[1] == "migrate" && os.Args[2] == "hooks" {
+		os.Exit(migrateHooks(os.Args[3:]))
+	}
 	if len(os.Args) == 2 {
 		if run, ok := ported[os.Args[1]]; ok {
 			os.Exit(run())

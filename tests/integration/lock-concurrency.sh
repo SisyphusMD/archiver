@@ -100,7 +100,7 @@ echo "999999 duplicacy pre-backup" >"$LOCKFILE"
 rm -f "$MARKER"
 archiver backup --detach >/dev/null || die "archiver start failed on stale lock"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
-[ -f "$MARKER" ] || die "backup never started after stale-lock recovery"
+[ -f "$MARKER" ] || { ls -la /var/lock; cat "$LOCKFILE" 2>/dev/null; tail -30 /opt/archiver/logs/archiver.log; die "backup never started after stale-lock recovery"; }
 
 NEW_PID="$(head -n1 "$LOCKFILE" | cut -d' ' -f1)"
 [ -n "$NEW_PID" ] && [ "$NEW_PID" != "999999" ] || die "lockfile still carries the stale PID"
