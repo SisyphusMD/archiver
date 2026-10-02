@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
+	"time"
 )
 
 // Storage is one storage target. The first one in a Deployment is the primary.
@@ -89,6 +91,31 @@ func (d *Deployment) Start(t testing.TB) {
 		}
 		docker(t, "rm", "-f", d.name)
 	})
+	d.waitReady(t)
+}
+
+// readyMarkers are what the entrypoint prints once keys and secrets are in place and it
+// is waiting for commands or schedules; a command run before that can miss the keys.
+var readyMarkers = []string{"Container is ready", "Starting scheduler", "Starting supercronic"}
+
+// waitReady waits for the entrypoint to finish setting up, or for the container to exit
+// (a refused start, which the test itself judges).
+func (d *Deployment) waitReady(t testing.TB) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	for time.Now().Before(deadline) {
+		logs := docker(t, "logs", d.name).Output()
+		for _, m := range readyMarkers {
+			if strings.Contains(logs, m) {
+				return
+			}
+		}
+		if !d.Running(t) {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("%s never became ready:\n%s", d.name, docker(t, "logs", d.name).Output())
 }
 
 // Stop removes the container early, so another image can take over the installation.
