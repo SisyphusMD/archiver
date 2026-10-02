@@ -62,8 +62,8 @@ func Exists(dir, name string) (bool, error) {
 
 var credentialVar = regexp.MustCompile(`^DUPLICACY_([A-Z0-9_]+_)?(PASSWORD|RSA_PASSPHRASE|B2_ID|B2_KEY|S3_ID|S3_SECRET|SSH_KEY_FILE)$`)
 
-// Environ is base without any secret or Duplicacy credential, plus the hook's variables.
-func Environ(base []string, s Service, result string) []string {
+// withoutSecrets is base without any secret, Duplicacy credential, or ARCHIVER_ variable.
+func withoutSecrets(base []string) []string {
 	var env []string
 	for _, kv := range base {
 		name, _, _ := strings.Cut(kv, "=")
@@ -72,7 +72,12 @@ func Environ(base []string, s Service, result string) []string {
 		}
 		env = append(env, kv)
 	}
-	env = append(env,
+	return env
+}
+
+// Environ is base without any secret or Duplicacy credential, plus the hook's variables.
+func Environ(base []string, s Service, result string) []string {
+	env := append(withoutSecrets(base),
 		"ARCHIVER_SERVICE="+s.Name,
 		"ARCHIVER_SERVICE_DIR="+s.Dir,
 		"ARCHIVER_SNAPSHOT_ID="+s.SnapshotID,

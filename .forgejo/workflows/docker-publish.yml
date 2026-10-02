@@ -324,6 +324,10 @@ jobs:
         run: |
           docker run -i --rm --hostname sd-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/service-dirs-reported.sh
+      - name: Hook migration (legacy settings become executable hooks the Go pipeline runs)
+        run: |
+          docker run -i --rm --hostname mh-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/migrate-hooks.sh
       - name: Scheduler smoke test (the daemon fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.

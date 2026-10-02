@@ -13,6 +13,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/pipeline"
+	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
 const recoveryKitStep = "/opt/archiver/lib/scripts/recovery-kit-step.sh"
@@ -118,4 +119,67 @@ func detachBackup(l layout.Layout) int {
 	cmd.Process.Release()
 	fmt.Println("Backup started in the background (follow with 'archiver logs').")
 	return 0
+}
+
+// migrateHooks runs `archiver migrate hooks [DIR...]`: every configured service directory,
+// or the ones named.
+func migrateHooks(dirs []string) int {
+	// Migrated services run only on the Go pipeline; converting them for a deployment that
+	// must stay on bash would leave every one of their backups refused.
+	if _, err := os.Stat(layout.Default().ConfigFile()); err == nil {
+		fmt.Fprintln(os.Stderr, "This deployment still uses a bundle (config.sh), which runs the bash pipeline. Migrate the bundle first ('archiver migrate'), then the hooks.")
+		return 1
+	}
+	if os.Getenv("ARCHIVER_PIPELINE") == "bash" {
+		fmt.Fprintln(os.Stderr, "ARCHIVER_PIPELINE=bash keeps this deployment on the bash pipeline, which does not run migrated hooks. Unset it before migrating.")
+		return 1
+	}
+	if len(dirs) == 0 {
+		cfg, _, err := config.Load(config.FromEnvironment(), nil)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "archiver:", err)
+			return 1
+		}
+		var unmatched []string
+		dirs, unmatched = config.ExpandServiceDirectories(cfg.ServiceDirectories)
+		for _, u := range unmatched {
+			fmt.Fprintf(os.Stderr, "SERVICE_DIRECTORIES entry '%s' matches no directory; skipped.\n", u)
+		}
+		if len(dirs) == 0 {
+			fmt.Fprintln(os.Stderr, "No service directories to migrate. Set SERVICE_DIRECTORIES, or name the directories.")
+			return 1
+		}
+	}
+	// Held throughout: a backup reading a service's files mid-migration could see neither
+	// the old settings file nor the new hooks, and back up without either.
+	l := layout.Default()
+	lock, _, err := runlock.Acquire(l.BackupLock(), filepath.Join(l.Lock, "archiver-stop-requested"), "migrate", "hooks")
+	if busy, ok := err.(*runlock.Busy); ok {
+		fmt.Fprintf(os.Stderr, "A backup is running (PID %d). Migrate the hooks once it has finished.\n", busy.Holder.PID)
+		return 1
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "archiver: cannot take the backup lock:", err)
+		return 1
+	}
+	defer lock.Release()
+	code, migrated := 0, 0
+	for _, d := range dirs {
+		m, err := hooks.Migrate(d, pipeline.Hostname(os.Getenv))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "archiver:", err)
+			code = 1
+			continue
+		}
+		if m == nil {
+			continue
+		}
+		migrated++
+		fmt.Printf("%s: wrote %v; kept the old file as %s.\n", d, m.Wrote, hooks.LegacyKept)
+		for _, w := range m.Warnings {
+			fmt.Fprintln(os.Stderr, "WARNING:", w)
+		}
+	}
+	fmt.Printf("Migrated %d service directories.\n", migrated)
+	return code
 }

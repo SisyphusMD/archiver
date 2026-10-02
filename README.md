@@ -894,6 +894,8 @@ A hook can be any program the container can run (most are shell scripts). It run
 
 Exit codes count. If `pre-backup` exits non-zero (the dump above failing, say), that service is **not** backed up that run: its newest revision stays the last good one instead of one holding a broken dump, and the run reports an error while every other service still backs up. `post-backup` always runs once `pre-backup` has, even after a failed `pre-backup`, a failed backup, or a stop, so it can restart whatever `pre-backup` stopped; a non-zero exit from it is reported as an error. A hook file that exists but is not executable is an error, and that service is skipped.
 
+**Upgrading from `service-backup-settings.sh`:** run `archiver migrate hooks` once. For every configured service it writes `pre-backup` and `post-backup` wrappers that call your existing functions, writes your `DUPLICACY_FILTERS_PATTERNS` to `filters` (a pattern naming the old file is rewritten to name the new ones), and keeps the old file as `service-backup-settings.legacy.sh`, which the wrappers source. It warns if a post-backup function reads a variable its pre-backup function sets, which no longer carries over between the two processes. Until a deployment is migrated it keeps running on the previous (bash) backup pipeline.
+
 ### Custom Restore Scripts
 
 Create `restore-service.sh` in any service directory to run post-restore tasks:

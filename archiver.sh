@@ -21,6 +21,7 @@ usage() {
   echo "  resume may be used in combination with logs."
   echo "  bundle requires a subcommand: export or import"
   echo "  migrate takes an optional OUTPUT_DIR (default /opt/archiver/migrate): writes the effective config as an env file + secret files."
+  echo "  migrate hooks [DIR...] converts each service's service-backup-settings.sh into executable pre-backup/post-backup hooks and a filters file."
   echo "  recovery-kit uploads the encrypted recovery kit to every storage target; 'recovery-kit force' re-uploads even if unchanged."
   echo "  pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments."
   echo "  auto-restore and snapshot-exists are non-interactive and driven by environment variables."
