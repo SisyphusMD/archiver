@@ -172,7 +172,7 @@ type Gate struct {
 
 // GatePreHook installs a pre-backup hook on service that records each entry and then
 // waits for the gate. The gate starts closed. It must be called before Start. The hook is
-// the 0.11 sourced service-backup-settings.sh; v1 executable hooks swap in here.
+// written in the form d's image runs.
 func (d *Deployment) GatePreHook(t testing.TB, service string) *Gate {
 	t.Helper()
 	dir, err := os.MkdirTemp(filepath.Dir(d.Keys.PrivatePath), "gate-")
@@ -181,14 +181,9 @@ func (d *Deployment) GatePreHook(t testing.TB, service string) *Gate {
 	}
 	const inContainer = "/e2e-gate"
 	d.Mount(dir, inContainer)
-	hook := `service_specific_pre_backup_function() {
-  echo entered >> ` + inContainer + `/entered
-  while [ ! -e ` + inContainer + `/open ]; do sleep 0.2; done
-}
-`
-	if err := os.WriteFile(filepath.Join(d.Services[service], "service-backup-settings.sh"), []byte(hook), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	hook := `  echo entered >> ` + inContainer + `/entered
+  while [ ! -e ` + inContainer + `/open ]; do sleep 0.2; done`
+	writeServiceFiles(t, d.Image, d.Services[service], serviceFiles{pre: &hook})
 	return &Gate{dir: dir}
 }
 
