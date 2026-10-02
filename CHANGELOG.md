@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- Copy workers: on a schedule, each secondary storage has a worker that copies every revision it lacks, retries a failed copy after 1, 5 and 15 minutes and then every 30 minutes, and notifies once when the storage has been failing for 30 minutes, daily while it stays down, and once when it recovers. A backup no longer waits for copies, so a slow or unreachable offsite no longer delays the next backup or makes it fail. `archiver status` shows each storage's copy state, and `logs/copies.log` holds the workers' log. Without a schedule, backups still copy for themselves.
 - `archiver migrate hooks` converts each service's `service-backup-settings.sh` into executable `pre-backup` and `post-backup` hooks and a `filters` file. The generated hooks call your existing functions, so they keep working unchanged.
 
 ### Security

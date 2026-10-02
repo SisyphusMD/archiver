@@ -8,6 +8,10 @@ fi
 source_if_not_sourced "${LOCKFILE_CORE}"
 source_if_not_sourced "${NOTIFICATION_FEATURE}"
 
+if /usr/local/bin/archiver daemon ctl resume >/dev/null 2>&1; then
+  echo "Copies to the secondary storages resumed."
+fi
+
 if ! is_lock_valid; then
   echo "No paused backup found."
   exit 0

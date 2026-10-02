@@ -8,6 +8,11 @@ fi
 source_if_not_sourced "${LOCKFILE_CORE}"
 source_if_not_sourced "${NOTIFICATION_FEATURE}"
 
+# Copy workers pause too (ADR 15): a running copy freezes and none starts until resume.
+if /usr/local/bin/archiver daemon ctl pause >/dev/null 2>&1; then
+  echo "Copies to the secondary storages paused."
+fi
+
 if ! is_lock_valid; then
   echo "No running backup found."
   exit 0

@@ -29,6 +29,9 @@ type Spec struct {
 	Output io.Writer
 	// Hook logs each output line at the level its [ERROR] or [WARNING] prefix asks for.
 	Hook bool
+	// Group runs the program in its own process group, so Terminate ends everything it
+	// started, however deep (a shell's command substitutions included).
+	Group bool
 }
 
 // outputGrace is how long output is still read after the program itself exits.
@@ -36,10 +39,11 @@ var outputGrace = 2 * time.Second
 
 // Proc is a started program.
 type Proc struct {
-	cmd  *exec.Cmd
-	done chan struct{}
-	code int
-	err  error
+	cmd   *exec.Cmd
+	done  chan struct{}
+	code  int
+	err   error
+	group bool
 }
 
 // Start starts the program with stdout and stderr logged as INFO lines, in order.
@@ -60,11 +64,14 @@ func Start(s Spec) (*Proc, error) {
 	// A background process the program left running holds its output open; past this,
 	// the program counts as done and the output pipe is closed.
 	cmd.WaitDelay = outputGrace
+	if s.Group {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}
 	if err := cmd.Start(); err != nil {
 		w.Close()
 		return nil, err
 	}
-	p := &Proc{cmd: cmd, done: make(chan struct{})}
+	p := &Proc{cmd: cmd, done: make(chan struct{}), group: s.Group}
 	go func() {
 		err := cmd.Wait()
 		w.Close()
@@ -120,16 +127,27 @@ func (p *Proc) Terminate(kill bool) {
 	if kill {
 		sig = syscall.SIGKILL
 	}
-	signalTree(p.PID(), sig)
+	p.signal(sig)
 	if kill {
 		return
 	}
 	select {
 	case <-p.done:
 	case <-time.After(2 * time.Second):
-		signalTree(p.PID(), syscall.SIGKILL)
+		p.signal(syscall.SIGKILL)
 	}
 }
+
+func (p *Proc) signal(sig syscall.Signal) {
+	if p.group {
+		syscall.Kill(-p.PID(), sig)
+		return
+	}
+	signalTree(p.PID(), sig)
+}
+
+// Signal sends sig to the program's children and the program, as pause and resume do.
+func (p *Proc) Signal(sig syscall.Signal) { p.signal(sig) }
 
 func signalTree(pid int, sig syscall.Signal) {
 	for _, c := range Children(pid) {

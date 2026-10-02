@@ -23,3 +23,18 @@ func (l Layout) SSHPrivateKey() string    { return filepath.Join(l.Root, "keys",
 func (l Layout) Logo() string             { return filepath.Join(l.Root, "lib", "logos", "logo.ascii") }
 func (l Layout) BackupLock() string       { return filepath.Join(l.Lock, "archiver-main.lock") }
 func (l Layout) MaintenanceLock() string  { return filepath.Join(l.Lock, "archiver-maintenance.lock") }
+func (l Layout) DaemonSocket() string     { return filepath.Join(l.Lock, "archiver-daemon.sock") }
+func (l Layout) CopyWorkersState() string { return filepath.Join(l.LogDir(), ".copy-workers.json") }
+
+// StorageInit is the lock held around duplicacy init or add of one storage: created by
+// two at once, a storage can get two configurations (duplicacy 3.2.5 has no
+// create-if-absent). One per storage, so a slow offsite never holds up another.
+func (l Layout) StorageInit(storage string) string {
+	return filepath.Join(l.Lock, "archiver-storage-init-"+storage+".flock")
+}
+
+// CopyLock is held around every copy into one storage, by its worker and by a backup
+// copying inline alike, so a storage never takes two copies at once.
+func (l Layout) CopyLock(storage string) string {
+	return filepath.Join(l.Lock, "archiver-copy-"+storage+".flock")
+}

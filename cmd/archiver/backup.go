@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
@@ -60,17 +61,25 @@ func exists(p string) bool {
 // backupCommand runs `archiver backup [--detach]` in Go, or returns false to leave the
 // command line to bash (other arguments, or a deployment not on the Go pipeline).
 func backupCommand(args []string) (int, bool) {
+	// Any mix of --detach and -d, as archiver.sh accepts; anything else is bash's to reject.
 	detach := false
-	switch {
-	case len(args) == 0:
-	case len(args) == 1 && (args[0] == "--detach" || args[0] == "-d"):
+	for _, a := range args {
+		if a != "--detach" && a != "-d" {
+			return 0, false
+		}
 		detach = true
-	default:
-		return 0, false
 	}
 	l := layout.Default()
 	src := config.FromEnvironment()
 	if !goPipeline(l, src) {
+		// The daemon decided ownership with its own environment; a bash run forced here
+		// copies inline and would be a second copier into each target.
+		// Bash copies without the workers' copy locks, so it is refused whenever workers run,
+		// whatever its storage settings.
+		if reply, err := daemon.Send(l.DaemonSocket(), daemon.CmdWorkers); err == nil && reply == daemon.ReplyOK {
+			fmt.Fprintln(os.Stderr, "Copy workers keep this deployment's secondary storages, and the bash pipeline would copy alongside them. Run the backup without ARCHIVER_PIPELINE=bash.")
+			return 1, true
+		}
 		return 0, false
 	}
 	if detach {

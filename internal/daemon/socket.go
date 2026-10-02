@@ -16,9 +16,11 @@ import (
 const (
 	CmdLocalChanged = "local-changed" // a backup added revisions to the primary
 	CmdWorkers      = "workers"       // whether copy workers run (ok or no-workers)
-	CmdStop         = "stop"
-	CmdPause        = "pause"
-	CmdResume       = "resume"
+	// Either may be followed by a space and the backup's config.StorageFingerprint: workers
+	// keeping other storages answer no-workers.
+	CmdStop   = "stop"
+	CmdPause  = "pause"
+	CmdResume = "resume"
 )
 
 // Replies.

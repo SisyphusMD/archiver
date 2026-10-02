@@ -498,6 +498,14 @@ STORAGE_TARGET_4_S3_ID="id"
 STORAGE_TARGET_4_S3_SECRET="secret"
 ```
 
+### Copies to secondary storages
+
+The first target is the primary: every backup writes there. Each further target is a copy of it.
+
+When the container runs on a schedule (`BACKUP_SCHEDULE`), each secondary has its own copy worker. A backup ends once the primary and the recovery kit are written, then wakes the workers, so a slow or unreachable offsite never delays or fails the next backup. Each worker copies every revision its target lacks, one copy at a time, with targets copying in parallel. A failed copy is retried after 1, 5 and 15 minutes, then every 30 minutes until the target has caught up. A target still failing after 30 minutes counts as down: one notification, a reminder every 24 hours while it stays down, and one when it recovers. Workers write to `logs/copies.log`, and `archiver status` shows each target's state. `archiver stop`, `pause` and `resume` act on the workers too; after a stop, a worker copies again after the next backup.
+
+Without a schedule (manual mode or a one-shot `run backup`), there are no workers: the backup copies to every secondary itself and exits non-zero if a copy fails.
+
 ### Secrets
 
 ```bash

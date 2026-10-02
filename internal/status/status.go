@@ -5,8 +5,10 @@ package status
 import (
 	"fmt"
 	"io"
+	"sort"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 )
@@ -36,6 +38,18 @@ func Write(w io.Writer, l layout.Layout, now time.Time) error {
 		fmt.Fprintln(w, "Maintenance: not running.")
 	}
 
+	if states := (&copier.Store{Path: l.CopyWorkersState()}).Load(); len(states) > 0 {
+		fmt.Fprintln(w, "Copies (as of the daemon's last update):")
+		names := make([]string, 0, len(states))
+		for n := range states {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			fmt.Fprintf(w, "  %s: %s\n", n, describe(states[n], now))
+		}
+	}
+
 	storages, err := lockstate.ReadMaintenance(l.MaintenanceState())
 	if err != nil {
 		return err
@@ -48,6 +62,45 @@ func Write(w io.Writer, l layout.Layout, now time.Time) error {
 		}
 	}
 	return nil
+}
+
+// describe is one copy worker's line.
+func describe(s copier.State, now time.Time) string {
+	var line string
+	switch s.Status {
+	case copier.Idle:
+		line = "caught up, last copy " + Age(s.LastSuccess, now)
+	case copier.Copying:
+		line = fmt.Sprintf("copying %d revisions, started %s", s.Behind, Age(s.Since, now))
+	case copier.Retrying:
+		line = fmt.Sprintf("retrying %s, failing since %s: %s", until(s.NextRetry, now), Age(s.FailingSince, now), s.LastError)
+	case copier.Down:
+		line = fmt.Sprintf("DOWN since %s, retrying %s: %s", Age(s.DownSince, now), until(s.NextRetry, now), s.LastError)
+	case copier.Stopped:
+		line = "stopped; copies again after the next backup"
+	default:
+		line = s.Status
+	}
+	if s.Status == copier.Copying && s.DownSince != 0 {
+		line += ", DOWN since " + Age(s.DownSince, now)
+	}
+	if s.Paused {
+		line += " (paused)"
+	}
+	return line
+}
+
+// until renders how soon an epoch is.
+func until(epoch int64, now time.Time) string {
+	d := epoch - now.Unix()
+	switch {
+	case d <= 0:
+		return "now"
+	case d < 3600:
+		return fmt.Sprintf("in %dm", (d+59)/60)
+	default:
+		return fmt.Sprintf("in %dh", (d+3599)/3600)
+	}
 }
 
 // Age renders how long ago an epoch was, coarsely: minutes under an hour, hours under two

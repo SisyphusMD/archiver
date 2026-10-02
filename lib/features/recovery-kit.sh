@@ -206,6 +206,9 @@ recovery_kit_json_field() {
 # owner-only kit as done freezes it silently and locks the mirror user out until someone forces
 # a rewrite.
 RECOVERY_KIT_UNVERIFIED=2
+# The kit is on the primary but at least one secondary upload failed: callers whose
+# secondaries are kept by copy workers report those through the workers instead.
+RECOVERY_KIT_SECONDARY_FAILED=3
 
 # Does octal mode $1 grant every group/other read bit that octal mode $2 grants? Only those bits
 # matter: they are the access a mirror/backup user copies the store with, and an owner-only kit
@@ -526,12 +529,26 @@ run_recovery_kit() {
   for i in $(seq 1 "${STORAGE_TARGET_COUNT}"); do
     name_var="STORAGE_TARGET_${i}_NAME"
     name="$(sanitize_storage_name "${!name_var}")"
+    # The backup pipeline names secondaries its copy workers report failing: waiting on them
+    # here would hold up the backup. Unrecorded, they get the kit on a later run.
+    if [[ " ${ARCHIVER_KIT_SKIP_TARGETS:-} " == *" ${name} "* ]]; then
+      log_message "WARNING" "Recovery kit: skipping ${name}, which its copy worker reports failing; it is placed after the storage recovers."
+      continue
+    fi
     if [[ "${force}" != "force" ]] && grep -qxF "${name}" <<<"${state_names}"; then
       done_names+=("${name}")
     else
       pending+=("${i}")
     fi
   done
+
+  # Tells the Go pipeline when the primary holds the current kit, so a later failure or
+  # timeout is known to be a secondary's.
+  primary_has_kit() {
+    if [[ -n "${ARCHIVER_KIT_PRIMARY_MARKER:-}" ]]; then : >"${ARCHIVER_KIT_PRIMARY_MARKER}"; fi
+    return 0
+  }
+  [[ " ${pending[*]} " == *" 1 "* ]] || primary_has_kit
 
   if [[ ${#pending[@]} -eq 0 ]]; then
     log_message "INFO" "Recovery kit is up to date on all storage targets."
@@ -545,12 +562,13 @@ run_recovery_kit() {
   }
   write_recovery_kit_readme "${readme}"
 
-  local failures=0 unverified=0 rc
+  local failures=0 primary_failed=false unverified=0 rc
   for i in "${pending[@]}"; do
     name_var="STORAGE_TARGET_${i}_NAME"
     name="$(sanitize_storage_name "${!name_var}")"
     rc=0; recovery_kit_upload_to_target "${i}" "${kit}" "${readme}" || rc=$?
     if [[ ${rc} -eq 0 ]]; then
+      if [[ "${i}" -eq 1 ]]; then primary_has_kit; fi
       log_message "INFO" "Recovery kit updated on storage '${name}' ($(recovery_kit_file_name))."
       done_names+=("${name}")
     elif [[ ${rc} -eq ${RECOVERY_KIT_UNVERIFIED} ]]; then
@@ -562,6 +580,7 @@ run_recovery_kit() {
     else
       handle_error "Recovery-kit upload to storage '${name}' failed; will retry on the next run."
       failures=$((failures + 1))
+      [[ "${i}" -eq 1 ]] && primary_failed=true
     fi
   done
 
@@ -572,7 +591,10 @@ run_recovery_kit() {
   chmod 600 "${RECOVERY_KIT_STATE_FILE}"
 
   rm -rf "${workdir}"
-  [[ ${failures} -eq 0 ]] || return 1
+  if [[ ${failures} -gt 0 ]]; then
+    [[ "${primary_failed}" == true ]] && return 1
+    return "${RECOVERY_KIT_SECONDARY_FAILED}"
+  fi
   # Distinct from success: the kit is placed, but a caller must not report it current everywhere.
   [[ ${unverified} -eq 0 ]] || return "${RECOVERY_KIT_UNVERIFIED}"
 }

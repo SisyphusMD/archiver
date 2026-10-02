@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 )
@@ -73,4 +75,31 @@ func (c *Config) DuplicacyEnv(t Target, sshKeyFile string) []string {
 		env = append(env, p+"S3_ID="+t.S3ID, p+"S3_SECRET="+t.S3Secret)
 	}
 	return env
+}
+
+// DuplicacyEnviron is environ without raw secrets, plus every target's credentials: the
+// environment every duplicacy command runs with.
+func (c *Config) DuplicacyEnviron(environ []string, sshKeyFile string) []string {
+	var env []string
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		if !IsSecret(name) {
+			env = append(env, kv)
+		}
+	}
+	for _, t := range c.Targets {
+		env = append(env, c.DuplicacyEnv(t, sshKeyFile)...)
+	}
+	return env
+}
+
+// StorageFingerprint identifies the configured storages (names and URLs, in order), so a
+// daemon's copy workers can tell whether a backup copies to the storages they keep.
+func (c *Config) StorageFingerprint() string {
+	h := sha256.New()
+	for _, t := range c.Targets {
+		url, _ := t.URL()
+		fmt.Fprintf(h, "%s=%s\n", t.StorageName(), url)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16]
 }
