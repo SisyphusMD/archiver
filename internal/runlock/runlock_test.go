@@ -36,7 +36,8 @@ func TestAcquireAndFormat(t *testing.T) {
 	if s := l.State(); s.Stage != "backup" || len(s.Events) != 4 {
 		t.Fatalf("State = %+v", s)
 	}
-	if s := Summarize(l.State()); s.EndState != "completed" || s.Paused != 0 {
+	// The pause lasts however long the two Record calls are apart, whole seconds.
+	if s := Summarize(l.State()); s.EndState != "completed" || s.Paused < 0 || s.Active != s.End-s.Start-s.Paused {
 		t.Fatalf("Summarize = %+v", s)
 	}
 	os.WriteFile(flag, nil, 0o644)
