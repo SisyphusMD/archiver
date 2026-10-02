@@ -112,6 +112,9 @@ COPY --from=cli /out/archiver /usr/local/bin/archiver
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Hooks are executables (ADR 20); the e2e harness reads this to write them in that form.
+LABEL io.archiver.hooks="executable"
+
 ENV BACKUP_SCHEDULE=""
 
 # Volumes

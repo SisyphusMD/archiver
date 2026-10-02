@@ -86,6 +86,16 @@ process_service() {
     return 1
   fi
 
+  # Executable hooks and a filters file belong to the Go pipeline (ADR 20). Ignoring them
+  # here would back up without the pre hook's dump and without the filters, as a success.
+  local f
+  for f in pre-backup post-backup filters; do
+    if [ -e "${service_dir}/${f}" ] || [ -L "${service_dir}/${f}" ]; then
+      handle_error "Cannot back up ${SERVICE}: it has a '${f}' file, which this (bash) pipeline does not run. Unset ARCHIVER_PIPELINE=bash or migrate the remaining services with 'archiver migrate hooks'."
+      return 1
+    fi
+  done
+
   # Set defaults before sourcing service-specific settings
   DUPLICACY_FILTERS_PATTERNS=("+*")
   service_specific_pre_backup_function() { :; }
