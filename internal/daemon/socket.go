@@ -21,6 +21,13 @@ const (
 	CmdStop   = "stop"
 	CmdPause  = "pause"
 	CmdResume = "resume"
+	// CmdMirrorPlan asks what each worker's next mirror pass would delete; CmdAllowLarge
+	// lets each worker's next pass exceed the cap on deleting most of an ID (ADR 12).
+	CmdMirrorPlan = "mirror-plan"
+	CmdAllowLarge = "mirror-allow-large"
+	// CmdExhaustive has each worker run an exhaustive prune on its next pass, for
+	// `archiver maintenance exhaustive`.
+	CmdExhaustive = "exhaustive"
 )
 
 // Replies.
@@ -62,11 +69,12 @@ func Serve(path string, handle func(cmd string) string) (net.Listener, error) {
 			}
 			go func() {
 				defer c.Close()
-				c.SetDeadline(time.Now().Add(10 * time.Second))
+				c.SetReadDeadline(time.Now().Add(10 * time.Second))
 				line, err := bufio.NewReader(c).ReadString('\n')
 				if err != nil {
 					return
 				}
+				c.SetWriteDeadline(time.Now().Add(15 * time.Minute))
 				fmt.Fprintln(c, handle(strings.TrimSpace(line)))
 			}()
 		}
@@ -76,13 +84,16 @@ func Serve(path string, handle func(cmd string) string) (net.Listener, error) {
 
 // Send sends one command to the daemon at path and returns its reply. An error means no
 // daemon answered.
-func Send(path, cmd string) (string, error) {
+func Send(path, cmd string) (string, error) { return SendWithin(path, cmd, 10*time.Second) }
+
+// SendWithin is Send with its own deadline, for a command that lists storages.
+func SendWithin(path, cmd string, within time.Duration) (string, error) {
 	c, err := net.DialTimeout("unix", path, 2*time.Second)
 	if err != nil {
 		return "", err
 	}
 	defer c.Close()
-	c.SetDeadline(time.Now().Add(10 * time.Second))
+	c.SetDeadline(time.Now().Add(within))
 	if _, err := fmt.Fprintln(c, cmd); err != nil {
 		return "", err
 	}

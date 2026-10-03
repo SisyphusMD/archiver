@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,6 +26,8 @@ type copyWorkers struct {
 	owns        bool // this daemon's workers copy; decided, workers built, before the socket opens
 	names       []string
 	fingerprint string // the storages the workers keep (config.StorageFingerprint)
+	logDir      string
+	repos       []string // the workers' repositories; any other in logDir is stale
 	log         *logging.Log
 	store       *copier.Store
 	workers     []*copier.Worker
@@ -39,13 +42,14 @@ func (w *copyWorkers) handle(cmd string) string {
 	w.mu.Unlock()
 	cmd, arg, _ := strings.Cut(cmd, " ")
 	if !owns {
-		if cmd == daemon.CmdWorkers || cmd == daemon.CmdLocalChanged {
+		switch cmd {
+		case daemon.CmdWorkers, daemon.CmdLocalChanged, daemon.CmdMirrorPlan, daemon.CmdAllowLarge, daemon.CmdExhaustive:
 			return daemon.ReplyNoWorkers
 		}
 		return daemon.ReplyOK
 	}
 	// A backup run with other storage settings than the daemon's copies for itself.
-	if (cmd == daemon.CmdWorkers || cmd == daemon.CmdLocalChanged) && arg != "" && arg != w.fingerprint {
+	if (cmd == daemon.CmdWorkers || cmd == daemon.CmdLocalChanged || cmd == daemon.CmdExhaustive) && arg != "" && arg != w.fingerprint {
 		return daemon.ReplyNoWorkers
 	}
 	each := func(f func(*copier.Worker)) {
@@ -63,6 +67,28 @@ func (w *copyWorkers) handle(cmd string) string {
 		each((*copier.Worker).Pause)
 	case daemon.CmdResume:
 		each((*copier.Worker).Resume)
+	case daemon.CmdAllowLarge:
+		each((*copier.Worker).AllowLarge)
+	case daemon.CmdExhaustive:
+		each((*copier.Worker).ForceExhaustive)
+	case daemon.CmdMirrorPlan:
+		var parts []string
+		for _, x := range workers {
+			if !x.Upkeep.Mirror {
+				parts = append(parts, x.Target+": not mirrored (PRUNE_BACKUPS is false)")
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			plan, err := x.PlanNow(ctx)
+			cancel()
+			if err != nil {
+				parts = append(parts, fmt.Sprintf("%s: cannot plan (%v)", x.Target, err))
+				continue
+			}
+			parts = append(parts, x.Target+": "+plan.Describe())
+		}
+		// One line on the wire; the CLI puts each target on its own.
+		return strings.Join(parts, " | ")
 	default:
 		return "unknown command " + cmd
 	}
@@ -119,7 +145,7 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 		name := t.StorageName()
 		cw.names = append(cw.names, name)
 		d := &copier.Duplicacy{
-			Bin: "duplicacy", Repo: copier.RepoDir(name), Env: env, Log: log, Threads: cfg.Threads,
+			Bin: "duplicacy", Repo: copier.RepoDir(l.LogDir(), cfg.Targets[0], t), Env: env, Log: log, Threads: cfg.Threads,
 			PrivKey: l.RSAPrivateKey(), PubKey: filepath.Join(l.Root, "keys", "public.pem"),
 			SnapshotID: host + "-archiver-copies", Primary: cfg.Targets[0], Target: t, InitLock: l.StorageInit,
 		}
@@ -129,9 +155,20 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 			Save:   func(s copier.State) { store.Save(s) },
 		}, saved[name])
 		w.CopyLock = l.CopyLock
+		w.Upkeep = copier.Upkeep{
+			Own:        ownIDs(cfg, host),
+			Mirror:     cfg.PruneBackups,
+			Exhaustive: cfg.ExhaustiveInterval(),
+			Check:      cfg.TargetCheckInterval(t),
+			Threads:    cfg.Threads,
+		}
 		cw.workers = append(cw.workers, w)
 	}
 	cw.owns, cw.log, cw.store, cw.fingerprint = true, log, store, cfg.StorageFingerprint()
+	cw.logDir = l.LogDir()
+	for _, t := range cfg.Targets[1:] {
+		cw.repos = append(cw.repos, copier.RepoDir(l.LogDir(), cfg.Targets[0], t))
+	}
 }
 
 // start runs the workers decide made. Each prepares its own repository in its first pass,
@@ -150,6 +187,9 @@ func (cw *copyWorkers) start(done <-chan struct{}) {
 		go func() { defer cw.running.Done(); w.Run(done) }()
 	}
 	cw.store.Prune(cw.names)
+	// Only here, once this daemon owns the socket: a second daemon that is refused must not
+	// remove the running one's repositories.
+	copier.PruneRepos(cw.logDir, cw.repos)
 	cw.log.Message(logging.Info, "", fmt.Sprintf("Copy workers started for %v.", cw.names))
 	// One file per day, as each backup run gets one.
 	go func() {
@@ -162,6 +202,19 @@ func (cw *copyWorkers) start(done <-chan struct{}) {
 			}
 		}
 	}()
+}
+
+// ownIDs lists this deployment's snapshot IDs as the backup names them, afresh each time,
+// so a service added since the daemon started is included.
+func ownIDs(cfg *config.Config, host string) func() map[string]bool {
+	return func() map[string]bool {
+		ids := map[string]bool{}
+		dirs, _ := config.ExpandServiceDirectories(cfg.ServiceDirectories)
+		for _, d := range dirs {
+			ids[host+"-"+filepath.Base(d)] = true
+		}
+		return ids
+	}
 }
 
 type realClock struct{}

@@ -11,9 +11,11 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/health"
 	"github.com/SisyphusMD/archiver/internal/layout"
@@ -52,6 +54,9 @@ func main() {
 		if code, ok := backupCommand(os.Args[2:]); ok {
 			os.Exit(code)
 		}
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "mirror" {
+		os.Exit(mirrorCommand(os.Args[2:]))
 	}
 	if len(os.Args) >= 3 && os.Args[1] == "migrate" && os.Args[2] == "hooks" {
 		os.Exit(migrateHooks(os.Args[3:]))
@@ -158,6 +163,13 @@ func runDaemon(args []string) int {
 // daemonCtl sends one command to a running daemon. With no daemon it exits 1 quietly:
 // the bash stop, pause and resume call it whether or not one runs.
 func daemonCtl(cmd string) int {
+	// Asked whether workers keep the storages, or told local changed, the daemon must know
+	// which storages the caller means: with other settings, the caller keeps its own.
+	if cmd == daemon.CmdWorkers || cmd == daemon.CmdLocalChanged || cmd == daemon.CmdExhaustive {
+		if cfg, _, err := config.Load(config.FromEnvironment(), nil); err == nil {
+			cmd += " " + cfg.StorageFingerprint()
+		}
+	}
 	reply, err := daemon.Send(layout.Default().DaemonSocket(), cmd)
 	if err != nil {
 		return 1
@@ -167,4 +179,35 @@ func daemonCtl(cmd string) int {
 		return 1
 	}
 	return 0
+}
+
+// mirrorCommand runs `archiver mirror --dry-run` (what each worker's next mirror pass
+// would delete) or `archiver mirror --allow-large` (let the next pass exceed the cap on
+// deleting more than half of an ID, for an intended retention change; ADR 12).
+func mirrorCommand(args []string) int {
+	if len(args) != 1 || (args[0] != "--dry-run" && args[0] != "--allow-large") {
+		fmt.Fprintln(os.Stderr, "usage: archiver mirror --dry-run | --allow-large")
+		return 2
+	}
+	cmd := daemon.CmdMirrorPlan
+	if args[0] == "--allow-large" {
+		cmd = daemon.CmdAllowLarge
+	}
+	reply, err := daemon.SendWithin(layout.Default().DaemonSocket(), cmd, 15*time.Minute)
+	if err != nil || reply == daemon.ReplyNoWorkers {
+		fmt.Fprintln(os.Stderr, "Mirroring runs in the copy workers, which run under the daemon (a container with BACKUP_SCHEDULE set) when there are secondary storages.")
+		return 1
+	}
+	if cmd == daemon.CmdAllowLarge {
+		fmt.Println("The next mirror pass on each secondary may delete more than half of a snapshot ID's revisions.")
+		return 0
+	}
+	rc := 0
+	for _, line := range strings.Split(reply, " | ") {
+		fmt.Println(line)
+		if strings.Contains(line, ": cannot plan (") {
+			rc = 1
+		}
+	}
+	return rc
 }

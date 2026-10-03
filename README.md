@@ -411,7 +411,7 @@ The primary mode is **env-native**: environment variables carry the non-secret s
 
 With no bundle at all, configuration is fully env-native — this is the recommended deployment. With a bundle and no overrides, behavior is exactly as it was pre-0.9.0. Because the layers stack, an existing bundle deployment can migrate one value at a time: set an env var or mount a secret file, confirm the backup still runs, and repeat until nothing depends on the bundle.
 
-**Non-secret settings (plain env vars).** These override the bundle when set: `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `CHECK_BACKUPS`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, and `NOTIFICATION_SERVICE`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine). The bundle's bash-array form is still read.
+**Non-secret settings (plain env vars).** These override the bundle when set: `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, and `NOTIFICATION_SERVICE`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine). The bundle's bash-array form is still read.
 
 **Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `BUNDLE_PASSWORD` (the bundle decryption password, read from `/run/secrets/bundle_password` or `BUNDLE_PASSWORD_FILE`), `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`, `B2_KEY`, `S3_ID`, and `S3_SECRET`. For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `bundle_password`) is picked up with no extra configuration.
 
@@ -582,6 +582,16 @@ If multiple archiver deployments back up to the same storage target, **only ONE 
 2. The designated deployment maintains all snapshot IDs on the shared storage via the `-all` flag
 
 See the [Duplicacy prune documentation](https://forum.duplicacy.com/t/prune-command-details/1005) for more details on the two-step fossil collection algorithm.
+
+#### Secondary storages under copy workers
+
+When copy workers run (a schedule and at least one secondary), maintenance keeps to the primary, and each worker maintains its own secondary once it has caught up:
+
+- **Mirroring.** The primary's retention is the only one: after each catch-up, and whenever a maintenance run prunes the primary, the worker deletes on its secondary the revisions the primary has pruned, so an offsite never holds a revision the primary dropped or lacks one it kept. It touches only this deployment's snapshot IDs (`<hostname>-...`), never a snapshot ID's newest revision, nothing when the primary's listing fails or lacks the ID entirely, and refuses (with a notification) a pass that would delete more than half of an ID's revisions. After a deliberate retention change, `archiver mirror --allow-large` lets the next pass through. `archiver mirror --dry-run` shows what the next pass would delete. Every deletion is logged in `copies.log`.
+- **Exhaustive prune** on `PRUNE_EXHAUSTIVE_FREQUENCY` (`archiver maintenance exhaustive` forces one on the workers' next pass too). Mirroring and the exhaustive prune run only with `PRUNE_BACKUPS="true"`, so the shared-storage rule above still applies.
+- **Check** on each secondary's own interval, when its worker is otherwise idle (a backup interrupts it; it runs again later): `STORAGE_TARGET_N_CHECK_INTERVAL`, else `CHECK_INTERVAL`, else 1 day for local, B2 and S3 storages and 7 days for SFTP, where a check lists every chunk. Intervals take `d`, `h` or `m` (`7d`, `12h`). `archiver status` shows when each secondary was last checked and flags a check more than twice its interval overdue. Checks run only with `CHECK_BACKUPS="true"`.
+
+Each worker keeps a small repository in `logs/.copy-repos/` whose cache holds Duplicacy's pending fossil collections; mount the logs directory so they survive container restarts (otherwise their chunks wait for the next exhaustive prune).
 
 ### Performance
 

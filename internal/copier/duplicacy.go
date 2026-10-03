@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sync"
 	"syscall"
 
@@ -53,10 +56,13 @@ func (d *Duplicacy) Prepare(ctx context.Context) error {
 	if d.prepared {
 		return nil
 	}
-	if err := os.RemoveAll(d.Repo); err != nil {
+	// Only the registration is redone: the repository's cache holds duplicacy's pending
+	// fossil collections from mirror prunes, which must outlive a restart or their chunks
+	// are orphaned until the next exhaustive prune.
+	if err := os.MkdirAll(filepath.Join(d.Repo, ".duplicacy"), 0o700); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(d.Repo, 0o700); err != nil {
+	if err := os.Remove(filepath.Join(d.Repo, ".duplicacy", "preferences")); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	purl, err := d.Primary.URL()
@@ -137,6 +143,15 @@ func (d *Duplicacy) StartCopy(string) (Copy, error) {
 	return running{p}, nil
 }
 
+// Start runs another duplicacy command (prune, check) in the repository.
+func (d *Duplicacy) Start(args ...string) (Copy, error) {
+	p, err := proc.Start(proc.Spec{Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: d.Target.StorageName(), Args: args})
+	if err != nil {
+		return nil, err
+	}
+	return running{p}, nil
+}
+
 type running struct{ p *proc.Proc }
 
 func (r running) Wait() error {
@@ -145,7 +160,7 @@ func (r running) Wait() error {
 		return err
 	}
 	if code != 0 {
-		return fmt.Errorf("duplicacy copy exited %d", code)
+		return fmt.Errorf("duplicacy exited %d", code)
 	}
 	return nil
 }
@@ -153,5 +168,31 @@ func (r running) Terminate() { r.p.Terminate(false) }
 func (r running) Pause()     { r.p.Signal(syscall.SIGSTOP) }
 func (r running) Resume()    { r.p.Signal(syscall.SIGCONT) }
 
-// RepoDir is where a target's repository lives: rebuilt at every daemon start, never data.
-func RepoDir(target string) string { return filepath.Join(os.TempDir(), "archiver-copies", target) }
+// RepoDir is where a target's repository lives: in the logs volume, beside the workers'
+// state, so its fossil collections survive a restart when logs are mounted. It is named
+// for both storages' URLs as well as the target's name: duplicacy keys its cache by
+// storage name and trusts cached snapshots, so a name pointed at another storage must
+// never inherit the old one's cache.
+func RepoDir(logDir string, primary, target config.Target) string {
+	h := sha256.New()
+	for _, t := range []config.Target{primary, target} {
+		url, _ := t.URL()
+		fmt.Fprintf(h, "%s=%s\n", t.StorageName(), url)
+	}
+	return filepath.Join(ReposDir(logDir), target.StorageName()+"-"+hex.EncodeToString(h.Sum(nil))[:12])
+}
+
+// ReposDir holds every worker's repository.
+func ReposDir(logDir string) string { return filepath.Join(logDir, ".copy-repos") }
+
+// PruneRepos removes repositories no current worker uses: those of storages since
+// renamed, repointed or removed, whose caches would only mislead.
+func PruneRepos(logDir string, keep []string) {
+	entries, _ := os.ReadDir(ReposDir(logDir))
+	for _, e := range entries {
+		dir := filepath.Join(ReposDir(logDir), e.Name())
+		if !slices.Contains(keep, dir) {
+			os.RemoveAll(dir)
+		}
+	}
+}

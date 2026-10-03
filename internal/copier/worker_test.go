@@ -73,6 +73,29 @@ type fakeRunner struct {
 	copies   int
 	started  chan *fakeCopy
 	block    bool // copies wait for release or Terminate
+	commands [][]string
+	failCmd  map[string]error // by command name (prune, check)
+}
+
+func (r *fakeRunner) Start(args ...string) (Copy, error) {
+	r.mu.Lock()
+	r.commands = append(r.commands, args)
+	err := r.failCmd[args[0]]
+	if err == nil && args[0] == "prune" {
+		id := ""
+		for i := 0; i+1 < len(args); i++ {
+			switch args[i] {
+			case "-id":
+				id = args[i+1]
+			case "-r":
+				delete(r.target, id+":"+args[i+1])
+			}
+		}
+	}
+	r.mu.Unlock()
+	c := &fakeCopy{r: r, release: make(chan struct{}), result: err, noApply: true}
+	close(c.release)
+	return c, nil
 }
 
 func (r *fakeRunner) Prepare(context.Context) error { return nil }
@@ -98,6 +121,8 @@ type fakeCopy struct {
 	resumed int
 	stopped bool
 	mu      sync.Mutex
+	result  error // for a non-copy command
+	noApply bool  // not a copy: nothing to apply to the target
 }
 
 func (r *fakeRunner) StartCopy(string) (Copy, error) {
@@ -122,6 +147,9 @@ func (c *fakeCopy) Wait() error {
 	c.mu.Unlock()
 	if stopped {
 		return errors.New("terminated")
+	}
+	if c.noApply {
+		return c.result
 	}
 	c.r.mu.Lock()
 	defer c.r.mu.Unlock()
