@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/copier"
+	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 )
@@ -133,9 +135,20 @@ func Run(w io.Writer, l layout.Layout, env Env, now time.Time) int {
 	checkOn, pruneOn := maintenanceToggles(l, env)
 	if checkOn || pruneOn {
 		storages, _ := lockstate.ReadMaintenance(l.MaintenanceState())
+		// Secondaries kept by copy workers are no longer in bash maintenance's record; how
+		// overdue their checks are is status's to show (ADR 17), not health's.
+		// Only while a running daemon says its workers keep them: saved state alone outlives
+		// a switch back to bash maintenance.
+		workers := map[string]copier.State{}
+		if reply, err := daemon.Send(l.DaemonSocket(), daemon.CmdWorkers); err == nil && reply == daemon.ReplyOK {
+			workers = (&copier.Store{Path: l.CopyWorkersState()}).Load()
+		}
 		switch {
 		case len(storages) > 0:
 			for _, s := range storages {
+				if _, kept := workers[s.Name]; kept {
+					continue
+				}
 				if checkOn && now.Sub(time.Unix(s.Check, 0)) > maintenanceStale {
 					r.warn("No successful check on '%s' in over 8 days", s.Name)
 				}

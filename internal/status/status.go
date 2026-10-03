@@ -78,8 +78,29 @@ func describe(s copier.State, now time.Time) string {
 		line = fmt.Sprintf("DOWN since %s, retrying %s: %s", Age(s.DownSince, now), until(s.NextRetry, now), s.LastError)
 	case copier.Stopped:
 		line = "stopped; copies again after the next backup"
+	case copier.Mirroring:
+		line = "deleting revisions local has pruned, started " + Age(s.Since, now)
+	case copier.Pruning:
+		line = "exhaustive prune, started " + Age(s.Since, now)
+	case copier.Checking:
+		line = "checking, started " + Age(s.Since, now)
 	default:
 		line = s.Status
+	}
+	if s.CheckEvery > 0 {
+		switch {
+		case s.CheckFailed != "":
+			line += "; LAST CHECK FAILED"
+		case s.LastCheck == 0:
+			line += "; not checked yet"
+		case now.Unix()-s.LastCheck > 2*s.CheckEvery:
+			line += "; check OVERDUE, last " + Age(s.LastCheck, now)
+		default:
+			line += "; checked " + Age(s.LastCheck, now)
+		}
+	}
+	if s.MirrorRefused != "" {
+		line += "; MIRROR REFUSED: " + s.MirrorRefused
 	}
 	if s.Status == copier.Copying && s.DownSince != 0 {
 		line += ", DOWN since " + Age(s.DownSince, now)

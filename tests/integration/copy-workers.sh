@@ -77,8 +77,27 @@ wait_for '[ "$(revisions "$OFFSITE2")" -eq 4 ]' 60 || die "offsite2 not caught u
 wait_for 'archiver status | grep -q "offsite: caught up"' 30 || die "status not caught up"
 wait_for 'archiver status | grep -q "offsite2: caught up"' 30 || die "offsite2 status not caught up"
 
+log "the workers check their targets (local-type default: daily, so at once)"
+wait_for 'archiver status | grep -q "offsite: caught up.*checked"' 60 || die "offsite not checked by its worker"
+
+log "mirroring: a revision local prunes is deleted from the secondaries too (ADR 12)"
+(cd "$SVC" && DUPLICACY_LOCAL_PASSWORD=testpassword DUPLICACY_LOCAL_RSA_PASSPHRASE="${RSA_PASSPHRASE}" \
+  duplicacy prune -storage local -id "${HOST}-app" -r 1 >/dev/null 2>&1) || die "local prune of revision 1 failed"
+[ ! -e "$STORE/snapshots/${HOST}-app/1" ] || die "local still has revision 1"
+archiver mirror --dry-run | grep -q "offsite: delete ${HOST}-app revisions 1$" || die "dry run does not plan the deletion: $(archiver mirror --dry-run)"
+[ -e "$OFFSITE/snapshots/${HOST}-app/1" ] || die "the dry run deleted something"
+archiver daemon ctl local-changed >/dev/null || die "could not wake the workers"
+wait_for '[ ! -e "$OFFSITE/snapshots/${HOST}-app/1" ] && [ ! -e "$OFFSITE2/snapshots/${HOST}-app/1" ]' 60 || die "revision 1 not mirrored off the secondaries"
+[ -e "$OFFSITE/snapshots/${HOST}-app/2" ] && [ -e "$OFFSITE/snapshots/${HOST}-app/4" ] || die "mirroring deleted more than local had pruned"
+grep -q "Mirror: deleting revisions 1 of ${HOST}-app from offsite storage" "$CLOG" || die "mirror deletion not logged"
+
+log "with workers running, maintenance keeps to local"
+archiver maintenance >/dev/null 2>&1 || die "maintenance failed"
+grep -q "maintaining local only" /opt/archiver/logs/maintenance.log || die "maintenance did not leave the secondaries to the workers"
+grep -q "Storage check completed for offsite" /opt/archiver/logs/maintenance.log && die "maintenance checked a secondary the workers keep"
+
 log "stop reaches the workers"
 archiver stop | grep -q "Copies to the secondary storages stopped" || die "stop did not reach the workers"
 
 kill -TERM "$DAEMON"; wait "$DAEMON"
-echo "=== COPY-WORKERS OK: inline without a daemon, handed off with one, retried without failing the backup, pause/resume/stop reach the workers ==="
+echo "=== COPY-WORKERS OK: inline without a daemon, handed off with one, retried without failing the backup, checked, mirrored, maintenance local-only, pause/resume/stop reach the workers ==="

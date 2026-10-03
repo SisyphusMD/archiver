@@ -97,6 +97,25 @@ initialize() {
   cd "${repo_dir}" || { handle_error "Failed to change to ${repo_dir}."; record_state_change "failed"; exit 1; }
 }
 
+# Ask the daemon about the workers for THIS run's storages: ctl fingerprints them from its
+# environment, where bash's loaded settings are not exported. Only the non-secret storage
+# fields are passed, so no secret reaches another process's environment.
+daemon_ctl_for_storages() {
+  (
+    while IFS= read -r v; do
+      [[ "${v}" == STORAGE_TARGET_* ]] && export "${v?}"
+    done < <(compgen -v | grep -E "${CONFIG_NONSECRET_VARS_RE}")
+    /usr/local/bin/archiver daemon ctl "$1" 2>/dev/null
+  )
+}
+
+end_stopped() {
+  log_message "INFO" "Stop requested; ending maintenance early."
+  record_state_change "stopped"
+  notify "Maintenance Stopped" "Stopped before completing all storages."
+  MAINTENANCE_STOPPED=true
+}
+
 main() {
   local i rc
 
@@ -106,24 +125,38 @@ main() {
     return
   fi
 
-  for i in $(seq 1 "${STORAGE_TARGET_COUNT}"); do
+  # Copy workers maintain the secondaries themselves (check, mirror local's retention,
+  # exhaustive prune: ADRs 12, 17, 18); pruning them here with -keep as well would bring
+  # back the race mirroring removes.
+  local last_storage="${STORAGE_TARGET_COUNT}"
+  if [ "$(daemon_ctl_for_storages workers)" = "ok" ]; then
+    last_storage=1
+    [ "${STORAGE_TARGET_COUNT}" -gt 1 ] && log_message "INFO" "Secondary storages are maintained by their copy workers; maintaining local only."
+    if [ "${FORCE_EXHAUSTIVE}" = "true" ] && [ "${PRUNE_BACKUPS}" = "true" ] && [ "$(daemon_ctl_for_storages exhaustive)" = "ok" ]; then
+      log_message "INFO" "Copy workers will prune their secondary storages exhaustively on their next pass."
+    fi
+  fi
+
+  for i in $(seq 1 "${last_storage}"); do
     if is_stop_requested; then
-      log_message "INFO" "Stop requested; ending maintenance early."
-      record_state_change "stopped"
-      notify "Maintenance Stopped" "Stopped before completing all storages."
-      MAINTENANCE_STOPPED=true
-      return
+      end_stopped; return
     fi
     maintain_storage "${i}"
     rc=$?
     if [ "${rc}" -eq 130 ]; then
-      log_message "INFO" "Stop requested; ending maintenance early."
-      record_state_change "stopped"
-      notify "Maintenance Stopped" "Stopped before completing all storages."
-      MAINTENANCE_STOPPED=true
-      return
+      end_stopped; return
     fi
   done
+
+  # A stop during the last listing must not be followed by the wake below.
+  if is_stop_requested; then
+    end_stopped; return
+  fi
+  # A local prune is a change the workers mirror onto the secondaries; a run that pruned
+  # nothing is not (and must not end a stop, which only a change to local does).
+  if [ "${LOCAL_PRUNED:-false}" = true ]; then
+    daemon_ctl_for_storages local-changed >/dev/null || true
+  fi
 
   record_state_change "completed"
   send_maintenance_notification

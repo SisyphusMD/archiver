@@ -32,21 +32,32 @@ const (
 	Retrying = "retrying" // the last copy failed; another is scheduled
 	Down     = "down"     // failing for DownAfter or longer; still retrying
 	Stopped  = "stopped"  // `archiver stop`: no retry until local next changes
+	// Upkeep after a catch-up (ADRs 12, 17, 18).
+	Mirroring = "mirroring" // deleting on the target what local has pruned
+	Pruning   = "pruning"   // exhaustive prune of unreferenced chunks
+	Checking  = "checking"
 )
 
 // State is what a worker reports and keeps across restarts.
 type State struct {
-	Target       string `json:"target"`
-	Status       string `json:"status"`
-	Paused       bool   `json:"paused,omitempty"`
-	Since        int64  `json:"since"`
-	Behind       int    `json:"behind"`
-	LastSuccess  int64  `json:"last_success,omitempty"`
-	FailingSince int64  `json:"failing_since,omitempty"`
-	DownSince    int64  `json:"down_since,omitempty"` // kept through retries, so down is reported once
-	NextRetry    int64  `json:"next_retry,omitempty"`
-	LastError    string `json:"last_error,omitempty"`
-	LastAlert    int64  `json:"last_alert,omitempty"`
+	Target         string `json:"target"`
+	Status         string `json:"status"`
+	Paused         bool   `json:"paused,omitempty"`
+	Since          int64  `json:"since"`
+	Behind         int    `json:"behind"`
+	LastSuccess    int64  `json:"last_success,omitempty"`
+	FailingSince   int64  `json:"failing_since,omitempty"`
+	DownSince      int64  `json:"down_since,omitempty"` // kept through retries, so down is reported once
+	NextRetry      int64  `json:"next_retry,omitempty"`
+	LastError      string `json:"last_error,omitempty"`
+	LastAlert      int64  `json:"last_alert,omitempty"`
+	LastMirror     int64  `json:"last_mirror,omitempty"`
+	LastExhaustive int64  `json:"last_exhaustive,omitempty"`
+	LastCheck      int64  `json:"last_check,omitempty"`
+	CheckEvery     int64  `json:"check_every,omitempty"` // the check interval in seconds, for status
+	CheckTried     int64  `json:"check_tried,omitempty"` // the last check attempt; the schedule counts from it
+	CheckFailed    string `json:"check_failed,omitempty"`
+	MirrorRefused  string `json:"mirror_refused,omitempty"` // last refusal reported, so it is reported once
 }
 
 // Copy is a running copy.
@@ -66,6 +77,8 @@ type Runner interface {
 	Revisions(ctx context.Context, storage string) (map[string]bool, error)
 	// StartCopy starts copying every snapshot the target lacks from the primary.
 	StartCopy(target string) (Copy, error)
+	// Start starts another duplicacy command (prune, check) in the target's repository.
+	Start(args ...string) (Copy, error)
 }
 
 // Clock is the time source, replaced in tests.
@@ -81,6 +94,20 @@ type Events struct {
 	Save   func(State)
 }
 
+// Upkeep is a worker's maintenance of its target (ADRs 12, 17, 18). Shared storages are
+// maintained by one deployment only: the others leave Mirror and Exhaustive off (with
+// PRUNE_BACKUPS=false) and Check off (with CHECK_BACKUPS=false).
+type Upkeep struct {
+	Own        func() map[string]bool // this deployment's snapshot IDs, exactly
+	Mirror     bool                   // delete on the target what local has pruned
+	Exhaustive time.Duration          // how often to prune unreferenced chunks; 0 is never
+	Check      time.Duration          // how often to check the target; 0 is never
+	Threads    string
+}
+
+// grace keeps a fixed daily schedule from drifting one slot later each cycle.
+const grace = time.Hour
+
 // Worker keeps one target caught up.
 type Worker struct {
 	Target  string // the target's storage name
@@ -91,6 +118,8 @@ type Worker struct {
 	// CopyLock names the lock held around each copy into the target (layout.CopyLock),
 	// shared with a backup that copies inline.
 	CopyLock func(target string) string
+	// Upkeep is what the worker maintains on its target once it has caught up.
+	Upkeep Upkeep
 
 	wake chan struct{}
 
@@ -108,6 +137,10 @@ type Worker struct {
 	// wakes counts Wake calls; wakesAtStop is the count when the last stop came. Only a wake
 	// after it (a backup after the stop) ends the stop.
 	wakes, wakesAtStop int
+	checking           bool // a check is current; a wake interrupts it (a check never delays a copy)
+	passWakes          int  // wakes when the current pass began: a later one means local changed meanwhile
+	forceExhaustive    bool // the next pass prunes exhaustively whether or not one is due
+	allowLarge         bool // the next mirror pass may delete more than half of an ID (ADR 12's override)
 }
 
 // New makes a worker that starts from a saved state, so a restart neither re-alerts nor
@@ -127,10 +160,26 @@ func New(target, primary string, r Runner, c Clock, ev Events, saved State) *Wor
 
 // Wake tells the worker local's revisions changed. Wakes arriving while it is busy
 // coalesce into one more pass.
+// nudge starts a pass for a queued upkeep request. Unlike Wake it is not a change to
+// local, so a stopped worker stays stopped and runs the request after its next wake.
+func (w *Worker) nudge() {
+	select {
+	case w.wake <- struct{}{}:
+	default:
+	}
+}
+
 func (w *Worker) Wake() {
 	w.mu.Lock()
 	w.wakes++
+	var check Copy
+	if w.checking {
+		check = w.current
+	}
 	w.mu.Unlock()
+	if check != nil {
+		check.Terminate()
+	}
 	select {
 	case w.wake <- struct{}{}:
 	default:
@@ -156,7 +205,7 @@ func (w *Worker) Run(done <-chan struct{}) {
 			timer = w.Clock.After(time.Unix(w.state.NextRetry, 0).Sub(w.Clock.Now()))
 		case Stopped:
 		default:
-			timer = w.Clock.After(SafetyWake)
+			timer = w.Clock.After(w.nextWake())
 		}
 		w.mu.Unlock()
 		if !first {
@@ -182,6 +231,7 @@ func (w *Worker) Run(done <-chan struct{}) {
 			w.state.Status = Idle
 		}
 		stops := w.stops
+		w.passWakes = w.wakes
 		w.mu.Unlock()
 		w.pass(stops, done)
 	}
@@ -294,7 +344,11 @@ func (w *Worker) pass(stops int, done <-chan struct{}) {
 			return
 		}
 		if len(missing) == 0 {
-			w.caughtUp(stops)
+			// Failure history clears only once upkeep has worked too, so a mirror or
+			// exhaustive prune that keeps failing still reaches down.
+			if w.upkeep(ctx, stops) {
+				w.caughtUp(stops)
+			}
 			return
 		}
 		for _, r := range missing {
@@ -313,56 +367,11 @@ func (w *Worker) pass(stops int, done <-chan struct{}) {
 	}
 }
 
-// copyOnce runs one copy; false means the pass is over (failed or stopped). The copy is
-// started and registered under the lock, so a pause or stop sees it or prevents it.
+// copyOnce runs one copy; false means the pass is over (failed or stopped).
 func (w *Worker) copyOnce(ctx context.Context, stops, behind int) bool {
-	var c Copy
 	began := w.Clock.Now()
-	if w.CopyLock != nil {
-		release, err := runlock.Exclusive(ctx, w.CopyLock(w.Target))
-		if err != nil {
-			if !w.stoppedSince(stops) && ctx.Err() == nil {
-				w.failed(stops, err)
-			}
-			return false
-		}
-		defer release()
-	}
-	for {
-		if !w.ready(stops) {
-			return false
-		}
-		if ctx.Err() != nil {
-			return false
-		}
-		w.mu.Lock()
-		if w.stops != stops {
-			w.mu.Unlock()
-			return false
-		}
-		if w.paused {
-			w.mu.Unlock()
-			continue
-		}
-		var err error
-		c, err = w.Runner.StartCopy(w.Target)
-		if err != nil {
-			w.mu.Unlock()
-			w.failed(stops, err)
-			return false
-		}
-		w.current = c
-		w.state.Status, w.state.Since, w.state.Behind = Copying, began.Unix(), behind
-		w.save()
-		w.mu.Unlock()
-		break
-	}
 	w.log("INFO", fmt.Sprintf("Copying %d revisions to %s storage.", behind, w.Target))
-	err := c.Wait()
-	w.mu.Lock()
-	w.current = nil
-	stopped := w.stops != stops
-	w.mu.Unlock()
+	err, stopped := w.run(ctx, stops, Copying, behind, false, func() (Copy, error) { return w.Runner.StartCopy(w.Target) })
 	if stopped {
 		w.log("INFO", fmt.Sprintf("Copy to %s storage stopped; it copies again after the next backup.", w.Target))
 		return false
@@ -373,6 +382,59 @@ func (w *Worker) copyOnce(ctx context.Context, stops, behind int) bool {
 	}
 	w.log("INFO", fmt.Sprintf("Copy to %s storage completed in %s.", w.Target, w.Clock.Now().Sub(began).Round(time.Second)))
 	return true
+}
+
+// run runs one duplicacy command against the target under the target's copy lock. It is
+// started and registered under the worker's lock, so a pause or stop sees it or prevents
+// it. stopped means a stop ended it (or it never started); a check also reports stopped
+// when a wake interrupted it.
+func (w *Worker) run(ctx context.Context, stops int, status string, behind int, check bool, start func() (Copy, error)) (err error, stopped bool) {
+	if w.CopyLock != nil {
+		release, err := runlock.Exclusive(ctx, w.CopyLock(w.Target))
+		if err != nil {
+			if w.stoppedSince(stops) || ctx.Err() != nil {
+				return nil, true
+			}
+			return err, false
+		}
+		defer release()
+	}
+	var c Copy
+	wakes := 0
+	for {
+		if !w.ready(stops) || ctx.Err() != nil {
+			return nil, true
+		}
+		w.mu.Lock()
+		// A check never starts once a backup has woken the worker: copying comes first.
+		if w.stops != stops || (check && w.wakes != w.passWakes) {
+			w.mu.Unlock()
+			return nil, true
+		}
+		if w.paused {
+			w.mu.Unlock()
+			continue
+		}
+		c, err = start()
+		if err != nil {
+			w.mu.Unlock()
+			return err, false
+		}
+		w.current, w.checking, wakes = c, check, w.passWakes
+		w.state.Status, w.state.Since, w.state.Behind = status, w.Clock.Now().Unix(), behind
+		w.save()
+		w.mu.Unlock()
+		break
+	}
+	err = c.Wait()
+	w.mu.Lock()
+	w.current, w.checking = nil, false
+	stopped = w.stops != stops || (check && w.wakes != wakes)
+	w.mu.Unlock()
+	if stopped {
+		return nil, true
+	}
+	return err, false
 }
 
 func (w *Worker) caughtUp(stops int) {

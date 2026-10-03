@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSharedStorageNameTable(t *testing.T) {
@@ -247,5 +248,40 @@ func TestExpandServiceDirectories(t *testing.T) {
 		if !slices.Equal(dirs, tc.dirs) || !slices.Equal(unmatched, tc.unmatch) {
 			t.Errorf("%s:\n dirs %q, want %q\n unmatched %q, want %q", tc.name, dirs, tc.dirs, unmatched, tc.unmatch)
 		}
+	}
+}
+
+func TestIntervals(t *testing.T) {
+	for in, want := range map[string]time.Duration{"": 0, "1d": 24 * time.Hour, "7d": 7 * 24 * time.Hour, "12h": 12 * time.Hour, "90m": 90 * time.Minute} {
+		if got, err := ParseInterval(in); err != nil || got != want {
+			t.Errorf("ParseInterval(%q) = %v, %v; want %v", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"0d", "-1h", "weekly", "1w", "d"} {
+		if _, err := ParseInterval(bad); err == nil {
+			t.Errorf("ParseInterval(%q) accepted", bad)
+		}
+	}
+	c := &Config{CheckBackups: true}
+	sftp, b2 := Target{Type: "sftp"}, Target{Type: "b2"}
+	if c.TargetCheckInterval(sftp) != 7*24*time.Hour || c.TargetCheckInterval(b2) != 24*time.Hour {
+		t.Error("type defaults: SFTP weekly, others daily")
+	}
+	c.CheckInterval = "3d"
+	if c.TargetCheckInterval(sftp) != 3*24*time.Hour {
+		t.Error("CHECK_INTERVAL overrides the type default")
+	}
+	sftp.CheckInterval = "14d"
+	if c.TargetCheckInterval(sftp) != 14*24*time.Hour {
+		t.Error("the target's own interval wins")
+	}
+	c.CheckBackups = false
+	if c.TargetCheckInterval(sftp) != 0 {
+		t.Error("CHECK_BACKUPS=false means no checks")
+	}
+	v := &Config{ServiceDirectories: []string{"/s"}, Targets: []Target{{N: 1, Name: "l", Type: "local", LocalPath: "/x"}, {N: 2, Name: "o", Type: "local", LocalPath: "/y", CheckInterval: "soon"}},
+		StoragePassword: "longenough", RSAPassphrase: "r", PruneExhaustiveFrequency: "monthly"}
+	if err := v.Validate("/run/secrets"); err == nil || !strings.Contains(err.Error(), "STORAGE_TARGET_2_CHECK_INTERVAL") {
+		t.Errorf("a bad interval must fail validation: %v", err)
 	}
 }

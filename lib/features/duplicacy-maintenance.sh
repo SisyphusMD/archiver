@@ -66,6 +66,14 @@ exhaustive_due() {
   [ $(( now - last )) -ge $(( interval - 3600 )) ]
 }
 
+# A storage's snapshot revisions, one "<id> <revision>" per line, sorted; fails when it
+# cannot be listed.
+list_revisions() {
+  local listing
+  listing="$("${DUPLICACY_BIN}" list -a -storage "${1}" 2>/dev/null)" || return 1
+  printf '%s\n' "${listing}" | awk '$1 == "Snapshot" && $3 == "revision" { print $2, $4 }' | sort
+}
+
 # Run one duplicacy command stoppably: process substitution keeps duplicacy a direct
 # child (stop signals children via pkill -P), same pattern as duplicacy_primary_backup.
 run_duplicacy_stoppable() {
@@ -140,6 +148,14 @@ maintain_storage() {
 
     update_lock_stage "storage:${storage_name}" "prune"
     phase_start="$(date +%s)"
+    local revisions_before="" revisions_after="" listed_before=false
+    if [ "${storage_id}" -eq 1 ] && revisions_before="$(list_revisions "${storage_name}")"; then
+      listed_before=true
+    fi
+    # The listing is not stoppable; a stop that came during it must not start a prune.
+    if is_stop_requested; then
+      unset SERVICE; return 130
+    fi
     run_duplicacy_stoppable "${prune_args[@]}"
     exit_status=$?
     if [ "${exit_status}" -eq 130 ]; then
@@ -148,6 +164,13 @@ maintain_storage() {
       handle_error "Prune failed for ${storage_name} storage. Review the Duplicacy logs for details."
     else
       set_maintenance_state "${storage_name}" 3 "$(date +%s)"
+      # Copy workers mirror a local prune, and only an actual change ends a stop of theirs.
+      # Only two good listings prove a deletion (a failed one proves nothing), and only a
+      # revision that went missing counts: a concurrent backup's new one must not hide it.
+      if [ "${listed_before}" = true ] && revisions_after="$(list_revisions "${storage_name}")" &&
+        [ -n "$(comm -23 <(printf '%s\n' "${revisions_before}") <(printf '%s\n' "${revisions_after}"))" ]; then
+        LOCAL_PRUNED=true
+      fi
       [ "${exhaustive_run}" = "true" ] && set_maintenance_state "${storage_name}" 4 "$(date +%s)"
       log_message "INFO" "Prune completed for ${storage_name} storage in $(format_duration $(( $(date +%s) - phase_start )))."
     fi

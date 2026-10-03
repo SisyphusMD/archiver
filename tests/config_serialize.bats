@@ -37,6 +37,8 @@ arrange_effective_config() {
   STORAGE_TARGET_1_S3_ID="AKIAEXAMPLE"
   STORAGE_TARGET_1_S3_SECRET='se$cret "with" spaces & $(dollar)'"'"'quote'
   ROTATE_BACKUPS="true"
+  CHECK_INTERVAL="3d"
+  STORAGE_TARGET_1_CHECK_INTERVAL="12h"
   PRUNE_KEEP="-keep 0:180 -keep 30:30"
   STORAGE_PASSWORD='pa$$w0rd with spaces!'
   RSA_PASSPHRASE='phrase"double'
@@ -83,6 +85,8 @@ arrange_effective_config() {
 
   grep -q "^SERVICE_DIRECTORIES=/srv/app:/home/user/data$" "${ENVFILE}"
   grep -q "^ROTATE_BACKUPS=true$" "${ENVFILE}"
+  grep -q "^CHECK_INTERVAL=3d$" "${ENVFILE}"
+  grep -q "^STORAGE_TARGET_1_CHECK_INTERVAL=12h$" "${ENVFILE}"
   ! grep -q "STORAGE_PASSWORD" "${ENVFILE}"
   ! grep -q "S3_SECRET" "${ENVFILE}"
   ! grep -q "S3_ID" "${ENVFILE}"
