@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Source is where configuration comes from. Tests supply their own.
@@ -43,6 +44,8 @@ type Target struct {
 	S3Bucket   string
 	S3Endpoint string
 	S3Region   string
+	// CheckInterval is STORAGE_TARGET_<N>_CHECK_INTERVAL, empty for the default.
+	CheckInterval string
 
 	B2ID     string
 	B2Key    string
@@ -68,6 +71,7 @@ type Config struct {
 	PruneKeep                string
 	PruneExhaustiveFrequency string
 	Threads                  string
+	CheckInterval            string // CHECK_INTERVAL: the default for every target
 }
 
 var secretVar = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET))$`)
@@ -109,6 +113,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		PruneKeep:                src.Getenv("PRUNE_KEEP"),
 		PruneExhaustiveFrequency: strings.ToLower(src.Getenv("PRUNE_EXHAUSTIVE_FREQUENCY")),
 		Threads:                  src.Getenv("DUPLICACY_THREADS"),
+		CheckInterval:            src.Getenv("CHECK_INTERVAL"),
 	}
 
 	prune := src.Getenv("PRUNE_BACKUPS")
@@ -144,6 +149,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		t.S3Bucket = src.Getenv(p + "S3_BUCKETNAME")
 		t.S3Endpoint = src.Getenv(p + "S3_ENDPOINT")
 		t.S3Region = src.Getenv(p + "S3_REGION")
+		t.CheckInterval = src.Getenv(p + "CHECK_INTERVAL")
 		switch t.Type {
 		case "b2":
 			t.B2ID, t.B2Key = secret(p+"B2_ID"), secret(p+"B2_KEY")
@@ -278,7 +284,65 @@ func (c *Config) Validate(secretsDir string) error {
 	default:
 		return fmt.Errorf("PRUNE_EXHAUSTIVE_FREQUENCY must be one of: off, daily, weekly, monthly (got '%s').", c.PruneExhaustiveFrequency)
 	}
+	if _, err := ParseInterval(c.CheckInterval); err != nil {
+		return fmt.Errorf("CHECK_INTERVAL: %v", err)
+	}
+	for _, t := range c.Targets {
+		if _, err := ParseInterval(t.CheckInterval); err != nil {
+			return fmt.Errorf("STORAGE_TARGET_%d_CHECK_INTERVAL: %v", t.N, err)
+		}
+	}
 	return nil
+}
+
+// ParseInterval reads an interval such as "7d", "12h" or "90m"; empty is zero (unset).
+func ParseInterval(s string) (time.Duration, error) {
+	if s == "" {
+		return 0, nil
+	}
+	if days, ok := strings.CutSuffix(s, "d"); ok {
+		n, err := strconv.Atoi(days)
+		if err != nil || n <= 0 {
+			return 0, fmt.Errorf("'%s' is not an interval (use e.g. 1d, 7d, 12h)", s)
+		}
+		return time.Duration(n) * 24 * time.Hour, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("'%s' is not an interval (use e.g. 1d, 7d, 12h)", s)
+	}
+	return d, nil
+}
+
+// TargetCheckInterval is how often a secondary is checked (ADR 17): its own setting, else
+// CHECK_INTERVAL, else a week for SFTP (where a check lists every chunk, for hours) and a
+// day for every other type. Zero when CHECK_BACKUPS is off.
+func (c *Config) TargetCheckInterval(t Target) time.Duration {
+	if !c.CheckBackups {
+		return 0
+	}
+	for _, s := range []string{t.CheckInterval, c.CheckInterval} {
+		if d, err := ParseInterval(s); err == nil && d > 0 {
+			return d
+		}
+	}
+	if t.Type == "sftp" {
+		return 7 * 24 * time.Hour
+	}
+	return 24 * time.Hour
+}
+
+// ExhaustiveInterval is PRUNE_EXHAUSTIVE_FREQUENCY as a duration; zero is never.
+func (c *Config) ExhaustiveInterval() time.Duration {
+	switch c.PruneExhaustiveFrequency {
+	case "daily":
+		return 24 * time.Hour
+	case "weekly":
+		return 7 * 24 * time.Hour
+	case "monthly":
+		return 30 * 24 * time.Hour
+	}
+	return 0
 }
 
 // Pushover reports whether notifications go to Pushover.
