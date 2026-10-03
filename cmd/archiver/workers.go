@@ -155,6 +155,7 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 			Save:   func(s copier.State) { store.Save(s) },
 		}, saved[name])
 		w.CopyLock = l.CopyLock
+		w.InUseDir = l.InUseDir()
 		w.Upkeep = copier.Upkeep{
 			Own:        ownIDs(cfg, host),
 			Mirror:     cfg.PruneBackups,

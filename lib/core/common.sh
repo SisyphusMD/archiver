@@ -47,6 +47,8 @@ STOP_FLAG="/var/lock/archiver-stop-requested"
 # Maintenance pipeline lock: check+prune runs independently of backups.
 MAINTENANCE_LOCKFILE="/var/lock/archiver-maintenance.lock"
 MAINTENANCE_STOP_FLAG="/var/lock/archiver-maintenance-stop-requested"
+# Revisions running copies and restores still read; a prune leaves them out (ADR 19, internal/inuse).
+IN_USE_DIR="/var/lock/archiver-in-use"
 
 DUPLICACY_RSA_PUBLIC_KEY_FILE="${KEYS_DIR}/public.pem"
 DUPLICACY_RSA_PRIVATE_KEY_FILE="${KEYS_DIR}/private.pem"

@@ -19,6 +19,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/health"
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/localprune"
 	"github.com/SisyphusMD/archiver/internal/logview"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
@@ -54,6 +55,9 @@ func main() {
 		if code, ok := backupCommand(os.Args[2:]); ok {
 			os.Exit(code)
 		}
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "prune-local" {
+		os.Exit(pruneLocal(os.Args[2:]))
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "mirror" {
 		os.Exit(mirrorCommand(os.Args[2:]))
@@ -210,4 +214,29 @@ func mirrorCommand(args []string) int {
 		}
 	}
 	return rc
+}
+
+// pruneLocal is the primary's prune for bash maintenance, run in its repository:
+// `archiver prune-local STORAGE THREADS exhaustive|normal -keep ...`. It leaves out the
+// revisions a copy or restore is still reading (ADR 19). Stopped by SIGTERM, it exits 130.
+func pruneLocal(args []string) int {
+	if len(args) < 3 || (args[2] != "exhaustive" && args[2] != "normal") {
+		fmt.Fprintln(os.Stderr, "usage: archiver prune-local STORAGE THREADS exhaustive|normal -keep n:m ...")
+		return 2
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer cancel()
+	l := layout.Default()
+	err := localprune.Run(ctx, localprune.Options{
+		Bin: "duplicacy", Storage: args[0], Threads: args[1], Exhaustive: args[2] == "exhaustive", Keep: args[3:],
+		InUseDir: l.InUseDir(), Out: os.Stdout,
+	})
+	switch {
+	case ctx.Err() != nil:
+		return 130
+	case err != nil:
+		fmt.Println("Prune of local storage failed:", err)
+		return 1
+	}
+	return 0
 }

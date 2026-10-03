@@ -570,6 +570,8 @@ The two pipelines run concurrently and rely on Duplicacy's own lock-free design 
 
 **Format:** `-keep n:m` means keep 1 snapshot every `n` days if the snapshot is at least `m` days old.
 
+**Revisions in use are left for the next prune.** The primary's prune asks Duplicacy which revisions the policy deletes (`prune -dry-run`), leaves out any a copy worker is still copying or a restore is still reading, and deletes the rest. A revision left out costs only its space until the next maintenance run. The prune still runs alongside a backup, which Duplicacy is designed for.
+
 #### Exhaustive prune frequency
 
 A normal prune is snapshot-metadata work (fast); `-exhaustive` additionally lists every chunk on the storage to garbage-collect orphans — expensive on remote storages (a full sftp listing can take hours) while orphans are rare, so it runs on its own interval. `PRUNE_EXHAUSTIVE_FREQUENCY` is evaluated per storage at each maintenance run: once the interval has elapsed since the last exhaustive success, that run's prune includes `-exhaustive`. An infrequent maintenance schedule simply fires it belatedly at the next opportunity. Force it any time with `archiver maintenance exhaustive`.
