@@ -25,6 +25,7 @@ func (l Layout) BackupLock() string       { return filepath.Join(l.Lock, "archiv
 func (l Layout) MaintenanceLock() string  { return filepath.Join(l.Lock, "archiver-maintenance.lock") }
 func (l Layout) DaemonSocket() string     { return filepath.Join(l.Lock, "archiver-daemon.sock") }
 func (l Layout) CopyWorkersState() string { return filepath.Join(l.LogDir(), ".copy-workers.json") }
+func (l Layout) InUseDir() string         { return filepath.Join(l.Lock, "archiver-in-use") }
 
 // StorageInit is the lock held around duplicacy init or add of one storage: created by
 // two at once, a storage can get two configurations (duplicacy 3.2.5 has no

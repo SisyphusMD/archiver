@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SisyphusMD/archiver/internal/inuse"
 )
 
 // AllowLarge lets the next mirror pass delete more than half of an ID's revisions on the
@@ -155,6 +157,18 @@ func (w *Worker) record(stops int, f func(*State)) {
 // mirror deletes on the target the revisions local has pruned. false means the pass is
 // over (failed or stopped).
 func (w *Worker) mirror(ctx context.Context, stops int) bool {
+	// A restore reading from the target registers its revision under this gate; held
+	// from listing to the last deletion, no revision a restore reads is deleted (ADR 19).
+	if w.InUseDir != "" {
+		release, err := inuse.Gate(ctx, w.InUseDir, w.Target, true)
+		if err != nil {
+			if !w.stoppedSince(stops) {
+				w.failed(stops, fmt.Errorf("mirror: %w", err))
+			}
+			return false
+		}
+		defer release()
+	}
 	local, err := w.Runner.Revisions(ctx, w.Primary)
 	if err == nil {
 		var target map[string]bool
@@ -176,6 +190,14 @@ func (w *Worker) applyMirror(ctx context.Context, stops int, local, target map[s
 	allow := w.allowLarge
 	w.mu.Unlock()
 	plan := PlanMirror(local, target, w.owns(), allow)
+	if w.InUseDir != "" {
+		busy, err := inuse.Read(w.InUseDir, w.Target)
+		if err != nil {
+			w.failed(stops, fmt.Errorf("mirror: reading revisions in use: %w", err))
+			return false
+		}
+		w.leaveInUse(plan, busy)
+	}
 
 	var refused []string
 	for id, why := range plan.Refused {
@@ -296,4 +318,34 @@ func (w *Worker) owns() func(string) bool {
 	}
 	ids := w.Upkeep.Own()
 	return func(id string) bool { return ids[id] }
+}
+
+// leaveInUse drops from a plan the revisions a restore is reading; the next pass deletes them.
+func (w *Worker) leaveInUse(plan MirrorPlan, busy *inuse.Set) {
+	for id, revs := range plan.Delete {
+		var keep, held []int
+		for _, r := range revs {
+			if busy.Has(id, r) {
+				held = append(held, r)
+			} else {
+				keep = append(keep, r)
+			}
+		}
+		if len(held) > 0 {
+			w.log("INFO", fmt.Sprintf("Mirror: leaving revisions %s of %s on %s storage for the next pass: a restore is reading them.", joinInts(held), id, w.Target))
+		}
+		if len(keep) == 0 {
+			delete(plan.Delete, id)
+		} else {
+			plan.Delete[id] = keep
+		}
+	}
+}
+
+func joinInts(revs []int) string {
+	s := make([]string, len(revs))
+	for i, r := range revs {
+		s[i] = strconv.Itoa(r)
+	}
+	return strings.Join(s, ",")
 }

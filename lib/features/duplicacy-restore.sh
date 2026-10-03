@@ -133,7 +133,36 @@ warn_if_restore_caps_missing() {
 # initialized, and REVISION / RESTORE_FLAGS / RESTORE_THREADS set.
 perform_restore() {
   warn_if_restore_caps_missing
+  local rc
+  hold_revision_in_use || return 1
   # shellcheck disable=SC2086
   duplicacy restore -r "${REVISION}" -key "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" \
     -stats -threads "${RESTORE_THREADS}" ${RESTORE_FLAGS}
+  rc=$?
+  release_revision_in_use
+  return "${rc}"
+}
+
+# Register the revision being restored, so no prune deletes it meanwhile (ADR 19). The file
+# is the format internal/inuse reads: written under a name readers skip, locked, then renamed
+# into place, all under a shared lock on the storage's gate; held for the restore's life.
+hold_revision_in_use() {
+  local storage gate tmp
+  storage="$(sanitize_storage_name "${SELECTED_STORAGE_TARGET_NAME}")"
+  mkdir -p "${IN_USE_DIR}" && chmod 700 "${IN_USE_DIR}" || return 1
+  exec {gate}>>"${IN_USE_DIR}/.gate-${storage}" && flock -s "${gate}" || return 1
+  tmp="$(mktemp "${IN_USE_DIR}/.tmp-restore-XXXXXX")" || { exec {gate}>&-; return 1; }
+  exec {IN_USE_FD}>>"${tmp}"
+  flock -x "${IN_USE_FD}"
+  printf '%s %s %s\n' "${storage}" "${SNAPSHOT_ID}" "${REVISION}" >&"${IN_USE_FD}"
+  IN_USE_FILE="${IN_USE_DIR}/${tmp##*/.tmp-}"
+  mv "${tmp}" "${IN_USE_FILE}"
+  exec {gate}>&-
+}
+
+release_revision_in_use() {
+  [ -n "${IN_USE_FILE:-}" ] || return 0
+  rm -f "${IN_USE_FILE}"
+  exec {IN_USE_FD}>&-
+  IN_USE_FILE=""
 }

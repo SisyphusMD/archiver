@@ -74,16 +74,19 @@ list_revisions() {
   printf '%s\n' "${listing}" | awk '$1 == "Snapshot" && $3 == "revision" { print $2, $4 }' | sort
 }
 
-# Run one duplicacy command stoppably: process substitution keeps duplicacy a direct
-# child (stop signals children via pkill -P), same pattern as duplicacy_primary_backup.
-run_duplicacy_stoppable() {
+# Run one duplicacy command stoppably.
+run_duplicacy_stoppable() { run_stoppable "${DUPLICACY_BIN}" "$@"; }
+
+# Run a command stoppably: process substitution keeps it a direct child (stop signals
+# children via pkill -P), same pattern as duplicacy_primary_backup.
+run_stoppable() {
   local exit_status
-  "${DUPLICACY_BIN}" "$@" > >(log_output) 2>&1 &
+  "$@" > >(log_output) 2>&1 &
   local cmd_pid=$!
 
   while kill -0 "${cmd_pid}" 2>/dev/null; do
     if is_stop_requested; then
-      log_message "INFO" "Stop requested during duplicacy ${1}."
+      log_message "INFO" "Stop requested during ${2}."
       pkill -TERM -P "${cmd_pid}" 2>/dev/null || true
       kill -TERM "${cmd_pid}" 2>/dev/null || true
       sleep 2
@@ -156,7 +159,14 @@ maintain_storage() {
     if is_stop_requested; then
       unset SERVICE; return 130
     fi
-    run_duplicacy_stoppable "${prune_args[@]}"
+    if [ "${storage_id}" -eq 1 ]; then
+      # The primary's prune leaves out revisions a copy or restore is still reading (ADR 19).
+      local mode=normal
+      [ "${exhaustive_run}" = "true" ] && mode=exhaustive
+      run_stoppable "${ARCHIVER_BIN:-/usr/local/bin/archiver}" prune-local "${storage_name}" "${DUPLICACY_THREADS}" "${mode}" "${PRUNE_KEEP_ARRAY[@]}"
+    else
+      run_duplicacy_stoppable "${prune_args[@]}"
+    fi
     exit_status=$?
     if [ "${exit_status}" -eq 130 ]; then
       unset SERVICE; return 130

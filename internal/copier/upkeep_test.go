@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SisyphusMD/archiver/internal/inuse"
 )
 
 func upkeepWorker(r *fakeRunner, u Upkeep) (*Worker, *fakeClock, *recorder) {
@@ -223,4 +225,49 @@ func TestUpkeepRequestKeepsStop(t *testing.T) {
 	if r.copies != 0 || len(r.commands) != 0 {
 		t.Fatalf("a stopped worker acted on an upkeep request: %d copies, %v", r.copies, r.commands)
 	}
+}
+
+// A restore reading a revision on the target keeps mirroring off it until it ends.
+func TestMirrorLeavesRevisionsInUse(t *testing.T) {
+	r := &fakeRunner{local: revisions("nas-app", 3, 4, 5), target: revisions("nas-app", 1, 2, 3, 4, 5)}
+	w, _, _ := upkeepWorker(r, Upkeep{Own: ownApp, Mirror: true})
+	w.InUseDir = t.TempDir()
+	h, err := inuse.Hold(w.InUseDir, "restore", []inuse.Revision{{Storage: "offsite", ID: "nas-app", Rev: 1}, {Storage: "local", ID: "nas-app", Rev: 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.pass(w.stops, nil)
+	if fmt.Sprint(r.target) != fmt.Sprint(revisions("nas-app", 1, 3, 4, 5)) {
+		t.Fatalf("target %v: only the revision read on offsite is kept", r.target)
+	}
+	h.Release()
+	w.pass(w.stops, nil)
+	if fmt.Sprint(r.target) != fmt.Sprint(revisions("nas-app", 3, 4, 5)) {
+		t.Fatalf("target %v after the restore ended", r.target)
+	}
+}
+
+// A copy registers the local revisions it still needs for as long as its pass runs.
+func TestCopyRegistersRevisionsInUse(t *testing.T) {
+	r := &fakeRunner{local: revisions("nas-app", 1, 2, 3), target: revisions("nas-app", 1), block: true, started: make(chan *fakeCopy, 1)}
+	w, _, _ := upkeepWorker(r, Upkeep{})
+	w.InUseDir = t.TempDir()
+	go w.pass(w.stops, nil)
+	c := <-r.started
+	busy, err := inuse.Read(w.InUseDir, "local")
+	if err != nil || busy.Has("nas-app", 1) || !busy.Has("nas-app", 2) || !busy.Has("nas-app", 3) {
+		t.Fatalf("in use during the copy: %+v %v", busy, err)
+	}
+	// The copy also takes revisions made after its listing, of any snapshot ID.
+	if !busy.Has("nas-app", 4) || !busy.Has("nas-new", 1) {
+		t.Fatalf("revisions newer than the listing not covered: %+v", busy)
+	}
+	close(c.release)
+	for i := 0; i < 100; i++ {
+		if busy, _ := inuse.Read(w.InUseDir, "local"); busy.Empty() {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("still registered after the pass")
 }

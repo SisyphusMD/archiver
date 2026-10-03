@@ -7,9 +7,12 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/inuse"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -118,6 +121,8 @@ type Worker struct {
 	// CopyLock names the lock held around each copy into the target (layout.CopyLock),
 	// shared with a backup that copies inline.
 	CopyLock func(target string) string
+	// InUseDir is the registry of revisions in use (layout.InUseDir); empty registers none.
+	InUseDir string
 	// Upkeep is what the worker maintains on its target once it has caught up.
 	Upkeep Upkeep
 
@@ -137,10 +142,12 @@ type Worker struct {
 	// wakes counts Wake calls; wakesAtStop is the count when the last stop came. Only a wake
 	// after it (a backup after the stop) ends the stop.
 	wakes, wakesAtStop int
-	checking           bool // a check is current; a wake interrupts it (a check never delays a copy)
-	passWakes          int  // wakes when the current pass began: a later one means local changed meanwhile
-	forceExhaustive    bool // the next pass prunes exhaustively whether or not one is due
-	allowLarge         bool // the next mirror pass may delete more than half of an ID (ADR 12's override)
+	checking           bool           // a check is current; a wake interrupts it (a check never delays a copy)
+	passWakes          int            // wakes when the current pass began: a later one means local changed meanwhile
+	forceExhaustive    bool           // the next pass prunes exhaustively whether or not one is due
+	held               *inuse.Holding // local revisions this pass's copy still reads; only the Run goroutine touches it
+	listedNewest       map[string]int // the newest revision of each ID at the last local listing, likewise
+	allowLarge         bool           // the next mirror pass may delete more than half of an ID (ADR 12's override)
 }
 
 // New makes a worker that starts from a saved state, so a restart neither re-alerts nor
@@ -273,9 +280,10 @@ func (w *Worker) save() {
 	}
 }
 
-// missing lists what the target lacks.
+// missing lists what the target lacks, and registers those revisions as in use on local so
+// no local prune deletes them under the copy (ADR 19).
 func (w *Worker) missing(ctx context.Context) ([]string, error) {
-	local, err := w.Runner.Revisions(ctx, w.Primary)
+	local, err := w.listLocal(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing %s: %w", w.Primary, err)
 	}
@@ -290,7 +298,65 @@ func (w *Worker) missing(ctx context.Context) ([]string, error) {
 		}
 	}
 	sort.Strings(out)
+	if w.held != nil {
+		if err := w.held.Narrow(w.revisions(w.Primary, out)); err != nil {
+			return nil, fmt.Errorf("registering revisions in use: %w", err)
+		}
+	}
 	return out, nil
+}
+
+// listLocal lists local and, until the target's listing shows which it lacks, registers
+// all of them, both under the gate a local prune holds exclusively.
+func (w *Worker) listLocal(ctx context.Context) (map[string]bool, error) {
+	if w.InUseDir == "" {
+		return w.Runner.Revisions(ctx, w.Primary)
+	}
+	release, err := inuse.Gate(ctx, w.InUseDir, w.Primary, false)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	local, err := w.Runner.Revisions(ctx, w.Primary)
+	if err != nil {
+		return nil, err
+	}
+	all := make([]string, 0, len(local))
+	w.listedNewest = map[string]int{}
+	for r := range local {
+		all = append(all, r)
+		id, rev, _ := strings.Cut(r, ":")
+		if n, err := strconv.Atoi(rev); err == nil && n > w.listedNewest[id] {
+			w.listedNewest[id] = n
+		}
+	}
+	revs := w.revisions(w.Primary, all)
+	if w.held == nil {
+		w.held, err = inuse.Hold(w.InUseDir, "copy-"+w.Target, revs)
+	} else {
+		err = w.held.Narrow(revs)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("registering revisions in use: %w", err)
+	}
+	return local, nil
+}
+
+// revisions turns "id:revision" keys into in-use entries on storage. The all-snapshot copy
+// also takes whatever local gained after the listing, so every revision past the newest
+// listed of each ID, and every revision of an ID the listing did not have, is in use too.
+func (w *Worker) revisions(storage string, keys []string) []inuse.Revision {
+	out := make([]inuse.Revision, 0, len(keys)+len(w.listedNewest)+1)
+	for _, k := range keys {
+		id, rev, ok := strings.Cut(k, ":")
+		if n, err := strconv.Atoi(rev); ok && err == nil {
+			out = append(out, inuse.Revision{Storage: storage, ID: id, Rev: n})
+		}
+	}
+	for id, newest := range w.listedNewest {
+		out = append(out, inuse.Revision{Storage: storage, ID: id, Rev: newest + 1, AndNewer: true})
+	}
+	return append(out, inuse.Revision{Storage: storage, ID: "*", Rev: 1, AndNewer: true})
 }
 
 // pass copies until the target has caught up, the copy fails, or a stop ends it. A copy
@@ -318,6 +384,8 @@ func (w *Worker) pass(stops int, done <-chan struct{}) {
 		w.cancel = nil
 		w.mu.Unlock()
 		cancel()
+		w.held.Release()
+		w.held = nil
 	}()
 	// A listing or preparation already running when a pause comes finishes (both are
 	// short reads); none starts while paused, and a copy, the long part, is frozen.
