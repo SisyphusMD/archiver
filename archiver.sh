@@ -13,7 +13,7 @@ source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 source_if_not_sourced "${LOCKFILE_CORE}"
 
 usage() {
-  echo "Usage: archiver {backup|maintenance|stop|pause|resume|logs|status|migrate hooks|mirror|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
+  echo "Usage: archiver {backup|maintenance|stop|pause|resume|logs|status|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
   echo "Note:"
   echo "  backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background."
   echo "  maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune."
@@ -22,6 +22,7 @@ usage() {
   echo "  mirror --dry-run shows what the copy workers' next mirror pass would delete on each secondary; mirror --allow-large lets that pass exceed the cap."
   echo "  migrate hooks [DIR...] converts each service's service-backup-settings.sh into executable pre-backup/post-backup hooks and a filters file."
   echo "  recovery-kit uploads the encrypted recovery kit to every storage target; 'recovery-kit force' re-uploads even if unchanged."
+  echo "  envelope [DIR] writes the printable break-glass envelope (default /opt/archiver/envelope); 'envelope confirm' records it as printed."
   echo "  pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments."
   echo "  auto-restore and snapshot-exists are non-interactive and driven by environment variables."
   exit 1
@@ -171,6 +172,14 @@ case "${command}" in
     # migrate hooks is the Go dispatcher's; only the bundle-era migrate reaches here.
     print_bundle_migration_help
     exit 2
+    ;;
+  envelope)
+    if [[ $# -gt 1 ]]; then
+      echo "'envelope' takes at most one argument: an output directory, or confirm."
+      usage
+    fi
+    "${ENVELOPE_SCRIPT}" "${@}"
+    exit $?
     ;;
   recovery-kit)
     if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "force" ) ]]; then

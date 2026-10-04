@@ -27,7 +27,7 @@ services:
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
       # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
 
-    # Non-secret settings, exactly as emitted by 'archiver init' or 'archiver migrate'.
+    # Non-secret settings, exactly as emitted by 'archiver init'.
     # The file holds no secrets, so it can be committed to git alongside this compose file.
     # (Values can also be inlined under environment: above — same effect.)
     env_file:
@@ -47,6 +47,8 @@ services:
       # - storage_target_1_b2_key
       # - storage_target_1_s3_id  # only for s3 targets
       # - storage_target_1_s3_secret
+      # - storage_target_1_breakglass_b2_id   # optional read-only key for the break-glass
+      # - storage_target_1_breakglass_b2_key  # envelope (README "Break-glass envelope")
 
     volumes:
       - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
@@ -62,7 +64,7 @@ services:
       # - /path/to/host/restore-dir:/mnt/restore-dir                 # Restore location (will be prompted)
 
 # Secrets for the env-native service above. Files can come straight from 'archiver init'
-# (env-native/secrets/) or 'archiver migrate'; move them somewhere safe and reference them here.
+# (env-native/secrets/); move them somewhere safe and reference them here.
 secrets:
   storage_password: { file: ./secrets/storage_password }
   rsa_passphrase:   { file: ./secrets/rsa_passphrase }
@@ -75,3 +77,5 @@ secrets:
   # storage_target_1_b2_key:    { file: ./secrets/storage_target_1_b2_key }
   # storage_target_1_s3_id:     { file: ./secrets/storage_target_1_s3_id }
   # storage_target_1_s3_secret: { file: ./secrets/storage_target_1_s3_secret }
+  # storage_target_1_breakglass_b2_id:  { file: ./secrets/storage_target_1_breakglass_b2_id }
+  # storage_target_1_breakglass_b2_key: { file: ./secrets/storage_target_1_breakglass_b2_key }

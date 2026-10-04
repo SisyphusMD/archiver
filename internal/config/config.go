@@ -74,7 +74,7 @@ type Config struct {
 	CheckInterval            string // CHECK_INTERVAL: the default for every target
 }
 
-var secretVar = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET))$`)
+var secretVar = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET|BREAKGLASS_(B2_ID|B2_KEY|S3_ID|S3_SECRET|SSH_KEY)))$`)
 
 // IsSecret reports whether a variable name is a secret, which is read only from a file.
 func IsSecret(name string) bool { return secretVar.MatchString(name) }

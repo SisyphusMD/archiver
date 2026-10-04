@@ -414,9 +414,9 @@ The settings below define what to backup and where. Supply them as environment v
 
 Environment variables carry the non-secret settings and files under `/run/secrets` carry the secrets and keys, so the configuration stays under version control (compose file / ConfigMap) and the secrets stay in a secret store. Nothing is read from a configuration file, and nothing configured is ever executed.
 
-**Non-secret settings (plain env vars).** `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, and `NOTIFICATION_SERVICE`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine).
+**Non-secret settings (plain env vars).** `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, `NOTIFICATION_SERVICE`, and `RECOVERY_KIT_EXTRA_PATHS`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine).
 
-**Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`, `B2_KEY`, `S3_ID`, and `S3_SECRET`. For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `storage_password`) is picked up with no extra configuration.
+**Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`, `B2_KEY`, `S3_ID`, `S3_SECRET` and optional [break-glass credentials](#break-glass-envelope). For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `storage_password`) is picked up with no extra configuration.
 
 **Keys (files).** Keys are always files under `/opt/archiver/keys`. The RSA keypair must be provided as files at `/run/secrets/rsa_private_key` and `/run/secrets/rsa_public_key` (override the paths with `RSA_PRIVATE_KEY_FILE` / `RSA_PUBLIC_KEY_FILE`). The SFTP keypair is optional, for sftp targets, at `/run/secrets/ssh_private_key` and `/run/secrets/ssh_public_key` (override with `SSH_PRIVATE_KEY_FILE` / `SSH_PUBLIC_KEY_FILE`; restore needs both halves).
 
@@ -509,7 +509,7 @@ openssl rand -base64 24 > secrets/recovery_password    # save a copy in your pas
 
 It must be at least 8 characters and **differ from `STORAGE_PASSWORD`** (it is the only thing protecting the kit at rest, and the kit contains the storage password); archiver refuses a violating configuration. To rotate it, replace the secret file and update your password manager — the next backup re-encrypts and re-uploads everywhere automatically.
 
-**What it does.** After each backup, archiver assembles the kit — the full effective configuration (every non-secret setting, every secret, and the keys, exactly what `archiver migrate` emits), generated recreation notes (`RECREATE.txt`: hostname, schedule, every container path that needs a mount, required capabilities), and your deployment manifests if mounted (below) — encrypts it to that password (AES-256, pbkdf2), and uploads it as a **plain file beside the duplicacy data on every storage target**: `archiver-recovery-kit-<hostname>.tar.enc`, with a companion `README.txt` holding the decrypt command. It is not inside duplicacy's storage format, so you can download it from any provider web UI or file browser with no tooling. The kit is re-encrypted and re-uploaded only when its content actually changes (or a new storage target appears); an unchanged config is a nightly no-op. (The name includes the hostname, so deployments sharing a storage target must have distinct hostnames — they already need that for distinct snapshot IDs.)
+**What it does.** After each backup, archiver assembles the kit — the full effective configuration (every non-secret setting, every secret, and the keys), generated recreation notes (`RECREATE.txt`: hostname, schedule, every container path that needs a mount, required capabilities), and your deployment manifests if mounted (below) — encrypts it to that password (AES-256, pbkdf2), and uploads it as a **plain file beside the duplicacy data on every storage target**: `archiver-recovery-kit-<hostname>.tar.enc`, with a companion `README.txt` holding the decrypt command. It is not inside duplicacy's storage format, so you can download it from any provider web UI or file browser with no tooling. The kit is re-encrypted and re-uploaded only when its content actually changes (or a new storage target appears); an unchanged config is a nightly no-op. (The name includes the hostname, so deployments sharing a storage target must have distinct hostnames — they already need that for distinct snapshot IDs.)
 
 **Capturing your deployment manifest.** The kit cannot see files outside the container, so it cannot magically include your compose file or Kubernetes YAML — instead, anything mounted (read-only) at `/opt/archiver/deployment/` is captured **verbatim** into the kit. Each runtime uses its native mechanism:
 
@@ -518,6 +518,8 @@ It must be at least 8 characters and **differ from `STORAGE_PASSWORD`** (it is t
 - **NixOS / systemd-managed containers**: bind the service definition, e.g. `"/etc/nixos/services/archiver.nix:/opt/archiver/deployment/archiver.nix:ro"`.
 
 In GitOps setups your manifest is already replicated in git; the kit's copy is for the total-loss case where the git host is gone too. Without a mounted manifest the kit still stands alone: `RECREATE.txt` lists every fact archiver knows about how the container must be put together, and the compose template covers the rest.
+
+**Carrying more in the kit.** `RECOVERY_KIT_EXTRA_PATHS` lists paths in the container (colon- or newline-separated; mount them read-only) that go into the kit's `extra/`: a disaster-recovery runbook, the scripts your restore hooks call, `git bundle` copies of the repositories you rebuild from. A recovery then has them before anything else is restored. A path that does not exist is reported as an error, and the kit goes out without it. Everything here is re-encrypted and re-uploaded whenever it changes, so keep large or fast-changing files out.
 
 **Recovery** happens on any machine with stock `openssl` — no archiver, no other files, just the recovery password from your password manager: reach **any one** of your storage locations, download the kit, and run
 
@@ -530,6 +532,30 @@ It prompts for the password and yields `archiver.env` + `secrets/` + `RECREATE.t
 `archiver recovery-kit` uploads on demand (useful right after setup); `archiver recovery-kit force` re-uploads everywhere even if unchanged. An upload failure is logged and notified but never fails the backup; the failed target is retried on the next run. The kit is **write-only**: nothing ever reads it back at runtime, so it is never a boot dependency.
 
 On B2, each update creates a new file version; old versions age out per your bucket lifecycle rules (they are ciphertext, so lingering versions are harmless).
+
+#### Break-glass envelope
+
+The kit needs two things to be useful: the recovery password, and a way to reach one storage. If both live only in systems the backups protect (a password manager hosted on the same servers, a login whose 2FA is there), recovery is circular. The envelope breaks the circle: one printed page, kept somewhere that does not share fate with the backups, from which any one storage is enough to recover with no help from anyone.
+
+```bash
+docker exec archiver archiver envelope              # writes /opt/archiver/envelope/envelope-<hostname>.{pdf,html}
+docker cp archiver:/opt/archiver/envelope ./envelope && docker exec archiver rm -rf /opt/archiver/envelope
+# print ./envelope/envelope-<hostname>.pdf, then:
+docker exec archiver archiver envelope confirm
+rm -rf ./envelope
+```
+
+The page holds the recovery password, the decrypt command, and for each storage target where the kit sits (address, user, bucket, path) with a credential that can read it, as text and as QR codes, plus space to write account-recovery codes by hand. The files are plaintext, owner-only, and never sent anywhere: print one and delete them.
+
+**Break-glass credentials.** By default each storage's block carries its backup credential, marked **FULL ACCESS**, because whoever holds the page could also delete those backups. Where the provider allows a narrower credential, create one that can only read the bucket and give it to archiver as a secret file; the page then carries it instead (archiver never uses it for anything else):
+
+| Storage type | Secret files (`/run/secrets/...`) |
+|---|---|
+| B2 | `storage_target_N_breakglass_b2_id`, `storage_target_N_breakglass_b2_key` (a key with `listBuckets`, `listFiles`, `readFiles` on the bucket) |
+| S3 | `storage_target_N_breakglass_s3_id`, `storage_target_N_breakglass_s3_secret` |
+| SFTP | `storage_target_N_breakglass_ssh_key` (a private key for a read-only account, whose name goes in the `STORAGE_TARGET_N_BREAKGLASS_SFTP_USER` env var; otherwise the page carries the backup key, since the kit holding it is itself on that server) |
+
+**Keeping it current.** `archiver envelope confirm` records a fingerprint of what the page says (a hash keyed by the recovery password; it reveals nothing). After every recovery-kit run archiver compares it with what the page would say now: when a secret or storage on it changes, `archiver status` shows `Envelope: OUT OF DATE`, healthcheck warns, and one notification is sent. A year after confirming, the same happens as a reminder to check the envelope is still there and readable.
 
 ### Maintenance (check + prune)
 
@@ -652,6 +678,8 @@ archiver auto-restore-all  # Restore every service in one pass (non-interactive)
 archiver snapshot-exists   # Check if a snapshot exists on any storage target
 archiver migrate hooks [DIR...]  # Convert service-backup-settings.sh into executable hooks
 archiver recovery-kit [force]  # Upload the encrypted recovery kit to every storage target now
+archiver envelope [DIR]    # Write the printable break-glass envelope (PDF + HTML; default /opt/archiver/envelope)
+archiver envelope confirm  # Record the envelope as printed, so status can say when it goes out of date
 archiver healthcheck       # Check system health (Docker HEALTHCHECK uses this; on Kubernetes wire it as an exec probe)
 archiver help              # Show help
 ```

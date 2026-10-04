@@ -89,6 +89,11 @@ write_recovery_kit_recreate_notes() {
       echo "2. deployment/ in this kit holds the manifest files that were mounted at"
       echo "   ${DEPLOYMENT_DIR} — your actual compose/nix/k8s definition. Prefer those."
     fi
+    if [[ -n "${RECOVERY_KIT_EXTRA_PATHS:-}" ]]; then
+      echo
+      echo "- extra/ in this kit holds the files this deployment chose to carry for a recovery"
+      echo "  (RECOVERY_KIT_EXTRA_PATHS): runbooks, scripts, repositories. Start there."
+    fi
     echo
     echo "Facts this deployment depended on:"
     echo "  - hostname: $(recovery_kit_host)   (keep it: snapshot IDs and this kit's filename derive from it)"
@@ -151,7 +156,42 @@ build_recovery_kit_payload() {
     chmod -R u+rwX,go-rwx "${workdir}/deployment"
     rmdir "${workdir}/deployment" 2>/dev/null || true   # drop it when nothing visible was mounted
   fi
-  (cd "${workdir}" && find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+  copy_recovery_kit_extras "${workdir}" || return 1
+  # NUL-delimited, so a file name with spaces (an extra's "DR Runbook.md") is hashed too. The
+  # extras' modes count as well: a restore helper that becomes executable is a change. Without
+  # extras the input is as it always was, so no existing kit is re-uploaded for this.
+  (
+    set -o pipefail
+    cd "${workdir}" || exit 1
+    {
+      find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+      if [[ -d extra ]]; then find extra -type f -printf '%m %p\n' | LC_ALL=C sort; fi
+    } | sha256sum | cut -d' ' -f1
+  )
+}
+
+# Copy RECOVERY_KIT_EXTRA_PATHS (colon- or newline-separated paths in the container: a
+# runbook, git bundles, helper scripts) into the kit's extra/, so a recovery has them before
+# anything else is restored. A missing path is an error worth a notification, but the kit
+# still goes out without it. Callers capture stdout, so log lines go to stderr.
+copy_recovery_kit_extras() {
+  local workdir="${1}" raw="${RECOVERY_KIT_EXTRA_PATHS:-}" p dest parts=()
+  [[ -n "${raw}" ]] || return 0
+  IFS=':' read -ra parts <<<"${raw//$'\n'/:}"
+  mkdir -p "${workdir}/extra"
+  for p in "${parts[@]}"; do
+    [[ -n "${p}" ]] || continue
+    if [[ ! -e "${p}" ]]; then
+      log_message "ERROR" "Recovery kit: RECOVERY_KIT_EXTRA_PATHS entry ${p} does not exist; the kit goes out without it." >&2
+      continue
+    fi
+    dest="${workdir}/extra/$(basename "${p}")"
+    local base="${dest}" n=2
+    while [[ -e "${dest}" ]]; do dest="${base}.${n}"; n=$((n + 1)); done
+    cp -RL "${p}" "${dest}" || return 1
+  done
+  chmod -R u+rwX,go-rwx "${workdir}/extra"
+  rmdir "${workdir}/extra" 2>/dev/null || true
 }
 
 # Encrypt the payload dir into a single kit file. -pass fd:3 keeps the password off
@@ -161,6 +201,7 @@ encrypt_recovery_kit() {
   local workdir="${1}" out="${2}"
   local members=(archiver.env secrets RECREATE.txt)
   [[ -d "${workdir}/deployment" ]] && members+=(deployment)
+  [[ -d "${workdir}/extra" ]] && members+=(extra)
   (
     set -o pipefail
     tar -C "${workdir}" -cf - "${members[@]}" \
@@ -518,6 +559,10 @@ run_recovery_kit() {
   # Version-tag the fingerprint so a placement-scheme change invalidates the recorded state and
   # forces a one-time re-stamp on upgrade, independent of whether the kit content changed.
   fingerprint="v${RECOVERY_KIT_STATE_VERSION}:${fingerprint}"
+
+  # What a printed envelope would say now: status compares it with what was confirmed printed.
+  source_if_not_sourced "${ENVELOPE_FEATURE}"
+  envelope_check || log_message "WARNING" "Envelope: could not check the printed envelope against the configuration."
 
   local state_hash="" state_names=""
   if [[ -f "${RECOVERY_KIT_STATE_FILE}" ]]; then

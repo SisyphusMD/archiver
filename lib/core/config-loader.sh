@@ -59,8 +59,11 @@ resolve_secret_files() {
     type_var="STORAGE_TARGET_${n}_TYPE"
     type="${!type_var}"
     case "${type}" in
-      b2) resolve_secret "STORAGE_TARGET_${n}_B2_ID";  resolve_secret "STORAGE_TARGET_${n}_B2_KEY" ;;
-      s3) resolve_secret "STORAGE_TARGET_${n}_S3_ID";  resolve_secret "STORAGE_TARGET_${n}_S3_SECRET" ;;
+      b2) resolve_secret "STORAGE_TARGET_${n}_B2_ID";  resolve_secret "STORAGE_TARGET_${n}_B2_KEY"
+          resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_B2_ID"; resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_B2_KEY" ;;
+      s3) resolve_secret "STORAGE_TARGET_${n}_S3_ID";  resolve_secret "STORAGE_TARGET_${n}_S3_SECRET"
+          resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_S3_ID"; resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_S3_SECRET" ;;
+      sftp) resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_SSH_KEY" ;;
     esac
     n=$((n + 1))
   done
@@ -87,6 +90,8 @@ normalize_service_directories() {
 purge_raw_env_secrets
 resolve_secret_files
 normalize_service_directories
+# Newline-separated paths are accepted too; colons keep the value one line in archiver.env.
+[[ -n "${RECOVERY_KIT_EXTRA_PATHS:-}" ]] && RECOVERY_KIT_EXTRA_PATHS="${RECOVERY_KIT_EXTRA_PATHS//$'\n'/:}"
 # Deprecated-name translation, silent (the entrypoint warns once at container start;
 # warning here would spam the log from every command, incl. the 5-minute healthcheck).
 # Translating before anything reads the value means the serializers and the recovery kit

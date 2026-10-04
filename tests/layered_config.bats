@@ -120,3 +120,20 @@ run_load() {
   run_load
   [ -z "${STORAGE_TARGET_1_NAME:-}" ]
 }
+
+@test "break-glass credentials are read per storage type from secret files" {
+  export STORAGE_TARGET_1_NAME="b" STORAGE_TARGET_1_TYPE="b2" STORAGE_TARGET_2_NAME="s" STORAGE_TARGET_2_TYPE="sftp"
+  printf 'ro-id' >"${SECRETS_DIR}/storage_target_1_breakglass_b2_id"
+  printf 'ro-key' >"${SECRETS_DIR}/storage_target_1_breakglass_b2_key"
+  printf -- '-----BEGIN KEY-----\nline2\n-----END KEY-----\n' >"${SECRETS_DIR}/storage_target_2_breakglass_ssh_key"
+  run_load
+  [ "${STORAGE_TARGET_1_BREAKGLASS_B2_ID}" = "ro-id" ]
+  [ "${STORAGE_TARGET_1_BREAKGLASS_B2_KEY}" = "ro-key" ]
+  [ "${STORAGE_TARGET_2_BREAKGLASS_SSH_KEY}" = $'-----BEGIN KEY-----\nline2\n-----END KEY-----' ]
+}
+
+@test "a break-glass credential passed as a raw env var is purged" {
+  export STORAGE_TARGET_1_BREAKGLASS_B2_KEY="raw"
+  run_load
+  [ -z "${STORAGE_TARGET_1_BREAKGLASS_B2_KEY:-}" ]
+}

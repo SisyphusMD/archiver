@@ -16,8 +16,10 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/daemon"
+	"github.com/SisyphusMD/archiver/internal/envelope"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
+	"github.com/SisyphusMD/archiver/internal/status"
 )
 
 const (
@@ -148,6 +150,10 @@ func Run(w io.Writer, l layout.Layout, env Env, now time.Time) int {
 		case backupLogExists:
 			r.warn("Maintenance has never completed (set MAINTENANCE_SCHEDULE or run 'archiver maintenance')")
 		}
+	}
+
+	if _, warning := envelope.Status(l, now, status.Age); warning != "" {
+		r.warn("Envelope: %s", warning)
 	}
 
 	if fi, err := os.Stat(l.LogDir()); err == nil && fi.IsDir() {
