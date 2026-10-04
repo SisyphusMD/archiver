@@ -27,15 +27,16 @@ LOGO_DIR="${LIB_DIR}/logos"
 LOG_DIR="${ARCHIVER_DIR}/logs"
 OLD_LOG_DIR="${LOG_DIR}/prior_logs"
 KEYS_DIR="${ARCHIVER_DIR}/keys"
-BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
-# init writes its generated materials (env-native/ + the bundle) here — a neutral
-# output path, so the primary flow is not branded by the transitional bundle mount.
+# init writes its generated env-native materials here.
 SETUP_DIR="${ARCHIVER_DIR}/setup"
 # Conventional mount point for the user's deployment manifests (compose.yaml, .nix files,
 # k8s YAML — whatever the runtime uses). Anything mounted here is captured verbatim into
 # the recovery kit, so the kit can recreate the deployment byte-exact.
 DEPLOYMENT_DIR="${ARCHIVER_DIR}/deployment"
 
+# Where releases before v1 kept a bundle and its decrypted config.sh. v1 reads neither, and
+# refuses to start while either is present (ADRs 4, 22).
+BUNDLE_DIR="${ARCHIVER_DIR}/bundle"
 CONFIG_FILE="${ARCHIVER_DIR}/config.sh"
 # Directory holding file-based secrets (Docker/k8s convention). Each secret is one file;
 # a per-secret <NAME>_FILE env var can point elsewhere. Overridable for tests.
@@ -57,6 +58,7 @@ DUPLICACY_SSH_PRIVATE_KEY_FILE="${KEYS_DIR}/id_ed25519"
 
 CONFIG_LOADER_CORE="${CORE_DIR}/config-loader.sh"
 CONFIG_SERIALIZE_CORE="${CORE_DIR}/config-serialize.sh"
+CONFIG_VARS_CORE="${CORE_DIR}/config-vars.sh"
 ERROR_CORE="${CORE_DIR}/error.sh"
 LOCKFILE_CORE="${CORE_DIR}/lockfile.sh"
 LOGGING_CORE="${CORE_DIR}/logging.sh"
@@ -70,15 +72,12 @@ RECOVERY_KIT_FEATURE="${FEATURES_DIR}/recovery-kit.sh"
 
 AUTO_RESTORE_SCRIPT="${SCRIPTS_DIR}/auto-restore.sh"
 AUTO_RESTORE_ALL_SCRIPT="${SCRIPTS_DIR}/auto-restore-all.sh"
-BUNDLE_EXPORT_SCRIPT="${SCRIPTS_DIR}/bundle-export.sh"
-BUNDLE_IMPORT_SCRIPT="${SCRIPTS_DIR}/bundle-import.sh"
 RECOVERY_KIT_SCRIPT="${SCRIPTS_DIR}/recovery-kit.sh"
 HEALTHCHECK_SCRIPT="${SCRIPTS_DIR}/healthcheck.sh"
 INIT_SCRIPT="${SCRIPTS_DIR}/init.sh"
 LOGS_SCRIPT="${SCRIPTS_DIR}/logs.sh"
 MAIN_SCRIPT="${SCRIPTS_DIR}/main.sh"
 MAINTENANCE_SCRIPT="${SCRIPTS_DIR}/maintenance.sh"
-MIGRATE_SCRIPT="${SCRIPTS_DIR}/migrate.sh"
 PAUSE_SCRIPT="${SCRIPTS_DIR}/pause.sh"
 RESTORE_SCRIPT="${SCRIPTS_DIR}/restore.sh"
 RESUME_SCRIPT="${SCRIPTS_DIR}/resume.sh"
@@ -86,3 +85,23 @@ SNAPSHOT_EXISTS_SCRIPT="${SCRIPTS_DIR}/snapshot-exists.sh"
 STATUS_SCRIPT="${SCRIPTS_DIR}/status.sh"
 STOP_SCRIPT="${SCRIPTS_DIR}/stop.sh"
 
+
+# How a bundle deployment converts, printed wherever v1 meets one (ADR 22): the 0.11 image
+# reads the bundle once and writes env-native materials.
+print_bundle_migration_help() {
+  cat >&2 <<'EOF'
+This release no longer reads bundles (bundle.tar.enc, config.sh). Convert yours once with the
+0.11 image, which writes the same configuration as env-native materials:
+
+  docker run --rm \
+    -v ./archiver-bundle:/opt/archiver/bundle:ro \
+    -v ./secrets/bundle_password:/run/secrets/bundle_password:ro \
+    -v ./archiver-migrate:/opt/archiver/migrate \
+    ghcr.io/sisyphusmd/archiver:0.11 run migrate
+
+Then load archiver-migrate/archiver.env as environment variables and the files in
+archiver-migrate/secrets/ under /run/secrets, remove the bundle mount and the bundle_password
+secret, and start this release again. The files hold your secrets in plaintext: move them
+into your secret store and delete them. README: "Upgrading from a bundle".
+EOF
+}

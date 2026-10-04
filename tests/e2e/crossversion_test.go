@@ -13,6 +13,17 @@ import (
 // installations actually hold.
 const defaultBaseline = "ghcr.io/sisyphusmd/archiver:0.11.0@sha256:44cdd90b37be891a60c1543e347ba4e47e0aeba131c17683a9857aa6604058b2"
 
+// The 0.11 release that converts a bundle in one `docker run` (`run migrate`), by digest:
+// what v1 tells a bundle deployment to run (ADR 22).
+const defaultConverter = "ghcr.io/sisyphusmd/archiver:0.11.4@sha256:5eb55b3b2852f671d72cdc41d0378ceac0e37237d72aa458eeeeaa599ae78a62"
+
+func converterImage() string {
+	if c := os.Getenv("ARCHIVER_CONVERTER_IMAGE"); c != "" {
+		return c
+	}
+	return defaultConverter
+}
+
 func images(t *testing.T) (baseline, current string) {
 	t.Helper()
 	baseline = os.Getenv("ARCHIVER_BASELINE_IMAGE")

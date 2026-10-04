@@ -147,7 +147,7 @@ func (b *Backup) Run() int {
 func (b *Backup) verifyConfig() ([]string, bool) {
 	c := b.cfg
 	if len(c.ServiceDirectories) == 0 {
-		b.log.Message(logging.Error, "", "SERVICE_DIRECTORIES is not set. Provide it via config.sh or the SERVICE_DIRECTORIES environment variable (colon-delimited).")
+		b.log.Message(logging.Error, "", "SERVICE_DIRECTORIES is not set. Set the SERVICE_DIRECTORIES environment variable (colon-delimited).")
 		return nil, false
 	}
 	dirs, unmatched := config.ExpandServiceDirectories(c.ServiceDirectories)

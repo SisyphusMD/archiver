@@ -4,7 +4,7 @@
 # ${DEPLOYMENT_DIR}, into a single encrypted tar, and place it as a PLAIN file beside the
 # duplicacy data on every storage target. Recovery needs only one reachable storage location
 # (even via a provider web UI) plus the single recovery password — no other archiver state.
-# The kit is write-only: nothing at runtime ever reads it back, so unlike the bundle it is
+# The kit is write-only: nothing at runtime ever reads it back, so it is
 # never a boot dependency.
 #
 # Enabled by the presence of the recovery_password secret (file-only, like every secret).
@@ -17,6 +17,7 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${ERROR_CORE}"
+source_if_not_sourced "${CONFIG_LOADER_CORE}"
 source_if_not_sourced "${CONFIG_SERIALIZE_CORE}"
 
 # Uploaded-state record: line 1 is the kit fingerprint, following lines are the storage

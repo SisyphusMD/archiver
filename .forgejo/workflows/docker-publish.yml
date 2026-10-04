@@ -240,16 +240,6 @@ jobs:
           docker run -i --rm --hostname en-host \
             --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/env-native.sh
-      - name: Bundle decrypts from a file-based password (Docker secret, not an env var)
-        run: |
-          docker run -i --rm --hostname bs-host \
-            --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
-            --entrypoint bash roundtrip:local -s < tests/integration/bundle-secret.sh
-      - name: Migrate round-trip (bundle -> migrate -> env-native -> export -> re-import)
-        run: |
-          docker run -i --rm --hostname mig-host \
-            --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
-            --entrypoint bash roundtrip:local -s < tests/integration/migrate.sh
       - name: Restore capability warning (backup-only caps warn; full caps stay quiet)
         run: |
           docker run -i --rm --cap-drop ALL --cap-add DAC_OVERRIDE \
@@ -392,8 +382,8 @@ jobs:
         run: IMAGE=hosttests:local bash tests/integration/s3-garage.sh
       - name: sftp runtime against sshd (backup + restore over ssh)
         run: IMAGE=hosttests:local bash tests/integration/sftp-runtime.sh
-      - name: Entrypoint secret contract (precise bundle-password errors; no env leak after import)
-        run: IMAGE=hosttests:local bash tests/integration/entrypoint-secrets.sh
+      - name: Bundle-era inputs refuse with the 0.11 conversion (ADRs 4, 22)
+        run: IMAGE=hosttests:local bash tests/integration/refuse-bundle.sh
 
   e2e:
     name: Black-box suite (never-break across versions)

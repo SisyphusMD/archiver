@@ -207,10 +207,10 @@ func splitServiceDirectories(raw string) []string {
 // order and words the bash loader uses.
 func (c *Config) Validate(secretsDir string) error {
 	if len(c.ServiceDirectories) == 0 {
-		return fmt.Errorf("SERVICE_DIRECTORIES is not set. Provide it via config.sh or the SERVICE_DIRECTORIES environment variable (colon-delimited).")
+		return fmt.Errorf("SERVICE_DIRECTORIES is not set. Set the SERVICE_DIRECTORIES environment variable (colon-delimited).")
 	}
 	if len(c.Targets) == 0 {
-		return fmt.Errorf("No storage targets specified. Provide at least one via config.sh or the STORAGE_TARGET_N_* environment variables.")
+		return fmt.Errorf("No storage targets specified. Provide at least one via the STORAGE_TARGET_N_* environment variables.")
 	}
 	secretFile := func(v string) string { return filepath.Join(secretsDir, strings.ToLower(v)) }
 	for _, t := range c.Targets {
@@ -264,7 +264,7 @@ func (c *Config) Validate(secretsDir string) error {
 	}
 	for _, s := range []struct{ name, v string }{{"STORAGE_PASSWORD", c.StoragePassword}, {"RSA_PASSPHRASE", c.RSAPassphrase}} {
 		if s.v == "" {
-			return fmt.Errorf("The required secret %s is not set. Provide it via the bundle, %s_FILE, or %s.", s.name, s.name, secretFile(s.name))
+			return fmt.Errorf("The required secret %s is not set. Provide it via %s_FILE or %s.", s.name, s.name, secretFile(s.name))
 		}
 	}
 	// Duplicacy rejects a shorter one only at init, with an opaque message. bash counts
@@ -275,7 +275,7 @@ func (c *Config) Validate(secretsDir string) error {
 	if strings.ToLower(c.NotificationService) == "pushover" {
 		for _, s := range []struct{ name, v string }{{"PUSHOVER_USER_KEY", c.PushoverUserKey}, {"PUSHOVER_API_TOKEN", c.PushoverAPIToken}} {
 			if s.v == "" {
-				return fmt.Errorf("Notification service is set to %s, but %s is not set. Provide it via config.sh or your env-native configuration.", c.NotificationService, s.name)
+				return fmt.Errorf("Notification service is set to %s, but %s is not set. Provide it as a secret file.", c.NotificationService, s.name)
 			}
 		}
 	}

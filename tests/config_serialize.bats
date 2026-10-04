@@ -1,28 +1,19 @@
 #!/usr/bin/env bats
-# lib/core/config-serialize.sh backs `bundle export` and `archiver migrate`: the effective
-# config must round-trip through both output shapes byte-exactly, including passwords with
-# shell metacharacters — a quoting bug here corrupts credentials in every exported bundle.
+# lib/core/config-serialize.sh backs init and the recovery kit: the configuration must reach
+# the env file and secret files byte-exactly, including passwords with shell metacharacters.
 
 setup() {
   REPO_ROOT="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
   SECRETS_DIR="${BATS_TEST_TMPDIR}/secrets"
-  CONFIG_FILE="${BATS_TEST_TMPDIR}/config.sh"
   mkdir -p "${SECRETS_DIR}"
-  : >"${CONFIG_FILE}"
-  export SECRETS_DIR CONFIG_FILE
+  export SECRETS_DIR
 }
 
-# config-serialize needs config-loader's CONFIG_*_VARS_RE, so load that first (same
-# arrange-then-source pattern as layered_config.bats), then the serializer.
 load_serializer() {
   COMMON_SH_SOURCED=true
-  LOGGING_SH_SOURCED=true
-  CONFIG_LOADER_SH_SOURCED=true
   source_if_not_sourced() { :; }
-  log_message() { :; }
-  handle_error() { echo "handle_error: $*" >&2; return 1; }
   # shellcheck source=/dev/null
-  source "${REPO_ROOT}/lib/core/config-loader.sh"
+  source "${REPO_ROOT}/lib/core/config-vars.sh"
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/lib/core/config-serialize.sh"
 }
@@ -42,31 +33,6 @@ arrange_effective_config() {
   PRUNE_KEEP="-keep 0:180 -keep 30:30"
   STORAGE_PASSWORD='pa$$w0rd with spaces!'
   RSA_PASSPHRASE='phrase"double'
-}
-
-@test "serialize_config_sh: nasty secrets survive a source round-trip byte-exactly" {
-  load_serializer
-  arrange_effective_config
-  OUT="${BATS_TEST_TMPDIR}/out-config.sh"
-  serialize_config_sh "${OUT}"
-
-  WANT_SECRET="${STORAGE_TARGET_1_S3_SECRET}"
-  WANT_PW="${STORAGE_PASSWORD}"
-  GOT_SECRET="$(bash -c "source '${OUT}'; printf '%s' \"\${STORAGE_TARGET_1_S3_SECRET}\"")"
-  GOT_PW="$(bash -c "source '${OUT}'; printf '%s' \"\${STORAGE_PASSWORD}\"")"
-  GOT_KEEP="$(bash -c "source '${OUT}'; printf '%s' \"\${PRUNE_KEEP}\"")"
-  [ "${GOT_SECRET}" = "${WANT_SECRET}" ]
-  [ "${GOT_PW}" = "${WANT_PW}" ]
-  [ "${GOT_KEEP}" = "${PRUNE_KEEP}" ]
-}
-
-@test "serialize_config_sh: SERVICE_DIRECTORIES array is emitted as the canonical colon-scalar" {
-  load_serializer
-  arrange_effective_config
-  OUT="${BATS_TEST_TMPDIR}/out-config.sh"
-  serialize_config_sh "${OUT}"
-  GOT="$(bash -c "source '${OUT}'; printf '%s' \"\${SERVICE_DIRECTORIES}\"")"
-  [ "${GOT}" = "/srv/app:/home/user/data" ]
 }
 
 @test "serialize_env_and_secrets: secrets land as exact-byte files (mode 600), never in the env file" {

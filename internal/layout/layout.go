@@ -17,7 +17,6 @@ func (l Layout) LogDir() string           { return filepath.Join(l.Root, "logs")
 func (l Layout) BackupLog() string        { return filepath.Join(l.LogDir(), "archiver.log") }
 func (l Layout) MaintenanceLog() string   { return filepath.Join(l.LogDir(), "maintenance.log") }
 func (l Layout) MaintenanceState() string { return filepath.Join(l.LogDir(), ".maintenance-state") }
-func (l Layout) ConfigFile() string       { return filepath.Join(l.Root, "config.sh") }
 func (l Layout) RSAPrivateKey() string    { return filepath.Join(l.Root, "keys", "private.pem") }
 func (l Layout) SSHPrivateKey() string    { return filepath.Join(l.Root, "keys", "id_ed25519") }
 func (l Layout) Logo() string             { return filepath.Join(l.Root, "lib", "logos", "logo.ascii") }

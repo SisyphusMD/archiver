@@ -121,9 +121,8 @@ ENV BACKUP_SCHEDULE=""
 # /opt/archiver/logs - Optional: persistent logs directory
 # User must also mount their service directories to backup
 # /opt/archiver/bundle is deliberately NOT declared: Compose carries the previous
-# container's mount over for image-declared volume paths on recreate, so a bundle-mode
-# deployment switching to env-native would inherit the old bundle mount and fail fast
-# (bundle present, no password).
+# container's mount over for image-declared volume paths on recreate, so a deployment that
+# converted from a bundle would inherit the old bundle mount and refuse to start.
 
 VOLUME ["/opt/archiver/logs"]
 

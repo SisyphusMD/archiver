@@ -56,11 +56,6 @@ func TestGoPipeline(t *testing.T) {
 		t.Fatal("ARCHIVER_PIPELINE=go must override")
 	}
 	os.Remove(legacy)
-	os.WriteFile(l.ConfigFile(), nil, 0o600)
-	if goPipeline(l, src(base)) {
-		t.Fatal("a bundle deployment (config.sh) must stay on bash")
-	}
-	os.Remove(l.ConfigFile())
 	if goPipeline(l, src(map[string]string{"SERVICE_DIRECTORIES": svcs + "/*/", "ARCHIVER_PIPELINE": "bash"})) {
 		t.Fatal("ARCHIVER_PIPELINE=bash must override")
 	}

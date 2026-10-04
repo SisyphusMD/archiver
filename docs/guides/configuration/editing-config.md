@@ -1,85 +1,36 @@
 # Editing Configuration in Docker
 
-This guide covers how to edit your Archiver configuration when running in Docker.
-
-> **Env-native deployments:** This guide covers the bundle workflow. If you run Archiver env-native (configuration from environment variables and file-based secrets, with no bundle), edit the environment variables or secret files in your platform instead (for example a Kubernetes ConfigMap and Secret), then restart the container to pick them up. See the README "Configuration Sources" section.
+This guide covers how to change your Archiver configuration when running in Docker.
 
 ## Overview
 
-Your configuration is stored in the encrypted bundle file. To edit it:
+Archiver's configuration lives where your deployment keeps it:
 
-1. Exec into the container
-2. Edit the config file
-3. Export a new bundle
-4. Keep the bundle backed up externally
+- **Settings** are environment variables: the `archiver.env` file your `compose.yaml` loads with `env_file:`, or a Kubernetes ConfigMap.
+- **Secrets and keys** are files mounted under `/run/secrets`: Compose `secrets:`, a Kubernetes Secret, or your secret store.
+
+Nothing is stored inside the container, so there is nothing to edit there. Change the setting or secret where it lives, then recreate the container.
+
+For every setting and its default, see `/opt/archiver/examples/archiver.env.example` (also in the repository at `docs/examples/archiver.env.example`) and the README's "Configuration" section.
 
 ---
 
 ## Editing Workflow
 
-### Step 1: Exec into the Container
+### Step 1: Change the setting or secret
+
+- A setting: edit `archiver.env` (or the ConfigMap).
+- A secret: replace the file under your secrets directory (or update the Secret). Each secret is one file holding only its value.
+
+### Step 2: Recreate the container
 
 ```bash
-docker exec -it archiver bash
+docker compose up -d
 ```
 
-### Step 2: Edit the Configuration
+Compose recreates the container when its environment changes. After changing only a secret file, force it: `docker compose up -d --force-recreate`. On Kubernetes, restart the pod.
 
-Use nano or vim to edit:
-
-```bash
-# Using nano (simpler)
-nano /opt/archiver/config.sh
-
-# Or using vim
-vim /opt/archiver/config.sh
-```
-
-Make your changes and save:
-- **nano**: `Ctrl+O` to save, `Ctrl+X` to exit
-- **vim**: `Esc`, then `:wq` and `Enter`
-
-For configuration options and examples, see: `/opt/archiver/examples/config.sh.example`
-
-### Step 3: Export the New Bundle
-
-```bash
-archiver bundle export
-```
-
-This will:
-- Prompt for your bundle password (or press Enter to reuse the current password)
-- Create a new `bundle.tar.enc` file
-- Back up the old bundle as `bundle.tar.enc.old` in the same directory
-
-### Step 4: Exit the Container
-
-```bash
-exit
-```
-
-### Step 5: Backup the Bundle Externally
-
-**IMPORTANT:** Keep a copy of your bundle file and password in a safe location outside the Docker host. (If you have enabled the automatic recovery kit — see the README's "Automatic Recovery Kit" section — an always-current encrypted copy of your configuration already sits on every storage target, and this manual copy is just extra insurance.)
-
-The bundle file is accessible on your host at the location you mounted in `compose.yaml`. For example, if you mounted:
-
-```yaml
-volumes:
-  - ~/archiver-bundle:/opt/archiver/bundle
-```
-
-Then the bundle is at `~/archiver-bundle/bundle.tar.enc` on your host.
-
-**Backup both:**
-- The bundle file: `bundle.tar.enc`
-- Your bundle password
-
-Without both, you cannot recover your configuration.
-
-### Step 6: Test Your Changes
-
-Run a test backup to verify your configuration changes:
+### Step 3: Test your changes
 
 ```bash
 docker exec archiver archiver backup
@@ -89,6 +40,6 @@ docker exec archiver archiver backup
 
 ## Notes
 
-- **No restart needed**: Configuration changes take effect immediately on the next backup run
-- **Backup retention**: The `.old` bundle is kept in the same directory, but only the most recent bundle is retained
-- **Schedule changes**: The backup and maintenance schedules (`BACKUP_SCHEDULE`, `MAINTENANCE_SCHEDULE`) are set in `compose.yaml`, not `config.sh`. Changing them requires `docker compose up -d` to recreate the container
+- **Recovery kit**: when the recovery password is set (`init` sets it), Archiver keeps an encrypted copy of the whole configuration on every storage target and refreshes it after the next backup, so a change is captured automatically. See the README's "Automatic Recovery Kit" section.
+- **Schedules**: `BACKUP_SCHEDULE` and `MAINTENANCE_SCHEDULE` are environment variables like the rest; an invalid one stops the container from starting.
+- **Storage passwords and keys**: `STORAGE_PASSWORD`, `RSA_PASSPHRASE` and the RSA keypair belong to the existing storages. Changing them does not re-encrypt what is already stored, and the old values are still needed to restore it.

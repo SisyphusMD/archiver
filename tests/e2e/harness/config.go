@@ -314,24 +314,27 @@ func (m *Migrated) Start(t testing.TB) {
 	m.startRaw(t, m.env, m.secretsDir)
 }
 
-// MigrateBundle has image convert b into env-native configuration for installation d,
-// through the 0.11 `migrate` command run in a bundle-configured container. The result
-// carries none of the harness's own env or secrets, so it works only if the migration did.
-func MigrateBundle(t testing.TB, image string, b Bundle, d *Deployment) *Migrated {
+// MigrateBundle converts b into env-native configuration for installation d the way the
+// README and v1's refusal tell a user to (ADR 22): one `docker run` of converter (a 0.11
+// image) with the bundle and its password mounted read-only. The result runs on image.
+func MigrateBundle(t testing.TB, converter, image string, b Bundle, d *Deployment) *Migrated {
 	t.Helper()
-	out, err := os.MkdirTemp(filepath.Dir(b.Path), "migrated-")
+	work := filepath.Dir(b.Path)
+	out, err := os.MkdirTemp(work, "migrated-")
 	if err != nil {
 		t.Fatal(err)
 	}
-	src := *d
-	src.Image = image
-	src.mounts = nil
-	src.Mount(out, "/migrate-out")
-	src.StartWithBundle(t, b)
-	if r := src.Archiver(t, nil, "migrate", "/migrate-out"); r.Code != 0 {
-		t.Fatalf("migrate by %s exited %d:\n%s", image, r.Code, r.Output())
+	pw := filepath.Join(work, "bundle_password")
+	if err := os.WriteFile(pw, []byte(b.Password), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	src.Stop(t)
+	if r := docker(t, "run", "--rm", "--network", "none",
+		"-v", work+":/opt/archiver/bundle:ro",
+		"-v", pw+":/run/secrets/bundle_password:ro",
+		"-v", out+":/opt/archiver/migrate",
+		converter, "run", "migrate"); r.Code != 0 {
+		t.Fatalf("run migrate by %s exited %d:\n%s", converter, r.Code, r.Output())
+	}
 
 	env := map[string]string{}
 	for _, line := range strings.Split(string(mustRead(t, filepath.Join(out, "archiver.env"))), "\n") {

@@ -1,21 +1,26 @@
 #!/bin/bash
-# Interactive setup for creating config.sh, keys, and bundles
+# Interactive setup: generates the keys and writes env-native materials (an env file plus
+# one file per secret) from the answers given.
 
 INIT_SH_SOURCED=true
 
 set -e
 
-# The bundle/env-native serializers below load the effective config via config-loader, which
-# layers environment variables and /run/secrets files OVER config.sh. Inside init those layers
-# are noise: the container's inherited deployment environment (e.g. 'docker compose run ... init')
-# and init's own working variables would silently override the answers the user just gave.
-# Serialize from the freshly written config.sh ALONE.
-export ARCHIVER_CONFIG_IGNORE_OVERLAYS=true
-
 if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
+source_if_not_sourced "${CONFIG_SERIALIZE_CORE}"
+
+# The answers are set as shell variables and serialized from there, so a setting inherited
+# from the container's environment (e.g. 'docker compose run ... init') must not ride along.
+while IFS= read -r v; do
+  unset "${v}"
+done < <(compgen -v | grep -E "${CONFIG_NONSECRET_VARS_RE}|${CONFIG_SECRET_VARS_RE}")
+unset v
+
+# set_setting NAME VALUE records one answer.
+set_setting() { printf -v "${1}" '%s' "${2}"; }
 
 # Generated credentials
 GENERATED_RSA_PASSPHRASE=""
@@ -242,11 +247,8 @@ prompt_storage_target() {
     fi
   done
 
-  # Write basic config
-  {
-    printf 'STORAGE_TARGET_%s_NAME="%s"\n' "${storage_num}" "${name}"
-    printf 'STORAGE_TARGET_%s_TYPE="%s"\n' "${storage_num}" "${type}"
-  } >> "${CONFIG_FILE}"
+    set_setting "STORAGE_TARGET_${storage_num}_NAME" "${name}"
+    set_setting "STORAGE_TARGET_${storage_num}_TYPE" "${type}"
 
   # Type-specific prompts
   case "$type" in
@@ -259,7 +261,7 @@ prompt_storage_target() {
           echo "  Error: Path cannot be empty"
         fi
       done
-      printf 'STORAGE_TARGET_%s_LOCAL_PATH="%s"\n\n' "${storage_num}" "${local_path}" >> "${CONFIG_FILE}"
+      set_setting "STORAGE_TARGET_${storage_num}_LOCAL_PATH" "${local_path}"
       ;;
 
     sftp)
@@ -290,12 +292,10 @@ prompt_storage_target() {
         fi
       done
 
-      {
-        printf 'STORAGE_TARGET_%s_SFTP_URL="%s"\n' "${storage_num}" "${sftp_url}"
-        printf 'STORAGE_TARGET_%s_SFTP_PORT="%s"\n' "${storage_num}" "${sftp_port}"
-        printf 'STORAGE_TARGET_%s_SFTP_USER="%s"\n' "${storage_num}" "${sftp_user}"
-        printf 'STORAGE_TARGET_%s_SFTP_PATH="%s"\n\n' "${storage_num}" "${sftp_path}"
-      } >> "${CONFIG_FILE}"
+        set_setting "STORAGE_TARGET_${storage_num}_SFTP_URL" "${sftp_url}"
+        set_setting "STORAGE_TARGET_${storage_num}_SFTP_PORT" "${sftp_port}"
+        set_setting "STORAGE_TARGET_${storage_num}_SFTP_USER" "${sftp_user}"
+        set_setting "STORAGE_TARGET_${storage_num}_SFTP_PATH" "${sftp_path}"
       ;;
 
     b2)
@@ -323,11 +323,9 @@ prompt_storage_target() {
         fi
       done
 
-      {
-        printf 'STORAGE_TARGET_%s_B2_BUCKETNAME="%s"\n' "${storage_num}" "${b2_bucket}"
-        printf 'STORAGE_TARGET_%s_B2_ID="%s"\n' "${storage_num}" "${b2_id}"
-        printf 'STORAGE_TARGET_%s_B2_KEY="%s"\n\n' "${storage_num}" "${b2_key}"
-      } >> "${CONFIG_FILE}"
+        set_setting "STORAGE_TARGET_${storage_num}_B2_BUCKETNAME" "${b2_bucket}"
+        set_setting "STORAGE_TARGET_${storage_num}_B2_ID" "${b2_id}"
+        set_setting "STORAGE_TARGET_${storage_num}_B2_KEY" "${b2_key}"
       ;;
 
     s3)
@@ -364,13 +362,11 @@ prompt_storage_target() {
         fi
       done
 
-      {
-        printf 'STORAGE_TARGET_%s_S3_BUCKETNAME="%s"\n' "${storage_num}" "${s3_bucket}"
-        printf 'STORAGE_TARGET_%s_S3_ENDPOINT="%s"\n' "${storage_num}" "${s3_endpoint}"
-        printf 'STORAGE_TARGET_%s_S3_REGION="%s"\n' "${storage_num}" "${s3_region}"
-        printf 'STORAGE_TARGET_%s_S3_ID="%s"\n' "${storage_num}" "${s3_id}"
-        printf 'STORAGE_TARGET_%s_S3_SECRET="%s"\n\n' "${storage_num}" "${s3_secret}"
-      } >> "${CONFIG_FILE}"
+        set_setting "STORAGE_TARGET_${storage_num}_S3_BUCKETNAME" "${s3_bucket}"
+        set_setting "STORAGE_TARGET_${storage_num}_S3_ENDPOINT" "${s3_endpoint}"
+        set_setting "STORAGE_TARGET_${storage_num}_S3_REGION" "${s3_region}"
+        set_setting "STORAGE_TARGET_${storage_num}_S3_ID" "${s3_id}"
+        set_setting "STORAGE_TARGET_${storage_num}_S3_SECRET" "${s3_secret}"
       ;;
   esac
 
@@ -379,8 +375,6 @@ prompt_storage_target() {
 
 create_config_file() {
   print_header "Configuration Setup"
-
-  backup_existing_file "${CONFIG_FILE}"
 
   # Auto-generate the storage password and the recovery-kit password. The recovery
   # password must differ from the storage password (the kit contains it); with two
@@ -391,39 +385,12 @@ create_config_file() {
     GENERATED_RECOVERY_PASSWORD=$(generate_password)
   done
 
-  # Service directories
+  # Service directories (prompt_service_directories sets the SERVICE_DIRECTORIES array)
   prompt_service_directories
 
-  # Write config header
-  cat > "${CONFIG_FILE}" <<'EOL'
-#########################################################################################
-# Archiver Configuration                                                                #
-#                                                                                       #
-# This file was generated by the Archiver init script.                                 #
-# Modify as needed, then export with: archiver bundle export                           #
-#########################################################################################
-
-EOL
-
-  # Write service directories
-  {
-    echo "# Directories to backup"
-    echo "SERVICE_DIRECTORIES=("
-    for dir in "${SERVICE_DIRECTORIES[@]}"; do
-      printf '  "%s"\n' "$dir"
-    done
-    echo ")"
-    echo
-  } >> "${CONFIG_FILE}"
-
-  # Write security section
-  {
-    echo "# Duplicacy encryption credentials + recovery-kit password (auto-generated)"
-    printf 'STORAGE_PASSWORD="%s"\n' "${GENERATED_STORAGE_PASSWORD}"
-    printf 'RSA_PASSPHRASE="%s"\n' "${GENERATED_RSA_PASSPHRASE}"
-    printf 'RECOVERY_PASSWORD="%s"\n' "${GENERATED_RECOVERY_PASSWORD}"
-    echo
-  } >> "${CONFIG_FILE}"
+  set_setting STORAGE_PASSWORD "${GENERATED_STORAGE_PASSWORD}"
+  set_setting RSA_PASSPHRASE "${GENERATED_RSA_PASSPHRASE}"
+  set_setting RECOVERY_PASSWORD "${GENERATED_RECOVERY_PASSWORD}"
 
   # Storage targets
   print_section "Storage Configuration"
@@ -454,66 +421,29 @@ EOL
     pushover_user="$(echo "$pushover_user" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
     read -p "  Pushover API token: " -r pushover_token
     pushover_token="$(echo "$pushover_token" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-
-    {
-      echo "# Notifications"
-      echo 'NOTIFICATION_SERVICE="Pushover"'
-      printf 'PUSHOVER_USER_KEY="%s"\n' "${pushover_user}"
-      printf 'PUSHOVER_API_TOKEN="%s"\n' "${pushover_token}"
-      echo
-    } >> "${CONFIG_FILE}"
+    set_setting NOTIFICATION_SERVICE "Pushover"
+    set_setting PUSHOVER_USER_KEY "${pushover_user}"
+    set_setting PUSHOVER_API_TOKEN "${pushover_token}"
   fi
 
-  # Defaults
-  {
-    echo "# Maintenance (default settings; runs on MAINTENANCE_SCHEDULE or 'archiver maintenance')"
-    echo 'CHECK_BACKUPS="true"'
-    echo 'PRUNE_BACKUPS="true"'
-    echo 'PRUNE_KEEP="-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"'
-    echo 'PRUNE_EXHAUSTIVE_FREQUENCY="monthly"'
-    echo
-    echo "# Performance"
-    echo 'DUPLICACY_THREADS="4"'
-  } >> "${CONFIG_FILE}"
+  # Defaults (maintenance runs on MAINTENANCE_SCHEDULE or 'archiver maintenance')
+  set_setting CHECK_BACKUPS "true"
+  set_setting PRUNE_BACKUPS "true"
+  set_setting PRUNE_KEEP "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
+  set_setting PRUNE_EXHAUSTIVE_FREQUENCY "monthly"
+  set_setting DUPLICACY_THREADS "4"
 
-  print_success "Configuration file created"
+  print_success "Configuration recorded"
 }
 
-create_new_bundle() {
-  print_header "Creating Disaster-Recovery Bundle"
-
-  # config-loader (sourced by bundle-export below, in this same shell) must see config.sh's
-  # SERVICE_DIRECTORIES, not init's leftover working array.
-  unset SERVICE_DIRECTORIES
-
-  # All init output (env-native materials + the bundle) lands in the neutral setup
-  # directory; bundle-export writes to BUNDLE_DIR, so point it there for this shell.
-  # Deployments that choose bundle mode mount the bundle at /opt/archiver/bundle at RUN time.
-  BUNDLE_DIR="${SETUP_DIR}"
-  mkdir -p "${SETUP_DIR}"
-
-  echo "Your configuration and keys will also be encrypted into a bundle file — a"
-  echo "self-contained copy: it and its password can restore your whole setup."
-  echo
-
-  # Source bundle export to use its logic
-  source "${BUNDLE_EXPORT_SCRIPT}"
-
-  # Capture the password that was set by bundle-export.sh
-  BUNDLE_EXPORT_PASSWORD="${PASSWORD}"
-}
-
-# Env-native (env vars + file secrets) is the primary way to deploy; the bundle is the
-# transitional / cold-restore artifact. Emit ready-to-use materials next to the bundle so a
-# new user never has to hand-transcribe the config.
+# Env-native materials (env vars + file secrets) are how Archiver is configured; write them
+# so a new user never hand-transcribes the configuration.
 emit_env_native_materials() {
   print_section "Writing Env-Native Deployment Materials"
 
-  if "${MIGRATE_SCRIPT}" "${SETUP_DIR}/env-native"; then
-    print_success "Env-native materials written to env-native/ in the mounted setup directory"
-  else
-    echo "WARNING: could not write env-native materials. You can generate them later with 'archiver migrate'."
-  fi
+  local out="${SETUP_DIR}/env-native"
+  (umask 077 && mkdir -p "${out}" && serialize_env_and_secrets "${out}/archiver.env" "${out}/secrets")
+  print_success "Env-native materials written to env-native/ in the mounted setup directory"
 }
 
 display_credentials() {
@@ -533,19 +463,6 @@ display_credentials() {
   echo "│                                                             │"
   echo "└─────────────────────────────────────────────────────────────┘"
   echo
-  echo "Your disaster-recovery bundle has also been created:"
-  echo "  bundle.tar.enc (in the mounted setup directory)"
-  echo
-  echo "┌─────────────────────────────────────────────────────────────┐"
-  echo "│ BUNDLE PASSWORD                                             │"
-  echo "├─────────────────────────────────────────────────────────────┤"
-  echo "│                                                             │"
-  echo "│ Save it to a secret file (e.g. ./secrets/bundle_password):  │"
-  printf "│   %-57s │\n" "${BUNDLE_EXPORT_PASSWORD}"
-  echo "│                                                             │"
-  echo "└─────────────────────────────────────────────────────────────┘"
-  echo
-
   if [ -f "${KEYS_DIR}/id_ed25519.pub" ]; then
     echo "SSH Public Key (for SFTP servers):"
     echo "────────────────────────────────────────────────────────────"
@@ -557,13 +474,10 @@ display_credentials() {
   fi
 
   echo "Next steps:"
-  echo "  1. RECOMMENDED (env-native): load env-native/archiver.env as environment variables and the"
+  echo "  1. Load env-native/archiver.env as environment variables and the"
   echo "     env-native/secrets/ files as secrets mounted under /run/secrets (see the compose template),"
   echo "     then DELETE env-native/ from the setup directory: it holds your secrets in plaintext."
-  echo "  2. Alternative (bundle mode): mount bundle.tar.enc and provide the bundle password as a"
-  echo "     secret file at /run/secrets/bundle_password (see password above)."
-  echo "  3. Either way, store bundle.tar.enc and its password in a safe location (cold-restore copy)."
-  echo "  4. Start container: docker compose up -d"
+  echo "  2. Start container: docker compose up -d"
   echo
 }
 
@@ -574,7 +488,6 @@ main() {
   generate_rsa_keypair
   generate_ssh_keypair
   create_config_file
-  create_new_bundle
   emit_env_native_materials
   display_credentials
 }

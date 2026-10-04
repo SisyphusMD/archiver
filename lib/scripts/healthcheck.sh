@@ -23,14 +23,10 @@ info() {
   echo "OK: $1"
 }
 
-# Env-native deployments have no config.sh at all (config comes from env vars + secret
-# files), so its absence is only an error when there is no RSA key either.
-if [ -f "${CONFIG_FILE}" ]; then
-  info "Configuration file exists"
-elif [ -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
-  info "No config.sh; env-native configuration (RSA key present)"
+if [ -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
+  info "RSA key present"
 else
-  error "No configuration found (no config.sh and no RSA private key)"
+  error "No configuration found (no RSA private key)"
 fi
 
 if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
@@ -113,18 +109,6 @@ check_lock_liveness "${MAINTENANCE_LOCKFILE}" "Maintenance"
 # 8 days covers daily and weekly cadences with margin; if you maintain less often than
 # weekly, expect (and ignore) these warnings or run 'archiver maintenance' manually.
 MAINT_STATE="${LOG_DIR}/.maintenance-state"
-# Bundle-mode deployments keep these toggles in config.sh, not the container env, so read that
-# too — otherwise a documented shared-storage bundle (PRUNE_BACKUPS="false") would default to
-# true here and warn about a prune that correctly never runs. Env still wins: capture it first,
-# source config.sh (which overwrites), then restore any value that was set in the environment.
-CHECK_BACKUPS_ENV="${CHECK_BACKUPS:-}"
-PRUNE_BACKUPS_ENV="${PRUNE_BACKUPS:-}"
-ROTATE_BACKUPS_ENV="${ROTATE_BACKUPS:-}"
-# shellcheck source=/dev/null
-[ -f "${CONFIG_FILE}" ] && source "${CONFIG_FILE}"
-[ -n "${CHECK_BACKUPS_ENV}" ] && CHECK_BACKUPS="${CHECK_BACKUPS_ENV}"
-[ -n "${PRUNE_BACKUPS_ENV}" ] && PRUNE_BACKUPS="${PRUNE_BACKUPS_ENV}"
-[ -n "${ROTATE_BACKUPS_ENV}" ] && ROTATE_BACKUPS="${ROTATE_BACKUPS_ENV}"
 CHECK_TOGGLE="$(echo "${CHECK_BACKUPS:-true}" | tr '[:upper:]' '[:lower:]')"
 PRUNE_TOGGLE="$(echo "${PRUNE_BACKUPS:-${ROTATE_BACKUPS:-true}}" | tr '[:upper:]' '[:lower:]')"
 if [ "${CHECK_TOGGLE}" = "true" ] || [ "${PRUNE_TOGGLE}" = "true" ]; then

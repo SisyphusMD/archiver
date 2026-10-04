@@ -22,7 +22,7 @@ SNAPSHOT_ID="$(hostname)-fixtures"
 log() { printf '>>> %s\n' "$*"; }
 die() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
-log "materialize config + RSA keys (bundle bypass)"
+log "configuration from env vars and secret files, plus RSA keys"
 mkdir -p /opt/archiver/keys "$STORE" "$FIXTURES" "$RESTORE"
 openssl genrsa -aes256 -passout "pass:${RSA_PASSPHRASE}" -out /opt/archiver/keys/private.pem -traditional 2048 2>/dev/null \
   || die "openssl genrsa"
@@ -31,17 +31,12 @@ openssl rsa -in /opt/archiver/keys/private.pem -passin "pass:${RSA_PASSPHRASE}" 
 chmod 600 /opt/archiver/keys/private.pem
 chmod 644 /opt/archiver/keys/public.pem
 
-cat >/opt/archiver/config.sh <<CFG
-SERVICE_DIRECTORIES=(
-  "${FIXTURES}/"
-)
-STORAGE_TARGET_1_NAME="local"
-STORAGE_TARGET_1_TYPE="local"
-STORAGE_TARGET_1_LOCAL_PATH="${STORE}"
-STORAGE_PASSWORD="testpassword"
-RSA_PASSPHRASE="${RSA_PASSPHRASE}"
-ROTATE_BACKUPS="false"
-CFG
+mkdir -p /run/secrets
+printf 'testpassword' >/run/secrets/storage_password
+printf '%s' "${RSA_PASSPHRASE}" >/run/secrets/rsa_passphrase
+export SERVICE_DIRECTORIES="${FIXTURES}/"
+export STORAGE_TARGET_1_NAME=local STORAGE_TARGET_1_TYPE=local STORAGE_TARGET_1_LOCAL_PATH="${STORE}"
+export PRUNE_BACKUPS=false
 
 log "build fixture tree with varied ownership + modes"
 echo "root-owned content" >"$FIXTURES/root.txt"
