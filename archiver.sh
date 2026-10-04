@@ -63,6 +63,7 @@ case "${command}" in
       usage
     fi
     "${STOP_SCRIPT}" "${@}"
+    rc=$?
     ;;
   pause)
     if [[ $# -gt 0 ]]; then
@@ -70,6 +71,7 @@ case "${command}" in
       usage
     fi
     "${PAUSE_SCRIPT}"
+    rc=$?
     ;;
   resume)
     if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "logs" ) ]]; then
@@ -80,6 +82,7 @@ case "${command}" in
       logs="true"
     fi
     "${RESUME_SCRIPT}"
+    rc=$?
     ;;
   logs)
     if [[ $# -gt 0 ]]; then
@@ -87,6 +90,7 @@ case "${command}" in
       usage
     fi
     "${LOGS_SCRIPT}"
+    rc=$?
     ;;
   status)
     if [[ $# -gt 0 ]]; then
@@ -94,6 +98,7 @@ case "${command}" in
       usage
     fi
     "${STATUS_SCRIPT}"
+    rc=$?
     ;;
   restore)
     if [[ $# -gt 0 ]]; then
@@ -101,6 +106,7 @@ case "${command}" in
       usage
     fi
     "${RESTORE_SCRIPT}"
+    rc=$?
     ;;
   auto-restore)
     if [[ $# -gt 0 ]]; then
@@ -169,8 +175,10 @@ case "${command}" in
     subcommand="${1}"
     if [[ "${subcommand}" == "export" ]]; then
       "${BUNDLE_EXPORT_SCRIPT}"
+      rc=$?
     elif [[ "${subcommand}" == "import" ]]; then
       "${BUNDLE_IMPORT_SCRIPT}"
+      rc=$?
     else
       echo "Unknown bundle subcommand: ${subcommand}"
       echo "Valid subcommands: export, import"
@@ -183,6 +191,7 @@ case "${command}" in
       usage
     fi
     "${MIGRATE_SCRIPT}" "${@}"
+    rc=$?
     ;;
   recovery-kit)
     if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "force" ) ]]; then
@@ -213,4 +222,5 @@ if [[ "${logs}" == "true" ]]; then
   "${LOGS_SCRIPT}"
 fi
 
-exit 0
+# The command's own status, so a failure is never reported as success.
+exit "${rc:-0}"
