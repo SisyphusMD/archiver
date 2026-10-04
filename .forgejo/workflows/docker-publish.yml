@@ -195,6 +195,10 @@ jobs:
           docker run -i --rm --hostname mig-host \
             --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/migrate.sh
+      - name: Failed commands exit non-zero through the archiver dispatcher
+        run: |
+          docker run -i --rm --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/dispatch-exit-codes.sh
       - name: Restore capability warning (backup-only caps warn; full caps stay quiet)
         run: |
           docker run -i --rm --cap-drop ALL --cap-add DAC_OVERRIDE \
@@ -305,6 +309,8 @@ jobs:
         run: IMAGE=hosttests:local bash tests/integration/sftp-runtime.sh
       - name: Entrypoint secret contract (precise bundle-password errors; no env leak after import)
         run: IMAGE=hosttests:local bash tests/integration/entrypoint-secrets.sh
+      - name: run migrate converts a read-only bundle in one docker run (the path v1 points bundles to)
+        run: IMAGE=hosttests:local bash tests/integration/run-migrate.sh
 
   e2e:
     name: Black-box suite (never-break across versions)

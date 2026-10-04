@@ -385,7 +385,7 @@ The entrypoint selects one of three modes based on the first container argument:
 |------|------------------|----------|
 | `init` | `docker run ... archiver:<tag> init` | Interactive setup: generates env-native materials, the recovery password, and an encrypted bundle. Exits when done. |
 | _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads configuration (env-native and/or bundle), then either runs `supercronic` (if `BACKUP_SCHEDULE` and/or `MAINTENANCE_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
-| `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads configuration (env-native and/or bundle), then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
+| `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads configuration (env-native and/or bundle), then `exec`s a single non-interactive subcommand (`backup`, `maintenance`, `migrate`, `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`) and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
 `run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, `backup`, and `maintenance` (synchronous paths intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`.
 
@@ -436,6 +436,16 @@ To move an existing bundle deployment to env-native without hand-transcribing an
 docker exec archiver archiver migrate
 docker cp archiver:/opt/archiver/migrate ./archiver-migrate
 docker exec archiver rm -rf /opt/archiver/migrate
+```
+
+Without a running container, one `docker run` does the same from the bundle and its password file, writing to a host directory:
+
+```bash
+docker run --rm \
+  -v ./archiver-bundle:/opt/archiver/bundle:ro \
+  -v ./secrets/bundle_password:/run/secrets/bundle_password:ro \
+  -v ./archiver-migrate:/opt/archiver/migrate \
+  ghcr.io/sisyphusmd/archiver:0.11 run migrate
 ```
 
 The copied files hold your secrets in **plaintext** — move them into your secret store, then delete the plain copies.

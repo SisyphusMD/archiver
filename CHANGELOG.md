@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- `run migrate` converts a bundle to env-native materials in one `docker run`, with no running container to `exec` into. This is the conversion v1 points bundle deployments to, since v1 no longer reads bundles.
+
+### Fixed
+- A restarted bundle-mode container re-imports its mounted bundle. It used to keep the configuration from its first boot, so a replaced bundle was ignored until the container was recreated.
+- `archiver bundle import` exits non-zero when you decline to overwrite the existing configuration, instead of reporting success with nothing imported.
+- `archiver restore`, `migrate`, `bundle export`/`import`, `stop`, `pause`, `resume`, `status` and `logs` now exit with their command's status. A failure, such as a restore that could not run, used to exit 0.
+
 ## [0.11.3] - 2026-10-03
 
 ### Security

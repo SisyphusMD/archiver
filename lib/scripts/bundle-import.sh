@@ -11,7 +11,9 @@ HAS_KEYS=false
 [ -f "${CONFIG_FILE}" ] && HAS_CONFIG=true
 [ -d "${KEYS_DIR}" ] && [ -n "$(ls -A "${KEYS_DIR}" 2>/dev/null)" ] && HAS_KEYS=true
 
-if [ "${HAS_CONFIG}" = true ] || [ "${HAS_KEYS}" = true ]; then
+# At container start the mounted bundle is the source of truth: what an earlier boot imported
+# is replaced without asking (there is no terminal to ask on).
+if [ "${ARCHIVER_BUNDLE_FORCE:-}" != true ] && { [ "${HAS_CONFIG}" = true ] || [ "${HAS_KEYS}" = true ]; }; then
   echo ""
   echo "WARNING: Existing configuration and/or keys will be OVERWRITTEN:"
   [ "${HAS_CONFIG}" = true ] && echo "  - Configuration: ${CONFIG_FILE}"
@@ -25,8 +27,8 @@ if [ "${HAS_CONFIG}" = true ] || [ "${HAS_KEYS}" = true ]; then
 
   # Require explicit Y/y, default to No
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Import cancelled."
-    exit 0
+    echo "Import cancelled; nothing was imported."
+    exit 1
   fi
   echo ""
 fi
@@ -57,7 +59,11 @@ fi
 SELECTED_FILE="${ARCHIVER_BUNDLE_FILE}"
 PASSWORD="${ARCHIVER_BUNDLE_PASSWORD}"
 
-TEMP_TAR="${SELECTED_FILE%.enc}"
+# Decrypted material goes to a private temp dir, never beside the bundle: that is often a
+# host directory, and may be mounted read-only.
+WORK_DIR="$(mktemp -d)" || { echo "Error: could not create a temporary directory."; exit 1; }
+trap 'rm -rf "${WORK_DIR}"' EXIT
+TEMP_TAR="${WORK_DIR}/bundle.tar"
 
 # -pass fd: keeps the password off the openssl argv (world-readable in /proc while it runs).
 openssl enc -d -aes-256-cbc -pbkdf2 -in "${SELECTED_FILE}" -out "${TEMP_TAR}" -pass fd:3 3<<<"${PASSWORD}"
@@ -67,7 +73,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-TEMP_DIR="${ARCHIVER_DIR}/temp_import"
+TEMP_DIR="${WORK_DIR}/extract"
 mkdir -p "${TEMP_DIR}"
 tar -xf "${TEMP_TAR}" -C "${TEMP_DIR}"
 if [ $? -ne 0 ]; then
