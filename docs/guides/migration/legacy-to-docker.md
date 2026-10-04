@@ -130,7 +130,7 @@ Then create a `compose.yaml` in the same directory:
 services:
   archiver:
     container_name: archiver
-    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11.3
+    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11.4
     restart: unless-stopped
     stop_grace_period: 2m  # Allow time for graceful shutdown and cleanup
 

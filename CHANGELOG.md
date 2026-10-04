@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.11.4] - 2026-10-04
+
 ### Added
 - `run migrate` converts a bundle to env-native materials in one `docker run`, with no running container to `exec` into. This is the conversion v1 points bundle deployments to, since v1 no longer reads bundles.
 
