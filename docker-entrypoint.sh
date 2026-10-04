@@ -86,6 +86,7 @@ import_bundle() {
     echo "Decrypting and importing configuration..."
     export ARCHIVER_BUNDLE_PASSWORD="$BUNDLE_PASSWORD"
     export ARCHIVER_BUNDLE_FILE="$BUNDLE_FILE"
+    export ARCHIVER_BUNDLE_FORCE=true
 
     cd "${ARCHIVER_DIR}"
     if ! "${BUNDLE_IMPORT_SCRIPT}"; then
@@ -96,7 +97,7 @@ import_bundle() {
 
     # The password's job is done; keeping it exported would hand it to every child process
     # (supercronic, backups, user hooks) via /proc — the leak the file-only rule exists for.
-    unset ARCHIVER_BUNDLE_PASSWORD ARCHIVER_BUNDLE_FILE BUNDLE_PASSWORD
+    unset ARCHIVER_BUNDLE_PASSWORD ARCHIVER_BUNDLE_FILE ARCHIVER_BUNDLE_FORCE BUNDLE_PASSWORD
 
     if [ ! -f "${CONFIG_FILE}" ]; then
         echo "ERROR: config.sh not found after import"
@@ -176,9 +177,9 @@ if [ "$1" = "run" ]; then
     fi
 
     case "$1" in
-        auto-restore|auto-restore-all|snapshot-exists|healthcheck|backup|maintenance) ;;
+        auto-restore|auto-restore-all|snapshot-exists|healthcheck|backup|maintenance|migrate) ;;
         *)
-            echo "ERROR: 'run' only supports: auto-restore, auto-restore-all, snapshot-exists, healthcheck, backup, maintenance" >&2
+            echo "ERROR: 'run' only supports: auto-restore, auto-restore-all, snapshot-exists, healthcheck, backup, maintenance, migrate" >&2
             echo "Received: $1" >&2
             exit 2
             ;;

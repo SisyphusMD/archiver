@@ -67,7 +67,10 @@ grep -q "^local " "$STATE" || die "no state row for local"
 grep -q "^second " "$STATE" || die "no state row for second"
 
 log "status shows maintenance recency"
-archiver status | grep -q "Storage maintenance (last success)" || die "status lacks maintenance recency"
+# Captured first: grep -q stops reading at the first match, and the writer's SIGPIPE status
+# would fail the pipeline under pipefail.
+STATUS_OUT="$(archiver status)"
+grep -q "Storage maintenance (last success)" <<<"$STATUS_OUT" || die "status lacks maintenance recency"
 
 log "maintenance run 2: exhaustive NOT due (daily frequency, just ran)"
 archiver maintenance || die "maintenance run 2 exited non-zero"
@@ -145,7 +148,8 @@ archiver maintenance >/dev/null 2>&1 &
 MAINT_BG=$!
 for _ in $(seq 1 60); do [ -f /tmp/check-started ] && break; sleep 1; done
 [ -f /tmp/check-started ] || die "maintenance never reached the check stage"
-archiver stop maintenance | grep -q "Stopping maintenance" || die "stop did not target maintenance"
+STOP_OUT="$(archiver stop maintenance)"
+grep -q "Stopping maintenance" <<<"$STOP_OUT" || die "stop did not target maintenance"
 wait "$MAINT_BG" 2>/dev/null || true
 for _ in $(seq 1 30); do [ ! -e /var/lock/archiver-maintenance.lock ] && break; sleep 1; done
 [ ! -e /var/lock/archiver-maintenance.lock ] || die "maintenance lock not released after stop"
