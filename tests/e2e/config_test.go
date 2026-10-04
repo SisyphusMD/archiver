@@ -154,11 +154,11 @@ func TestConfigSecretsStayHidden(t *testing.T) {
 	}
 }
 
-// TestConfigMigrateBundle: migration turns a bundle, current or legacy (`openssl -k`,
-// array SERVICE_DIRECTORIES), into env-native configuration that continues the same
-// installation. The baseline release backs up from the bundle, the image under test
-// migrates it, and the migrated deployment alone must add the next revision under the same
-// snapshot ID to the primary and the copy and restore both revisions from each.
+// TestConfigMigrateBundle: a bundle, current or legacy (`openssl -k`, array
+// SERVICE_DIRECTORIES), converted by the 0.11 image's one-shot `run migrate` (ADR 22),
+// continues the same installation on the image under test. The baseline release backs up
+// from the bundle, and the converted configuration alone must add the next revision under
+// the same snapshot ID to the primary and the copy and restore both revisions from each.
 func TestConfigMigrateBundle(t *testing.T) {
 	baseline, image := images(t)
 	for _, c := range []struct {
@@ -200,7 +200,7 @@ func TestConfigMigrateBundle(t *testing.T) {
 			}
 			old.Stop(t)
 
-			migrated := harness.MigrateBundle(t, image, bundle, install)
+			migrated := harness.MigrateBundle(t, converterImage(), image, bundle, install)
 			writeFixtures(t, svc, 2)
 			v2 := harness.Snapshot(t, svc)
 			migrated.Start(t)

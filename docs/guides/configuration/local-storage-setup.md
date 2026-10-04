@@ -1,7 +1,5 @@
 # Local Storage Setup Guide
 
-> **Env-native deployments:** This guide covers the bundle workflow. If you run Archiver env-native, supply the same values as environment variables and file-based secrets instead. See the README "Configuration Sources" section.
-
 This guide explains how to configure local disk storage as your primary backup target in Archiver. Using local storage provides faster backups, lower bandwidth usage, and better reliability compared to remote-only backups.
 
 ## Why Use Local Storage as Primary?
@@ -75,46 +73,26 @@ docker compose up -d
 
 ### Step 3: Add Local Storage as Secondary
 
-Exec into the container and edit your configuration:
+Add the local storage as `STORAGE_TARGET_2` in your `archiver.env` (or ConfigMap):
 
 ```bash
-docker exec -it archiver bash
-nano /opt/archiver/config.sh
-```
-
-Add the local storage configuration as `STORAGE_TARGET_2`:
-
-```bash
-# Existing primary storage (e.g., B2)
-STORAGE_TARGET_1_NAME="b2-primary"
-STORAGE_TARGET_1_TYPE="b2"
-STORAGE_TARGET_1_B2_BUCKETNAME="your-bucket"
-STORAGE_TARGET_1_B2_ID="your-key-id"
-STORAGE_TARGET_1_B2_KEY="your-app-key"
+# Existing primary storage (e.g., B2); its key ID and key are the secret files
+# storage_target_1_b2_id and storage_target_1_b2_key
+STORAGE_TARGET_1_NAME=b2-primary
+STORAGE_TARGET_1_TYPE=b2
+STORAGE_TARGET_1_B2_BUCKETNAME=your-bucket
 
 # New local storage (as secondary)
-STORAGE_TARGET_2_NAME="local-backups"
-STORAGE_TARGET_2_TYPE="local"
-STORAGE_TARGET_2_LOCAL_PATH="/mnt/backups"
+STORAGE_TARGET_2_NAME=local-backups
+STORAGE_TARGET_2_TYPE=local
+STORAGE_TARGET_2_LOCAL_PATH=/mnt/backups
 ```
 
-Save and exit, then export:
+Recreate the container to apply it:
 
 ```bash
-archiver bundle export
-exit
+docker compose up -d
 ```
-
-**IMPORTANT: Backup Your Bundle File**
-
-After exporting, copy your updated bundle file to a safe location outside the Docker host:
-
-```bash
-# Copy from host (example path from compose.yaml mount)
-cp ~/archiver-bundle/bundle.tar.enc /path/to/safe/location/
-```
-
-Keep both the bundle file and your bundle password in a secure location. Without both, you cannot recover your configuration.
 
 ### Step 4: Populate the Local Storage
 
@@ -134,42 +112,24 @@ You should see the local storage being initialized and data being copied from th
 
 ### Step 5: Promote Local Storage to Primary
 
-After the first successful backup, swap the storage numbers:
-
-```bash
-docker exec -it archiver bash
-nano /opt/archiver/config.sh
-```
-
-Renumber the storage targets:
+After the first successful backup, swap the storage numbers in `archiver.env`:
 
 ```bash
 # Local storage is now primary
-STORAGE_TARGET_1_NAME="local-backups"
-STORAGE_TARGET_1_TYPE="local"
-STORAGE_TARGET_1_LOCAL_PATH="/mnt/backups"
+STORAGE_TARGET_1_NAME=local-backups
+STORAGE_TARGET_1_TYPE=local
+STORAGE_TARGET_1_LOCAL_PATH=/mnt/backups
 
 # Remote storage is now secondary
-STORAGE_TARGET_2_NAME="b2-backup"
-STORAGE_TARGET_2_TYPE="b2"
-STORAGE_TARGET_2_B2_BUCKETNAME="your-bucket"
-STORAGE_TARGET_2_B2_ID="your-key-id"
-STORAGE_TARGET_2_B2_KEY="your-app-key"
+STORAGE_TARGET_2_NAME=b2-backup
+STORAGE_TARGET_2_TYPE=b2
+STORAGE_TARGET_2_B2_BUCKETNAME=your-bucket
 ```
 
-Export the configuration:
+Rename the B2 secret files to match the new number (`storage_target_2_b2_id`, `storage_target_2_b2_key`) in your secrets directory and `compose.yaml`, then recreate the container:
 
 ```bash
-archiver bundle export
-exit
-```
-
-**IMPORTANT: Backup Your Bundle File Again**
-
-After this export, backup the updated bundle file again:
-
-```bash
-cp ~/archiver-bundle/bundle.tar.enc /path/to/safe/location/
+docker compose up -d --force-recreate
 ```
 
 ### Step 6: Verify the New Configuration
@@ -218,17 +178,7 @@ Follow the prompts and configure:
 
 ### Step 3: Complete Setup
 
-Follow the remaining init prompts to configure directories and notifications; init then writes the encrypted bundle and the env-native materials (scheduling is set later via `BACKUP_SCHEDULE` and `MAINTENANCE_SCHEDULE` in your compose file).
-
-**IMPORTANT: Backup Your Bundle File**
-
-After initialization completes, copy the bundle file from your setup output directory to a safe location outside the Docker host:
-
-```bash
-cp /path/to/setup-output/bundle.tar.enc /path/to/safe/location/
-```
-
-Keep both the bundle file and your bundle password in a secure location.
+Follow the remaining init prompts to configure directories and notifications; init then writes the env-native materials (scheduling is set later via `BACKUP_SCHEDULE` and `MAINTENANCE_SCHEDULE` in your compose file). Save the recovery password init shows in your password manager.
 
 ---
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # `archiver healthcheck` backs the image's Docker HEALTHCHECK: it must be healthy for a
-# fresh env-native deployment (no config.sh — config from env/secrets), healthy after a
+# fresh env-native deployment (config from env/secrets), healthy after a
 # finished run even one with errors (transient failures must not flip a daily-backup
 # container UNHEALTHY), and UNHEALTHY when recent errors have no finished run (crash/hang)
 # or when there is no configuration at all.
@@ -25,9 +25,9 @@ archiver healthcheck >/tmp/hc0.out 2>&1
 rc=$?
 set -e
 [ "$rc" -ne 0 ] || { cat /tmp/hc0.out; die "healthcheck healthy with no config and no keys"; }
-grep -q "No configuration found" /tmp/hc0.out || die "missing no-configuration error"
+grep -q "RSA private key not found" /tmp/hc0.out || die "missing no-key error"
 
-log "env-native deployment (keys + secrets, NO config.sh): must be healthy"
+log "env-native deployment (keys + secrets): must be healthy"
 mkdir -p /opt/archiver/keys "${SECRETS_DIR}" "$STORE" "$FIXTURES"
 openssl genrsa -aes256 -passout "pass:${RSA_PASSPHRASE}" -out /opt/archiver/keys/private.pem -traditional 2048 2>/dev/null \
   || die "openssl genrsa"
@@ -42,7 +42,7 @@ archiver healthcheck >/tmp/hc1.out 2>&1
 rc=$?
 set -e
 [ "$rc" -eq 0 ] || { cat /tmp/hc1.out; die "healthcheck UNHEALTHY for a valid env-native deployment (exit $rc)"; }
-grep -q "env-native configuration" /tmp/hc1.out || die "env-native mode not recognized"
+grep -q "RSA private key exists" /tmp/hc1.out || die "the RSA key was not reported"
 
 log "after a successful backup: healthy, no errors"
 export SERVICE_DIRECTORIES="${FIXTURES}/"

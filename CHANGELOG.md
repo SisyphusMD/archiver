@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Removed
+- **Bundles are no longer read.** A container that finds a mounted `bundle.tar.enc`, a `config.sh`, a `bundle_password` secret or `BUNDLE_PASSWORD` in its environment refuses to start and prints the conversion: one `docker run` of the 0.11 image (`run migrate`, from 0.11.4) writes the same configuration as `archiver.env` plus secret files, keeping snapshot IDs, storages and keys. `archiver bundle export`, `bundle import` and `migrate` are removed (`migrate hooks` stays), `init` writes env-native materials only, and the configuration is read from environment variables and secret files alone. See the README's "Upgrading from a bundle".
+
 ### Added
 - The primary's prune leaves out revisions still in use: Duplicacy's own dry run decides what the retention policy deletes, and any revision a copy worker is copying or a restore is reading waits for the next prune instead of failing that copy or restore. Mirroring likewise keeps a revision a restore is reading from a secondary.
 - Copy workers maintain their secondary storages. They mirror the primary's retention (deleting on each secondary the revisions the primary has pruned, with rails: only this deployment's snapshot IDs, never an ID's newest revision, nothing when the primary's listing fails, and a pass that would delete more than half of an ID's revisions is refused with a notification until `archiver mirror --allow-large`), run the exhaustive prune on `PRUNE_EXHAUSTIVE_FREQUENCY`, and check each secondary on its own interval (`STORAGE_TARGET_N_CHECK_INTERVAL`, `CHECK_INTERVAL`, default 1 day, 7 days for SFTP). `archiver mirror --dry-run` shows the next mirror pass. While workers run, maintenance keeps to the primary.

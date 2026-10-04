@@ -1,5 +1,7 @@
 #!/bin/bash
-# Loads and validates user configuration from config.sh
+# Loads and validates the configuration: non-secret settings from environment variables,
+# secrets from files (<NAME>_FILE, else ${SECRETS_DIR}/<name>). Nothing is read from a
+# configuration file, and nothing configured is ever executed (ADR 4).
 
 CONFIG_LOADER_SH_SOURCED=true
 
@@ -7,32 +9,10 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOGGING_CORE}"
+source_if_not_sourced "${CONFIG_VARS_CORE}"
 
-# ------------------------------------------------------------------------------
-# Layered configuration load
-#
-# Config is resolved from three sources, in increasing precedence:
-#   1. the decrypted bundle's config.sh              (optional baseline; the cold-restore path)
-#   2. plain environment variables                   (non-secret config only)
-#   3. files: <NAME>_FILE, else ${SECRETS_DIR}/<name>  (secrets only — never raw env)
-#
-# This lets a deployment migrate off the bundle one value at a time: set an env var or
-# mount a secret file and it shadows the bundle; once every value is shadowed the bundle
-# can be dropped (pure env-native, e.g. a k8s ConfigMap + Secret). With no env/secret
-# overrides and a bundle present, the result is byte-identical to sourcing config.sh alone.
-# ------------------------------------------------------------------------------
-
-SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"
-
-# The user-config var surface, as two regexes over variable names. Single source of truth for
-# the load path AND the serializers in config-serialize.sh (migrate / mode-agnostic bundle
-# export): adding a field here is picked up by both, so a serializer can't silently drop it.
-CONFIG_NONSECRET_VARS_RE='^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|CHECK_INTERVAL|DUPLICACY_THREADS|NOTIFICATION_SERVICE|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION|CHECK_INTERVAL))$'
-CONFIG_SECRET_VARS_RE='^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET))$'
-
-# Secrets must come from the bundle or a file, never a plain env var (which would leak via
-# /proc and `docker inspect`). Drop any passed in the environment before loading, so the
-# only remaining sources are config.sh and the secret files. Warn per purged var: a silent
+# Secrets come from files, never a plain env var (which would leak via /proc and `docker
+# inspect`). Drop any passed in the environment before loading. Warn per purged var: a silent
 # purge turns a natural env-var deployment into a baffling "X is not set" failure later.
 purge_raw_env_secrets() {
   local v
@@ -42,28 +22,8 @@ purge_raw_env_secrets() {
   done < <(compgen -v | grep -E "${CONFIG_SECRET_VARS_RE}")
 }
 
-# Non-secret config passed via the environment is the override layer that must win over the
-# bundle. Capture it now, because sourcing config.sh below would otherwise clobber it.
-declare -gA ENV_CONFIG_OVERRIDES=()
-snapshot_env_overrides() {
-  local v
-  while IFS= read -r v; do
-    ENV_CONFIG_OVERRIDES["${v}"]="${!v}"
-  done < <(compgen -v | grep -E "${CONFIG_NONSECRET_VARS_RE}")
-}
-
-apply_env_overrides() {
-  local v
-  for v in "${!ENV_CONFIG_OVERRIDES[@]}"; do
-    unset "${v}"                                   # drop a possible array baseline before re-setting as scalar
-    printf -v "${v}" '%s' "${ENV_CONFIG_OVERRIDES[${v}]}"
-  done
-}
-
 # Populate one secret from a file only: ${VAR}_FILE if set, else ${SECRETS_DIR}/<var lower>.
-# Overrides the bundle value only when such a file exists, so a bundle-provided secret
-# survives when nothing is mounted — but an EXPLICITLY set <VAR>_FILE pointing nowhere is a
-# config error, not a fallback (silently ignoring it would keep a stale bundle secret).
+# An EXPLICITLY set <VAR>_FILE pointing nowhere is a config error, not a fallback.
 # $(<file) trims the trailing newline editors/tools add; the \r strip catches CRLF-edited
 # files, which otherwise fail much later as a baffling "wrong password".
 resolve_secret() {
@@ -106,9 +66,8 @@ resolve_secret_files() {
   done
 }
 
-# SERVICE_DIRECTORIES may be a bash array (legacy bundle config.sh) or a colon/newline
-# delimited scalar (env-native and new config.sh). Normalize the scalar into the array
-# that expand_service_directories() consumes; leave a real array untouched.
+# SERVICE_DIRECTORIES is a colon/newline delimited scalar. Normalize it into the array that
+# expand_service_directories() consumes; leave a real array (init's own) untouched.
 normalize_service_directories() {
   case "${SERVICE_DIRECTORIES@a}" in
     *a*) return 0 ;;                               # already an array
@@ -125,30 +84,8 @@ normalize_service_directories() {
   SERVICE_DIRECTORIES=("${out[@]}")
 }
 
-# ARCHIVER_CONFIG_IGNORE_OVERLAYS=true loads config.sh ALONE, with no env-var or secret-file
-# layering. init sets it when serializing the bundle/env-native materials it just generated:
-# there, the container's inherited environment and any mounted /run/secrets are noise that
-# would silently override the user's fresh answers (and init's own working variables would
-# leak into the snapshot). Skipping the overlay is not enough — an inherited var that
-# config.sh never assigns would survive into the effective set — so clear them outright.
-clear_env_config_vars() {
-  local v
-  while IFS= read -r v; do
-    unset "${v}"
-  done < <(compgen -v | grep -E "${CONFIG_NONSECRET_VARS_RE}")
-}
-
 purge_raw_env_secrets
-if [[ "${ARCHIVER_CONFIG_IGNORE_OVERLAYS:-}" == "true" ]]; then
-  clear_env_config_vars
-else
-  snapshot_env_overrides
-fi
-[[ -f "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
-if [[ "${ARCHIVER_CONFIG_IGNORE_OVERLAYS:-}" != "true" ]]; then
-  apply_env_overrides
-  resolve_secret_files
-fi
+resolve_secret_files
 normalize_service_directories
 # Deprecated-name translation, silent (the entrypoint warns once at container start;
 # warning here would spam the log from every command, incl. the 5-minute healthcheck).
@@ -280,7 +217,7 @@ expand_service_directories() {
   UNMATCHED_SERVICE_DIRECTORIES=()
 
   if [[ -z "${SERVICE_DIRECTORIES[*]}" ]]; then
-    handle_error "SERVICE_DIRECTORIES is not set. Provide it via config.sh or the SERVICE_DIRECTORIES environment variable (colon-delimited)."
+    handle_error "SERVICE_DIRECTORIES is not set. Set the SERVICE_DIRECTORIES environment variable (colon-delimited)."
     exit 1
   fi
 
@@ -317,7 +254,7 @@ count_storage_targets() {
   done
 
   if [[ $count -eq 0 ]]; then
-    handle_error "No storage targets specified. Provide at least one via config.sh or the STORAGE_TARGET_N_* environment variables."
+    handle_error "No storage targets specified. Provide at least one via the STORAGE_TARGET_N_* environment variables."
     exit 1
   else
     log_message "INFO" "${count} backup targets configured."
@@ -397,7 +334,7 @@ check_required_secrets() {
 
   for secret in "${secrets[@]}"; do
     if [[ -z "${!secret}" ]]; then
-      handle_error "The required secret ${secret} is not set. Provide it via the bundle, ${secret}_FILE, or ${SECRETS_DIR}/$(echo "${secret}" | tr '[:upper:]' '[:lower:]')."
+      handle_error "The required secret ${secret} is not set. Provide it via ${secret}_FILE or ${SECRETS_DIR}/$(echo "${secret}" | tr '[:upper:]' '[:lower:]')."
       exit 1
     fi
   done
@@ -420,7 +357,7 @@ check_notification_config() {
     local settings=("PUSHOVER_USER_KEY" "PUSHOVER_API_TOKEN")
     for setting in "${settings[@]}"; do
       if [[ -z "${!setting}" ]]; then
-        handle_error "Notification service is set to ${NOTIFICATION_SERVICE}, but ${setting} is not set. Provide it via config.sh or your env-native configuration."
+        handle_error "Notification service is set to ${NOTIFICATION_SERVICE}, but ${setting} is not set. Provide it as a secret file."
         exit 1
       fi
     done

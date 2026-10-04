@@ -3,7 +3,6 @@ set -e
 
 source "/opt/archiver/lib/core/common.sh"
 
-BUNDLE_FILE="${BUNDLE_DIR}/bundle.tar.enc"
 LOG_FILE="${LOG_DIR}/archiver.log"
 
 handle_shutdown() {
@@ -37,7 +36,7 @@ handle_shutdown() {
 trap 'handle_shutdown' SIGTERM
 
 # Copy a provided key file into its canonical KEYS_DIR path with the right mode. A missing
-# source is a no-op (bundle mode with no mounted keys, or an unused optional SSH key).
+# source is a no-op (an unused optional SSH key).
 place_key_file() {
     local src="$1" dst="$2" mode="$3"
     [ -f "$src" ] || return 0
@@ -45,9 +44,8 @@ place_key_file() {
     chmod "$mode" "$dst"
 }
 
-# Overlay any mounted RSA/SSH key files onto KEYS_DIR. Mounted files win over bundle-extracted
-# keys, so a deployment can move just its keys to secrets while the rest still comes from a
-# bundle. Paths default under SECRETS_DIR; each is overridable via its <NAME>_FILE env var.
+# Place the mounted RSA/SSH key files in KEYS_DIR. Paths default under SECRETS_DIR; each is
+# overridable via its <NAME>_FILE env var.
 overlay_key_files() {
     mkdir -p "${KEYS_DIR}"
     place_key_file "${RSA_PRIVATE_KEY_FILE:-${SECRETS_DIR}/rsa_private_key}" "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" 600
@@ -57,107 +55,43 @@ overlay_key_files() {
     place_key_file "${SSH_PUBLIC_KEY_FILE:-${SECRETS_DIR}/ssh_public_key}"   "${DUPLICACY_SSH_PUBLIC_KEY_FILE}" 644
 }
 
-# BUNDLE_PASSWORD decrypts the whole bundle (including the RSA private key), so it is the most
-# sensitive secret and is read from a file, never the environment. A raw-env value is rejected
-# with a migration message rather than silently ignored, which would otherwise drop a bundle
-# deployment into env-native mode and fail later with a confusing "no bundle" error.
-resolve_bundle_password() {
-    if [ -n "${BUNDLE_PASSWORD:-}" ]; then
-        echo "ERROR: BUNDLE_PASSWORD is no longer read from the environment (an env var leaks via 'docker inspect' and /proc)." >&2
-        echo "Write the password to a file, mount it at ${SECRETS_DIR}/bundle_password (or set BUNDLE_PASSWORD_FILE to its path)," >&2
-        echo "and remove BUNDLE_PASSWORD from the container environment." >&2
-        exit 1
-    fi
-    # An explicitly set BUNDLE_PASSWORD_FILE pointing nowhere is a config error, not a
-    # fallback — silently ignoring it would drop a bundle deployment into env-native mode.
-    if [ -n "${BUNDLE_PASSWORD_FILE:-}" ] && [ ! -f "${BUNDLE_PASSWORD_FILE}" ]; then
-        echo "ERROR: BUNDLE_PASSWORD_FILE is set to '${BUNDLE_PASSWORD_FILE}', but no such file exists." >&2
-        exit 1
-    fi
-    local path="${BUNDLE_PASSWORD_FILE:-${SECRETS_DIR}/bundle_password}"
-    if [ -f "${path}" ]; then
-        BUNDLE_PASSWORD="$(<"${path}")"
-        BUNDLE_PASSWORD="${BUNDLE_PASSWORD%$'\r'}"   # CRLF-edited file would fail as "wrong password"
-    fi
+# A deployment still configured by a bundle must convert first (ADRs 4, 22): starting without
+# it would back up nothing, or with half a configuration. Anything bundle-era refuses.
+refuse_bundle() {
+    local found=""
+    [ -e "${BUNDLE_DIR}/bundle.tar.enc" ] && found="${BUNDLE_DIR}/bundle.tar.enc"
+    [ -e "${CONFIG_FILE}" ] && found="${CONFIG_FILE}"
+    [ -e "${BUNDLE_PASSWORD_FILE:-${SECRETS_DIR}/bundle_password}" ] && found="${BUNDLE_PASSWORD_FILE:-${SECRETS_DIR}/bundle_password}"
+    [ -n "${BUNDLE_PASSWORD:-}" ] && found="BUNDLE_PASSWORD in the environment"
+    [ -z "${found}" ] && return 0
+    echo "ERROR: found ${found}." >&2
+    print_bundle_migration_help
+    exit 1
 }
 
-import_bundle() {
-    echo "Bundle file found: $BUNDLE_FILE"
-    echo "Decrypting and importing configuration..."
-    export ARCHIVER_BUNDLE_PASSWORD="$BUNDLE_PASSWORD"
-    export ARCHIVER_BUNDLE_FILE="$BUNDLE_FILE"
-
-    cd "${ARCHIVER_DIR}"
-    if ! "${BUNDLE_IMPORT_SCRIPT}"; then
-        echo "ERROR: Failed to import configuration"
-        echo "Please verify the bundle password (at ${SECRETS_DIR}/bundle_password or BUNDLE_PASSWORD_FILE) is correct"
-        exit 1
-    fi
-
-    # The password's job is done; keeping it exported would hand it to every child process
-    # (the scheduler, backups, user hooks) via /proc — the leak the file-only rule exists for.
-    unset ARCHIVER_BUNDLE_PASSWORD ARCHIVER_BUNDLE_FILE BUNDLE_PASSWORD
-
-    if [ ! -f "${CONFIG_FILE}" ]; then
-        echo "ERROR: config.sh not found after import"
-        exit 1
-    fi
-}
-
-# Prepare configuration + keys from whichever source is present. An encrypted bundle
-# (a mounted bundle.tar.enc + its password file) is the optional baseline; env vars plus
-# file-based secrets are the override layer, resolved later by config-loader. Keys are
-# files, so they are materialized into KEYS_DIR here regardless of mode.
+# Keys come from files; the rest of the configuration is validated at run time by
+# config-loader. Only the RSA keypair must be present here.
 prepare_config() {
-    local have_bundle=0
-    if [ -f "$BUNDLE_FILE" ] && [ -z "$BUNDLE_PASSWORD" ]; then
-        # A mounted bundle with no resolvable password is the upgrade path every pre-0.9.0
-        # deployment walks; falling through to env-native here would either start a container
-        # that never backs up (keys mounted) or blame a missing bundle that plainly exists.
-        echo "ERROR: bundle found at $BUNDLE_FILE, but no bundle password." >&2
-        echo "Provide it at ${SECRETS_DIR}/bundle_password (or point BUNDLE_PASSWORD_FILE at it)." >&2
-        exit 1
-    fi
-    if [ -n "$BUNDLE_PASSWORD" ] && [ -f "$BUNDLE_FILE" ]; then
-        have_bundle=1
-        import_bundle
-    fi
-
     overlay_key_files
-
-    if [ "$have_bundle" -eq 1 ]; then
-        if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ]; then
-            echo "ERROR: RSA keys not found after import"
-            exit 1
-        fi
-        echo "Configuration imported successfully"
-        return 0
-    fi
-
-    # Env-native mode: config comes from env + ${SECRETS_DIR} (validated at run time by
-    # config-loader). Only the RSA keypair must already be present here, as files.
     if [ ! -f "${DUPLICACY_RSA_PRIVATE_KEY_FILE}" ] || [ ! -f "${DUPLICACY_RSA_PUBLIC_KEY_FILE}" ]; then
-        echo "ERROR: no bundle and no RSA key files found." >&2
-        echo "Provide an encrypted bundle (mount it at $BUNDLE_FILE with its password at ${SECRETS_DIR}/bundle_password)," >&2
-        echo "or mount the RSA keypair at ${SECRETS_DIR}/rsa_private_key and ${SECRETS_DIR}/rsa_public_key" >&2
+        echo "ERROR: no RSA key files found." >&2
+        echo "Mount the RSA keypair at ${SECRETS_DIR}/rsa_private_key and ${SECRETS_DIR}/rsa_public_key" >&2
         echo "(or point RSA_PRIVATE_KEY_FILE / RSA_PUBLIC_KEY_FILE at them)." >&2
         exit 1
     fi
-    echo "Env-native configuration (no bundle): keys loaded from files."
+    echo "Configuration: keys loaded from files."
 }
 
 echo "==================================="
 echo "Archiver Container Starting"
 echo "==================================="
 
-resolve_bundle_password
-
 if [ "$1" = "init" ]; then
     echo "Running in INIT mode"
     echo ""
 
-    if [ -f "${SETUP_DIR}/bundle.tar.enc" ]; then
-        echo "WARNING: ${SETUP_DIR}/bundle.tar.enc already exists"
+    if [ -e "${SETUP_DIR}/env-native" ]; then
+        echo "WARNING: ${SETUP_DIR}/env-native already exists"
         echo "Continuing will overwrite it."
         echo ""
     fi
@@ -186,11 +120,13 @@ if [ "$1" = "run" ]; then
 
     echo "Running in RUN mode: $*"
     echo ""
+    refuse_bundle
     prepare_config
     cd "${ARCHIVER_DIR}"
     exec archiver "$@"
 fi
 
+refuse_bundle
 prepare_config
 
 # Clear any lock/stop-flag state left by a prior container. These live under /var/lock (not
@@ -235,7 +171,7 @@ if [ -n "${CRON_SCHEDULE:-}" ]; then
     exit 1
 fi
 if [ -n "${ROTATE_BACKUPS:-}" ]; then
-    echo "WARNING: ROTATE_BACKUPS is deprecated; rename it to PRUNE_BACKUPS (still honored for old bundle configs)."
+    echo "WARNING: ROTATE_BACKUPS is deprecated; rename it to PRUNE_BACKUPS (still honored for now)."
 fi
 
 # Check/prune only run on MAINTENANCE_SCHEDULE (or a manual 'archiver maintenance').

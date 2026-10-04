@@ -75,38 +75,3 @@ secrets:
   # storage_target_1_b2_key:    { file: ./secrets/storage_target_1_b2_key }
   # storage_target_1_s3_id:     { file: ./secrets/storage_target_1_s3_id }
   # storage_target_1_s3_secret: { file: ./secrets/storage_target_1_s3_secret }
-
-# ---------------------------------------------------------------------------------------
-# Bundle-mode alternative (transitional / cold-restore). The encrypted bundle carries the
-# whole configuration; its password is a file-based secret (NOT an environment variable —
-# a container that sets BUNDLE_PASSWORD in its environment fails fast at startup). Use this
-# INSTEAD OF the env-native service above.
-# ---------------------------------------------------------------------------------------
-# services:
-#   archiver:
-#     container_name: archiver
-#     image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11.1
-#     restart: unless-stopped
-#     stop_grace_period: 2m
-#     hostname: backup-server
-#     cap_drop:
-#       - ALL
-#     cap_add:
-#       - DAC_OVERRIDE
-#       - CHOWN
-#       - FOWNER
-#     security_opt:
-#       - no-new-privileges:true
-#     environment:
-#       BACKUP_SCHEDULE: "0 3 * * *"
-#       MAINTENANCE_SCHEDULE: "0 13 * * *"
-#       TZ: "America/New_York"
-#     secrets:
-#       - bundle_password                                            # mounted at /run/secrets/bundle_password
-#     volumes:
-#       - ./archiver-bundle:/opt/archiver/bundle                     # Bundle file (bundle mode)
-#       - ./archiver-logs:/opt/archiver/logs                         # Persistent logs (optional)
-#       - /path/to/host/backup-dir:/mnt/backup-dir                   # Data to backup (must match config.sh)
-# secrets:
-#   bundle_password:
-#     file: ./secrets/bundle_password   # a file containing ONLY the bundle password

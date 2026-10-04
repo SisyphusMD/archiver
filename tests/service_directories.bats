@@ -5,10 +5,8 @@
 setup() {
   REPO_ROOT="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
   SECRETS_DIR="${BATS_TEST_TMPDIR}/secrets"
-  CONFIG_FILE="${BATS_TEST_TMPDIR}/config.sh"
   mkdir -p "${SECRETS_DIR}"
-  : >"${CONFIG_FILE}"
-  export SECRETS_DIR CONFIG_FILE
+  export SECRETS_DIR
   SVC="${BATS_TEST_TMPDIR}/svc"
   mkdir -p "${SVC}/app1" "${SVC}/app2" "${SVC}/other"
 }
@@ -20,6 +18,8 @@ run_load() {
   source_if_not_sourced() { :; }
   log_message() { :; }
   handle_error() { echo "handle_error: $*" >&2; return 1; }
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/lib/core/config-vars.sh"
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/lib/core/config-loader.sh"
 }

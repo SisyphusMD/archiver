@@ -13,14 +13,12 @@ source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 source_if_not_sourced "${LOCKFILE_CORE}"
 
 usage() {
-  echo "Usage: archiver {backup|maintenance|stop|pause|resume|logs|status|bundle|migrate|mirror|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
+  echo "Usage: archiver {backup|maintenance|stop|pause|resume|logs|status|migrate hooks|mirror|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
   echo "Note:"
   echo "  backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background."
   echo "  maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune."
   echo "  stop takes an optional target (backup|maintenance|all, default all) and --immediate."
   echo "  resume may be used in combination with logs."
-  echo "  bundle requires a subcommand: export or import"
-  echo "  migrate takes an optional OUTPUT_DIR (default /opt/archiver/migrate): writes the effective config as an env file + secret files."
   echo "  mirror --dry-run shows what the copy workers' next mirror pass would delete on each secondary; mirror --allow-large lets that pass exceed the cap."
   echo "  migrate hooks [DIR...] converts each service's service-backup-settings.sh into executable pre-backup/post-backup hooks and a filters file."
   echo "  recovery-kit uploads the encrypted recovery kit to every storage target; 'recovery-kit force' re-uploads even if unchanged."
@@ -169,31 +167,10 @@ case "${command}" in
     "${MAIN_SCRIPT}"
     exit $?
     ;;
-  bundle)
-    if [[ $# -ne 1 ]]; then
-      echo "'bundle' requires exactly one subcommand: export or import"
-      usage
-    fi
-    subcommand="${1}"
-    if [[ "${subcommand}" == "export" ]]; then
-      "${BUNDLE_EXPORT_SCRIPT}"
-      rc=$?
-    elif [[ "${subcommand}" == "import" ]]; then
-      "${BUNDLE_IMPORT_SCRIPT}"
-      rc=$?
-    else
-      echo "Unknown bundle subcommand: ${subcommand}"
-      echo "Valid subcommands: export, import"
-      usage
-    fi
-    ;;
-  migrate)
-    if [[ $# -gt 1 ]]; then
-      echo "'migrate' takes at most one argument: the output directory."
-      usage
-    fi
-    "${MIGRATE_SCRIPT}" "${@}"
-    rc=$?
+  bundle|migrate)
+    # migrate hooks is the Go dispatcher's; only the bundle-era migrate reaches here.
+    print_bundle_migration_help
+    exit 2
     ;;
   recovery-kit)
     if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "force" ) ]]; then

@@ -130,8 +130,8 @@ func TestWarningsStayHealthy(t *testing.T) {
 	}
 }
 
-// Deployments that share a storage maintain it from one place and turn both off elsewhere,
-// from the environment or, for bundles, config.sh; the environment wins.
+// Deployments that share a storage maintain it from one place and turn both off elsewhere;
+// ROTATE_BACKUPS is still read as PRUNE_BACKUPS.
 func TestMaintenanceToggles(t *testing.T) {
 	l := healthy(t)
 	put(t, l.MaintenanceState(), "local 0 0 0\n")
@@ -141,14 +141,9 @@ func TestMaintenanceToggles(t *testing.T) {
 		t.Errorf("toggled-off maintenance still warned:\n%s", out)
 	}
 
-	put(t, l.ConfigFile(), "CHECK_BACKUPS=\"false\"\nexport ROTATE_BACKUPS='false' # legacy name\n")
-	_, out = run(t, l, nil)
-	if strings.Contains(out, "No successful") {
-		t.Errorf("config.sh toggles ignored:\n%s", out)
-	}
-	_, out = run(t, l, map[string]string{"CHECK_BACKUPS": "true"})
+	_, out = run(t, l, map[string]string{"CHECK_BACKUPS": "true", "ROTATE_BACKUPS": "false"})
 	if !strings.Contains(out, "No successful check on 'local'") || strings.Contains(out, "No successful prune") {
-		t.Errorf("environment should win over config.sh:\n%s", out)
+		t.Errorf("ROTATE_BACKUPS=false should turn the prune warning off:\n%s", out)
 	}
 }
 

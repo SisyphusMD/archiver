@@ -5,13 +5,11 @@
 package health
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -53,16 +51,7 @@ func (r *report) fail(format string, a ...any) {
 func Run(w io.Writer, l layout.Layout, env Env, now time.Time) int {
 	r := &report{w: w}
 
-	hasConfig := exists(l.ConfigFile())
 	hasKey := exists(l.RSAPrivateKey())
-	switch {
-	case hasConfig:
-		r.ok("Configuration file exists")
-	case hasKey:
-		r.ok("No config.sh; env-native configuration (RSA key present)")
-	default:
-		r.fail("No configuration found (no config.sh and no RSA private key)")
-	}
 	if hasKey {
 		r.ok("RSA private key exists")
 	} else {
@@ -184,41 +173,16 @@ func Run(w io.Writer, l layout.Layout, env Env, now time.Time) int {
 	return 0
 }
 
-// maintenanceToggles resolves CHECK_BACKUPS and PRUNE_BACKUPS (formerly ROTATE_BACKUPS):
-// the environment wins, then a bundle's config.sh, then the default, true. config.sh is
-// read as plain assignments, never executed.
+// maintenanceToggles resolves CHECK_BACKUPS and PRUNE_BACKUPS (formerly ROTATE_BACKUPS)
+// from the environment, defaulting to true.
 func maintenanceToggles(l layout.Layout, env Env) (check, prune bool) {
-	cfg := configAssignments(l.ConfigFile())
-	get := func(name string) string {
-		if v := env(name); v != "" {
-			return v
-		}
-		return cfg[name]
-	}
+	get := func(name string) string { return env(name) }
 	on := func(v string) bool { return v == "" || strings.EqualFold(v, "true") }
 	pruneVal := get("PRUNE_BACKUPS")
 	if pruneVal == "" {
 		pruneVal = get("ROTATE_BACKUPS")
 	}
 	return on(get("CHECK_BACKUPS")), on(pruneVal)
-}
-
-var assignment = regexp.MustCompile(`^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)=(?:"([^"]*)"|'([^']*)'|([^\s#]*))`)
-
-func configAssignments(path string) map[string]string {
-	out := map[string]string{}
-	f, err := os.Open(path)
-	if err != nil {
-		return out
-	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		if m := assignment.FindStringSubmatch(sc.Text()); m != nil {
-			out[m[1]] = m[2] + m[3] + m[4]
-		}
-	}
-	return out
 }
 
 func exists(path string) bool {

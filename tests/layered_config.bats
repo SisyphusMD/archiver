@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
-# Layered config load in lib/core/config-loader.sh: an optional bundle config.sh baseline,
-# overridden by non-secret env vars and file-based secrets. This is what lets a deployment
-# migrate off the encrypted bundle one value at a time (env-native / k8s).
+# Config load in lib/core/config-loader.sh: non-secret settings from env vars, secrets from
+# files only.
 #
 # Unlike config_loader.bats, these tests must control the environment + fixtures BEFORE the
 # load-time orchestration runs, so they arrange state and then source config-loader via
@@ -10,10 +9,8 @@
 setup() {
   REPO_ROOT="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
   SECRETS_DIR="${BATS_TEST_TMPDIR}/secrets"
-  CONFIG_FILE="${BATS_TEST_TMPDIR}/config.sh"
   mkdir -p "${SECRETS_DIR}"
-  : >"${CONFIG_FILE}"
-  export SECRETS_DIR CONFIG_FILE
+  export SECRETS_DIR
 }
 
 # Arrange-then-source: satisfies the same source guards/stubs as helpers/load.bash, then
@@ -24,6 +21,8 @@ run_load() {
   source_if_not_sourced() { :; }
   log_message() { :; }
   handle_error() { echo "handle_error: $*" >&2; return 1; }
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/lib/core/config-vars.sh"
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/lib/core/config-loader.sh"
 }
@@ -47,47 +46,20 @@ run_load() {
   [ "${RSA_PASSPHRASE}" = "trimmed" ]
 }
 
-@test "resolve_secret: no file leaves the bundle value intact" {
-  echo 'STORAGE_PASSWORD="from-bundle"' >"${CONFIG_FILE}"
-  run_load
-  [ "${STORAGE_PASSWORD}" = "from-bundle" ]
-}
-
-@test "a secret file overrides the bundle secret" {
-  echo 'STORAGE_PASSWORD="from-bundle"' >"${CONFIG_FILE}"
-  printf 'from-secret-file' >"${SECRETS_DIR}/storage_password"
-  run_load
-  [ "${STORAGE_PASSWORD}" = "from-secret-file" ]
-}
-
 @test "a secret passed as a raw env var is purged (never trusted)" {
   export STORAGE_PASSWORD="raw-env-secret"
   run_load
   [ -z "${STORAGE_PASSWORD}" ]
 }
 
-@test "an env var overrides the bundle non-secret value" {
-  echo 'STORAGE_TARGET_1_TYPE="local"' >"${CONFIG_FILE}"
-  export STORAGE_TARGET_1_TYPE="s3"
-  run_load
-  [ "${STORAGE_TARGET_1_TYPE}" = "s3" ]
-}
-
-@test "bundle non-secret survives when no env override is set" {
-  echo 'PRUNE_BACKUPS="false"' >"${CONFIG_FILE}"
-  run_load
-  [ "${PRUNE_BACKUPS}" = "false" ]
-}
-
-@test "deprecated ROTATE_BACKUPS in a bundle config translates to PRUNE_BACKUPS" {
-  echo 'ROTATE_BACKUPS="false"' >"${CONFIG_FILE}"
+@test "deprecated ROTATE_BACKUPS translates to PRUNE_BACKUPS" {
+  export ROTATE_BACKUPS="false"
   run_load
   [ "${PRUNE_BACKUPS}" = "false" ]
   [ -z "${ROTATE_BACKUPS:-}" ]
 }
 
-@test "pure env-native: no bundle file, config comes entirely from env + secrets" {
-  rm -f "${CONFIG_FILE}"
+@test "config comes entirely from env + secret files" {
   export STORAGE_TARGET_1_NAME="b2t" STORAGE_TARGET_1_TYPE="b2"
   printf 'the-key' >"${SECRETS_DIR}/storage_target_1_b2_key"
   run_load
@@ -110,14 +82,6 @@ run_load() {
   [ "${SERVICE_DIRECTORIES[1]}" = "/mnt/b/" ]
 }
 
-@test "normalize_service_directories: a legacy bundle array is left untouched" {
-  printf 'SERVICE_DIRECTORIES=(\n  "/x/"\n  "/y/"\n)\n' >"${CONFIG_FILE}"
-  run_load
-  [ "${#SERVICE_DIRECTORIES[@]}" -eq 2 ]
-  [ "${SERVICE_DIRECTORIES[0]}" = "/x/" ]
-  [ "${SERVICE_DIRECTORIES[1]}" = "/y/" ]
-}
-
 @test "purging a raw env secret logs a warning naming the file path to use" {
   export STORAGE_PASSWORD="sneaky-env-secret"
   COMMON_SH_SOURCED=true
@@ -126,6 +90,8 @@ run_load() {
   WARNINGS=""
   log_message() { [ "${1}" = "WARNING" ] && WARNINGS+="${2}"$'\n'; }
   handle_error() { echo "handle_error: $*" >&2; return 1; }
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/lib/core/config-vars.sh"
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/lib/core/config-loader.sh"
   [ -z "${STORAGE_PASSWORD:-}" ]
@@ -146,15 +112,11 @@ run_load() {
   [[ "${output}" == *"STORAGE_PASSWORD_FILE"* ]]
 }
 
-@test "ARCHIVER_CONFIG_IGNORE_OVERLAYS loads config.sh alone (init isolation)" {
-  printf 'STORAGE_TARGET_1_NAME="fresh"\n' >"${CONFIG_FILE}"
-  export STORAGE_TARGET_1_NAME="stale-deployment-value"
-  # an inherited var config.sh never assigns must not survive into the effective set
-  export STORAGE_TARGET_1_B2_BUCKETNAME="stale-bucket"
-  printf 'stale-secret' >"${SECRETS_DIR}/storage_password"
-  export ARCHIVER_CONFIG_IGNORE_OVERLAYS=true
+
+@test "a config.sh is never read" {
+  CONFIG_FILE="${BATS_TEST_TMPDIR}/config.sh"
+  echo 'STORAGE_TARGET_1_NAME="from-config-sh"' >"${CONFIG_FILE}"
+  export CONFIG_FILE
   run_load
-  [ "${STORAGE_TARGET_1_NAME}" = "fresh" ]
-  [ -z "${STORAGE_TARGET_1_B2_BUCKETNAME:-}" ]
-  [ -z "${STORAGE_PASSWORD:-}" ]
+  [ -z "${STORAGE_TARGET_1_NAME:-}" ]
 }

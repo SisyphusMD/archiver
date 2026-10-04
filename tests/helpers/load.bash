@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Shared bats setup. config-loader.sh has load-time side effects — it sources
-# common.sh, logging.sh, and $CONFIG_FILE — so to unit-test its functions in
-# isolation we pre-satisfy those guards with stubs and hand it an empty config.
+# Shared bats setup. config-loader.sh has load-time side effects — it sources common.sh and
+# logging.sh and loads the configuration — so to unit-test its functions in isolation we
+# pre-satisfy those guards with stubs.
 
 REPO_ROOT="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
 
@@ -12,9 +12,8 @@ load_config_loader() {
   log_message() { :; }            # provided by logging.sh; default no-op stub
   handle_error() { echo "handle_error: $*" >&2; return 1; }
 
-  CONFIG_FILE="${BATS_TEST_TMPDIR}/config.sh"
-  : >"${CONFIG_FILE}"
-
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/lib/core/config-vars.sh"
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/lib/core/config-loader.sh"
 }

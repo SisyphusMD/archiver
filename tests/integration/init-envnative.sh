@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# `archiver init` is the front door: driven with scripted answers, it must produce BOTH the
-# encrypted bundle and the env-native materials (archiver.env + secrets/, the primary
-# deployment path) — and it must serialize the user's ANSWERS, not the container's inherited
-# environment or mounted secrets ('docker compose run ... init' under an existing deployment
-# must not fold the old config into the new artifacts). Then prove the materials are real:
-# wipe config.sh and the keys, rebuild the runtime state purely from env-native/, and run a
-# backup with no bundle involved.
+# `archiver init` is the front door: driven with scripted answers, it must produce the
+# env-native materials (archiver.env + secrets/) and no bundle, and it must serialize the
+# user's ANSWERS, not the container's inherited environment or mounted secrets ('docker
+# compose run ... init' under an existing deployment must not fold the old config into the new
+# materials). Then prove the materials are real: wipe the keys, rebuild the runtime state
+# purely from env-native/, and run a backup.
 #
 #   docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \
 #     --entrypoint bash archiver:dev -s < tests/integration/init-envnative.sh
@@ -36,15 +35,17 @@ log "drive init with scripted answers (TWO directories, local target, no pushove
 # In production the ENTRYPOINT dispatches 'init' (docker run ... init); here the entrypoint
 # is bypassed, so call the script directly. Answer order: Directories (comma-separated) /
 # storage name / type / local path, then two single-char (y/N) reads with no trailing
-# newline, then the bundle password twice.
-printf '/data/fixtures/,/data/other/\nlocal\nlocal\n/backup-store\nnntestbundlepw\ntestbundlepw\n' \
+# newline.
+printf '/data/fixtures/,/data/other/\nlocal\nlocal\n/backup-store\nnn' \
   | bash /opt/archiver/lib/scripts/init.sh >/tmp/init.out 2>&1 || { tail -30 /tmp/init.out; die "init exited non-zero"; }
 
-log "init must have produced the bundle AND the env-native materials"
-[ -f /opt/archiver/setup/bundle.tar.enc ] || die "no bundle.tar.enc"
+log "init must have produced the env-native materials, and nothing bundle-era"
 [ -f "$ENVNATIVE/archiver.env" ] || die "no env-native/archiver.env"
 [ -d "$ENVNATIVE/secrets" ] || die "no env-native/secrets/"
-grep -q "RECOMMENDED (env-native)" /tmp/init.out || die "init guidance does not lead with env-native"
+[ "$(stat -c %a "$ENVNATIVE/secrets")" = 700 ] || die "env-native/secrets is not private"
+[ ! -e /opt/archiver/setup/bundle.tar.enc ] || die "init wrote a bundle"
+[ ! -e /opt/archiver/config.sh ] || die "init wrote a config.sh"
+grep -qi "bundle" /tmp/init.out && die "init output still mentions a bundle"
 grep -q "RECOVERY PASSWORD" /tmp/init.out || die "init did not display the recovery password callout"
 
 log "the materials must reflect the ANSWERS, not the decoys, and keep BOTH directories"
@@ -60,17 +61,7 @@ done
 [ "$(cat "$ENVNATIVE/secrets/recovery_password")" != "$(cat "$ENVNATIVE/secrets/storage_password")" ] \
   || die "generated recovery password equals the storage password"
 
-log "the bundle decrypts with the OLD-style openssl -k (compat) and records config.sh as 0600"
-openssl enc -d -aes-256-cbc -pbkdf2 -in /opt/archiver/setup/bundle.tar.enc -out /tmp/bundle.tar -k testbundlepw \
-  || die "bundle does not decrypt with legacy-style -k (password-derivation compat broken)"
-tar -tvf /tmp/bundle.tar | grep "config.sh" | grep -q -- "^-rw-------" || die "config.sh not 0600 inside the bundle tar"
-tar -xf /tmp/bundle.tar -C /tmp config.sh
-grep -q "decoy" /tmp/config.sh && die "a decoy value leaked into the bundle's config.sh"
-grep -q "^RECOVERY_PASSWORD=" /tmp/config.sh || die "bundle config.sh lacks the generated recovery password"
-rm -f /tmp/bundle.tar /tmp/config.sh
-
 log "wipe the in-container config state; rebuild purely from env-native/"
-rm -f /opt/archiver/config.sh
 rm -rf /opt/archiver/keys
 mkdir -p /opt/archiver/keys
 unset SERVICE_DIRECTORIES STORAGE_TARGET_1_NAME STORAGE_TARGET_1_TYPE STORAGE_TARGET_1_B2_BUCKETNAME
@@ -86,7 +77,7 @@ while IFS= read -r line; do
   export "${line%%=*}"="${line#*=}"
 done <"$ENVNATIVE/archiver.env"
 
-log "backup must run BOTH services from env-native materials alone (no bundle, no config.sh)"
+log "backup must run BOTH services from env-native materials alone"
 archiver backup || die "env-native backup from init materials failed"
 [ -d "$STORE/snapshots/$(hostname)-fixtures" ] || die "no snapshot for fixtures"
 [ -d "$STORE/snapshots/$(hostname)-other" ] || die "no snapshot for other (multi-dir lost)"
@@ -98,4 +89,4 @@ openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:$(cat "$SECRETS_DIR/recovery_pas
   | tar -xOf - archiver.env | grep -q "^STORAGE_TARGET_1_NAME=local$" \
   || die "recovery kit does not decrypt with the init-generated password"
 
-echo "=== INIT-ENVNATIVE OK: decoys ignored, both dirs kept, bundle 0600 + -k compat, bundle-free backup, recovery kit on by default ==="
+echo "=== INIT-ENVNATIVE OK: decoys ignored, both dirs kept, no bundle written, backup from env-native materials, recovery kit on by default ==="

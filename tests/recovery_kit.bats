@@ -9,12 +9,10 @@
 setup() {
   REPO_ROOT="$(cd "$(dirname "${BATS_TEST_FILENAME}")/.." && pwd)"
   SECRETS_DIR="${BATS_TEST_TMPDIR}/secrets"
-  CONFIG_FILE="${BATS_TEST_TMPDIR}/config.sh"
   LOG_DIR="${BATS_TEST_TMPDIR}"
   DEPLOYMENT_DIR="${BATS_TEST_TMPDIR}/deployment"
   mkdir -p "${SECRETS_DIR}"
-  : >"${CONFIG_FILE}"
-  export SECRETS_DIR CONFIG_FILE LOG_DIR DEPLOYMENT_DIR
+  export SECRETS_DIR LOG_DIR DEPLOYMENT_DIR
 }
 
 load_recovery_kit() {
@@ -24,6 +22,8 @@ load_recovery_kit() {
   source_if_not_sourced() { :; }
   log_message() { :; }
   handle_error() { echo "handle_error: $*" >&2; return 1; }
+  # shellcheck source=/dev/null
+  source "${REPO_ROOT}/lib/core/config-vars.sh"
   # shellcheck source=/dev/null
   source "${REPO_ROOT}/lib/core/config-loader.sh"
   # shellcheck source=/dev/null

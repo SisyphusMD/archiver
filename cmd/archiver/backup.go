@@ -19,18 +19,15 @@ import (
 
 const recoveryKitStep = "/opt/archiver/lib/scripts/recovery-kit-step.sh"
 
-// goPipeline reports whether this deployment's backups run in Go. A bundle (config.sh), or
-// services that all still carry service-backup-settings.sh, stay on the bash pipeline until
-// migrated. ARCHIVER_PIPELINE=bash or =go overrides the choice.
+// goPipeline reports whether this deployment's backups run in Go. Services that all still
+// carry service-backup-settings.sh stay on the bash pipeline until migrated.
+// ARCHIVER_PIPELINE=bash or =go overrides the choice.
 func goPipeline(l layout.Layout, src config.Source) bool {
 	switch src.Getenv("ARCHIVER_PIPELINE") {
 	case "bash":
 		return false
 	case "go":
 		return true
-	}
-	if _, err := os.Stat(l.ConfigFile()); err == nil {
-		return false
 	}
 	cfg, _, err := config.Load(src, nil)
 	if err != nil {
@@ -135,10 +132,6 @@ func detachBackup(l layout.Layout) int {
 func migrateHooks(dirs []string) int {
 	// Migrated services run only on the Go pipeline; converting them for a deployment that
 	// must stay on bash would leave every one of their backups refused.
-	if _, err := os.Stat(layout.Default().ConfigFile()); err == nil {
-		fmt.Fprintln(os.Stderr, "This deployment still uses a bundle (config.sh), which runs the bash pipeline. Migrate the bundle first ('archiver migrate'), then the hooks.")
-		return 1
-	}
 	if os.Getenv("ARCHIVER_PIPELINE") == "bash" {
 		fmt.Fprintln(os.Stderr, "ARCHIVER_PIPELINE=bash keeps this deployment on the bash pipeline, which does not run migrated hooks. Unset it before migrating.")
 		return 1
