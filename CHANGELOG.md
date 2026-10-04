@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver` is now a small Go program, the first step of the v1 rewrite. For now it runs the same bash commands as before, so every command, flag, exit code, and output is unchanged; scheduled runs, `docker stop`, and `init` go through it too. `archiver init` also works inside a running container.
 
 ### Fixed
+- `archiver restore`, `migrate`, `bundle export`/`import`, `stop`, `pause`, `resume` and `logs` now exit with their command's status. A failure, such as a restore that could not run, used to exit 0.
 - Ctrl+C now ends `archiver logs` at once. It used to leave the viewer running when attached with `docker exec -it`.
 
 ## [0.11.2] - 2026-09-29

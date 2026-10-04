@@ -63,9 +63,9 @@ wait_for 'archiver status | grep -q "offsite: retrying in"' 60 || die "status do
 grep -q "\[WARNING\] \[Service: offsite\] Copy to offsite storage failed" "$CLOG" || die "failed copy not logged as a warning"
 
 log "pause and resume reach the workers"
-archiver pause | grep -q "Copies to the secondary storages paused" || die "pause did not reach the workers"
+grep -q "Copies to the secondary storages paused" <<<"$(archiver pause)" || die "pause did not reach the workers"
 archiver status | grep -q "(paused)" || die "status does not show the pause"
-archiver resume | grep -q "Copies to the secondary storages resumed" || die "resume did not reach the workers"
+grep -q "Copies to the secondary storages resumed" <<<"$(archiver resume)" || die "resume did not reach the workers"
 
 log "once the offsites are back, a backup's wake catches them up"
 rm "$OFFSITE" && mv "${OFFSITE}.away" "$OFFSITE"
@@ -97,7 +97,7 @@ grep -q "maintaining local only" /opt/archiver/logs/maintenance.log || die "main
 grep -q "Storage check completed for offsite" /opt/archiver/logs/maintenance.log && die "maintenance checked a secondary the workers keep"
 
 log "stop reaches the workers"
-archiver stop | grep -q "Copies to the secondary storages stopped" || die "stop did not reach the workers"
+grep -q "Copies to the secondary storages stopped" <<<"$(archiver stop)" || die "stop did not reach the workers"
 
 kill -TERM "$DAEMON"; wait "$DAEMON"
 echo "=== COPY-WORKERS OK: inline without a daemon, handed off with one, retried without failing the backup, checked, mirrored, maintenance local-only, pause/resume/stop reach the workers ==="

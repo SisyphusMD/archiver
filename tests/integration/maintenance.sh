@@ -145,7 +145,7 @@ archiver maintenance >/dev/null 2>&1 &
 MAINT_BG=$!
 for _ in $(seq 1 60); do [ -f /tmp/check-started ] && break; sleep 1; done
 [ -f /tmp/check-started ] || die "maintenance never reached the check stage"
-archiver stop maintenance | grep -q "Stopping maintenance" || die "stop did not target maintenance"
+grep -q "Stopping maintenance" <<<"$(archiver stop maintenance)" || die "stop did not target maintenance"
 wait "$MAINT_BG" 2>/dev/null || true
 for _ in $(seq 1 30); do [ ! -e /var/lock/archiver-maintenance.lock ] && break; sleep 1; done
 [ ! -e /var/lock/archiver-maintenance.lock ] || die "maintenance lock not released after stop"
