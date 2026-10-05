@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.11.6] - 2026-10-05
+
 ### Fixed
 - A pause that lands between two steps of a backup now holds the next step until `archiver resume`. Pause stopped only what was running at that moment, so the next step (a duplicacy backup, copy, or recovery-kit upload) could start and run unpaused.
 

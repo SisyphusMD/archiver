@@ -209,7 +209,7 @@ For new installations, run initialization interactively (the mount is just an ou
 ```bash
 docker run -it --rm \
   -v ./archiver-setup:/opt/archiver/setup \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.5 init
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.6 init
 ```
 
 This writes your configuration into `archiver-setup/`:
@@ -229,7 +229,7 @@ services:
   archiver:
 
     container_name: archiver
-    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11.5
+    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11.6
     restart: unless-stopped
     stop_grace_period: 2m         # Allow time for graceful shutdown and cleanup
 
@@ -391,7 +391,7 @@ The entrypoint selects one of three modes based on the first container argument:
 
 ### Image Tags
 
-- `forgejo.bryantserver.com/sisyphusmd/archiver:0.11.5` - exact version (recommended; this line always names the current release)
+- `forgejo.bryantserver.com/sisyphusmd/archiver:0.11.6` - exact version (recommended; this line always names the current release)
 - `MAJOR.MINOR` (e.g. `0.9`) - receives patch updates automatically
 - `MAJOR` (e.g. `0`) - receives minor and patch updates automatically
 
@@ -722,7 +722,7 @@ docker run --rm \
   --env-file /path/to/archiver.env \
   -v /path/to/secrets:/run/secrets:ro \
   -v /path/to/host/backup-dir:/mnt/backup-dir \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.5 run backup
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.6 run backup
 ```
 
 (Bundle mode instead: replace the first two lines with `-v /path/to/bundle/dir:/opt/archiver/bundle` and `-v /path/to/bundle_password:/run/secrets/bundle_password:ro`.) The same pattern drives maintenance from an external scheduler: `run maintenance` blocks through the per-storage check + prune and propagates its exit code.
@@ -747,7 +747,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: archiver
-              image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11.5
+              image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11.6
               args: ["run", "backup"]
               envFrom:
                 - configMapRef: { name: archiver-config }   # the archiver.env keys (non-secret settings)
@@ -799,7 +799,7 @@ docker run -d --name archiver-restore \
   --env-file /path/to/archiver.env \
   -v /path/to/secrets:/run/secrets:ro \
   -v /path/to/restore/destination:/mnt/restore \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.5
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.6
 
 docker exec -it archiver-restore archiver restore
 
@@ -875,7 +875,7 @@ docker run --rm \
   --env-file /path/to/archiver.env \
   -v /path/to/secrets:/run/secrets:ro \
   -e SNAPSHOT_ID=myservice \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.5 run snapshot-exists
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.6 run snapshot-exists
 
 # Restore a snapshot into a mounted destination
 docker run --rm \
@@ -885,7 +885,7 @@ docker run --rm \
   -e LOCAL_DIR=/mnt/restore \
   -e OVERWRITE=1 \
   -v /path/to/restore/destination:/mnt/restore \
-  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.5 run auto-restore
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.11.6 run auto-restore
 ```
 
 (Bundle mode: swap the `--env-file` + secrets mount for `-v /path/to/bundle/dir:/opt/archiver/bundle` and `-v /path/to/bundle_password:/run/secrets/bundle_password:ro`.)
