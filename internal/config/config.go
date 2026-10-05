@@ -209,6 +209,35 @@ func (c *Config) Validate(secretsDir string) error {
 	if len(c.ServiceDirectories) == 0 {
 		return fmt.Errorf("SERVICE_DIRECTORIES is not set. Set the SERVICE_DIRECTORIES environment variable (colon-delimited).")
 	}
+	if err := c.ValidateStorage(secretsDir); err != nil {
+		return err
+	}
+	if strings.ToLower(c.NotificationService) == "pushover" {
+		for _, s := range []struct{ name, v string }{{"PUSHOVER_USER_KEY", c.PushoverUserKey}, {"PUSHOVER_API_TOKEN", c.PushoverAPIToken}} {
+			if s.v == "" {
+				return fmt.Errorf("Notification service is set to %s, but %s is not set. Provide it as a secret file.", c.NotificationService, s.name)
+			}
+		}
+	}
+	switch c.PruneExhaustiveFrequency {
+	case "off", "daily", "weekly", "monthly":
+	default:
+		return fmt.Errorf("PRUNE_EXHAUSTIVE_FREQUENCY must be one of: off, daily, weekly, monthly (got '%s').", c.PruneExhaustiveFrequency)
+	}
+	if _, err := ParseInterval(c.CheckInterval); err != nil {
+		return fmt.Errorf("CHECK_INTERVAL: %v", err)
+	}
+	for _, t := range c.Targets {
+		if _, err := ParseInterval(t.CheckInterval); err != nil {
+			return fmt.Errorf("STORAGE_TARGET_%d_CHECK_INTERVAL: %v", t.N, err)
+		}
+	}
+	return nil
+}
+
+// ValidateStorage checks only what reaching the storages needs: the targets' settings and
+// credentials, the storage password and the RSA passphrase. A restore needs no more.
+func (c *Config) ValidateStorage(secretsDir string) error {
 	if len(c.Targets) == 0 {
 		return fmt.Errorf("No storage targets specified. Provide at least one via the STORAGE_TARGET_N_* environment variables.")
 	}
@@ -271,26 +300,6 @@ func (c *Config) Validate(secretsDir string) error {
 	// bytes here, since the image runs in the C locale.
 	if len(c.StoragePassword) < 8 {
 		return fmt.Errorf("STORAGE_PASSWORD must be at least 8 characters (a Duplicacy requirement); got %d.", len(c.StoragePassword))
-	}
-	if strings.ToLower(c.NotificationService) == "pushover" {
-		for _, s := range []struct{ name, v string }{{"PUSHOVER_USER_KEY", c.PushoverUserKey}, {"PUSHOVER_API_TOKEN", c.PushoverAPIToken}} {
-			if s.v == "" {
-				return fmt.Errorf("Notification service is set to %s, but %s is not set. Provide it as a secret file.", c.NotificationService, s.name)
-			}
-		}
-	}
-	switch c.PruneExhaustiveFrequency {
-	case "off", "daily", "weekly", "monthly":
-	default:
-		return fmt.Errorf("PRUNE_EXHAUSTIVE_FREQUENCY must be one of: off, daily, weekly, monthly (got '%s').", c.PruneExhaustiveFrequency)
-	}
-	if _, err := ParseInterval(c.CheckInterval); err != nil {
-		return fmt.Errorf("CHECK_INTERVAL: %v", err)
-	}
-	for _, t := range c.Targets {
-		if _, err := ParseInterval(t.CheckInterval); err != nil {
-			return fmt.Errorf("STORAGE_TARGET_%d_CHECK_INTERVAL: %v", t.N, err)
-		}
 	}
 	return nil
 }
