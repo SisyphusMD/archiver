@@ -61,6 +61,11 @@ func main() {
 			os.Exit(code)
 		}
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "maintenance" {
+		if code, ok := maintenanceCommand(os.Args[2:]); ok {
+			os.Exit(code)
+		}
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "prune-local" {
 		os.Exit(pruneLocal(os.Args[2:]))
 	}

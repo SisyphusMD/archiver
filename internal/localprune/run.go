@@ -23,6 +23,8 @@ type Options struct {
 	Exhaustive bool
 	InUseDir   string
 	Out        io.Writer // duplicacy's output and this prune's own lines, for the maintenance log
+	Dir        string    // the repository to run in; empty is the working directory
+	Env        []string  // duplicacy's environment; nil is this process's
 }
 
 // Run prunes. It runs alongside any backup (ADR 21): duplicacy's non-exclusive prune never
@@ -84,7 +86,11 @@ func (o Options) prune(ctx context.Context) (bool, error) {
 func (o Options) duplicacy(ctx context.Context, out io.Writer, args ...string) error {
 	cmd := exec.CommandContext(ctx, o.Bin, args...)
 	cmd.Stdout, cmd.Stderr = out, out
-	cmd.Env = os.Environ()
+	cmd.Dir = o.Dir
+	cmd.Env = o.Env
+	if cmd.Env == nil {
+		cmd.Env = os.Environ()
+	}
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()

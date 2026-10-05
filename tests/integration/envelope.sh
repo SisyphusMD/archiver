@@ -93,7 +93,7 @@ printf 'RO-APP-KEY<&>"' >"$SECRETS_DIR/storage_target_3_breakglass_b2_key"
 
 log "confirming records what was printed; status shows it current"
 archiver envelope confirm >/tmp/confirm.out 2>&1 || { cat /tmp/confirm.out; die "confirm failed"; }
-archiver status | grep -q '^Envelope: current, confirmed printed' || die "status does not show a current envelope: $(archiver status | grep Envelope)"
+grep -q '^Envelope: current, confirmed printed' <<<"$(archiver status)" || die "status does not show a current envelope: $(archiver status | grep Envelope)"
 HC="$(archiver healthcheck 2>&1)"
 grep -q 'Envelope:' <<<"$HC" && die "healthcheck warned about a current envelope"
 
@@ -133,7 +133,7 @@ archiver recovery-kit >/dev/null 2>&1 || die "kit run after the mode change fail
 [ "$(sha256sum "$STORE/$KIT" | cut -c1-64)" != "$before" ] || die "the kit was not re-uploaded after an extra's mode changed"
 
 log "the storages changed, so the kit run marks the printed envelope stale, once"
-archiver status | grep -q '^Envelope: OUT OF DATE' || die "status does not show the envelope out of date: $(archiver status | grep Envelope)"
+grep -q '^Envelope: OUT OF DATE' <<<"$(archiver status)" || die "status does not show the envelope out of date: $(archiver status | grep Envelope)"
 # Captured first: healthcheck exits 1 here (the missing extra path logged an ERROR).
 HC="$(archiver healthcheck 2>&1)"
 grep -q 'Envelope: the printed break-glass envelope is out of date' <<<"$HC" || die "healthcheck does not warn"
@@ -143,7 +143,7 @@ archiver recovery-kit force >/dev/null 2>&1 || die "second kit run failed"
 
 log "reprinting and confirming clears it"
 archiver envelope "$OUT" >/dev/null 2>&1 && archiver envelope confirm >/dev/null 2>&1 || die "reprint failed"
-archiver status | grep -q '^Envelope: current' || die "a reprinted envelope is not current"
+grep -q '^Envelope: current' <<<"$(archiver status)" || die "a reprinted envelope is not current"
 
 log "accented letters reach the PDF intact; characters its fonts lack leave the HTML only"
 printf 'p\xc3\xa4ssw\xc3\xb6rd-123' >"$SECRETS_DIR/recovery_password"
