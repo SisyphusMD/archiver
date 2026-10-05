@@ -6,6 +6,7 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOCKFILE_CORE}"
+source_if_not_sourced "${ENVELOPE_STATE_CORE}"
 
 # Small local humanizer (this script deliberately stays off the logging chain).
 age_of() {
@@ -41,6 +42,9 @@ fi
     echo "Maintenance: not running."
   fi
 )
+
+envelope_line="$(envelope_standing age_of | cut -f1)"
+[ -n "${envelope_line}" ] && echo "${envelope_line}"
 
 # Per-storage maintenance recency (written by the maintenance pipeline).
 STATE_FILE="${LOG_DIR}/.maintenance-state"

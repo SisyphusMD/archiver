@@ -6,6 +6,7 @@ if [[ -z "${COMMON_SH_SOURCED}" ]]; then
   source "/opt/archiver/lib/core/common.sh"
 fi
 source_if_not_sourced "${LOCKFILE_CORE}"
+source_if_not_sourced "${ENVELOPE_STATE_CORE}"
 ERRORS=0
 WARNINGS=0
 
@@ -145,6 +146,9 @@ if [ "${CHECK_TOGGLE}" = "true" ] || [ "${PRUNE_TOGGLE}" = "true" ]; then
     warn "Maintenance has never completed (set MAINTENANCE_SCHEDULE or run 'archiver maintenance')"
   fi
 fi
+
+envelope_warning="$(envelope_standing echo | cut -f2)"
+[ -n "${envelope_warning}" ] && warn "Envelope: ${envelope_warning}"
 
 if [ -d "${LOG_DIR}" ]; then
   AVAILABLE_MB=$(df -BM "${LOG_DIR}" | awk 'NR==2 {print $4}' | sed 's/M//')
