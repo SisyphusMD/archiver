@@ -88,27 +88,65 @@ func writeAtomic(path, content string) error {
 	return os.Rename(tmp, path)
 }
 
-// SetStage records where the run is, for stop, pause and status.
-func (l *Lock) SetStage(context, stage string) error {
-	b, err := os.ReadFile(l.Path)
+// edit runs fn holding the kernel lock that serializes edits of the lock file at path: the
+// owner rewrites the file to record its stage while `archiver pause` and `resume` append
+// to it, and an append between the owner's read and rename would otherwise be lost.
+func edit(path string, fn func() error) error {
+	f, err := os.OpenFile(path+".edit", os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		return err
 	}
-	_, rest, _ := strings.Cut(string(b), "\n")
-	return writeAtomic(l.Path, fmt.Sprintf("%d %s %s\n%s", l.pid, context, stage, rest))
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	return fn()
+}
+
+// SetStage records where the run is, for stop, pause and status.
+func (l *Lock) SetStage(context, stage string) error {
+	return edit(l.Path, func() error {
+		b, err := os.ReadFile(l.Path)
+		if err != nil {
+			return err
+		}
+		_, rest, _ := strings.Cut(string(b), "\n")
+		return writeAtomic(l.Path, fmt.Sprintf("%d %s %s\n%s", l.pid, context, stage, rest))
+	})
 }
 
 // Record appends a state event (completed, stopped).
-func (l *Lock) Record(state string) error {
-	f, err := os.OpenFile(l.Path, os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
+func (l *Lock) Record(state string) error { return Append(l.Path, state, l.now()) }
+
+// Append appends a state event to the lock file at path, as the run's owner or as another
+// process (`archiver pause` records "paused" for the run).
+func Append(path, state string, at time.Time) error {
+	return edit(path, func() error {
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(f, "%d %s\n", at.Unix(), state)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
 		return err
+	})
+}
+
+// HeldByGo reports whether a Go pipeline holds the run lock at path. A bash run takes no
+// kernel lock, only the lock file.
+func HeldByGo(path string) bool {
+	f, err := os.OpenFile(path+".flock", os.O_RDWR, 0o644)
+	if err != nil {
+		return false
 	}
-	_, err = fmt.Fprintf(f, "%d %s\n", l.now().Unix(), state)
-	if cerr := f.Close(); err == nil {
-		err = cerr
+	defer f.Close()
+	if syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		return false
 	}
-	return err
+	return true
 }
 
 // StopRequested reports whether `archiver stop` asked this run to end.
