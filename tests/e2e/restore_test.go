@@ -233,7 +233,7 @@ func TestRestoreFullCycleWithMinimalCaps(t *testing.T) {
 		if got := harness.Revisions(t, s.Dir, d.SnapshotID("app")); !slices.Equal(got, []int{1}) {
 			t.Fatalf("after backup, revisions in %s = %v, want [1]", s.Name, got)
 		}
-		checkKit(t, s.Dir, in.keys, "minimal-caps")
+		checkKit(t, s.Dir, "e2e-host", in.keys, "minimal-caps")
 	}
 	if r := d.Maintenance(t); r.Code != 0 {
 		t.Fatalf("maintenance with caps %v exited %d:\n%s", d.Caps, r.Code, r.Output())
@@ -259,7 +259,7 @@ func TestRestoreBackupNeedsOnlyDACOverride(t *testing.T) {
 		if got := harness.Revisions(t, s.Dir, b.SnapshotID("app")); !slices.Equal(got, []int{1}) {
 			t.Fatalf("after backup, revisions in %s = %v, want [1]", s.Name, got)
 		}
-		checkKit(t, s.Dir, in.keys, "DAC_OVERRIDE-only")
+		checkKit(t, s.Dir, "e2e-host", in.keys, "DAC_OVERRIDE-only")
 	}
 
 	r := in.deploy(t, harness.MinimalCaps)
