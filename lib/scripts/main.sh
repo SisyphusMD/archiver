@@ -107,6 +107,12 @@ process_service() {
 
   local pre_status=0 backup_status=0 post_status=0
   update_lock_stage "service:${service_dir}" "pre-backup"
+  # A stop that ended a pause at this boundary comes before the pre hook ran, so there is
+  # nothing for a post hook to undo either: skip the service.
+  if is_stop_requested; then
+    log_message "INFO" "Stop requested before ${SERVICE} service's pre-backup hook; skipping it."
+    return 1
+  fi
   run_hook service_specific_pre_backup_function || pre_status=$?
 
   if [ "${pre_status}" -ne 0 ]; then
@@ -116,8 +122,9 @@ process_service() {
     backup_status=1
   elif ! is_stop_requested; then
     update_lock_stage "service:${service_dir}" "backup"
+    # A stop that ended a pause at the stage boundary skips the backup; the post hook still runs.
     # duplicacy_primary_backup reports its own failures; a stop-triggered return is not an error.
-    duplicacy_primary_backup || backup_status=1
+    is_stop_requested || duplicacy_primary_backup || backup_status=1
   fi
 
   # The post hook undoes the pre hook (restarts what it stopped), so it runs whenever the
@@ -128,6 +135,7 @@ process_service() {
     handle_error "Post-backup hook failed for ${SERVICE} service (exit ${post_status}); check that whatever its pre hook stopped is running again."
   fi
   [ "${backup_status}" -eq 0 ] || return 1
+  wait_while_paused
   if ! is_stop_requested; then
     duplicacy_add_backup || { handle_error "Add backup failed for ${SERVICE} service."; return 1; }
   fi
@@ -174,6 +182,17 @@ send_completion_notification() {
   notify "Backup Complete" "${message}"
 }
 
+# A stop requested by now ends the run before any further storage work.
+honor_stop_before_wrapup() {
+  if is_stop_requested; then
+    log_message "INFO" "Stop requested. Skipping storage wrap-up, invoking stop handler."
+    "${STOP_SCRIPT}" backup
+    # Reached when the stop handler's own signal took it down before it could end this
+    # run; a stopped run is still not a successful one.
+    exit 1
+  fi
+}
+
 main() {
   local last_working_dir=""
 
@@ -190,13 +209,7 @@ main() {
 
   # A stop during the final service's backup returns from process_service before reaching
   # its stop handler; honor it here or the wrap-up below would run a destructive prune.
-  if is_stop_requested; then
-    log_message "INFO" "Stop requested. Skipping storage wrap-up, invoking stop handler."
-    "${STOP_SCRIPT}" backup
-    # Reached when the stop handler's own signal took it down before it could end this
-    # run; a stopped run is still not a successful one.
-    exit 1
-  fi
+  honor_stop_before_wrapup
 
   # cd "" is a silent no-op, so guard explicitly: with no successful service there is
   # nothing to copy, and duplicacy would run from an arbitrary repository directory.
@@ -211,10 +224,13 @@ main() {
   cd "${last_working_dir}" || handle_error "Failed to change to ${last_working_dir} for copies."
 
   update_lock_stage "duplicacy" "copy"
+  honor_stop_before_wrapup   # a stop may have ended a pause at the stage boundary
   duplicacy_copy_backup
 
   # Recovery-kit failures are reported (handle_error -> notification) but never abort the
   # run: the state file leaves failed targets unrecorded so the next run retries them.
+  wait_while_paused
+  honor_stop_before_wrapup
   run_recovery_kit
 
   record_state_change "completed"

@@ -54,13 +54,35 @@ setup() {
 @test "update_lock_stage: rewrites line 1, preserves PID and state history" {
   acquire_lock
   record_state_change "paused"
+  record_state_change "running"
   update_lock_stage "service:/data/svc" "backup"
   [ "$(get_lock_pid)" = "$$" ]
   [ "$(get_lock_context)" = "service:/data/svc" ]
   [ "$(get_lock_stage)" = "backup" ]
-  # history intact: running then paused
+  # history intact: running, paused, running
   sed -n '2p' "${LOCKFILE}" | grep -qE '^[0-9]+ running$'
   sed -n '3p' "${LOCKFILE}" | grep -qE '^[0-9]+ paused$'
+  sed -n '4p' "${LOCKFILE}" | grep -qE '^[0-9]+ running$'
+}
+
+@test "update_lock_stage waits while the run is paused, until resumed" {
+  acquire_lock
+  record_state_change "paused"
+  (sleep 2; record_state_change "running") &
+  start=$(date +%s)
+  update_lock_stage "service:/data/svc" "backup"
+  [ $(( $(date +%s) - start )) -ge 1 ]
+  [ "$(get_lock_stage)" = "backup" ]
+}
+
+@test "update_lock_stage stops waiting when a stop is requested" {
+  acquire_lock
+  record_state_change "paused"
+  (sleep 2; request_stop) &
+  start=$(date +%s)
+  update_lock_stage "service:/data/svc" "backup"
+  [ $(( $(date +%s) - start )) -ge 1 ]
+  is_stop_requested
 }
 
 @test "is_paused reflects the LAST state record" {

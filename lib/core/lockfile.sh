@@ -37,6 +37,10 @@ update_lock_stage() {
   local pid
   local temp_file
 
+  # Every step starts here, so this is where a paused run waits: pause stops what is
+  # running, and a step that would start after it must not run unpaused.
+  wait_while_paused
+
   pid=$(get_lock_pid)
   temp_file="${ARCHIVER_LOCKFILE}.tmp"
 
@@ -187,6 +191,13 @@ release_lock() {
 
 is_stop_requested() {
   [ -f "${ARCHIVER_STOP_FLAG_FILE}" ]
+}
+
+# wait_while_paused returns once the run is not paused, or a stop has been requested.
+wait_while_paused() {
+  while is_paused && ! is_stop_requested; do
+    sleep 1
+  done
 }
 
 request_stop() {
