@@ -41,8 +41,23 @@ func images(t *testing.T) (baseline, current string) {
 // written by the baseline release is taken over by the image under test, which must keep
 // the same snapshot ID, extend the same storages (primary and bit-identical copy), restore
 // what the baseline wrote, and leave data the baseline can still restore, so a rollback
-// works. Both kits must open with stock openssl and carry the keys.
+// works. Both kits must open with stock openssl and carry the keys. The second installation
+// takes its snapshot host from an inherited HOSTNAME and has storage names Duplicacy needs
+// sanitized, which the baseline wrote into the service's repository preferences.
 func TestCrossVersionUpgrade(t *testing.T) {
+	for _, c := range []struct {
+		name               string
+		hostEnv            string
+		primary, secondary string
+	}{
+		{"plain", "", "primary", "offsite"},
+		{"hostname-env-sanitized-names", "job-stable-name", "Primary-1", "off-site 2"},
+	} {
+		t.Run(c.name, func(t *testing.T) { crossVersion(t, c.hostEnv, c.primary, c.secondary) })
+	}
+}
+
+func crossVersion(t *testing.T, hostEnv, primaryName, secondaryName string) {
 	baseline, current := images(t)
 	work := harness.WorkDir(t)
 	svc := filepath.Join(work, "svc", "app")
@@ -58,16 +73,21 @@ func TestCrossVersionUpgrade(t *testing.T) {
 
 	keys := harness.NewKeys(t, baseline, keysDir)
 	install := func(image string) *harness.Deployment {
-		return &harness.Deployment{
+		d := &harness.Deployment{
 			Image:            image,
 			Hostname:         "e2e-host",
 			Services:         map[string]string{"app": svc},
-			Storages:         []harness.Storage{{Name: "primary", Dir: primary}, {Name: "offsite", Dir: copyDir}},
+			Storages:         []harness.Storage{{Name: primaryName, Dir: primary}, {Name: secondaryName, Dir: copyDir}},
 			Keys:             keys,
 			RecoveryPassword: "e2e-recovery-password",
 			RestoreRoot:      restores,
 		}
+		if hostEnv != "" {
+			d.Extra = map[string]string{"HOSTNAME": hostEnv}
+		}
+		return d
 	}
+	host := install(baseline).SnapshotHost()
 
 	writeFixtures(t, svc, 1)
 	v1 := harness.Snapshot(t, svc)
@@ -78,7 +98,9 @@ func TestCrossVersionUpgrade(t *testing.T) {
 		t.Fatalf("baseline backup exited %d:\n%s", r.Code, r.Output())
 	}
 	old.Stop(t)
-	checkStorages(t, "baseline", []int{1}, primary, copyDir, keys)
+	// 0.11.0 named its kit after the container's hostname even when HOSTNAME set the snapshot
+	// host; later releases name it after the snapshot host. Either kit opens on its own.
+	checkStorages(t, "baseline", host, "e2e-host", []int{1}, primary, copyDir, keys)
 
 	writeFixtures(t, svc, 2)
 	v2 := harness.Snapshot(t, svc)
@@ -88,14 +110,14 @@ func TestCrossVersionUpgrade(t *testing.T) {
 	if r := cur.Archiver(t, nil, "backup"); r.Code != 0 {
 		t.Fatalf("backup by %s over baseline data exited %d:\n%s", current, r.Code, r.Output())
 	}
-	checkStorages(t, "current", []int{1, 2}, primary, copyDir, keys)
+	checkStorages(t, "current", host, host, []int{1, 2}, primary, copyDir, keys)
 
 	for _, c := range []struct {
 		storage string
 		rev     int
 		want    harness.Tree
 	}{
-		{"primary", 1, v1}, {"primary", 2, v2}, {"offsite", 1, v1}, {"offsite", 2, v2},
+		{primaryName, 1, v1}, {primaryName, 2, v2}, {secondaryName, 1, v1}, {secondaryName, 2, v2},
 	} {
 		got := harness.Snapshot(t, cur.Restore(t, "app", c.rev, c.storage))
 		if d := c.want.Diff(got); len(d) > 0 {
@@ -106,7 +128,7 @@ func TestCrossVersionUpgrade(t *testing.T) {
 
 	back := install(baseline)
 	back.Start(t)
-	for _, storage := range []string{"primary", "offsite"} {
+	for _, storage := range []string{primaryName, secondaryName} {
 		got := harness.Snapshot(t, back.Restore(t, "app", 2, storage))
 		if d := v2.Diff(got); len(d) > 0 {
 			t.Errorf("baseline restore of the upgraded revision from %s differs: %v", storage, d)
@@ -117,14 +139,14 @@ func TestCrossVersionUpgrade(t *testing.T) {
 // checkStorages asserts the state both storages must be in after a backup by who: the
 // same snapshot ID holding exactly wantRevs, a copy with exactly the primary's chunks and
 // snapshot files (what -bit-identical promises), and a recovery kit on each.
-func checkStorages(t *testing.T, who string, wantRevs []int, primary, copyDir string, k harness.Keys) {
+func checkStorages(t *testing.T, who, host, kitHost string, wantRevs []int, primary, copyDir string, k harness.Keys) {
 	t.Helper()
-	const id = "e2e-host-app"
+	id := host + "-app"
 	for _, dir := range []string{primary, copyDir} {
 		if got := harness.Revisions(t, dir, id); !slices.Equal(got, wantRevs) {
 			t.Fatalf("after the %s backup, revisions of %s in %s = %v, want %v", who, id, dir, got, wantRevs)
 		}
-		checkKit(t, dir, k, who)
+		checkKit(t, dir, kitHost, k, who)
 	}
 	for _, sub := range []string{"chunks", "snapshots"} {
 		p, c := harness.ObjectNames(t, primary, sub), harness.ObjectNames(t, copyDir, sub)
@@ -134,9 +156,9 @@ func checkStorages(t *testing.T, who string, wantRevs []int, primary, copyDir st
 	}
 }
 
-func checkKit(t *testing.T, storage string, k harness.Keys, who string) {
+func checkKit(t *testing.T, storage, host string, k harness.Keys, who string) {
 	t.Helper()
-	dir := harness.OpenKit(t, harness.KitPath(storage, "e2e-host"), "e2e-recovery-password")
+	dir := harness.OpenKit(t, harness.KitPath(storage, host), "e2e-recovery-password")
 	priv, err := os.ReadFile(k.PrivatePath)
 	if err != nil {
 		t.Fatal(err)

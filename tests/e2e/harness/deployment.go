@@ -47,7 +47,16 @@ type Deployment struct {
 
 // SnapshotID is the ID archiver gives a service of this deployment.
 func (d *Deployment) SnapshotID(service string) string {
-	return d.Hostname + "-" + service
+	return d.SnapshotHost() + "-" + service
+}
+
+// SnapshotHost is the host part of the snapshot IDs and the kit's name: an inherited HOSTNAME
+// wins over the container's hostname (a Kubernetes Job's stable name).
+func (d *Deployment) SnapshotHost() string {
+	if h := d.Extra["HOSTNAME"]; h != "" {
+		return h
+	}
+	return d.Hostname
 }
 
 // Start runs the container in manual mode (no schedule) and removes it after the test.
