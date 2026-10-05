@@ -250,6 +250,10 @@ func TestRunsPruneOnlyInMaintenance(t *testing.T) {
 		t.Fatalf("the first maintenance did not prune exhaustively: the orphan is %s, want %s", s, harness.ChunkFossil)
 	}
 
+	// Duplicacy deletes a fossil only after a backup that started later than the collection
+	// was made, and compares at one-second resolution: a backup in the same second as the
+	// first maintenance's prune does not count.
+	time.Sleep(1100 * time.Millisecond)
 	b := harness.PlantOrphanChunk(t, in.storage)
 	writeSmall(t, in.svc, "two")
 	in.mustBackup(t, 1, 2)
