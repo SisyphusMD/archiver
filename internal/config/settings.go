@@ -189,3 +189,21 @@ func writeMode(path string, data []byte, mode os.FileMode) error {
 	}
 	return os.Chmod(path, mode)
 }
+
+// NewSettings is Settings from values (settings and secrets by name; any other name is
+// ignored), with SERVICE_DIRECTORIES given as its entries.
+func NewSettings(serviceDirectories []string, values map[string]string) *Settings {
+	s := &Settings{ServiceDirectories: strings.Join(serviceDirectories, ":")}
+	for name, v := range values {
+		switch {
+		case IsSetting(name) && name != "SERVICE_DIRECTORIES":
+			s.NonSecret = append(s.NonSecret, Setting{name, v})
+		case IsSecret(name):
+			s.Secrets = append(s.Secrets, Setting{name, v})
+		}
+	}
+	s.NonSecret = append(s.NonSecret, Setting{"SERVICE_DIRECTORIES", s.ServiceDirectories})
+	sort.Slice(s.NonSecret, func(i, j int) bool { return versionLess(s.NonSecret[i].Name, s.NonSecret[j].Name) })
+	sort.Slice(s.Secrets, func(i, j int) bool { return versionLess(s.Secrets[i].Name, s.Secrets[j].Name) })
+	return s
+}

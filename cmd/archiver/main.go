@@ -25,9 +25,8 @@ import (
 )
 
 const (
-	bashCLI    = "/opt/archiver/archiver.sh"
-	initScript = "/opt/archiver/lib/scripts/init.sh"
-	selfPath   = "/usr/local/bin/archiver"
+	bashCLI  = "/opt/archiver/archiver.sh"
+	selfPath = "/usr/local/bin/archiver"
 )
 
 // ported maps each command implemented in Go to its entry point, which returns the exit
@@ -70,6 +69,10 @@ func main() {
 			os.Exit(code)
 		}
 	}
+	// Extra arguments were always ignored.
+	if len(os.Args) >= 2 && os.Args[1] == "init" {
+		os.Exit(initCommand())
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "recovery-kit" {
 		if code, ok := recoveryKitCommand(os.Args[2:]); ok {
 			os.Exit(code)
@@ -101,12 +104,7 @@ func main() {
 }
 
 // route picks the bash program that implements a command line and the arguments it gets.
-// init has no archiver.sh verb: the entrypoint used to run its script directly, and now
-// comes through here like every other caller.
 func route(args []string) (string, []string) {
-	if len(args) > 0 && args[0] == "init" {
-		return initScript, args[1:]
-	}
 	return bashCLI, args
 }
 

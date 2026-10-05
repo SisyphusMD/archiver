@@ -22,7 +22,6 @@ ARG DEBIAN_MIRROR=http://deb.debian.org
 RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.list.d/contrib.list && \
     { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/contrib.list 2>/dev/null || true; } && \
     apt-get update && apt-get install -y \
-    expect \
     openssh-client \
     openssl \
     curl \
