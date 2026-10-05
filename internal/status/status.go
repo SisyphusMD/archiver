@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/copier"
+	"github.com/SisyphusMD/archiver/internal/envelope"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 )
@@ -48,6 +49,10 @@ func Write(w io.Writer, l layout.Layout, now time.Time) error {
 		for _, n := range names {
 			fmt.Fprintf(w, "  %s: %s\n", n, describe(states[n], now))
 		}
+	}
+
+	if line, _ := envelope.Status(l, now, Age); line != "" {
+		fmt.Fprintln(w, line)
 	}
 
 	storages, err := lockstate.ReadMaintenance(l.MaintenanceState())
