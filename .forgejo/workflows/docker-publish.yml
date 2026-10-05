@@ -547,7 +547,7 @@ jobs:
           # served (nas services/image-mirror retention). quay garbage-collects a tag's old
           # digest when it re-pushes the tag, so a direct pin 404s before Renovate bumps it.
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:249b92db7297e5c801e19172dbb3b56fde88094a49740a5ededac8c2958bf2c0
+          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:dcb473551681437c514d5eabd9d01f7f69d5be1218d36b9be3ad1a40e5add9e4
 
           docker volume create skopeo-stage >/dev/null
           trap 'docker volume rm -f skopeo-stage >/dev/null 2>&1' EXIT
@@ -586,7 +586,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:249b92db7297e5c801e19172dbb3b56fde88094a49740a5ededac8c2958bf2c0
+          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:dcb473551681437c514d5eabd9d01f7f69d5be1218d36b9be3ad1a40e5add9e4
           docker run --rm \
             -e SRC_CREDS -e DST_CREDS \
             "$SKOPEO_IMAGE" \
@@ -612,7 +612,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:249b92db7297e5c801e19172dbb3b56fde88094a49740a5ededac8c2958bf2c0
+          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:dcb473551681437c514d5eabd9d01f7f69d5be1218d36b9be3ad1a40e5add9e4
           while IFS= read -r src; do
             [ -z "$src" ] && continue
             dst="${src/forgejo.bryantserver.com/ghcr.io}"
