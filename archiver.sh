@@ -13,7 +13,7 @@ source_if_not_sourced "${REQUIRE_CONTAINER_CORE}"
 source_if_not_sourced "${LOCKFILE_CORE}"
 
 usage() {
-  echo "Usage: $0 {backup|maintenance|stop|pause|resume|logs|status|bundle|migrate|recovery-kit|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
+  echo "Usage: $0 {backup|maintenance|stop|pause|resume|logs|status|bundle|migrate|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help}"
   echo "Note:"
   echo "  backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background."
   echo "  maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune."
@@ -22,6 +22,7 @@ usage() {
   echo "  bundle requires a subcommand: export or import"
   echo "  migrate takes an optional OUTPUT_DIR (default /opt/archiver/migrate): writes the effective config as an env file + secret files."
   echo "  recovery-kit uploads the encrypted recovery kit to every storage target; 'recovery-kit force' re-uploads even if unchanged."
+  echo "  envelope [DIR] writes the printable break-glass envelope (default /opt/archiver/envelope); 'envelope confirm' records it as printed."
   echo "  pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments."
   echo "  auto-restore and snapshot-exists are non-interactive and driven by environment variables."
   exit 1
@@ -192,6 +193,14 @@ case "${command}" in
     fi
     "${MIGRATE_SCRIPT}" "${@}"
     rc=$?
+    ;;
+  envelope)
+    if [[ $# -gt 1 ]]; then
+      echo "'envelope' takes at most one argument: an output directory, or confirm."
+      usage
+    fi
+    "${ENVELOPE_SCRIPT}" "${@}"
+    exit $?
     ;;
   recovery-kit)
     if [[ $# -gt 1 || ( $# -eq 1 && "${1}" != "force" ) ]]; then

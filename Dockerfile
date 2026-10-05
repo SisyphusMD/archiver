@@ -14,6 +14,7 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
     ca-certificates \
     tzdata \
     sqlite3 \
+    qrencode \
     procps \
     nano \
     vim \

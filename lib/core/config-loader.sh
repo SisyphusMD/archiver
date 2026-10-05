@@ -27,8 +27,8 @@ SECRETS_DIR="${SECRETS_DIR:-/run/secrets}"
 # The user-config var surface, as two regexes over variable names. Single source of truth for
 # the load path AND the serializers in config-serialize.sh (migrate / mode-agnostic bundle
 # export): adding a field here is picked up by both, so a serializer can't silently drop it.
-CONFIG_NONSECRET_VARS_RE='^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|DUPLICACY_THREADS|NOTIFICATION_SERVICE|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION))$'
-CONFIG_SECRET_VARS_RE='^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET))$'
+CONFIG_NONSECRET_VARS_RE='^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|DUPLICACY_THREADS|NOTIFICATION_SERVICE|RECOVERY_KIT_EXTRA_PATHS|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION|BREAKGLASS_SFTP_USER))$'
+CONFIG_SECRET_VARS_RE='^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET|BREAKGLASS_(B2_ID|B2_KEY|S3_ID|S3_SECRET|SSH_KEY)))$'
 
 # Secrets must come from the bundle or a file, never a plain env var (which would leak via
 # /proc and `docker inspect`). Drop any passed in the environment before loading, so the
@@ -99,8 +99,11 @@ resolve_secret_files() {
     type_var="STORAGE_TARGET_${n}_TYPE"
     type="${!type_var}"
     case "${type}" in
-      b2) resolve_secret "STORAGE_TARGET_${n}_B2_ID";  resolve_secret "STORAGE_TARGET_${n}_B2_KEY" ;;
-      s3) resolve_secret "STORAGE_TARGET_${n}_S3_ID";  resolve_secret "STORAGE_TARGET_${n}_S3_SECRET" ;;
+      b2) resolve_secret "STORAGE_TARGET_${n}_B2_ID";  resolve_secret "STORAGE_TARGET_${n}_B2_KEY"
+          resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_B2_ID"; resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_B2_KEY" ;;
+      s3) resolve_secret "STORAGE_TARGET_${n}_S3_ID";  resolve_secret "STORAGE_TARGET_${n}_S3_SECRET"
+          resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_S3_ID"; resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_S3_SECRET" ;;
+      sftp) resolve_secret "STORAGE_TARGET_${n}_BREAKGLASS_SSH_KEY" ;;
     esac
     n=$((n + 1))
   done
@@ -150,6 +153,8 @@ if [[ "${ARCHIVER_CONFIG_IGNORE_OVERLAYS:-}" != "true" ]]; then
   resolve_secret_files
 fi
 normalize_service_directories
+# Newline-separated paths are accepted too; colons keep the value one line in archiver.env.
+[[ -n "${RECOVERY_KIT_EXTRA_PATHS:-}" ]] && RECOVERY_KIT_EXTRA_PATHS="${RECOVERY_KIT_EXTRA_PATHS//$'\n'/:}"
 # Deprecated-name translation, silent (the entrypoint warns once at container start;
 # warning here would spam the log from every command, incl. the 5-minute healthcheck).
 # Translating before anything reads the value means the serializers and the recovery kit

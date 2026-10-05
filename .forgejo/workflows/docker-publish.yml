@@ -273,6 +273,10 @@ jobs:
         run: |
           docker run -i --rm --hostname sd-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/service-dirs-reported.sh
+      - name: Break-glass envelope and kit extras
+        run: |
+          docker run -i --rm --hostname ev-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/envelope.sh
       - name: Scheduler smoke test (supercronic fires a job without SETGID)
         # Same hardened cap set as the round-trip, minus SETGID — proves the scheduler
         # runs scheduled jobs without the capability Phase 2 removed.

@@ -47,6 +47,8 @@ services:
       # - storage_target_1_b2_key
       # - storage_target_1_s3_id  # only for s3 targets
       # - storage_target_1_s3_secret
+      # - storage_target_1_breakglass_b2_id   # optional read-only key for the break-glass
+      # - storage_target_1_breakglass_b2_key  # envelope (README "Break-glass envelope")
 
     volumes:
       - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
@@ -75,6 +77,8 @@ secrets:
   # storage_target_1_b2_key:    { file: ./secrets/storage_target_1_b2_key }
   # storage_target_1_s3_id:     { file: ./secrets/storage_target_1_s3_id }
   # storage_target_1_s3_secret: { file: ./secrets/storage_target_1_s3_secret }
+  # storage_target_1_breakglass_b2_id:  { file: ./secrets/storage_target_1_breakglass_b2_id }
+  # storage_target_1_breakglass_b2_key: { file: ./secrets/storage_target_1_breakglass_b2_key }
 
 # ---------------------------------------------------------------------------------------
 # Bundle-mode alternative (transitional / cold-restore). The encrypted bundle carries the
