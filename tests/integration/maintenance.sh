@@ -67,7 +67,7 @@ grep -q "^local " "$STATE" || die "no state row for local"
 grep -q "^second " "$STATE" || die "no state row for second"
 
 log "status shows maintenance recency"
-archiver status | grep -q "Storage maintenance (last success)" || die "status lacks maintenance recency"
+grep -q "Storage maintenance (last success)" <<<"$(archiver status)" || die "status lacks maintenance recency"
 
 log "maintenance run 2: exhaustive NOT due (daily frequency, just ran)"
 archiver maintenance || die "maintenance run 2 exited non-zero"
