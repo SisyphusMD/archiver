@@ -17,8 +17,6 @@ import (
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
-const recoveryKitStep = "/opt/archiver/lib/scripts/recovery-kit-step.sh"
-
 // goPipeline reports whether this deployment's backups run in Go. Services that all still
 // carry service-backup-settings.sh stay on the bash pipeline until migrated.
 // ARCHIVER_PIPELINE=bash or =go overrides the choice.
@@ -92,7 +90,7 @@ func backupCommand(args []string) (int, bool) {
 		Stdout:          os.Stdout,
 		Stderr:          os.Stderr,
 		Duplicacy:       "duplicacy",
-		RecoveryKitStep: recoveryKitStep,
+		RecoveryKitStep: []string{selfPath, "recovery-kit-step"},
 		Signals:         sigs,
 	}
 	stop := make(chan struct{})

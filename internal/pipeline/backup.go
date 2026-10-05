@@ -37,8 +37,8 @@ type Backup struct {
 	Environ         []string
 	Hostname        string // the host part of snapshot IDs
 	Stdout, Stderr  io.Writer
-	Duplicacy       string // the duplicacy binary
-	RecoveryKitStep string // lib/scripts/recovery-kit-step.sh
+	Duplicacy       string   // the duplicacy binary
+	RecoveryKitStep []string // the kit step's command line: `archiver recovery-kit-step`
 	Signals         <-chan os.Signal
 
 	cfg    *config.Config
@@ -678,7 +678,7 @@ func (b *Backup) copyLegs(dir string, names []string) (failed []string) {
 // KitDeadline bounds the recovery-kit step when copy workers keep the secondaries.
 var KitDeadline = 30 * time.Minute
 
-// recoveryKit refreshes the recovery kit through the bash step. Its errors were logged and
+// recoveryKit refreshes the recovery kit through its step. Its errors were logged and
 // notified there; one is counted here so the run still fails.
 func (b *Backup) recoveryKit() {
 	if b.cfg.RecoveryPassword == "" {
@@ -693,7 +693,7 @@ func (b *Backup) recoveryKit() {
 		defer os.Remove(marker.Name())
 		b.kitMarker = marker.Name()
 	}
-	p, err := b.startPlain(b.RecoveryKitStep)
+	p, err := b.startPlain(b.RecoveryKitStep[0], b.RecoveryKitStep[1:]...)
 	if err != nil {
 		b.log.Message(logging.Error, "", "Recovery kit: cannot run its step: "+err.Error())
 		return
@@ -730,7 +730,7 @@ func (b *Backup) recoveryKit() {
 
 // startPlain runs a program with its output passed through, not logged: the recovery-kit
 // step logs for itself.
-func (b *Backup) startPlain(path string) (*proc.Proc, error) {
+func (b *Backup) startPlain(path string, args ...string) (*proc.Proc, error) {
 	env := b.Environ
 	if b.kitMarker != "" {
 		env = append(append([]string(nil), env...), "ARCHIVER_KIT_PRIMARY_MARKER="+b.kitMarker)
@@ -743,7 +743,7 @@ func (b *Backup) startPlain(path string) (*proc.Proc, error) {
 		sort.Strings(names)
 		env = append(append([]string(nil), env...), "ARCHIVER_KIT_SKIP_TARGETS="+strings.Join(names, " "))
 	}
-	return b.start(proc.Spec{Path: path, Env: env, Output: b.Stdout, Group: true})
+	return b.start(proc.Spec{Path: path, Args: args, Env: env, Output: b.Stdout, Group: true})
 }
 
 func (b *Backup) complete() {
