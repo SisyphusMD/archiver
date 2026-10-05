@@ -33,11 +33,10 @@ printf 'decoy-secret' >"$SECRETS_DIR/storage_password"
 
 log "drive init with scripted answers (TWO directories, local target, no pushover)"
 # In production the ENTRYPOINT dispatches 'init' (docker run ... init); here the entrypoint
-# is bypassed, so call the script directly. Answer order: Directories (comma-separated) /
-# storage name / type / local path, then two single-char (y/N) reads with no trailing
-# newline.
-printf '/data/fixtures/,/data/other/\nlocal\nlocal\n/backup-store\nnn' \
-  | bash /opt/archiver/lib/scripts/init.sh >/tmp/init.out 2>&1 || { tail -30 /tmp/init.out; die "init exited non-zero"; }
+# is bypassed. Answer order: Directories (comma-separated) / storage name / type / local
+# path, then no to another storage and no to Pushover.
+printf '/data/fixtures/,/data/other/\nlocal\nlocal\n/backup-store\nn\nn\n' \
+  | archiver init >/tmp/init.out 2>&1 || { tail -30 /tmp/init.out; die "init exited non-zero"; }
 
 log "init must have produced the env-native materials, and nothing bundle-era"
 [ -f "$ENVNATIVE/archiver.env" ] || die "no env-native/archiver.env"

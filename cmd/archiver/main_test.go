@@ -19,8 +19,6 @@ func TestRoute(t *testing.T) {
 		{nil, bashCLI, nil},
 		{[]string{"backup", "--detach"}, bashCLI, []string{"backup", "--detach"}},
 		{[]string{"stop", "maintenance"}, bashCLI, []string{"stop", "maintenance"}},
-		{[]string{"init"}, initScript, []string{}},
-		// Only a leading init is the init command; anywhere else it is an argument.
 		{[]string{"help", "init"}, bashCLI, []string{"help", "init"}},
 	} {
 		target, args := route(c.args)
