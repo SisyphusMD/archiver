@@ -207,3 +207,13 @@ func NewSettings(serviceDirectories []string, values map[string]string) *Setting
 	sort.Slice(s.Secrets, func(i, j int) bool { return versionLess(s.Secrets[i].Name, s.Secrets[j].Name) })
 	return s
 }
+
+// Secret returns a secret's value, empty when it is not set.
+func (s *Settings) Secret(name string) string {
+	for _, kv := range s.Secrets {
+		if kv.Name == name {
+			return kv.Value
+		}
+	}
+	return ""
+}

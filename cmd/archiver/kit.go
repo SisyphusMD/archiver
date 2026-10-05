@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/SisyphusMD/archiver/internal/config"
@@ -13,8 +12,6 @@ import (
 	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/pipeline"
 )
-
-const envelopeCheckScript = "/opt/archiver/lib/scripts/envelope-check.sh"
 
 // kitRun is a kit refresh logging to the backup log, its errors notified as the backup's.
 func kitRun(src config.Source) *kit.Run {
@@ -28,18 +25,15 @@ func kitRun(src config.Source) *kit.Run {
 		}
 		log.Notify = n.Send
 	}
-	return &kit.Run{
+	r := &kit.Run{
 		Layout:   l,
 		Source:   src,
 		Environ:  os.Environ(),
 		Hostname: host,
 		Log:      log,
-		EnvelopeCheck: func() error {
-			cmd := exec.Command(envelopeCheckScript)
-			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-			return cmd.Run()
-		},
 	}
+	r.EnvelopeCheck = func() error { return envelopeCheck(l, src, log, log.Notify) }
+	return r
 }
 
 // recoveryKitCommand runs `archiver recovery-kit [force]`; ok is false for any other command
