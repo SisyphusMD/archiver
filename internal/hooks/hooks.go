@@ -24,6 +24,10 @@ const (
 	Filters    = "filters"
 	// Legacy is the sourced-bash settings file the Go pipeline does not run.
 	Legacy = "service-backup-settings.sh"
+	// PostRestore runs after a restore, when asked for; LegacyRestore is its old name, a
+	// script run with bash when no PostRestore is present.
+	PostRestore   = "post-restore"
+	LegacyRestore = "restore-service.sh"
 )
 
 // Results passed to post-backup in ARCHIVER_BACKUP_RESULT.
@@ -87,6 +91,18 @@ func Environ(base []string, s Service, result string) []string {
 		env = append(env, "ARCHIVER_BACKUP_RESULT="+result)
 	}
 	return env
+}
+
+// RestoreEnviron is the environment of a post-restore hook: Environ without the backup's
+// variables, plus the revision restored and the storage it came from.
+func RestoreEnviron(base []string, s Service, revision int, storage string) []string {
+	return append(withoutSecrets(base),
+		"ARCHIVER_SERVICE="+s.Name,
+		"ARCHIVER_SERVICE_DIR="+s.Dir,
+		"ARCHIVER_SNAPSHOT_ID="+s.SnapshotID,
+		fmt.Sprintf("ARCHIVER_RESTORE_REVISION=%d", revision),
+		"ARCHIVER_RESTORE_STORAGE="+storage,
+	)
 }
 
 // Run runs one hook and returns its exit code.

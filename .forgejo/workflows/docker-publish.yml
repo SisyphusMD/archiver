@@ -286,6 +286,10 @@ jobs:
         run: |
           docker run -i --rm --hostname re-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/restore-extras.sh
+      - name: Restore commands (snapshot-exists, auto-restore fallback/codes, auto-restore-all, post-restore, restored-settings migration)
+        run: |
+          docker run -i --rm --hostname rc-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/restore-commands.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \

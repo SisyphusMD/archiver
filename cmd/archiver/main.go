@@ -44,7 +44,11 @@ var ported = map[string]func() int{
 	"healthcheck": func() int {
 		return health.Run(os.Stdout, layout.Default(), os.Getenv, time.Now())
 	},
-	"logs": followLogs,
+	"logs":             followLogs,
+	"restore":          func() int { return restoreEnv().Interactive() },
+	"auto-restore":     func() int { return restoreEnv().Auto() },
+	"auto-restore-all": func() int { return restoreEnv().AutoAll() },
+	"snapshot-exists":  func() int { return restoreEnv().SnapshotExists() },
 }
 
 func main() {

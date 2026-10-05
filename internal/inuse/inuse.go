@@ -109,6 +109,11 @@ func (h *Holding) Narrow(revs []Revision) error {
 	return nil
 }
 
+// File is the locked registration file. A child process given it (exec.Cmd.ExtraFiles)
+// shares the lock, so the registration stays live for as long as the child runs, even if
+// this process dies first. Narrow replaces the file.
+func (h *Holding) File() *os.File { return h.f }
+
 // Release ends the registration.
 func (h *Holding) Release() {
 	if h == nil || h.f == nil {

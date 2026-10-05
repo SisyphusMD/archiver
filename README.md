@@ -828,12 +828,12 @@ Iterates storage targets in configured order and restores from the first target 
 | `DELETE_EXTRA` | No | Non-empty enables `-delete` |
 | `HASH_COMPARE` | No | Non-empty enables `-hash` |
 | `IGNORE_OWNERSHIP` | No | Non-empty enables `-ignore-owner` |
-| `RUN_RESTORE_SERVICE` | No | Non-empty runs `./restore-service.sh` after a successful file restore (DB reload, stack restart); its exit code propagates |
+| `RUN_RESTORE_SERVICE` | No | Non-empty runs the restored directory's restore hook (`post-restore`, or `restore-service.sh`) after a successful file restore (DB reload, stack restart); its failure fails the restore |
 | `RESTORE_THREADS` | No | Override download thread count (default matches `DUPLICACY_THREADS`) |
 
 Exit codes:
-- `0` — snapshot restored (and, if `RUN_RESTORE_SERVICE` set, `restore-service.sh` succeeded)
-- `1` — snapshot not found on any reachable target, the restore itself failed, or `restore-service.sh` failed
+- `0` — snapshot restored (and, if `RUN_RESTORE_SERVICE` set, the restore hook succeeded)
+- `1` — snapshot not found on any reachable target, the restore itself failed, or the restore hook failed (whatever code it exited with)
 - `2` — all targets unreachable, or invalid env
 - `3` — an Archiver backup is in progress; restore skipped
 
@@ -919,11 +919,13 @@ Exit codes count. If `pre-backup` exits non-zero (the dump above failing, say), 
 
 ### Custom Restore Scripts
 
-Create `restore-service.sh` in any service directory to run post-restore tasks:
+Create an executable `post-restore` in any service directory (and include it in the service's `filters`, if it has one) to run post-restore tasks. `archiver restore` offers to run it once the files are back; `auto-restore` and `auto-restore-all` run it when `RUN_RESTORE_SERVICE` is set. It runs in the restored directory and receives `ARCHIVER_SERVICE`, `ARCHIVER_SERVICE_DIR`, `ARCHIVER_SNAPSHOT_ID`, `ARCHIVER_RESTORE_REVISION` and `ARCHIVER_RESTORE_STORAGE`, never storage credentials or the RSA passphrase. A non-zero exit fails the restore. A directory without `post-restore` but with the older `restore-service.sh` runs that instead, with `bash restore-service.sh`, so existing scripts and backups need no change.
+
+A restore that brings a `service-backup-settings.sh` back into a configured service directory migrates it as `archiver migrate hooks` would, unless the deployment still runs the bash pipeline. Restores anywhere else leave the files exactly as backed up.
 
 ```bash
 #!/bin/bash
-# Runs after restoration completes
+# post-restore: runs after restoration completes
 
 echo "Importing database..."
 docker exec postgres-container psql -U user -d dbname -f /backup/dump.sql
