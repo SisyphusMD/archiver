@@ -18,16 +18,18 @@ import (
 	"github.com/SisyphusMD/archiver/internal/config"
 )
 
+// uploaders place the kit and its README on a storage of each type, returning OK, Failed or
+// Unverified. Duplicacy cannot upload arbitrary files, so each type needs its own.
+var uploaders = map[string]func(r *Run, t config.Target, kit, readme string) int{
+	"local": (*Run).uploadLocal,
+	"sftp":  (*Run).uploadSFTP,
+	"b2":    (*Run).uploadB2,
+	"s3":    (*Run).uploadS3,
+}
+
 func (r *Run) upload(t config.Target, kit, readme string) int {
-	switch t.Type {
-	case "local":
-		return r.uploadLocal(t, kit, readme)
-	case "sftp":
-		return r.uploadSFTP(t, kit, readme)
-	case "b2":
-		return r.uploadB2(t, kit, readme)
-	case "s3":
-		return r.uploadS3(t, kit, readme)
+	if up, ok := uploaders[t.Type]; ok {
+		return up(r, t, kit, readme)
 	}
 	return Failed
 }

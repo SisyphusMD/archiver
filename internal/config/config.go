@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -52,6 +53,11 @@ type Target struct {
 	S3ID     string
 	S3Secret string
 }
+
+// StorageTypes are the storage types a configuration may use. Every one needs, besides its
+// settings here, a URL (Target.URL), credentials (DuplicacyEnv) and a recovery-kit uploader;
+// internal/kit's tests fail for a type without one.
+var StorageTypes = []string{"local", "sftp", "b2", "s3"}
 
 // Config is the resolved configuration.
 type Config struct {
@@ -252,6 +258,9 @@ func (c *Config) ValidateStorage(secretsDir string) error {
 		}
 		missingSecret := func(kind, setting string) error {
 			return fmt.Errorf("Missing %s secret %s for the %s storage. Secrets are file-only (never env vars): provide %s or set %s%s_FILE.", kind, setting, t.Name, secretFile(p+setting), p, setting)
+		}
+		if !slices.Contains(StorageTypes, t.Type) {
+			return fmt.Errorf("The storage type %s is not supported. Please check your %sTYPE configuration.", t.Type, p)
 		}
 		switch t.Type {
 		case "local":
