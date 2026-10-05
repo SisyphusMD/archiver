@@ -73,6 +73,11 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "init" {
 		os.Exit(initCommand())
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "envelope" {
+		if code, ok := envelopeCommand(os.Args[2:]); ok {
+			os.Exit(code)
+		}
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "recovery-kit" {
 		if code, ok := recoveryKitCommand(os.Args[2:]); ok {
 			os.Exit(code)
