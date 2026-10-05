@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	bashCLI    = "/opt/archiver/archiver.sh"
-	selfPath   = "/usr/local/bin/archiver"
+	bashCLI  = "/opt/archiver/archiver.sh"
+	selfPath = "/usr/local/bin/archiver"
 )
 
 // ported maps each command implemented in Go to its entry point, which returns the exit
