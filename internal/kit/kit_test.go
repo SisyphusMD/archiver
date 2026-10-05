@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -392,5 +393,20 @@ func TestUploadB2(t *testing.T) {
 	tgt.B2Key = "wrong"
 	if got := r.upload(tgt, kit, readme); got != Failed {
 		t.Fatalf("bad credentials: %d", got)
+	}
+}
+
+// Every storage type a configuration accepts can hold the kit: a type added to config without
+// an uploader fails here, not at a deployment's first kit refresh.
+func TestEveryStorageTypeHasAnUploader(t *testing.T) {
+	for _, typ := range config.StorageTypes {
+		if _, ok := uploaders[typ]; !ok {
+			t.Errorf("storage type %q has no recovery-kit uploader", typ)
+		}
+	}
+	for typ := range uploaders {
+		if !slices.Contains(config.StorageTypes, typ) {
+			t.Errorf("uploader for %q, a type config does not accept", typ)
+		}
 	}
 }
