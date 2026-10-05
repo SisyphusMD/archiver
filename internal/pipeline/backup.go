@@ -115,8 +115,10 @@ func (b *Backup) Run() int {
 			case <-b.ctx.Done():
 				return
 			case <-time.After(time.Second):
+				// A stop ends the run as a signal does: running duplicacy and the kit step
+				// end now, nothing new starts (no copy retry), and post hooks still run.
 				if b.lock.StopRequested() {
-					b.cancel()
+					b.onSignal()
 					return
 				}
 			}
@@ -278,7 +280,15 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 	ctx := "service:" + svc.Dir
 	result := hooks.Success
 	b.lock.SetStage(ctx, "pre-backup")
+	preRan := false
 	if hasPre {
+		b.waitWhilePaused()
+	}
+	if hasPre && b.stopped() {
+		// Stopped before the pre hook ran: there is nothing for a post hook to undo either.
+		result = hooks.Stopped
+	} else if hasPre {
+		preRan = true
 		code, err := hooks.Run(b.log, b.Environ, svc, hooks.PreBackup, "")
 		if err != nil || code != 0 {
 			// The service's files are in an unknown state (a half-written or stale dump).
@@ -297,9 +307,11 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 	}
 
 	// The post hook undoes the pre hook (restarts what it stopped), so it runs whenever the
-	// pre hook ran: after a failed pre hook, a failed backup, or a stop.
+	// pre hook ran: after a failed pre hook, a failed backup, or a stop. Without a pre hook
+	// it always runs.
 	b.lock.SetStage(ctx, "post-backup")
-	if hasPost {
+	if hasPost && (preRan || !hasPre) {
+		b.waitWhilePaused()
 		code, err := hooks.Run(b.log, b.Environ, svc, hooks.PostBackup, result)
 		if err != nil || code != 0 {
 			log(logging.Error, fmt.Sprintf("Post-backup hook failed for %s service (%s); check that whatever its pre hook stopped is running again.", svc.Name, exitText(code, err)))
@@ -400,7 +412,17 @@ func (b *Backup) waitBounded(p *proc.Proc, limit time.Duration) bool {
 	return true
 }
 
+// waitWhilePaused holds off starting a program while `archiver pause` has the run paused:
+// pause stops what is running, and anything started after it must not run either. A stop
+// or a signal ends the wait.
+func (b *Backup) waitWhilePaused() {
+	for b.lock.State().Paused() && !b.stopped() {
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
 func (b *Backup) start(s proc.Spec) (*proc.Proc, error) {
+	b.waitWhilePaused()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.signaled {
@@ -564,6 +586,11 @@ func (b *Backup) copyWorkersRun() bool {
 // instead: a wake that timed out may still arrive, and two copiers would share a target.
 // An undelivered wake is caught up by the workers' periodic check.
 func (b *Backup) handOffCopies() {
+	// A stop never wakes the workers it just stopped; `archiver stop` also waits for this run
+	// to end before stopping them a final time.
+	if b.stopped() {
+		return
+	}
 	reply, err := daemon.Send(b.Layout.DaemonSocket(), daemon.CmdLocalChanged+" "+b.cfg.StorageFingerprint())
 	if err != nil || reply != daemon.ReplyOK {
 		b.log.Message(logging.Warning, "", fmt.Sprintf("Could not wake the copy workers (%v %s); they copy at their next periodic check.", err, reply))
