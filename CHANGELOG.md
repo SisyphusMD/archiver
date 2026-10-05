@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.11.5] - 2026-10-05
+
 ### Added
 - `archiver envelope` writes a printable break-glass page (PDF and HTML) with the recovery password, the decrypt command, and for each storage where the recovery kit sits a credential that can read it, as text and QR codes. A storage's optional break-glass credential (`STORAGE_TARGET_N_BREAKGLASS_*` secret files, for example a read-only B2 key) goes on the page instead of the backup credential, which is otherwise marked FULL ACCESS. `archiver envelope confirm` records what was printed; after each recovery-kit run, `archiver status` and healthcheck flag the page when something on it changes or a year has passed, with one notification. A feature in a patch release by exception, so 0.11 deployments get it before v1.
 - `RECOVERY_KIT_EXTRA_PATHS` puts more files in the recovery kit (under `extra/`): a runbook, restore helpers, git bundles. A missing path is reported as an error.
