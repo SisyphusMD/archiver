@@ -70,6 +70,14 @@ func main() {
 			os.Exit(code)
 		}
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "recovery-kit" {
+		if code, ok := recoveryKitCommand(os.Args[2:]); ok {
+			os.Exit(code)
+		}
+	}
+	if len(os.Args) == 2 && os.Args[1] == "recovery-kit-step" {
+		os.Exit(recoveryKitStep())
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "prune-local" {
 		os.Exit(pruneLocal(os.Args[2:]))
 	}
