@@ -6,7 +6,8 @@
 // kit back, so it is never a dependency of a run.
 //
 // The kit is re-placed only when its content changes, when a storage lacks it, or when
-// forced. The state file and its fingerprint are the bash kit's, read and written alike.
+// forced. The state file and fingerprint are the ones existing deployments recorded, so an
+// upgrade re-places nothing.
 package kit
 
 import (
@@ -33,7 +34,7 @@ const (
 )
 
 // stateVersion versions the placement scheme inside the recorded fingerprint: bumping it
-// re-places every kit once, content unchanged. It is the bash kit's.
+// re-places every kit once, content unchanged.
 const stateVersion = "5"
 
 // Run is one kit refresh.
@@ -215,7 +216,7 @@ func (r *Run) writeState(fp string, names []string) {
 		content += n + "\n"
 	}
 	if len(names) == 0 {
-		content += "\n" // as bash's printf '%s\n' of an empty list
+		content += "\n" // the recorded format: an empty line for no storages
 	}
 	if err := os.WriteFile(r.statePath(), []byte(content), 0o600); err != nil {
 		r.warning("Recovery kit: could not record where the kit is placed: " + err.Error())

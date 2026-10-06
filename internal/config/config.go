@@ -1,7 +1,6 @@
 // Package config resolves Archiver's env-native configuration: plain environment variables
-// for settings, and files for secrets (ADR 4). It must resolve exactly what
-// lib/core/config-loader.sh does, above all the storage names and the DUPLICACY_<NAME>_*
-// variables they map to, which address existing storages (never-break list).
+// for settings, and files for secrets (ADR 4). The storage names and the DUPLICACY_<NAME>_*
+// variables they map to address existing storages and must never change (never-break list).
 package config
 
 import (
@@ -138,7 +137,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		c.Threads = "4"
 	}
 
-	// Targets are numbered from 1; the first missing name ends the list, as in bash.
+	// Targets are numbered from 1; the first missing name ends the list.
 	for n := 1; ; n++ {
 		p := "STORAGE_TARGET_" + strconv.Itoa(n) + "_"
 		t := Target{N: n, Name: src.Getenv(p + "NAME")}
@@ -209,8 +208,7 @@ func splitServiceDirectories(raw string) []string {
 	return out
 }
 
-// Validate reports the first configuration error a run must refuse to start with, in the
-// order and words the bash loader uses.
+// Validate reports the first configuration error a run must refuse to start with.
 func (c *Config) Validate(secretsDir string) error {
 	if len(c.ServiceDirectories) == 0 {
 		return fmt.Errorf("SERVICE_DIRECTORIES is not set. Set the SERVICE_DIRECTORIES environment variable (colon-delimited).")
@@ -305,8 +303,8 @@ func (c *Config) ValidateStorage(secretsDir string) error {
 			return fmt.Errorf("The required secret %s is not set. Provide it via %s_FILE or %s.", s.name, s.name, secretFile(s.name))
 		}
 	}
-	// Duplicacy rejects a shorter one only at init, with an opaque message. bash counts
-	// bytes here, since the image runs in the C locale.
+	// Duplicacy rejects a shorter one only at init, with an opaque message. Bytes count,
+	// as they always have.
 	if len(c.StoragePassword) < 8 {
 		return fmt.Errorf("STORAGE_PASSWORD must be at least 8 characters (a Duplicacy requirement); got %d.", len(c.StoragePassword))
 	}

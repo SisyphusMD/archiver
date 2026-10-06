@@ -37,7 +37,7 @@ func kitRun(src config.Source) *kit.Run {
 }
 
 // recoveryKitCommand runs `archiver recovery-kit [force]`; ok is false for any other command
-// line, which archiver.sh rejects with its usage.
+// line, which gets the usage.
 func recoveryKitCommand(args []string) (code int, ok bool) {
 	force := false
 	switch {

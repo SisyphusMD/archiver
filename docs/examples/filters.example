@@ -1,0 +1,11 @@
+# filters: optional. Duplicacy include/exclude patterns, one per line, selecting what of
+# this service directory is backed up. Without it, everything is.
+# See https://forum.duplicacy.com/t/filters-include-exclude-patterns/1089 for the syntax.
+#
+# For example, back up compose.yaml and the hooks, and nothing else:
+#
+# +compose.yaml
+# +pre-backup
+# +post-backup
+# +post-restore
+# -*

@@ -1,0 +1,21 @@
+#!/bin/bash
+#########################################################################################
+# pre-backup                                                                            #
+#                                                                                       #
+# Optional. Runs in the service directory before the service is backed up: stop a       #
+# service, dump a database, take a snapshot. Make it executable (chmod +x pre-backup).  #
+#                                                                                       #
+# If it exits non-zero, this service is not backed up this run (its newest revision     #
+# stays the last good one) and the run reports an error; post-backup still runs. To     #
+# back up anyway when a step fails, handle it here and exit 0.                          #
+#                                                                                       #
+# It receives ARCHIVER_SERVICE, ARCHIVER_SERVICE_DIR, ARCHIVER_SNAPSHOT_ID and          #
+# ARCHIVER_STATE_DIR (shared with this run's post-backup), never storage credentials.   #
+# Output goes to the Archiver log; a line starting "[ERROR] " or "[WARNING] " is logged  #
+# at that level.                                                                        #
+#                                                                                       #
+# Available tools: duplicacy, docker, sqlite3, systemctl, zfs, curl, ssh, openssl, vim  #
+# Note: Docker commands require mounting the Docker or Podman socket in compose.yaml    #
+#########################################################################################
+
+# Example: docker compose stop

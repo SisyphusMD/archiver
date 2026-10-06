@@ -18,7 +18,7 @@ func IsSetting(name string) bool { return nonSecretVar.MatchString(name) }
 // Setting is one configuration variable and its value.
 type Setting struct{ Name, Value string }
 
-// Settings is the configuration as provided, the surface lib/core/config-vars.sh names: what
+// Settings is the configuration as provided: what
 // the recovery kit (and init) serialize. Settings are in version order (STORAGE_TARGET_2_*
 // before STORAGE_TARGET_10_*); secrets are the ones whose file exists, read only for a
 // target of the type that uses them.
@@ -28,7 +28,7 @@ type Settings struct {
 	Secrets            []Setting
 }
 
-// Snapshot reads Settings as the bash loader leaves them: deprecated ROTATE_BACKUPS becomes
+// Snapshot reads Settings as they are recorded: deprecated ROTATE_BACKUPS becomes
 // PRUNE_BACKUPS, DUPLICACY_THREADS defaults to 4, newlines in RECOVERY_KIT_EXTRA_PATHS become
 // colons, and a variable set but empty in the environment is kept.
 func Snapshot(src Source, environ []string) (*Settings, error) {

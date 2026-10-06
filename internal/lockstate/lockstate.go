@@ -1,6 +1,5 @@
-// Package lockstate reads the state the bash pipelines keep on disk: their lock files and
-// the per-storage maintenance record. It never writes either; until the pipelines move to
-// Go (ADR 10), bash owns both formats.
+// Package lockstate reads the state the pipelines keep on disk: their lock files and the
+// per-storage maintenance record.
 package lockstate
 
 import (

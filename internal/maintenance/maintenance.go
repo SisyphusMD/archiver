@@ -3,7 +3,7 @@
 // interval, independent of backups. The primary's prune leaves out revisions in use (ADR 19);
 // while copy workers keep the secondaries, maintenance keeps to the primary and wakes them
 // after a prune that deleted revisions (ADR 12). Lock, log, state file and messages are the
-// bash pipeline's, so status, healthcheck and stop read it as before.
+// ones status, healthcheck and stop read.
 package maintenance
 
 import (

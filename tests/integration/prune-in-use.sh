@@ -46,6 +46,11 @@ present 1 2 3 4 5 || die "expected revisions 1-5"
 REAL="$(command -v duplicacy)"
 cat >/tmp/fakebin/duplicacy <<EOF
 #!/usr/bin/env bash
+# A restore waits while /tmp/hold-restore exists, as a long restore would.
+if [ "\${1:-}" = "restore" ] && [ -e /tmp/hold-restore ]; then
+  touch /tmp/holding
+  while [ -e /tmp/hold-restore ]; do sleep 0.2; done
+fi
 for a in "\$@"; do
   if [ "\$a" = "-dry-run" ]; then
     echo "Storage set to $STORE"
@@ -58,23 +63,10 @@ EOF
 chmod +x /tmp/fakebin/duplicacy
 
 log "a restore reading revision 2 keeps it through a prune that selects 1, 2 and 3"
-# The restore's own registration code, holding for as long as the restore would run.
-(
-  set +u
-  # shellcheck source=/dev/null
-  source /opt/archiver/lib/core/common.sh
-  # shellcheck source=/dev/null
-  source "${CONFIG_LOADER_CORE}"
-  # shellcheck source=/dev/null
-  source "${DUPLICACY_RESTORE_FEATURE}"
-  # shellcheck disable=SC2034 # read by hold_revision_in_use
-  SELECTED_STORAGE_TARGET_NAME=local SNAPSHOT_ID="$ID" REVISION=2
-  hold_revision_in_use || exit 1
-  touch /tmp/holding
-  sleep 600
-) &
+touch /tmp/hold-restore
+PATH="/tmp/fakebin:$PATH" SNAPSHOT_ID="$ID" LOCAL_DIR=/tmp/restore REVISION=2 archiver auto-restore >/tmp/restore.out 2>&1 &
 RESTORE=$!
-wait_for '[ -e /tmp/holding ]' 15 || die "the restore registration did not complete"
+wait_for '[ -e /tmp/holding ]' 30 || { cat /tmp/restore.out; die "the restore never started reading"; }
 echo "1 2 3" >/tmp/plan
 maintain || { cat /tmp/maint.out; die "maintenance failed"; }
 absent 1 3 || die "revisions 1 and 3 were not pruned"
@@ -82,7 +74,8 @@ present 2 4 5 || die "the prune deleted revision 2, which a restore is reading"
 grep -q "Leaving revisions 2 of $ID for the next prune" "$MLOG" || die "kept revision not logged"
 
 log "once the restore ends, the next prune deletes it"
-kill "$RESTORE"; wait "$RESTORE" 2>/dev/null
+rm /tmp/hold-restore
+wait "$RESTORE" || { cat /tmp/restore.out; die "the held restore failed"; }
 echo "2" >/tmp/plan
 maintain || { cat /tmp/maint.out; die "maintenance failed"; }
 absent 2 || die "revision 2 survived after the restore ended"

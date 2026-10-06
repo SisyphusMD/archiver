@@ -13,7 +13,7 @@ import (
 )
 
 // maintenanceCommand runs `archiver maintenance [exhaustive]`; ok is false for any other
-// command line, which archiver.sh rejects with its usage.
+// command line, which gets the usage.
 func maintenanceCommand(args []string) (code int, ok bool) {
 	force := false
 	switch {

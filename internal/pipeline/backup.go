@@ -1,8 +1,7 @@
 // Package pipeline runs Archiver's backup pipeline: per service, the pre-backup hook, the
 // duplicacy backup, and the post-backup hook; then a copy to every secondary storage and the
-// recovery kit. It keeps lib/scripts/main.sh's stages, log lines, and exit codes, because
-// the bash stop, pause, status and healthcheck commands read them, and its contract
-// behaviors (tests/e2e) hold for both.
+// recovery kit. Stop, pause, status and healthcheck read its stages and log lines, and its
+// contract behaviors are tested black-box in tests/e2e.
 package pipeline
 
 import (
@@ -473,7 +472,7 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 	if content != "" {
 		content += "\n"
 	}
-	// Removed first, as bash did: writing through a symlink here would truncate its target.
+	// Removed first: writing through a symlink here would truncate its target.
 	os.Remove(filepath.Join(repo, "filters"))
 	if err := os.WriteFile(filepath.Join(repo, "filters"), []byte(content), 0o644); err != nil {
 		log(logging.Error, fmt.Sprintf("Unable to create the Duplicacy filters file for the %s service.", svc.Name))
@@ -814,7 +813,7 @@ func (b *Backup) onSignal() {
 	}
 }
 
-// handleStop ends a stopped run as the bash stop handler does: record it, report it with
+// handleStop ends a stopped run: record it, report it with
 // the run's error count, and exit non-zero.
 func (b *Backup) handleStop() int {
 	st := b.lock.State()
@@ -862,7 +861,7 @@ func (b *Backup) finish() {
 }
 
 // Hostname is the host part of snapshot IDs: an inherited HOSTNAME wins over the kernel's,
-// as it did in bash (a Kubernetes Job pins its IDs across pod names this way).
+// (a Kubernetes Job pins its IDs across pod names this way).
 func Hostname(getenv func(string) string) string {
 	if h := getenv("HOSTNAME"); h != "" {
 		return h

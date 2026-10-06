@@ -16,7 +16,7 @@ func write(t *testing.T, content string) string {
 	return p
 }
 
-// The bash pipelines write exactly this shape (lib/core/lockfile.sh).
+// The pipelines write exactly this shape.
 func TestReadLock(t *testing.T) {
 	p := write(t, "4242 service:/srv/app backup\n1000 running\n1100 paused\n1160 running\n1200 paused\n")
 	l, ok, err := ReadLock(p)

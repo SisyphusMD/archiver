@@ -8,9 +8,9 @@ import (
 )
 
 // Sanitize turns a storage name into the Duplicacy storage name and the fragment of its
-// DUPLICACY_<NAME>_* variables. It works on bytes, as bash's tr does in the C locale, so a
-// multi-byte character becomes one underscore per byte; a leading digit gets an
-// underscore in front. Existing storages were created under these names.
+// DUPLICACY_<NAME>_* variables. It works on bytes, so a multi-byte character becomes one
+// underscore per byte; a leading digit gets an underscore in front. Existing storages were
+// created under these names, so this must never change.
 func Sanitize(name string) string {
 	b := []byte(name)
 	for i, c := range b {
