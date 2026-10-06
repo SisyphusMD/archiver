@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -73,7 +74,9 @@ func TestHeldByAnotherProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cmd.Process.Kill()
-	time.Sleep(300 * time.Millisecond)
+	// Read deletes a file nobody holds, so it may only look once flock(1) holds the lock: a
+	// fixed sleep loses that race on a busy machine.
+	waitHeld(t, path)
 	if got, _ := Read(dir, "local"); !got.Has("nas-app", 7) || got.Has("nas-app", 6) {
 		t.Fatalf("got %+v", got)
 	}
@@ -161,4 +164,21 @@ func TestReadDuringNarrow(t *testing.T) {
 			t.Fatal("a registration being replaced was skipped")
 		}
 	}
+}
+
+// waitHeld waits until another process holds path's lock: a non-blocking try fails while it does.
+func waitHeld(t *testing.T, path string) {
+	t.Helper()
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		f.Close()
+		if err == syscall.EWOULDBLOCK {
+			return
+		}
+	}
+	t.Fatal("flock(1) never took the lock")
 }
