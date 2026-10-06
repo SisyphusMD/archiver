@@ -305,3 +305,16 @@ Then start with RECREATE.txt, or see the 'Configuration Sources' section of the 
 https://github.com/SisyphusMD/archiver
 `, r.Hostname, r.KitName())
 }
+
+func hashFile(p string) (string, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}

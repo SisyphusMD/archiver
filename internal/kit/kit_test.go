@@ -2,13 +2,6 @@ package kit
 
 import (
 	"bytes"
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,48 +41,6 @@ func inode(t *testing.T, p string) uint64 {
 		t.Fatal(err)
 	}
 	return fi.Sys().(*syscall.Stat_t).Ino
-}
-
-func TestPlaceLocal(t *testing.T) {
-	d := t.TempDir()
-	src, dst, ref := filepath.Join(d, "src"), filepath.Join(d, "dst"), filepath.Join(d, "config")
-	os.WriteFile(src, []byte("new kit"), 0o600)
-	os.WriteFile(ref, nil, 0o644)
-	os.Chmod(ref, 0o644)
-	os.WriteFile(dst, []byte("old kit"), 0o600)
-	before := inode(t, dst)
-	if got := placeLocal(src, dst, ref); got != OK {
-		t.Fatalf("placeLocal = %d", got)
-	}
-	if b, _ := os.ReadFile(dst); string(b) != "new kit" {
-		t.Fatalf("dst holds %q", b)
-	}
-	if inode(t, dst) == before {
-		t.Error("replaced in place, not through a fresh inode")
-	}
-	if fi, _ := os.Stat(dst); fi.Mode().Perm() != 0o644 {
-		t.Errorf("mode %o, want the reference's 644", fi.Mode().Perm())
-	}
-	entries, _ := os.ReadDir(d)
-	if len(entries) != 3 {
-		t.Errorf("a staging file was left: %v", entries)
-	}
-
-	// The reference less readable than the target can be made: unverified, still placed.
-	os.Chmod(ref, 0o640)
-	os.Chmod(d, 0o755)
-	if got := placeLocal(src, dst, ref); got != OK {
-		t.Fatalf("a 640 reference: %d", got)
-	}
-
-	// A kit that cannot be staged leaves the previous one.
-	os.WriteFile(dst, []byte("old kit"), 0o644)
-	if got := placeLocal(filepath.Join(d, "missing"), dst, ref); got != Failed {
-		t.Fatalf("missing source: %d", got)
-	}
-	if b, _ := os.ReadFile(dst); string(b) != "old kit" {
-		t.Fatal("a failed placement replaced the kit")
-	}
 }
 
 // A share that ignores the chmod leaves the kit less readable than the storage's files:
@@ -165,8 +116,30 @@ func newFixture(t *testing.T, stores int) *fixture {
 		Hostname:     "h",
 		Log:          &logging.Log{Dir: filepath.Join(root, "logs"), Basename: "archiver", Stdout: &f.out},
 		DockerSocket: filepath.Join(root, "no-socket"),
+		Rclone:       fakeRclone(t, root),
 	}
 	return f
+}
+
+// fakeRclone stands in for rclone with a local remote: lsjson fails for a missing local path,
+// and copyto writes a temporary file and renames it over the destination, as rclone does. It
+// records its arguments and RCLONE_ environment.
+func fakeRclone(t *testing.T, root string) string {
+	t.Helper()
+	p := filepath.Join(root, "rclone")
+	os.WriteFile(p, []byte(`#!/bin/sh
+echo "$@" >> "$(dirname "$0")/rclone.args"
+env | grep '^RCLONE_' | sort >> "$(dirname "$0")/rclone.env"
+for a in "$@"; do src="$dst"; dst="$a"; done
+if [ "$3" = lsjson ]; then
+  case "$dst" in KIT:/*) [ -e "${dst#KIT:}" ] || exit 3 ;; esac
+  exit 0
+fi
+path="${dst#KIT:}"
+[ -d "$(dirname "$path")" ] || { echo "directory not found" >&2; exit 3; }
+cp "$src" "$path.partial" && mv "$path.partial" "$path"
+`), 0o755)
+	return p
 }
 
 func (f *fixture) environ() []string {
@@ -259,6 +232,7 @@ func TestSecondaryFailureAndRetry(t *testing.T) {
 	}
 	before := inode(t, f.kit(0))
 	os.MkdirAll(f.store[1], 0o755)
+	os.WriteFile(filepath.Join(f.store[1], "config"), nil, 0o644)
 	// The secondary is retried; the primary, recorded, is not rewritten.
 	if code := f.execute(); code != OK || inode(t, f.kit(0)) != before {
 		t.Fatalf("exit %d, or the recorded primary was rewritten", code)
@@ -332,81 +306,91 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
-// fakeB2 is enough of the B2 API for the kit: authorize (with an unrestricted key, so the
-// bucket is looked up by name), list_buckets, get_upload_url and upload_file.
-func fakeB2(t *testing.T) (*httptest.Server, map[string][]byte) {
-	t.Helper()
-	files := map[string][]byte{}
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/b2api/v2/b2_authorize_account":
-			if u, p, ok := r.BasicAuth(); !ok || u != "keyid" || p != "secret\"key" {
-				http.Error(w, "unauthorized", 401)
-				return
-			}
-			fmt.Fprintf(w, `{"accountId":"acct","apiUrl":%q,"authorizationToken":"tok","allowed":{"bucketId":null,"bucketName":null}}`, srv.URL)
-		case "/b2api/v2/b2_list_buckets":
-			var req map[string]string
-			json.NewDecoder(r.Body).Decode(&req)
-			if r.Header.Get("Authorization") != "tok" || req["bucketName"] != "bkt" || req["accountId"] != "acct" {
-				http.Error(w, "bad list", 400)
-				return
-			}
-			fmt.Fprint(w, `{"buckets":[{"bucketId":"bid","bucketName":"bkt"}]}`)
-		case "/b2api/v2/b2_get_upload_url":
-			fmt.Fprintf(w, `{"bucketId":"bid","uploadUrl":%q,"authorizationToken":"up"}`, srv.URL+"/upload")
-		case "/upload":
-			body, _ := io.ReadAll(r.Body)
-			sum := sha1.Sum(body)
-			if r.Header.Get("Authorization") != "up" || r.Header.Get("X-Bz-Content-Sha1") != hex.EncodeToString(sum[:]) {
-				http.Error(w, "bad upload", 400)
-				return
-			}
-			files[r.Header.Get("X-Bz-File-Name")] = body
-			fmt.Fprint(w, `{}`)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	return srv, files
-}
-
-func TestUploadB2(t *testing.T) {
-	srv, files := fakeB2(t)
-	b2API = srv.URL
-	defer func() { b2API = "https://api.backblazeb2.com" }()
-	d := t.TempDir()
-	kit, readme := filepath.Join(d, "kit"), filepath.Join(d, "readme")
-	os.WriteFile(kit, []byte("encrypted"), 0o600)
-	os.WriteFile(readme, []byte("readme"), 0o600)
-	var out bytes.Buffer
-	r := &Run{Hostname: "h", Log: &logging.Log{Dir: d, Basename: "archiver", Stdout: &out}}
-	tgt := config.Target{Type: "b2", B2Bucket: "bkt", B2ID: "keyid", B2Key: `secret"key`}
-	if got := r.upload(tgt, kit, readme); got != OK {
-		t.Fatalf("upload = %d: %s", got, out.String())
-	}
-	if string(files["archiver-recovery-kit-h.tar.enc"]) != "encrypted" || string(files["archiver-recovery-kit-h.README.txt"]) != "readme" {
-		t.Fatalf("uploaded %v", files)
-	}
-	tgt.B2Key = "wrong"
-	if got := r.upload(tgt, kit, readme); got != Failed {
-		t.Fatalf("bad credentials: %d", got)
-	}
-}
-
 // Every storage type a configuration accepts can hold the kit: a type added to config without
 // an uploader fails here, not at a deployment's first kit refresh.
 func TestEveryStorageTypeHasAnUploader(t *testing.T) {
 	for _, typ := range config.StorageTypes {
-		if _, ok := uploaders[typ]; !ok {
+		if _, ok := remotes[typ]; !ok {
 			t.Errorf("storage type %q has no recovery-kit uploader", typ)
 		}
 	}
-	for typ := range uploaders {
+	for typ := range remotes {
 		if !slices.Contains(config.StorageTypes, typ) {
 			t.Errorf("uploader for %q, a type config does not accept", typ)
 		}
+	}
+}
+
+// Credentials reach rclone in its environment, never its arguments.
+func TestRemoteCredentialsStayOffArgv(t *testing.T) {
+	f := newFixture(t, 0)
+	for _, tgt := range []config.Target{
+		{Name: "b", Type: "b2", B2Bucket: "bkt", B2ID: "keyid", B2Key: "b2-secret"},
+		{Name: "s", Type: "s3", S3Bucket: "bkt", S3Endpoint: "s3.example.com", S3ID: "akid", S3Secret: "s3-secret"},
+	} {
+		os.Remove(filepath.Join(f.root, "rclone.args"))
+		os.Remove(filepath.Join(f.root, "rclone.env"))
+		f.run.upload(tgt, filepath.Join(f.root, "keys", "public.pem"), filepath.Join(f.root, "keys", "public.pem"))
+		args, _ := os.ReadFile(filepath.Join(f.root, "rclone.args"))
+		env, _ := os.ReadFile(filepath.Join(f.root, "rclone.env"))
+		if !strings.Contains(string(args), "--ignore-times") {
+			t.Errorf("%s: a kit chosen for upload must always be sent: %s", tgt.Type, args)
+		}
+		if strings.Contains(string(args), "secret") {
+			t.Errorf("%s: a credential on rclone's argv: %s", tgt.Type, args)
+		}
+		if !strings.Contains(string(args), "KIT:bkt/archiver-recovery-kit-h.tar.enc") {
+			t.Errorf("%s: wrong destination: %s", tgt.Type, args)
+		}
+		want := map[string][]string{"b2": {"RCLONE_CONFIG_KIT_ACCOUNT=keyid", "RCLONE_CONFIG_KIT_KEY=b2-secret"},
+			"s3": {"RCLONE_CONFIG_KIT_SECRET_ACCESS_KEY=s3-secret", "RCLONE_CONFIG_KIT_ENDPOINT=https://s3.example.com", "RCLONE_CONFIG_KIT_FORCE_PATH_STYLE=true", "RCLONE_CONFIG_KIT_REGION=us-east-1"}}[tgt.Type]
+		for _, w := range want {
+			if !strings.Contains(string(env), w+"\n") {
+				t.Errorf("%s: rclone's environment lacks %s:\n%s", tgt.Type, w, env)
+			}
+		}
+	}
+}
+
+// The local kit takes the storage's mode, through a fresh inode, and a failed upload leaves
+// the previous kit in place.
+func TestLocalPlacement(t *testing.T) {
+	f := newFixture(t, 1)
+	os.Chmod(filepath.Join(f.store[0], "config"), 0o644)
+	os.WriteFile(f.kit(0), []byte("old"), 0o600)
+	before := inode(t, f.kit(0))
+	if code := f.execute(); code != OK {
+		t.Fatalf("exit %d: %s", code, f.out.String())
+	}
+	if inode(t, f.kit(0)) == before {
+		t.Error("replaced in place, not through a fresh inode")
+	}
+	if fi, _ := os.Stat(f.kit(0)); fi.Mode().Perm() != 0o644 {
+		t.Errorf("mode %o, want the storage's 644", fi.Mode().Perm())
+	}
+	os.WriteFile(f.kit(0), []byte("current"), 0o644)
+	f.vars["STORAGE_TARGET_1_LOCAL_PATH"] = filepath.Join(f.root, "gone")
+	if code := f.execute(); code != Failed {
+		t.Fatalf("a missing storage: exit %d", code)
+	}
+	if b, _ := os.ReadFile(f.kit(0)); string(b) != "current" {
+		t.Fatal("a failed upload touched the kit")
+	}
+}
+
+// Only the host-key types already trusted are offered, and an RSA key allows SHA-2 too.
+func TestTrustedAlgorithms(t *testing.T) {
+	d := t.TempDir()
+	known := filepath.Join(d, "known_hosts")
+	os.WriteFile(known, []byte("[nas.lan]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGnJ+7uNcHwJy3bXTBWdzEw1v4s4m0U5n6aRZkLGvH0U\n"+
+		"other ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7\n"), 0o600)
+	if got := trusted(known, "[nas.lan]:2222"); got != "ssh-ed25519" {
+		t.Errorf("nas.lan: %q", got)
+	}
+	if got := trusted(known, "other"); got != "rsa-sha2-512 rsa-sha2-256 ssh-rsa" {
+		t.Errorf("other: %q", got)
+	}
+	if got := trusted(known, "unknown"); got != "" {
+		t.Errorf("unknown: %q", got)
 	}
 }

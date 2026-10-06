@@ -127,7 +127,7 @@ fi
 [ -f "$KIT" ] || die "healthy target not updated during the partial failure"
 [ ! -e "$KIT2" ] || die "kit appeared on a target whose path does not exist"
 sumA="$(sha256sum "$KIT" | cut -d' ' -f1)"
-mkdir -p /backup-store2
+mkdir -p /backup-store2 && : >/backup-store2/config   # the storage is back
 archiver recovery-kit || die "retry run exited non-zero"
 [ -f "$KIT2" ] || die "failed target not retried on the next run"
 sumB="$(sha256sum "$KIT" | cut -d' ' -f1)"

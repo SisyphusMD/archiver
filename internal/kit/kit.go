@@ -54,6 +54,7 @@ type Run struct {
 	EnvelopeCheck func() error
 	Log           *logging.Log
 	DockerSocket  string // tests point it elsewhere
+	Rclone        string // the rclone binary; tests stand in a fake
 
 	cfg *config.Config
 }

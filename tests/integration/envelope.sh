@@ -109,6 +109,7 @@ echo "restore helper" >/site/restore-common.sh
 mkdir -p /x /other && echo "x two" >/x/restore-common.sh.2 && echo "other helper" >/other/restore-common.sh
 export RECOVERY_KIT_EXTRA_PATHS=$'/site/runbook\n/site/restore-common.sh:/x/restore-common.sh.2:/other/restore-common.sh:/site/missing\n'
 
+: >"$STORE/config"   # a storage root, where the kit belongs
 archiver recovery-kit >/tmp/kit.out 2>&1 || { cat /tmp/kit.out; die "recovery-kit failed"; }
 grep -q 'RECOVERY_KIT_EXTRA_PATHS entry /site/missing does not exist' "$LOG" || die "the missing extra path was not reported"
 mkdir -p /tmp/kit && openssl enc -d -aes-256-cbc -pbkdf2 -in "$STORE/$KIT" -pass file:"$SECRETS_DIR/recovery_password" | tar -xf - -C /tmp/kit || die "kit does not decrypt"

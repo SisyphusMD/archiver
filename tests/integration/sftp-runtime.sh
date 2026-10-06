@@ -116,4 +116,26 @@ README_MODE="$(docker exec "$SFTP" stat -c '%a' "/home/backup/upload/archiver-re
 [ "$KIT_MODE" = "640" ] || die "kit mode ($KIT_MODE) not stamped to match the storage config (640)"
 [ "$README_MODE" = "640" ] || die "kit README mode ($README_MODE) not stamped to match the storage config (640)"
 
-echo "=== SFTP-RUNTIME OK: backup + restore over ssh + kit perms match storage config ==="
+log "known_hosts trusting only one of the server's key types still connects"
+# The server gains an ECDSA key, which SSH clients prefer; only its Ed25519 key is trusted,
+# as OpenSSH's accept-new may have recorded. Offered ECDSA, a client would see a changed key.
+docker exec "$SFTP" sh -c 'ssh-keygen -q -t ecdsa -N "" -f /etc/ssh/ssh_host_ecdsa_key && echo "HostKey /etc/ssh/ssh_host_ecdsa_key" >> /etc/ssh/sshd_config && grep -q "^HostKey .*ed25519" /etc/ssh/sshd_config || echo "HostKey /etc/ssh/ssh_host_ed25519_key" >> /etc/ssh/sshd_config' \
+  || die "could not add an ECDSA host key"
+docker exec "$SFTP" kill -HUP 1 || die "could not reload the sftp server"
+sleep 2
+docker exec "$ARCH" bash -c 'ssh-keyscan -T 5 sftp-server 2>/dev/null | grep " ecdsa-" >/dev/null && grep " ssh-ed25519 " /root/.ssh/known_hosts > /tmp/kh && [ -s /tmp/kh ] && mv /tmp/kh /root/.ssh/known_hosts' \
+  || die "the server does not offer ECDSA, or no Ed25519 key was recorded"
+docker exec "$ARCH" archiver recovery-kit force >/tmp/sftp-onekey.out 2>&1 || { cat /tmp/sftp-onekey.out; die "kit upload failed with one trusted key type"; }
+
+log "a server that refuses SETSTAT (timestamps, modes) still receives the kit"
+docker exec "$SFTP" sed -i 's/^ForceCommand internal-sftp$/ForceCommand internal-sftp -P setstat,fsetstat/' /etc/ssh/sshd_config \
+  || die "could not reconfigure the sftp server"
+docker exec "$SFTP" kill -HUP 1 || die "could not reload the sftp server"
+sleep 2
+before="$(docker exec "$SFTP" stat -c '%i %Y' "/home/backup/upload/archiver-recovery-kit-${HOSTN}.tar.enc")"
+docker exec "$ARCH" archiver recovery-kit force >/tmp/sftp-nosetstat.out 2>&1
+grep -q "upload of .* failed" /tmp/sftp-nosetstat.out && { cat /tmp/sftp-nosetstat.out; die "the upload failed on a server that refuses SETSTAT"; }
+after="$(docker exec "$SFTP" stat -c '%i %Y' "/home/backup/upload/archiver-recovery-kit-${HOSTN}.tar.enc")"
+[ "$before" != "$after" ] || { cat /tmp/sftp-nosetstat.out; die "the kit was not replaced on a server that refuses SETSTAT"; }
+
+echo "=== SFTP-RUNTIME OK: backup + restore over ssh + kit perms match storage config; no SETSTAT needed ==="

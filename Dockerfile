@@ -14,6 +14,26 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/archiver ./cmd/archiver
 
+# rclone places the recovery kit on every storage type (ADR 24). Its release is a zip, so a
+# throwaway stage unpacks it and only the binary reaches the image.
+FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0 AS rclone
+ARG TARGETARCH
+ARG DEBIAN_MIRROR=http://deb.debian.org
+ARG GITHUB_MIRROR=https://github.com
+# renovate: datasource=github-releases depName=rclone/rclone extractVersion=^v(?<version>.+)$
+ENV RCLONE_VERSION=1.75.1
+ARG RCLONE_SHA256_AMD64=982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab
+ARG RCLONE_SHA256_ARM64=03f2504174034b6d004152ed7369251c9a9ec1f7e0836eda420f5c7a5ec0dff9
+RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; } && \
+    apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip && \
+    if [ "$TARGETARCH" = "amd64" ]; then SHA256="$RCLONE_SHA256_AMD64"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then SHA256="$RCLONE_SHA256_ARM64"; \
+    else echo "Unsupported architecture: $TARGETARCH" && exit 1; fi && \
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
+        "${GITHUB_MIRROR}/rclone/rclone/releases/download/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-${TARGETARCH}.zip" -o /tmp/rclone.zip && \
+    echo "$SHA256  /tmp/rclone.zip" | sha256sum -c - && \
+    unzip -j /tmp/rclone.zip "*/rclone" -d /out && chmod 755 /out/rclone
+
 FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0
 
 ARG TARGETARCH
@@ -102,6 +122,7 @@ COPY docs/examples/ ./examples/
 RUN mkdir -p /opt/archiver/logs /opt/archiver/keys
 
 COPY --from=cli /out/archiver /usr/local/bin/archiver
+COPY --from=rclone /out/rclone /usr/local/bin/rclone
 
 
 # Hooks are executables (ADR 20); the e2e harness reads this to write them in that form.
