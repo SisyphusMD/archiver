@@ -3,7 +3,7 @@
 
 # The Go CLI cross-compiles on the build platform, so an arm64 image is not built under
 # emulation. Pure Go with CGO off: the binary needs nothing from the runtime image.
-FROM --platform=$BUILDPLATFORM golang:1.27.1-trixie@sha256:9d41bc0272def1f2aa133746aa2567dff35ddf2ae9893bb306da5b6631981898 AS cli
+FROM --platform=$BUILDPLATFORM golang:1.27.1-trixie@sha256:0982f930de50a4f1a2b4453d51651f0031082ef2e3a25deb3c763fc39a1094a0 AS cli
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
