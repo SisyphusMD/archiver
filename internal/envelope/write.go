@@ -39,7 +39,7 @@ func (p *Page) HTML() ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteString(htmlHead)
 	tags := map[string]string{"title": "<h1>%s</h1>\n", "sub": "<p class=\"sub\">%s</p>\n", "h": "<h2>%s</h2>\n",
-		"p": "<p>%s</p>\n", "m": "<pre>%s</pre>\n", "warn": "<p class=\"warn\">%s</p>\n"}
+		"p": "<p>%s</p>\n", "m": "<pre>%s</pre>\n", "cmd": "<pre>%s</pre>\n", "warn": "<p class=\"warn\">%s</p>\n"}
 	for _, e := range p.Elements {
 		switch e.Kind {
 		case "qr":

@@ -22,6 +22,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/inuse"
+	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 )
@@ -108,7 +109,7 @@ func (e *Env) duplicacy(dir string, out io.Writer, args ...string) *exec.Cmd {
 
 // connect makes dir a duplicacy repository of snapshot id on t, replacing any it was.
 func (e *Env) connect(dir string, t config.Target, id string, out io.Writer) error {
-	if t.Type == "sftp" {
+	if t.Type == "sftp" || t.Type == "sftpc" {
 		for _, k := range []string{e.Layout.SSHPrivateKey(), e.Layout.SSHPrivateKey() + ".pub"} {
 			if _, err := os.Stat(k); err != nil {
 				return fmt.Errorf("missing SSH key file %s for the SFTP storage '%s'; restore the keys directory first", k, t.Name)
@@ -124,6 +125,9 @@ func (e *Env) connect(dir string, t config.Target, id string, out io.Writer) err
 	}
 	pub := filepath.Join(e.Layout.Root, "keys", "public.pem")
 	if err := e.duplicacy(dir, out, "init", "-e", "-key", pub, "-storage-name", t.StorageName(), id, url).Run(); err != nil {
+		if why := kit.Diagnose(e.Layout, "", t); why != "" {
+			return fmt.Errorf("duplicacy %s storage initialization failed for '%s': %s", t.Type, t.StorageName(), why)
+		}
 		return fmt.Errorf("duplicacy %s storage initialization failed for '%s'", t.Type, t.StorageName())
 	}
 	return nil

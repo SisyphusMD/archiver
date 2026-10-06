@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -40,22 +42,30 @@ func (t Target) EnvPrefix() string {
 
 // URL is the Duplicacy storage URL.
 func (t Target) URL() (string, error) {
-	switch t.Type {
-	case "local":
-		return t.LocalPath, nil
-	case "sftp":
-		return fmt.Sprintf("sftp://%s@%s:%s//%s", t.SFTPUser, t.SFTPURL, t.SFTPPort, t.SFTPPath), nil
-	case "b2":
-		return "b2://" + t.B2Bucket, nil
-	case "s3":
-		region := t.S3Region
-		if region == "" {
-			region = "none"
-		}
-		return fmt.Sprintf("s3://%s@%s/%s", region, t.S3Endpoint, t.S3Bucket), nil
+	typ, ok := Types[t.Type]
+	if !ok {
+		return "", fmt.Errorf("%s is not a supported storage type (%s)", t.Type, strings.Join(StorageTypes, ", "))
 	}
-	return "", fmt.Errorf("%s is not a supported backup type (local, sftp, b2, s3)", t.Type)
+	return typ.URL(t.withDefaults()), nil
 }
+
+// withDefaults is the target's values with each empty field at its type's default.
+func (t Target) withDefaults() Values {
+	v := Values{}
+	for k, x := range t.Values {
+		v[k] = x
+	}
+	for _, f := range Types[t.Type].Fields {
+		if v[f.Name] == "" {
+			v[f.Name] = f.Default
+		}
+	}
+	return v
+}
+
+// TokenDir holds writable copies of the token files Duplicacy rewrites as it refreshes them
+// (OneDrive): the secrets themselves are mounted read-only.
+var TokenDir = "/opt/archiver/logs/.tokens"
 
 // DuplicacyEnv is the credentials Duplicacy needs for this target, as NAME=value pairs.
 // Environment variables are the only way they reach Duplicacy: `duplicacy set -value`
@@ -66,13 +76,21 @@ func (c *Config) DuplicacyEnv(t Target, sshKeyFile string) []string {
 		p + "PASSWORD=" + c.StoragePassword,
 		p + "RSA_PASSPHRASE=" + c.RSAPassphrase,
 	}
-	switch t.Type {
-	case "sftp":
+	if t.Type == "sftp" || t.Type == "sftpc" {
 		env = append(env, p+"SSH_KEY_FILE="+sshKeyFile)
-	case "b2":
-		env = append(env, p+"B2_ID="+t.B2ID, p+"B2_KEY="+t.B2Key)
-	case "s3":
-		env = append(env, p+"S3_ID="+t.S3ID, p+"S3_SECRET="+t.S3Secret)
+	}
+	for _, f := range Types[t.Type].Fields {
+		if f.Key == "" || t.Values[f.Name] == "" {
+			continue
+		}
+		v := t.Values[f.Name]
+		if f.Path {
+			v = t.Values[f.Name+"_FILE"]
+			if f.Rotates {
+				v = WritableToken(t, f)
+			}
+		}
+		env = append(env, p+strings.ToUpper(f.Key)+"="+v)
 	}
 	return env
 }
@@ -102,4 +120,48 @@ func (c *Config) StorageFingerprint() string {
 		fmt.Fprintf(h, "%s=%s\n", t.StorageName(), url)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+// WritableToken is the path of t's writable copy of a token secret that Duplicacy rewrites as
+// it refreshes it. The copy is seeded from the secret, and seeded again only when the secret
+// itself changes (a new token from the user), so a refreshed token survives restarts.
+func WritableToken(t Target, f Field) string {
+	src, dst := t.Values[f.Name+"_FILE"], tokenCopy(t, f)
+	seed, err := os.ReadFile(src)
+	if err != nil {
+		return src
+	}
+	if _, err := os.Stat(dst); err == nil && seeded(dst, seed) {
+		return dst
+	}
+	if os.MkdirAll(TokenDir, 0o700) != nil || os.WriteFile(dst, seed, 0o600) != nil || os.WriteFile(dst+".seed", []byte(seedMark(seed)), 0o600) != nil {
+		return src
+	}
+	return dst
+}
+
+// tokenCopy is where t keeps its writable copy of the token field f.
+func tokenCopy(t Target, f Field) string {
+	return filepath.Join(TokenDir, t.StorageName()+"-"+strings.ToLower(f.Name))
+}
+
+// currentToken is the token as Duplicacy last refreshed it into the copy at path, or secret
+// when the copy is missing or was seeded from a different secret.
+func currentToken(path string, secret []byte) []byte {
+	if b, err := os.ReadFile(path); err == nil && seeded(path, secret) {
+		return b
+	}
+	return secret
+}
+
+func seeded(path string, secret []byte) bool {
+	mark, err := os.ReadFile(path + ".seed")
+	return err == nil && string(mark) == seedMark(secret)
+}
+
+// seedMark identifies the secret a copy was seeded from, read as secrets are (a trailing
+// newline does not count), so the raw file and the value read from it match.
+func seedMark(secret []byte) string {
+	sum := sha256.Sum256([]byte(strings.TrimSuffix(strings.TrimRight(string(secret), "\n"), "\r")))
+	return hex.EncodeToString(sum[:])
 }

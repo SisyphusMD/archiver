@@ -250,7 +250,7 @@ func (r *renderer) element(kind, s string) {
 	case "p":
 		r.lines("F3", 9.5, 12, 4.95, s)
 		r.y -= 2
-	case "m":
+	case "m", "cmd":
 		r.exact("F2", 8.5, 10.5, 5.1, s)
 	case "warn":
 		edge := r.right()

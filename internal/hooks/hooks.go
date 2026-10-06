@@ -64,7 +64,19 @@ func Exists(dir, name string) (bool, error) {
 	return true, nil
 }
 
-var credentialVar = regexp.MustCompile(`^DUPLICACY_([A-Z0-9_]+_)?(PASSWORD|RSA_PASSPHRASE|B2_ID|B2_KEY|S3_ID|S3_SECRET|SSH_KEY_FILE)$`)
+// credentialVar matches the variables Duplicacy reads a storage's credentials from: its
+// password, RSA passphrase, SSH key file, and every storage type's credential keys.
+var credentialVar = func() *regexp.Regexp {
+	keys := []string{"PASSWORD", "RSA_PASSPHRASE", "SSH_KEY_FILE"}
+	for _, t := range config.Types {
+		for _, f := range t.Fields {
+			if f.Key != "" {
+				keys = append(keys, regexp.QuoteMeta(strings.ToUpper(f.Key)))
+			}
+		}
+	}
+	return regexp.MustCompile(`^DUPLICACY_([A-Z0-9_]+_)?(` + strings.Join(keys, "|") + `)$`)
+}()
 
 // withoutSecrets is base without any secret, Duplicacy credential, or ARCHIVER_ variable.
 func withoutSecrets(base []string) []string {

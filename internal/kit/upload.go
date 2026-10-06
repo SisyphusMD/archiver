@@ -14,47 +14,63 @@ import (
 	"github.com/SisyphusMD/archiver/internal/config"
 )
 
-// remotes describe, per storage type, the rclone remote that reaches it (ADR 24): its
-// RCLONE_CONFIG_KIT_* settings, and the directory on it where the kit goes, beside the
-// backups. Credentials only ever travel in this environment, never argv or disk.
-var remotes = map[string]func(r *Run, t config.Target) (settings map[string]string, dir string, err error){
-	"local": func(r *Run, t config.Target) (map[string]string, string, error) {
-		return map[string]string{"TYPE": "local"}, t.LocalPath, nil
-	},
-	"sftp": func(r *Run, t config.Target) (map[string]string, string, error) {
+// remote is the rclone remote that reaches t for the kit (ADR 24): the type's settings
+// (config.Types), plus what needs local state: the SSH key and host keys for SFTP, rclone's
+// obscured form of a password, a Google Drive token file's contents, OneDrive's writable
+// token. Credentials only ever travel in this environment, never argv or disk.
+func (r *Run) remote(t config.Target) (map[string]string, string, error) {
+	typ, ok := config.Types[t.Type]
+	if !ok || typ.Remote == nil {
+		return nil, "", fmt.Errorf("no recovery-kit remote for storage type %s", t.Type)
+	}
+	settings, dir := typ.Remote(t.Values)
+	switch t.Type {
+	case "sftp", "sftpc":
 		known, algorithms, err := r.knownHosts(t)
 		if err != nil {
 			return nil, "", err
 		}
 		// No shell commands on the server (many allow SFTP only): rclone then cannot hash
-		// remotely and checks the size, as the sftp put it replaces did.
-		return map[string]string{
-			"TYPE": "sftp", "HOST": t.SFTPURL, "PORT": t.SFTPPort, "USER": t.SFTPUser,
-			"KEY_FILE": r.Layout.SSHPrivateKey(), "KNOWN_HOSTS_FILE": known, "SHELL_TYPE": "none",
-			// A server may forbid SETSTAT; the kit needs no timestamp, and the mode step after
-			// tolerates a refused chmod.
-			"SET_MODTIME": "false",
-			// Only the key types already trusted for this host: offered another type the
-			// server also has, rclone would call it a changed key and refuse.
-			"HOST_KEY_ALGORITHMS": algorithms,
-		}, "/" + t.SFTPPath, nil
-	},
-	"b2": func(r *Run, t config.Target) (map[string]string, string, error) {
-		return map[string]string{"TYPE": "b2", "ACCOUNT": t.B2ID, "KEY": t.B2Key}, t.B2Bucket, nil
-	},
-	"s3": func(r *Run, t config.Target) (map[string]string, string, error) {
-		region := t.S3Region
-		// duplicacy's "none" (region-less endpoints such as MinIO); SigV4 needs some region.
-		if region == "" || region == "none" {
-			region = "us-east-1"
+		// remotely and checks the size, as the sftp put it replaces did. A server may forbid
+		// SETSTAT; the kit needs no timestamp, and the mode step after tolerates a refused
+		// chmod. Only the key types already trusted for this host are offered: offered another
+		// type the server also has, rclone would call it a changed key and refuse.
+		for k, v := range map[string]string{"KEY_FILE": r.Layout.SSHPrivateKey(), "KNOWN_HOSTS_FILE": known,
+			"SHELL_TYPE": "none", "SET_MODTIME": "false", "HOST_KEY_ALGORITHMS": algorithms} {
+			settings[k] = v
 		}
-		return map[string]string{
-			"TYPE": "s3", "PROVIDER": "Other", "ACCESS_KEY_ID": t.S3ID, "SECRET_ACCESS_KEY": t.S3Secret,
-			"ENDPOINT": "https://" + t.S3Endpoint, "REGION": region, "FORCE_PATH_STYLE": "true",
-			// A key limited to its bucket may not create or list buckets.
-			"NO_CHECK_BUCKET": "true",
-		}, t.S3Bucket, nil
-	},
+	case "webdav", "webdav-http", "smb":
+		obscured, err := r.obscure(settings["PASS"])
+		if err != nil {
+			return nil, "", err
+		}
+		settings["PASS"] = obscured
+	case "one", "odb":
+		pre := strings.ToUpper(t.Type) + "_"
+		for _, f := range typ.Fields {
+			if !f.Rotates {
+				continue
+			}
+			token, id, driveType, err := oneDrive(config.WritableToken(t, f), t.Get(pre+"CLIENT_ID"), t.Get(pre+"CLIENT_SECRET"), t.Get(pre+"DRIVE_ID"))
+			if err != nil {
+				return nil, "", err
+			}
+			settings["TOKEN"], settings["DRIVE_ID"], settings["DRIVE_TYPE"] = token, id, driveType
+		}
+	}
+	return settings, dir, nil
+}
+
+// obscure is rclone's reversible encoding of a password, which its config expects; the
+// password reaches rclone on stdin.
+func (r *Run) obscure(pass string) (string, error) {
+	cmd := exec.Command(r.rclone(), "obscure", "-")
+	cmd.Stdin = strings.NewReader(pass)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("rclone obscure: %v", err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // after are the steps some types take once the kit is placed: making it as readable as the
@@ -62,6 +78,7 @@ var remotes = map[string]func(r *Run, t config.Target) (settings map[string]stri
 var after = map[string]func(r *Run, t config.Target, names []string) int{
 	"local": (*Run).localAccess,
 	"sftp":  (*Run).sftpAccess,
+	"sftpc": (*Run).sftpAccess,
 }
 
 func (r *Run) rclone() string {
@@ -73,11 +90,7 @@ func (r *Run) rclone() string {
 
 // upload places the kit and its README on t, returning OK, Failed or Unverified.
 func (r *Run) upload(t config.Target, kit, readme string) int {
-	remote, ok := remotes[t.Type]
-	if !ok {
-		return Failed
-	}
-	settings, dir, err := remote(r, t)
+	settings, dir, err := r.remote(t)
 	if err != nil {
 		r.warning(fmt.Sprintf("Recovery kit: cannot reach storage '%s': %v", t.Name, err))
 		return Failed
@@ -132,13 +145,13 @@ var chmod = os.Chmod
 // ACLs; a chmod is made only when it changes the mode, because on an ACL-backed share
 // (Synology's) any chmod discards the inherited ACL, even one to the mode already shown.
 func (r *Run) localAccess(t config.Target, names []string) int {
-	ref, err := os.Stat(filepath.Join(t.LocalPath, "config"))
+	ref, err := os.Stat(filepath.Join(t.Get("LOCAL_PATH"), "config"))
 	if err != nil {
 		return OK
 	}
 	status := OK
 	for _, n := range names {
-		p := filepath.Join(t.LocalPath, n)
+		p := filepath.Join(t.Get("LOCAL_PATH"), n)
 		if st, ok := ref.Sys().(*syscall.Stat_t); ok {
 			os.Chown(p, int(st.Uid), int(st.Gid))
 		}
@@ -152,7 +165,7 @@ func (r *Run) localAccess(t config.Target, names []string) int {
 		}
 	}
 	if status != OK {
-		r.warning(fmt.Sprintf("Recovery kit in '%s' is less readable than its config; retrying on the next run.", t.LocalPath))
+		r.warning(fmt.Sprintf("Recovery kit in '%s' is less readable than its config; retrying on the next run.", t.Get("LOCAL_PATH")))
 	}
 	return status
 }
@@ -188,20 +201,20 @@ func (r *Run) knownHosts(t config.Target) (path, algorithms string, err error) {
 		dir = "/root/.ssh"
 	}
 	path = filepath.Join(dir, "known_hosts")
-	host := t.SFTPURL
-	if t.SFTPPort != "" && t.SFTPPort != "22" {
-		host = "[" + t.SFTPURL + "]:" + t.SFTPPort
+	host := t.Get("SFTP_URL")
+	if t.Get("SFTP_PORT") != "" && t.Get("SFTP_PORT") != "22" {
+		host = "[" + t.Get("SFTP_URL") + "]:" + t.Get("SFTP_PORT")
 	}
 	if algorithms = trusted(path, host); algorithms != "" {
 		return path, algorithms, nil
 	}
-	port := t.SFTPPort
+	port := t.Get("SFTP_PORT")
 	if port == "" {
 		port = "22"
 	}
-	keys, err := exec.Command("ssh-keyscan", "-T", "15", "-p", port, t.SFTPURL).Output()
+	keys, err := exec.Command("ssh-keyscan", "-T", "15", "-p", port, t.Get("SFTP_URL")).Output()
 	if err != nil || len(bytes.TrimSpace(keys)) == 0 {
-		return "", "", fmt.Errorf("no host key from %s:%s", t.SFTPURL, port)
+		return "", "", fmt.Errorf("no host key from %s:%s", t.Get("SFTP_URL"), port)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", "", err
@@ -257,9 +270,9 @@ func (r *Run) sftp(t config.Target, batch string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command("sftp", "-q", "-P", t.SFTPPort, "-i", r.Layout.SSHPrivateKey(),
+	cmd := exec.Command("sftp", "-q", "-P", t.Get("SFTP_PORT"), "-i", r.Layout.SSHPrivateKey(),
 		"-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "UserKnownHostsFile="+known,
-		"-b", "-", t.SFTPUser+"@"+t.SFTPURL)
+		"-b", "-", t.Get("SFTP_USER")+"@"+t.Get("SFTP_URL"))
 	cmd.Stdin = bytes.NewBufferString(batch)
 	return cmd.Output()
 }
@@ -281,7 +294,7 @@ func (r *Run) sftpMode(t config.Target, path string) (os.FileMode, bool) {
 // ignored the chmod still reports success, and recording that would freeze an owner-only
 // kit in place. An unreadable mode is not a pass.
 func (r *Run) sftpAccess(t config.Target, names []string) int {
-	dir := "/" + t.SFTPPath
+	dir := "/" + t.Get("SFTP_PATH")
 	mode, ok := r.sftpMode(t, dir+"/config")
 	if !ok {
 		mode = 0o644
@@ -292,7 +305,7 @@ func (r *Run) sftpAccess(t config.Target, names []string) int {
 		fmt.Fprintf(&batch, "-chmod %o %s/%s\n", mode, dir, n)
 	}
 	r.sftp(t, batch.String())
-	target := t.SFTPUser + "@" + t.SFTPURL
+	target := t.Get("SFTP_USER") + "@" + t.Get("SFTP_URL")
 	placed, ok := r.sftpMode(t, dir+"/"+names[0])
 	if !ok {
 		r.warning(fmt.Sprintf("Recovery kit uploaded to '%s' but its mode could not be read back; re-placing on the next run.", target))

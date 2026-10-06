@@ -103,3 +103,59 @@ func TestWords(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// A type without a block of its own lists its settings, URL and credentials: the break-glass
+// key when set, else the backup key marked FULL ACCESS.
+func TestGenericBlock(t *testing.T) {
+	az := map[string]string{"STORAGE_TARGET_1_NAME": "az", "STORAGE_TARGET_1_TYPE": "azure",
+		"STORAGE_TARGET_1_AZURE_ACCOUNT": "acct", "STORAGE_TARGET_1_AZURE_CONTAINER": "c"}
+	sec := map[string]string{"RECOVERY_PASSWORD": "recovery-pw", "STORAGE_TARGET_1_AZURE_KEY": "backup-key"}
+	text := func(p *Page) string {
+		var b strings.Builder
+		for _, e := range p.Elements {
+			b.WriteString(e.Kind + " " + e.Text + "\n")
+		}
+		return b.String()
+	}
+	got := text(page(t, az, sec))
+	for _, want := range []string{"m Azure storage account: acct\n", "m Duplicacy storage URL: azure://acct/c\n", "warn FULL ACCESS", "m Azure access key: backup-key\n"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("backup credential page lacks %q:\n%s", want, got)
+		}
+	}
+	sec["STORAGE_TARGET_1_BREAKGLASS_AZURE_KEY"] = "read-key"
+	got = text(page(t, az, sec))
+	if strings.Contains(got, "FULL ACCESS") || !strings.Contains(got, "m Azure access key: read-key\n") || strings.Contains(got, "backup-key") {
+		t.Errorf("break-glass page:\n%s", got)
+	}
+}
+
+// A token that changes as it is used stays off the page, which points to the provider instead;
+// the app's own secret is still printed.
+func TestRotatingTokenOffPage(t *testing.T) {
+	one := map[string]string{"STORAGE_TARGET_1_NAME": "od", "STORAGE_TARGET_1_TYPE": "one", "STORAGE_TARGET_1_ONE_PATH": "b", "STORAGE_TARGET_1_ONE_CLIENT_ID": "cid"}
+	sec := map[string]string{"RECOVERY_PASSWORD": "recovery-pw", "STORAGE_TARGET_1_ONE_TOKEN": `{"refresh_token":"rotating"}`, "STORAGE_TARGET_1_ONE_CLIENT_SECRET": "app-secret"}
+	var b strings.Builder
+	for _, e := range page(t, one, sec).Elements {
+		b.WriteString(e.Text + "\n")
+	}
+	got := b.String()
+	if strings.Contains(got, "rotating") || !strings.Contains(got, "sign in to the provider") || !strings.Contains(got, "app-secret") {
+		t.Errorf("page:\n%s", got)
+	}
+}
+
+// A setting left at its default reaches the fetch command as a run would use it.
+func TestFetchUsesDefaults(t *testing.T) {
+	w := map[string]string{"STORAGE_TARGET_1_NAME": "w", "STORAGE_TARGET_1_TYPE": "wasabi", "STORAGE_TARGET_1_WASABI_BUCKETNAME": "bk"}
+	sec := map[string]string{"RECOVERY_PASSWORD": "recovery-pw", "STORAGE_TARGET_1_WASABI_KEY": "k", "STORAGE_TARGET_1_WASABI_SECRET": "s"}
+	var cmd string
+	for _, e := range page(t, w, sec).Elements {
+		if e.Kind == "cmd" {
+			cmd = e.Text
+		}
+	}
+	if !strings.Contains(cmd, `endpoint="https://s3.wasabisys.com"`) || !strings.Contains(cmd, `region="us-east-1"`) {
+		t.Errorf("fetch command %s", cmd)
+	}
+}

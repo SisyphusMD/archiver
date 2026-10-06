@@ -34,29 +34,15 @@ type Target struct {
 	N    int
 	Name string
 	Type string
-
-	LocalPath  string
-	SFTPURL    string
-	SFTPPort   string
-	SFTPUser   string
-	SFTPPath   string
-	B2Bucket   string
-	S3Bucket   string
-	S3Endpoint string
-	S3Region   string
+	// Values are the type's settings and secrets by field name (Types); a secret passed as
+	// a file path also has <NAME>_FILE.
+	Values Values
 	// CheckInterval is STORAGE_TARGET_<N>_CHECK_INTERVAL, empty for the default.
 	CheckInterval string
-
-	B2ID     string
-	B2Key    string
-	S3ID     string
-	S3Secret string
 }
 
-// StorageTypes are the storage types a configuration may use. Every one needs, besides its
-// settings here, a URL (Target.URL), credentials (DuplicacyEnv) and a recovery-kit uploader;
-// internal/kit's tests fail for a type without one.
-var StorageTypes = []string{"local", "sftp", "b2", "s3"}
+// Get returns one of the target's values.
+func (t Target) Get(name string) string { return t.Values[name] }
 
 // Config is the resolved configuration.
 type Config struct {
@@ -79,10 +65,32 @@ type Config struct {
 	CheckInterval            string // CHECK_INTERVAL: the default for every target
 }
 
-var secretVar = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|STORAGE_TARGET_[0-9]+_(B2_ID|B2_KEY|S3_ID|S3_SECRET|BREAKGLASS_(B2_ID|B2_KEY|S3_ID|S3_SECRET|SSH_KEY)))$`)
+var globalSecret = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN)$`)
+var targetVar = regexp.MustCompile(`^STORAGE_TARGET_[0-9]+_(.+)$`)
 
-// IsSecret reports whether a variable name is a secret, which is read only from a file.
-func IsSecret(name string) bool { return secretVar.MatchString(name) }
+// IsSecret reports whether a variable name is a secret, which is read only from a file: a
+// global one, a storage type's secret field, its break-glass variant, or the break-glass SSH key.
+func IsSecret(name string) bool {
+	if globalSecret.MatchString(name) {
+		return true
+	}
+	m := targetVar.FindStringSubmatch(name)
+	if m == nil {
+		return false
+	}
+	field := strings.TrimPrefix(m[1], "BREAKGLASS_")
+	if m[1] == "BREAKGLASS_SSH_KEY" {
+		return true
+	}
+	for _, t := range Types {
+		for _, f := range t.Fields {
+			if f.Secret && f.Name == field && (field == m[1] || f.BreakGlass) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // Load resolves the configuration. Secrets passed as plain environment variables are
 // ignored, with a warning each: they would leak through /proc and docker inspect. Load does
@@ -145,21 +153,21 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 			break
 		}
 		t.Type = src.Getenv(p + "TYPE")
-		t.LocalPath = src.Getenv(p + "LOCAL_PATH")
-		t.SFTPURL = src.Getenv(p + "SFTP_URL")
-		t.SFTPPort = src.Getenv(p + "SFTP_PORT")
-		t.SFTPUser = src.Getenv(p + "SFTP_USER")
-		t.SFTPPath = src.Getenv(p + "SFTP_PATH")
-		t.B2Bucket = src.Getenv(p + "B2_BUCKETNAME")
-		t.S3Bucket = src.Getenv(p + "S3_BUCKETNAME")
-		t.S3Endpoint = src.Getenv(p + "S3_ENDPOINT")
-		t.S3Region = src.Getenv(p + "S3_REGION")
 		t.CheckInterval = src.Getenv(p + "CHECK_INTERVAL")
-		switch t.Type {
-		case "b2":
-			t.B2ID, t.B2Key = secret(p+"B2_ID"), secret(p+"B2_KEY")
-		case "s3":
-			t.S3ID, t.S3Secret = secret(p+"S3_ID"), secret(p+"S3_SECRET")
+		t.Values = Values{}
+		for _, f := range Types[t.Type].Fields {
+			if f.Secret {
+				t.Values[f.Name] = secret(p + f.Name)
+				if f.Path {
+					t.Values[f.Name+"_FILE"] = secretPath(src, p+f.Name)
+				}
+				continue
+			}
+			v := src.Getenv(p + f.Name)
+			if v == "" {
+				v = f.Default
+			}
+			t.Values[f.Name] = v
 		}
 		c.Targets = append(c.Targets, t)
 	}
@@ -172,6 +180,14 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 // boolSetting is "true" in any case, with true as the default; anything else is false.
 func boolSetting(v string) bool {
 	return v == "" || strings.ToLower(v) == "true"
+}
+
+// secretPath is where a secret is read from: <NAME>_FILE if set, else <secrets dir>/<name>.
+func secretPath(src Source, name string) string {
+	if p := src.Getenv(name + "_FILE"); p != "" {
+		return p
+	}
+	return filepath.Join(src.SecretsDir, strings.ToLower(name))
 }
 
 // readSecret reads <NAME>_FILE if set, else <secrets dir>/<name>. A missing default file
@@ -260,42 +276,19 @@ func (c *Config) ValidateStorage(secretsDir string) error {
 		if !slices.Contains(StorageTypes, t.Type) {
 			return fmt.Errorf("The storage type %s is not supported. Please check your %sTYPE configuration.", t.Type, p)
 		}
-		switch t.Type {
-		case "local":
-			if t.LocalPath == "" {
-				return fmt.Errorf("Missing LOCAL_PATH configuration for the %s storage. Please check your 'STORAGE_TARGET_%d' configuration.", t.Name, t.N)
+		for _, f := range Types[t.Type].Fields {
+			if f.Optional || f.Default != "" || t.Values[f.Name] != "" {
+				continue
 			}
-		case "sftp":
-			for _, f := range []struct{ k, v string }{{"SFTP_URL", t.SFTPURL}, {"SFTP_PORT", t.SFTPPort}, {"SFTP_USER", t.SFTPUser}, {"SFTP_PATH", t.SFTPPath}} {
-				if f.v == "" {
-					return missing("SFTP", f.k)
-				}
+			if f.Secret {
+				return missingSecret(strings.ToUpper(t.Type), f.Name)
 			}
-		case "b2":
-			if t.B2Bucket == "" {
-				return missing("B2", "B2_BUCKETNAME")
+			return missing(strings.ToUpper(t.Type), f.Name)
+		}
+		if req := Types[t.Type].Require; req != nil {
+			if name := req(t.withDefaults()); name != "" {
+				return missing(strings.ToUpper(t.Type), name)
 			}
-			if t.B2ID == "" {
-				return missingSecret("B2", "B2_ID")
-			}
-			if t.B2Key == "" {
-				return missingSecret("B2", "B2_KEY")
-			}
-		case "s3":
-			if t.S3Bucket == "" {
-				return missing("S3", "S3_BUCKETNAME")
-			}
-			if t.S3Endpoint == "" {
-				return missing("S3", "S3_ENDPOINT")
-			}
-			if t.S3ID == "" {
-				return missingSecret("S3", "S3_ID")
-			}
-			if t.S3Secret == "" {
-				return missingSecret("S3", "S3_SECRET")
-			}
-		default:
-			return fmt.Errorf("The storage type %s is not supported. Please check your %sTYPE configuration.", t.Type, p)
 		}
 	}
 	for _, s := range []struct{ name, v string }{{"STORAGE_PASSWORD", c.StoragePassword}, {"RSA_PASSPHRASE", c.RSAPassphrase}} {
@@ -342,8 +335,8 @@ func (c *Config) TargetCheckInterval(t Target) time.Duration {
 			return d
 		}
 	}
-	if t.Type == "sftp" {
-		return 7 * 24 * time.Hour
+	if d := Types[t.Type].CheckInterval; d > 0 {
+		return d
 	}
 	return 24 * time.Hour
 }
