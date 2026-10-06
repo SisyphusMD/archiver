@@ -9,7 +9,6 @@ import (
 	"syscall"
 
 	"github.com/SisyphusMD/archiver/internal/config"
-	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
@@ -17,46 +16,15 @@ import (
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
-// goPipeline reports whether this deployment's backups run in Go. Services that all still
-// carry service-backup-settings.sh stay on the bash pipeline until migrated.
-// ARCHIVER_PIPELINE=bash or =go overrides the choice.
-func goPipeline(l layout.Layout, src config.Source) bool {
-	switch src.Getenv("ARCHIVER_PIPELINE") {
-	case "bash":
-		return false
-	case "go":
-		return true
-	}
-	cfg, _, err := config.Load(src, nil)
-	if err != nil {
-		return true // the Go pipeline reports the configuration error
-	}
-	dirs, _ := config.ExpandServiceDirectories(cfg.ServiceDirectories)
-	legacy, executable := false, false
-	for _, d := range dirs {
-		if exists(filepath.Join(d, hooks.Legacy)) {
-			legacy = true
-		}
-		for _, f := range []string{hooks.PreBackup, hooks.PostBackup, hooks.Filters} {
-			if exists(filepath.Join(d, f)) {
-				executable = true
-			}
-		}
-	}
-	// A partly migrated deployment runs in Go, which refuses the unmigrated services
-	// loudly; bash would run their hooks but silently ignore the migrated ones'.
-	return !legacy || executable
-}
-
 func exists(p string) bool {
 	_, err := os.Lstat(p)
 	return err == nil
 }
 
-// backupCommand runs `archiver backup [--detach]` in Go, or returns false to leave the
-// command line to bash (other arguments, or a deployment not on the Go pipeline).
+// backupCommand runs `archiver backup [--detach]`; ok is false for other arguments, which
+// get the usage.
 func backupCommand(args []string) (int, bool) {
-	// Any mix of --detach and -d, as archiver.sh accepts; anything else is bash's to reject.
+	// Any mix of --detach and -d.
 	detach := false
 	for _, a := range args {
 		if a != "--detach" && a != "-d" {
@@ -66,17 +34,6 @@ func backupCommand(args []string) (int, bool) {
 	}
 	l := layout.Default()
 	src := config.FromEnvironment()
-	if !goPipeline(l, src) {
-		// The daemon decided ownership with its own environment; a bash run forced here
-		// copies inline and would be a second copier into each target.
-		// Bash copies without the workers' copy locks, so it is refused whenever workers run,
-		// whatever its storage settings.
-		if reply, err := daemon.Send(l.DaemonSocket(), daemon.CmdWorkers); err == nil && reply == daemon.ReplyOK {
-			fmt.Fprintln(os.Stderr, "Copy workers keep this deployment's secondary storages, and the bash pipeline would copy alongside them. Run the backup without ARCHIVER_PIPELINE=bash.")
-			return 1, true
-		}
-		return 0, false
-	}
 	if detach {
 		return detachBackup(l), true
 	}
@@ -128,12 +85,6 @@ func detachBackup(l layout.Layout) int {
 // migrateHooks runs `archiver migrate hooks [DIR...]`: every configured service directory,
 // or the ones named.
 func migrateHooks(dirs []string) int {
-	// Migrated services run only on the Go pipeline; converting them for a deployment that
-	// must stay on bash would leave every one of their backups refused.
-	if os.Getenv("ARCHIVER_PIPELINE") == "bash" {
-		fmt.Fprintln(os.Stderr, "ARCHIVER_PIPELINE=bash keeps this deployment on the bash pipeline, which does not run migrated hooks. Unset it before migrating.")
-		return 1
-	}
 	if len(dirs) == 0 {
 		cfg, _, err := config.Load(config.FromEnvironment(), nil)
 		if err != nil {

@@ -1,7 +1,5 @@
-// Command archiver is the image's CLI, midway through replacing the bash implementation
-// (ADR 8). Commands already ported run here; every other command line runs the bash program
-// that implements it, which replaces this process, so signals, the terminal, and the exit
-// status pass straight through as if the bash program had been called directly.
+// Command archiver is the image's CLI and its entrypoint: every command runs here (ADR 8,
+// ADR 10).
 package main
 
 import (
@@ -19,19 +17,16 @@ import (
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/health"
 	"github.com/SisyphusMD/archiver/internal/layout"
-	"github.com/SisyphusMD/archiver/internal/localprune"
 	"github.com/SisyphusMD/archiver/internal/logview"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
 
 const (
-	bashCLI  = "/opt/archiver/archiver.sh"
 	selfPath = "/usr/local/bin/archiver"
 )
 
-// ported maps each command implemented in Go to its entry point, which returns the exit
-// status. They take no arguments; a command line with any is left to archiver.sh, so its
-// usage errors stay exactly as they were.
+// ported maps each command that takes no arguments to its entry point, which returns the
+// exit status; a command line with any gets the usage.
 var ported = map[string]func() int{
 	"status": func() int {
 		if err := status.Write(os.Stdout, layout.Default(), time.Now()); err != nil {
@@ -89,9 +84,6 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == "recovery-kit-step" {
 		os.Exit(recoveryKitStep())
 	}
-	if len(os.Args) >= 2 && os.Args[1] == "prune-local" {
-		os.Exit(pruneLocal(os.Args[2:]))
-	}
 	if len(os.Args) >= 2 && os.Args[1] == "mirror" {
 		os.Exit(mirrorCommand(os.Args[2:]))
 	}
@@ -103,17 +95,7 @@ func main() {
 			os.Exit(run())
 		}
 	}
-	target, args := route(os.Args[1:])
-	argv := append([]string{target}, args...)
-	err := syscall.Exec(target, argv, os.Environ())
-	// Exec only returns on failure.
-	fmt.Fprintf(os.Stderr, "archiver: cannot run %s: %v\n", target, err)
-	os.Exit(127)
-}
-
-// route picks the bash program that implements a command line and the arguments it gets.
-func route(args []string) (string, []string) {
-	return bashCLI, args
+	os.Exit(usage(os.Args[1:]))
 }
 
 // followLogs runs the log viewer until the backup ends or a signal stops it, and then exits
@@ -177,7 +159,7 @@ func runDaemon(args []string) int {
 		defer workers.shutdown()
 	}
 	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, func(j daemon.Job) int {
-		// A fresh process per run, as under cron: the bash pipeline keeps its own state.
+		// A fresh process per run, as under cron: each run starts clean.
 		cmd := exec.Command(selfPath, j.Name)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
@@ -192,8 +174,7 @@ func runDaemon(args []string) int {
 	return 0
 }
 
-// daemonCtl sends one command to a running daemon. With no daemon it exits 1 quietly:
-// the bash stop, pause and resume call it whether or not one runs.
+// daemonCtl sends one command to a running daemon. With no daemon it exits 1 quietly.
 func daemonCtl(cmd string) int {
 	// Asked whether workers keep the storages, or told local changed, the daemon must know
 	// which storages the caller means: with other settings, the caller keeps its own.
@@ -242,29 +223,4 @@ func mirrorCommand(args []string) int {
 		}
 	}
 	return rc
-}
-
-// pruneLocal is the primary's prune for bash maintenance, run in its repository:
-// `archiver prune-local STORAGE THREADS exhaustive|normal -keep ...`. It leaves out the
-// revisions a copy or restore is still reading (ADR 19). Stopped by SIGTERM, it exits 130.
-func pruneLocal(args []string) int {
-	if len(args) < 3 || (args[2] != "exhaustive" && args[2] != "normal") {
-		fmt.Fprintln(os.Stderr, "usage: archiver prune-local STORAGE THREADS exhaustive|normal -keep n:m ...")
-		return 2
-	}
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
-	defer cancel()
-	l := layout.Default()
-	err := localprune.Run(ctx, localprune.Options{
-		Bin: "duplicacy", Storage: args[0], Threads: args[1], Exhaustive: args[2] == "exhaustive", Keep: args[3:],
-		InUseDir: l.InUseDir(), Out: os.Stdout,
-	})
-	switch {
-	case ctx.Err() != nil:
-		return 130
-	case err != nil:
-		fmt.Println("Prune of local storage failed:", err)
-		return 1
-	}
-	return 0
 }

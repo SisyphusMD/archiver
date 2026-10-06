@@ -273,10 +273,6 @@ jobs:
         run: |
           docker run -i --rm --hostname pr-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/pause-resume.sh
-      - name: Per-service settings (filters shape the snapshot, hooks ordered and isolated)
-        run: |
-          docker run -i --rm --hostname ss-host --cap-drop ALL --cap-add DAC_OVERRIDE \
-            --entrypoint bash roundtrip:local -s < tests/integration/service-settings.sh
       - name: Healthcheck (env-native healthy, finished-with-errors warns, crash unhealthy)
         run: |
           docker run -i --rm --hostname hc-host --cap-drop ALL --cap-add DAC_OVERRIDE \
@@ -309,10 +305,6 @@ jobs:
         run: |
           docker run -i --rm --hostname mt-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/maintenance.sh
-      - name: Post-backup hook runs after a failed or stopped backup
-        run: |
-          docker run -i --rm --hostname hp-host --cap-drop ALL --cap-add DAC_OVERRIDE \
-            --entrypoint bash roundtrip:local -s < tests/integration/hooks-always-post.sh
       - name: Hook exit codes count (failed pre hook skips its service; post hook still runs)
         run: |
           docker run -i --rm --hostname hf-host --cap-drop ALL --cap-add DAC_OVERRIDE \
@@ -407,6 +399,8 @@ jobs:
         run: IMAGE=hosttests:local bash tests/integration/sftp-runtime.sh
       - name: Bundle-era inputs refuse with the 0.11 conversion (ADRs 4, 22)
         run: IMAGE=hosttests:local bash tests/integration/refuse-bundle.sh
+      - name: Legacy settings files refuse start; migrate hooks runs as the command (ADR 20)
+        run: IMAGE=hosttests:local bash tests/integration/refuse-legacy.sh
 
   e2e:
     name: Black-box suite (never-break across versions)
