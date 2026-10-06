@@ -14,9 +14,12 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/archiver ./cmd/archiver
 
-# Duplicacy is built from its pinned source with one reviewed patch (ADR 26): build/duplicacy/
-# dropbox-app.patch lets Dropbox refresh tokens with your own app instead of duplicacy.com.
-# Its modules are checked against the source's go.sum; the CLI still runs as a child process.
+# Duplicacy is built from its pinned source with reviewed patches (ADR 26): build/duplicacy/
+# dropbox-app.patch lets Dropbox refresh tokens with your own app instead of duplicacy.com, and
+# highwayhash-arm64.patch renames an arm64 assembly table in a vendored fork whose name clash
+# with a Go function current Go's linker rejects, keeping the exact bytes the released 3.2.5
+# arm64 binary read there (so its hashes match the release's). Modules are vendored against
+# the source's go.sum; the CLI still runs as a child process.
 FROM --platform=$BUILDPLATFORM golang:1.27.1-trixie@sha256:0982f930de50a4f1a2b4453d51651f0031082ef2e3a25deb3c763fc39a1094a0 AS duplicacy
 ARG TARGETOS
 ARG TARGETARCH
@@ -34,6 +37,7 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
     echo "$DUPLICACY_SOURCE_SHA256  /tmp/duplicacy.tar.gz" | sha256sum -c - && \
     mkdir /src && tar -xzf /tmp/duplicacy.tar.gz -C /src --strip-components=1 && \
     cd /src && patch -p1 < /patches/dropbox-app.patch && \
+    go mod vendor && patch -p1 < /patches/highwayhash-arm64.patch && \
     go test -count=1 -run TestDropboxAppTokens ./src/ && \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/duplicacy ./duplicacy
 
