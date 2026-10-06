@@ -23,6 +23,7 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
     { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/contrib.list 2>/dev/null || true; } && \
     apt-get update && apt-get install -y \
     openssh-client \
+    tini \
     openssl \
     curl \
     ca-certificates \
@@ -109,8 +110,6 @@ RUN chmod +x /opt/archiver/archiver.sh && \
 
 COPY --from=cli /out/archiver /usr/local/bin/archiver
 
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Hooks are executables (ADR 20); the e2e harness reads this to write them in that form.
 LABEL io.archiver.hooks="executable"
@@ -131,5 +130,7 @@ VOLUME ["/opt/archiver/logs"]
 HEALTHCHECK --interval=5m --timeout=10s --start-period=1m --retries=3 \
     CMD archiver healthcheck >/dev/null 2>&1 || exit 1
 
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+# tini is PID 1: it reaps processes orphaned by hooks (a Go PID 1 would not) and passes
+# docker stop's SIGTERM to the entrypoint, which stops everything gracefully.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/archiver", "entrypoint"]
 CMD []

@@ -51,6 +51,9 @@ var ported = map[string]func() int{
 }
 
 func main() {
+	if len(os.Args) >= 2 && os.Args[1] == "entrypoint" {
+		os.Exit(entrypointCommand(os.Args[2:]))
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "daemon" {
 		os.Exit(runDaemon(os.Args[2:]))
 	}
