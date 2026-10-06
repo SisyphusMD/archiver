@@ -33,7 +33,6 @@ jobs:
             --severity=warning
             --shell=bash
             archiver.sh
-            docker-entrypoint.sh
 
   validate-changelog:
     name: Validate CHANGELOG structure

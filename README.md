@@ -393,7 +393,7 @@ The entrypoint selects one of three modes based on the first container argument:
 | Mode | How it's invoked | Behavior |
 |------|------------------|----------|
 | `init` | `docker run ... archiver:<tag> init` | Interactive setup: generates env-native materials and the recovery password. Exits when done. |
-| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads the configuration, then either runs the scheduler, `archiver daemon` (if `BACKUP_SCHEDULE` and/or `MAINTENANCE_SCHEDULE` is set) or idles on `tail -f /dev/null` so you can `docker exec` in. |
+| _default_ (daemon) | `docker run ... archiver:<tag>` (no args) | Loads the configuration, then either runs the scheduler, `archiver daemon` (if `BACKUP_SCHEDULE` and/or `MAINTENANCE_SCHEDULE` is set) or waits so you can `docker exec` in. |
 | `run` | `docker run ... archiver:<tag> run <subcommand>` | Loads the configuration, then `exec`s a single non-interactive subcommand and exits with that subcommand's exit code. Designed for Kubernetes Jobs / init containers and other CI flows. |
 
 `run` mode only accepts subcommands whose exit codes form a meaningful contract: `auto-restore`, `auto-restore-all`, `snapshot-exists`, `healthcheck`, `backup`, and `maintenance` (synchronous paths intended for external schedulers — see [Running a Backup from an External Scheduler](#running-a-backup-from-an-external-scheduler-run-backup)). Any other subcommand is rejected with exit code `2`.

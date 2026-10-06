@@ -56,7 +56,7 @@ refused "BUNDLE_PASSWORD" "BUNDLE_PASSWORD in the environment" -e BUNDLE_PASSWOR
 
 log "a config.sh refuses"
 refused "config.sh" "/opt/archiver/config.sh" -v "$SECVOL":/run/secrets --entrypoint bash "$IMAGE" \
-  -c 'touch /opt/archiver/config.sh && exec /usr/local/bin/docker-entrypoint.sh'
+  -c 'touch /opt/archiver/config.sh && exec archiver entrypoint'
 
 log "run mode refuses too"
 refused "run backup" "/opt/archiver/bundle/bundle.tar.enc" -v "$BUNVOL":/opt/archiver/bundle -v "$SECVOL":/run/secrets "$IMAGE" run backup
