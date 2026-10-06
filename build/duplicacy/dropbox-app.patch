@@ -1,0 +1,201 @@
+--- a/src/duplicacy_dropboxapp_test.go
++++ b/src/duplicacy_dropboxapp_test.go
+@@ -0,0 +1,63 @@
++// Copyright (c) Acrosync LLC. All rights reserved.
++// Free for personal use and commercial trial
++// Commercial use requires per-user licenses available from https://duplicacy.com
++
++package duplicacy
++
++import (
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"sync/atomic"
++	"testing"
++
++	"golang.org/x/oauth2"
++)
++
++// A token Dropbox rejects before its expiry is replaced on the next request.
++func TestDropboxAppTokensReplaceRejected(t *testing.T) {
++	var issued int32
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		switch r.URL.Path {
++		case "/oauth2/token":
++			r.ParseForm()
++			if r.Form.Get("grant_type") != "refresh_token" || r.Form.Get("refresh_token") != "refresh" {
++				http.Error(w, "bad request", http.StatusBadRequest)
++				return
++			}
++			n := atomic.AddInt32(&issued, 1)
++			w.Header().Set("Content-Type", "application/json")
++			fmt.Fprintf(w, `{"access_token":"access-%d","token_type":"bearer","expires_in":14400}`, n)
++		case "/2/users/get_current_account":
++			if r.Header.Get("Authorization") != "Bearer access-2" {
++				http.Error(w, "expired", http.StatusUnauthorized)
++				return
++			}
++			w.Write([]byte(`{}`))
++		}
++	}))
++	defer server.Close()
++
++	tokens := &appTokens{
++		config:       &oauth2.Config{ClientID: "key", ClientSecret: "secret", Endpoint: oauth2.Endpoint{TokenURL: server.URL + "/oauth2/token"}},
++		refreshToken: "refresh",
++	}
++	client := &http.Client{Transport: tokens}
++	call := func() int {
++		response, err := client.Post(server.URL+"/2/users/get_current_account", "application/json", nil)
++		if err != nil {
++			t.Fatal(err)
++		}
++		response.Body.Close()
++		return response.StatusCode
++	}
++	if status := call(); status != http.StatusUnauthorized {
++		t.Fatalf("first call: %d, want 401 for the rejected token", status)
++	}
++	if status := call(); status != http.StatusOK {
++		t.Fatalf("retry: %d, want 200 with a fresh token", status)
++	}
++	if issued != 2 {
++		t.Errorf("%d tokens issued, want 2", issued)
++	}
++}
+--- a/src/duplicacy_dropboxstorage.go
++++ b/src/duplicacy_dropboxstorage.go
+@@ -5,11 +5,15 @@
+ package duplicacy
+ 
+ import (
++	"context"
+ 	"fmt"
+ 	"io/ioutil"
++	"net/http"
+ 	"strings"
++	"sync"
+ 
+ 	"github.com/gilbertchen/go-dropbox"
++	"golang.org/x/oauth2"
+ )
+ 
+ type DropboxStorage struct {
+@@ -20,13 +24,75 @@
+ 	storageDir     string
+ }
+ 
+-// CreateDropboxStorage creates a dropbox storage object.
+-func CreateDropboxStorage(refreshToken string, storageDir string, minimumNesting int, threads int) (storage *DropboxStorage, err error) {
++// appTokens authorizes requests with access tokens from the user's own Dropbox app. A token
++// Dropbox rejects is dropped, so the client's retry of a 401 gets a fresh one.
++type appTokens struct {
++	lock         sync.Mutex
++	config       *oauth2.Config
++	refreshToken string
++	token        *oauth2.Token
++}
++
++func (tokens *appTokens) current() (string, error) {
++	tokens.lock.Lock()
++	defer tokens.lock.Unlock()
++	if !tokens.token.Valid() {
++		token, err := tokens.config.TokenSource(context.Background(), &oauth2.Token{RefreshToken: tokens.refreshToken}).Token()
++		if err != nil {
++			return "", fmt.Errorf("failed to refresh the access token with the Dropbox app: %v", err)
++		}
++		tokens.token = token
++	}
++	return tokens.token.AccessToken, nil
++}
++
++func (tokens *appTokens) RoundTrip(request *http.Request) (*http.Response, error) {
++	accessToken, err := tokens.current()
++	if err != nil {
++		return nil, err
++	}
++	request = request.Clone(request.Context())
++	request.Header.Set("Authorization", "Bearer "+accessToken)
++	response, err := http.DefaultTransport.RoundTrip(request)
++	if err == nil && response.StatusCode == http.StatusUnauthorized {
++		tokens.lock.Lock()
++		if tokens.token != nil && tokens.token.AccessToken == accessToken {
++			tokens.token = nil
++		}
++		tokens.lock.Unlock()
++	}
++	return response, err
++}
++
++// CreateDropboxStorage creates a dropbox storage object. With clientID set, access tokens are
++// refreshed directly with Dropbox using that app; otherwise through duplicacy.com.
++func CreateDropboxStorage(refreshToken string, storageDir string, minimumNesting int, threads int, clientID string, clientSecret string) (storage *DropboxStorage, err error) {
++
++	var tokens *appTokens
++	if clientID != "" {
++		tokens = &appTokens{
++			config: &oauth2.Config{
++				ClientID:     clientID,
++				ClientSecret: clientSecret,
++				Endpoint:     oauth2.Endpoint{TokenURL: "https://api.dropboxapi.com/oauth2/token"},
++			},
++			refreshToken: refreshToken,
++		}
++		if _, err := tokens.current(); err != nil {
++			return nil, err
++		}
++	}
+ 
+ 	var clients []*dropbox.Files
+ 	for i := 0; i < threads; i++ {
+-		client := dropbox.NewFiles(dropbox.NewConfig("", refreshToken, "https://duplicacy.com/dropbox_refresh"))
+-		clients = append(clients, client)
++		config := dropbox.NewConfig("", refreshToken, "https://duplicacy.com/dropbox_refresh")
++		if tokens != nil {
++			// The transport sets the access token on every request; the placeholder keeps the
++			// client from refreshing through duplicacy.com itself.
++			config = dropbox.NewConfig("set-by-transport", "", "")
++			config.HTTPClient = &http.Client{Transport: tokens}
++		}
++		clients = append(clients, dropbox.NewFiles(config))
+ 	}
+ 
+ 	if storageDir == "" || storageDir[0] != '/' {
+--- a/src/duplicacy_storage.go
++++ b/src/duplicacy_storage.go
+@@ -542,12 +542,22 @@
+ 	} else if matched[1] == "dropbox" {
+ 		storageDir := matched[3] + matched[5]
+ 		token := GetPassword(preference, "dropbox_token", "Enter Dropbox refresh token:", true, resetPassword)
+-		dropboxStorage, err := CreateDropboxStorage(token, storageDir, 1, threads)
++		// client_id, like the OneDrive one, can be stored in preferences
++		client_id := GetPasswordFromPreference(preference, "dropbox_client_id")
++		client_secret := ""
++		if client_id != "" {
++			prompt := fmt.Sprintf("Enter client_secret for custom Dropbox app:")
++			client_secret = GetPassword(preference, "dropbox_client_secret", prompt, true, resetPassword)
++		}
++		dropboxStorage, err := CreateDropboxStorage(token, storageDir, 1, threads, client_id, client_secret)
+ 		if err != nil {
+ 			LOG_ERROR("STORAGE_CREATE", "Failed to load the dropbox storage: %v", err)
+ 			return nil
+ 		}
+ 		SavePassword(preference, "dropbox_token", token)
++		if client_id != "" {
++			SavePassword(preference, "dropbox_client_secret", client_secret)
++		}
+ 		return dropboxStorage
+ 	} else if matched[1] == "b2" {
+ 		bucket := matched[3]
+--- a/src/duplicacy_storage_test.go
++++ b/src/duplicacy_storage_test.go
+@@ -96,7 +96,7 @@
+ 		storage.SetDefaultNestingLevels([]int{2, 3}, 2)
+ 		return storage, err
+ 	} else if *testStorageName == "dropbox" {
+-		storage, err := CreateDropboxStorage(config["token"], config["directory"], 1, threads)
++		storage, err := CreateDropboxStorage(config["token"], config["directory"], 1, threads, config["client_id"], config["client_secret"])
+ 		storage.SetDefaultNestingLevels([]int{2, 3}, 2)
+ 		return storage, err
+ 	} else if *testStorageName == "b2" {

@@ -1,0 +1,42 @@
+--- a/vendor/github.com/gilbertchen/highwayhash/highwayhash_arm64.s
++++ b/vendor/github.com/gilbertchen/highwayhash/highwayhash_arm64.s
+@@ -140,7 +140,7 @@
+ 	//  v7 = mul1.hi
+ 
+ 	// Load zipper merge constants table pointer
+-	MOVD $·zipperMerge(SB), R3
++	MOVD $·asmZipperMerge(SB), R3
+ 
+ 	// and load zipper merge constants into v28, v29, and v30
+ 	VLD1 (R3), [V28.B16, V29.B16, V30.B16]
+@@ -173,7 +173,7 @@
+ 	MOVD out_len+8(FP), R2
+ 
+ 	// Load zipper merge constants table pointer
+-	MOVD $·zipperMerge(SB), R3
++	MOVD $·asmZipperMerge(SB), R3
+ 
+ 	// and load zipper merge constants into v28, v29, and v30
+ 	VLD1 (R3), [V28.B16, V29.B16, V30.B16]
+@@ -317,10 +317,14 @@
+ GLOBL ·constants(SB), 8, $64
+ 
+ // Constants for TBL instructions
+-DATA ·zipperMerge+0x0(SB)/8, $0x000f010e05020c03 // zipper merge constant
+-DATA ·zipperMerge+0x8(SB)/8, $0x070806090d0a040b
+-DATA ·zipperMerge+0x10(SB)/8, $0x0f0e0d0c07060504 // setup first register for multiply
+-DATA ·zipperMerge+0x18(SB)/8, $0x1f1e1d1c17161514
+-DATA ·zipperMerge+0x20(SB)/8, $0x0b0a090803020100 // setup second register for multiply
+-DATA ·zipperMerge+0x28(SB)/8, $0x1b1a191813121110
+-GLOBL ·zipperMerge(SB), 8, $48
++// The table the released Duplicacy 3.2.5 arm64 binary loads here: until Go 1.27, this
++// symbol's name clashed with the Go function zipperMerge, and the code read the first 48
++// bytes of that function's ABI wrapper instead of the zipper-merge constants. That is the
++// "incorrect hash on arm64" Duplicacy keeps this fork for, so the bytes are kept exactly.
++DATA ·asmZipperMerge+0x0(SB)/8, $0xf81f83fdf81d0ffe
++DATA ·asmZipperMerge+0x8(SB)/8, $0xf9401fe0d10023fd
++DATA ·asmZipperMerge+0x10(SB)/8, $0xf94027e2f94023e1
++DATA ·asmZipperMerge+0x18(SB)/8, $0x97fffe41f9402be3
++DATA ·asmZipperMerge+0x20(SB)/8, $0x9100c3ffa97ffbfd
++DATA ·asmZipperMerge+0x28(SB)/8, $0x00000000d65f03c0
++GLOBL ·asmZipperMerge(SB), 8, $48

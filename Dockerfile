@@ -14,6 +14,33 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/archiver ./cmd/archiver
 
+# Duplicacy is built from its pinned source with reviewed patches (ADR 26): build/duplicacy/
+# dropbox-app.patch lets Dropbox refresh tokens with your own app instead of duplicacy.com, and
+# highwayhash-arm64.patch renames an arm64 assembly table in a vendored fork whose name clash
+# with a Go function current Go's linker rejects, keeping the exact bytes the released 3.2.5
+# arm64 binary read there (so its hashes match the release's). Modules are vendored against
+# the source's go.sum; the CLI still runs as a child process.
+FROM --platform=$BUILDPLATFORM golang:1.27.1-trixie@sha256:0982f930de50a4f1a2b4453d51651f0031082ef2e3a25deb3c763fc39a1094a0 AS duplicacy
+ARG TARGETOS
+ARG TARGETARCH
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG DEBIAN_MIRROR=http://deb.debian.org
+ARG GITHUB_MIRROR=https://github.com
+# renovate: datasource=github-releases depName=gilbertchen/duplicacy extractVersion=^v(?<version>.+)$
+ENV DUPLICACY_VERSION=3.2.5
+ARG DUPLICACY_SOURCE_SHA256=9e289409b884d0c20f5b2e8b2fec64a019534fd394167346a3677ba785809b4c
+COPY build/duplicacy/ /patches/
+RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; } && \
+    apt-get update && apt-get install -y --no-install-recommends patch && \
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 \
+        "${GITHUB_MIRROR}/gilbertchen/duplicacy/archive/refs/tags/v${DUPLICACY_VERSION}.tar.gz" -o /tmp/duplicacy.tar.gz && \
+    echo "$DUPLICACY_SOURCE_SHA256  /tmp/duplicacy.tar.gz" | sha256sum -c - && \
+    mkdir /src && tar -xzf /tmp/duplicacy.tar.gz -C /src --strip-components=1 && \
+    cd /src && patch -p1 < /patches/dropbox-app.patch && \
+    go mod vendor && patch -p1 < /patches/highwayhash-arm64.patch && \
+    go test -count=1 -run TestDropboxAppTokens ./src/ && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/duplicacy ./duplicacy
+
 # rclone places the recovery kit on every storage type (ADR 24). Its release is a zip, so a
 # throwaway stage unpacks it and only the binary reaches the image.
 FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0 AS rclone
@@ -66,12 +93,6 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
 
 ARG GITHUB_MIRROR=https://github.com
 
-# Duplicacy publishes no checksums; these are the digests of the reviewed downloads.
-# renovate: datasource=github-releases depName=gilbertchen/duplicacy extractVersion=^v(?<version>.+)$
-ENV DUPLICACY_VERSION=3.2.5
-ARG DUPLICACY_SHA256_AMD64=548526d462fb38c23f2bf62ea3b1177b8ad11cc1499fa3dbe092a607d68d84f5
-ARG DUPLICACY_SHA256_ARM64=9c27d8ba149e67d0bc58406c6b3218661d870cb07e265aec31563540f8f20598
-
 # moby/moby's release tag pattern is `docker-vX.Y.Z`; client/api/* tags
 # are filtered out by the extractVersion anchor. The static binary
 # archive at download.docker.com/linux/static/stable/<arch>/docker-<v>.tgz
@@ -101,18 +122,6 @@ RUN ARCH_SUFFIX="" && \
     tar -xzC /usr/local/bin --strip-components=1 -f /tmp/docker-cli.tgz docker/docker && \
     rm /tmp/docker-cli.tgz
 
-RUN ARCH_SUFFIX="" && \
-    if [ "$TARGETARCH" = "amd64" ]; then \
-        ARCH_SUFFIX="x64"; SHA256="$DUPLICACY_SHA256_AMD64"; \
-    elif [ "$TARGETARCH" = "arm64" ]; then \
-        ARCH_SUFFIX="arm64"; SHA256="$DUPLICACY_SHA256_ARM64"; \
-    else \
-        echo "Unsupported architecture: $TARGETARCH" && exit 1; \
-    fi && \
-    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 --max-time 300 "${GITHUB_MIRROR}/gilbertchen/duplicacy/releases/download/v${DUPLICACY_VERSION}/duplicacy_linux_${ARCH_SUFFIX}_${DUPLICACY_VERSION}" \
-        -o /usr/local/bin/duplicacy && \
-    echo "$SHA256  /usr/local/bin/duplicacy" | sha256sum -c - && \
-    chmod +x /usr/local/bin/duplicacy
 
 WORKDIR /opt/archiver
 
@@ -123,6 +132,7 @@ RUN mkdir -p /opt/archiver/logs /opt/archiver/keys
 
 COPY --from=cli /out/archiver /usr/local/bin/archiver
 COPY --from=rclone /out/rclone /usr/local/bin/rclone
+COPY --from=duplicacy /out/duplicacy /usr/local/bin/duplicacy
 
 
 # Hooks are executables (ADR 20); the e2e harness reads this to write them in that form.
