@@ -128,16 +128,16 @@
 +	return response, err
 +}
 +
-+// CreateDropboxStorage creates a dropbox storage object. With appKey set, access tokens are
++// CreateDropboxStorage creates a dropbox storage object. With clientID set, access tokens are
 +// refreshed directly with Dropbox using that app; otherwise through duplicacy.com.
-+func CreateDropboxStorage(refreshToken string, storageDir string, minimumNesting int, threads int, appKey string, appSecret string) (storage *DropboxStorage, err error) {
++func CreateDropboxStorage(refreshToken string, storageDir string, minimumNesting int, threads int, clientID string, clientSecret string) (storage *DropboxStorage, err error) {
 +
 +	var tokens *appTokens
-+	if appKey != "" {
++	if clientID != "" {
 +		tokens = &appTokens{
 +			config: &oauth2.Config{
-+				ClientID:     appKey,
-+				ClientSecret: appSecret,
++				ClientID:     clientID,
++				ClientSecret: clientSecret,
 +				Endpoint:     oauth2.Endpoint{TokenURL: "https://api.dropboxapi.com/oauth2/token"},
 +			},
 +			refreshToken: refreshToken,
@@ -164,21 +164,30 @@
  	if storageDir == "" || storageDir[0] != '/' {
 --- a/src/duplicacy_storage.go
 +++ b/src/duplicacy_storage.go
-@@ -542,7 +542,13 @@
+@@ -542,12 +542,22 @@
  	} else if matched[1] == "dropbox" {
  		storageDir := matched[3] + matched[5]
  		token := GetPassword(preference, "dropbox_token", "Enter Dropbox refresh token:", true, resetPassword)
 -		dropboxStorage, err := CreateDropboxStorage(token, storageDir, 1, threads)
-+		// An app of your own refreshes the token directly with Dropbox instead of through duplicacy.com.
-+		appKey := GetPasswordFromPreference(preference, "dropbox_app_key")
-+		appSecret := ""
-+		if appKey != "" {
-+			appSecret = GetPassword(preference, "dropbox_app_secret", "Enter the Dropbox app secret:", true, resetPassword)
++		// client_id, like the OneDrive one, can be stored in preferences
++		client_id := GetPasswordFromPreference(preference, "dropbox_client_id")
++		client_secret := ""
++		if client_id != "" {
++			prompt := fmt.Sprintf("Enter client_secret for custom Dropbox app:")
++			client_secret = GetPassword(preference, "dropbox_client_secret", prompt, true, resetPassword)
 +		}
-+		dropboxStorage, err := CreateDropboxStorage(token, storageDir, 1, threads, appKey, appSecret)
++		dropboxStorage, err := CreateDropboxStorage(token, storageDir, 1, threads, client_id, client_secret)
  		if err != nil {
  			LOG_ERROR("STORAGE_CREATE", "Failed to load the dropbox storage: %v", err)
  			return nil
+ 		}
+ 		SavePassword(preference, "dropbox_token", token)
++		if client_id != "" {
++			SavePassword(preference, "dropbox_client_secret", client_secret)
++		}
+ 		return dropboxStorage
+ 	} else if matched[1] == "b2" {
+ 		bucket := matched[3]
 --- a/src/duplicacy_storage_test.go
 +++ b/src/duplicacy_storage_test.go
 @@ -96,7 +96,7 @@
@@ -186,7 +195,7 @@
  		return storage, err
  	} else if *testStorageName == "dropbox" {
 -		storage, err := CreateDropboxStorage(config["token"], config["directory"], 1, threads)
-+		storage, err := CreateDropboxStorage(config["token"], config["directory"], 1, threads, config["app_key"], config["app_secret"])
++		storage, err := CreateDropboxStorage(config["token"], config["directory"], 1, threads, config["client_id"], config["client_secret"])
  		storage.SetDefaultNestingLevels([]int{2, 3}, 2)
  		return storage, err
  	} else if *testStorageName == "b2" {
