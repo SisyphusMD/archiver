@@ -465,8 +465,9 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 	}
 	if b.run(b.duplicacy(svc.Dir, svc.Name, "list", "-storage", storage)) != 0 {
 		log(logging.Error, fmt.Sprintf("Primary storage verification failed for %s service.", svc.Name))
+	} else {
+		log(logging.Info, fmt.Sprintf("Primary storage verified for %s service.", svc.Name))
 	}
-	log(logging.Info, fmt.Sprintf("Primary storage verified for %s service.", svc.Name))
 
 	content := strings.Join(filters, "\n")
 	if content != "" {
@@ -844,7 +845,15 @@ func (b *Backup) finish() {
 	var status string
 	switch s.EndState {
 	case "completed":
-		status = "Backup completed successfully"
+		// "completed" means the run reached its end, not that every step succeeded.
+		switch n := b.log.Errors(); n {
+		case 0:
+			status = "Backup completed successfully"
+		case 1:
+			status = "Backup completed with 1 error"
+		default:
+			status = fmt.Sprintf("Backup completed with %d errors", n)
+		}
 	case "stopped":
 		status = "Backup stopped before completion"
 	default:
