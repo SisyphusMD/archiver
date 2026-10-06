@@ -12,7 +12,7 @@ ADR 23 adds every Duplicacy backend. Duplicacy 3.2.5, its latest release, refres
 
 1. The released binary; Dropbox depends on duplicacy.com, flagged.
 2. The released binary, with duplicacy.com redirected to a local refresher inside the container.
-3. Build the pinned 3.2.5 source with a one-line patch so Dropbox refreshes directly against Dropbox with the user's own app; offer the change upstream.
+3. Build the pinned 3.2.5 source with a small patch so Dropbox refreshes directly against Dropbox with the user's own app (a standard OAuth token source, about 20 lines, used only when an app is configured); offer the change upstream.
 
 ## Decision
 
