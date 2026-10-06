@@ -18,9 +18,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/pipeline"
 )
 
-// copyWorkers runs one worker per secondary storage (ADR 11) for a deployment on the Go
-// pipeline. A deployment still on bash copies inline in its own pipeline, so it gets none:
-// two copiers into one target would overlap.
+// copyWorkers runs one worker per secondary storage (ADR 11).
 type copyWorkers struct {
 	mu          sync.Mutex
 	owns        bool // this daemon's workers copy; decided, workers built, before the socket opens
@@ -109,9 +107,6 @@ func (w *copyWorkers) shutdown() {
 // copies, so no backup is ever told otherwise while they start.
 func (cw *copyWorkers) decide(l layout.Layout) {
 	src := config.FromEnvironment()
-	if !goPipeline(l, src) {
-		return
-	}
 	cfg, _, err := config.Load(src, os.Environ())
 	if err != nil || cfg.Validate(src.SecretsDir) != nil || len(cfg.Targets) < 2 {
 		return

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/layout"
 )
 
@@ -143,5 +144,26 @@ func TestFollow(t *testing.T) {
 	<-done
 	if strings.Contains(out.String(), "old line") {
 		t.Error("printed what was there before it followed")
+	}
+}
+
+func TestLegacyServices(t *testing.T) {
+	svcs := t.TempDir()
+	for _, s := range []string{"app", "db"} {
+		os.MkdirAll(filepath.Join(svcs, s), 0o755)
+	}
+	os.WriteFile(filepath.Join(svcs, "db", "service-backup-settings.sh"), nil, 0o644)
+	src := config.Source{Getenv: func(k string) string {
+		if k == "SERVICE_DIRECTORIES" {
+			return svcs + "/*/"
+		}
+		return ""
+	}, SecretsDir: t.TempDir()}
+	got := LegacyServices(src)
+	if len(got) != 1 || filepath.Base(got[0]) != "db" {
+		t.Fatalf("got %v", got)
+	}
+	if !strings.Contains(LegacyHelp(got), "docker compose run --rm archiver migrate hooks") {
+		t.Error("the help does not name the conversion")
 	}
 }

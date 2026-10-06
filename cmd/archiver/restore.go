@@ -50,45 +50,27 @@ func capEff() int64 {
 }
 
 // migrateRestored migrates a service-backup-settings.sh that a restore brought back into a
-// configured service directory, when executable hooks (any service's) keep the deployment
-// on the Go pipeline, which refuses the file. Without them the bash pipeline runs it as
-// before, so it is kept; so is one restored elsewhere (a drill's scratch directory must stay
-// exactly what was backed up). A failure only warns: the files are restored either way.
+// configured service directory: backups refuse the file. One restored elsewhere is kept (a
+// drill's scratch directory must stay exactly what was backed up). A failure only warns:
+// the files are restored either way.
 func migrateRestored(dir string) {
 	if _, err := os.Lstat(filepath.Join(dir, hooks.Legacy)); err != nil {
 		return
 	}
-	src := config.FromEnvironment()
-	cfg, _, err := config.Load(src, nil)
+	cfg, _, err := config.Load(config.FromEnvironment(), nil)
 	if err != nil {
 		return
 	}
 	dirs, _ := config.ExpandServiceDirectories(cfg.ServiceDirectories)
-	configured, executable := false, false
 	target, _ := filepath.Abs(dir)
+	configured := false
 	for _, d := range dirs {
-		// The destination's own surviving hooks count too: they put the deployment on Go
-		// just the same, and migration then reports the conflict.
 		if abs, _ := filepath.Abs(d); abs == target {
 			configured = true
-		}
-		for _, f := range []string{hooks.PreBackup, hooks.PostBackup, hooks.Filters} {
-			if exists(filepath.Join(d, f)) {
-				executable = true
-			}
 		}
 	}
 	if !configured {
 		return
-	}
-	switch src.Getenv("ARCHIVER_PIPELINE") {
-	case "bash":
-		return
-	case "go":
-	default:
-		if !executable {
-			return
-		}
 	}
 	l := layout.Default()
 	lock, _, err := runlock.Acquire(l.BackupLock(), filepath.Join(l.Lock, "archiver-stop-requested"), "migrate", "hooks")

@@ -16,7 +16,8 @@ import (
 	"github.com/SisyphusMD/archiver/internal/layout"
 )
 
-// entrypointCommand is the container's entrypoint: `archiver entrypoint [init | run CMD...]`.
+// entrypointCommand is the container's entrypoint: `archiver entrypoint [init | run CMD... |
+// migrate hooks [DIR...]]`.
 func entrypointCommand(args []string) int {
 	l := layout.Default()
 	e := &entrypoint.Env{Layout: l, Getenv: os.Getenv, SecretsDir: config.FromEnvironment().SecretsDir,
@@ -35,6 +36,20 @@ func entrypointCommand(args []string) int {
 		os.MkdirAll(setup, 0o755)
 		os.Chdir(l.Root)
 		return initCommand()
+	}
+
+	// Converts legacy settings files, which keep the container from starting.
+	if len(args) >= 2 && args[0] == "migrate" && args[1] == "hooks" {
+		os.Chdir(l.Root)
+		return migrateHooks(args[2:])
+	}
+
+	refuseLegacy := func() bool {
+		if dirs := entrypoint.LegacyServices(config.FromEnvironment()); len(dirs) > 0 {
+			fmt.Fprint(os.Stderr, entrypoint.LegacyHelp(dirs))
+			return true
+		}
+		return false
 	}
 
 	ready := func() bool {
@@ -60,7 +75,7 @@ func entrypointCommand(args []string) int {
 			return 2
 		}
 		fmt.Printf("Running in RUN mode: %s\n\n", strings.Join(args[1:], " "))
-		if !ready() {
+		if !ready() || (args[1] == "backup" && refuseLegacy()) {
 			return 1
 		}
 		os.Chdir(l.Root)
@@ -69,7 +84,7 @@ func entrypointCommand(args []string) int {
 		return 127
 	}
 
-	if !ready() {
+	if !ready() || refuseLegacy() {
 		return 1
 	}
 	e.ClearLocks()

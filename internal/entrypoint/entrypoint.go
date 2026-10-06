@@ -1,7 +1,7 @@
 // Package entrypoint is the container's start: it refuses a bundle-era configuration, puts
 // the mounted keys in place, clears lock state a previous container left, forwards the logs
 // to stdout for `docker logs`, and runs the scheduler or waits for manual commands. `init`
-// and `run <command>` are one-shot modes. A SIGTERM stops whatever runs, gracefully, before
+// `run <command>` and `migrate hooks` are one-shot modes. A SIGTERM stops whatever runs, gracefully, before
 // the container exits.
 package entrypoint
 
@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/layout"
 )
 
@@ -223,4 +225,34 @@ func (e *Env) LocksClear() bool {
 // Exec replaces this process with `archiver args...`.
 func (e *Env) Exec(args ...string) error {
 	return syscall.Exec(e.Self, append([]string{e.Self}, args...), os.Environ())
+}
+
+// LegacyServices lists the configured service directories that still hold the sourced
+// service-backup-settings.sh, which this release does not run (ADR 20).
+func LegacyServices(src config.Source) []string {
+	cfg, _, err := config.Load(src, nil)
+	if err != nil {
+		return nil // the commands report a configuration problem themselves
+	}
+	dirs, _ := config.ExpandServiceDirectories(cfg.ServiceDirectories)
+	var legacy []string
+	for _, d := range dirs {
+		if _, err := os.Lstat(filepath.Join(d, hooks.Legacy)); err == nil {
+			legacy = append(legacy, d)
+		}
+	}
+	return legacy
+}
+
+// LegacyHelp is what a deployment with legacy settings files is told to do.
+func LegacyHelp(dirs []string) string {
+	return fmt.Sprintf(`ERROR: service-backup-settings.sh, which this release does not run, is still in: %s.
+Convert it once, with this container's mounts and environment:
+
+  docker compose run --rm archiver migrate hooks
+
+(or the same 'docker run' as this container with 'migrate hooks' as its command), then start
+again. The hooks keep calling your existing functions. README: "Upgrading from
+service-backup-settings.sh".
+`, strings.Join(dirs, ", "))
 }

@@ -111,27 +111,23 @@ echo "old data" >/data/old-src/file.txt
 printf 'service_specific_pre_backup_function() { echo pre; }\n' >/data/old-src/service-backup-settings.sh
 printf '#!/bin/sh\necho "post-restore $ARCHIVER_SNAPSHOT_ID r$ARCHIVER_RESTORE_REVISION" > post-restore-ran\n' >/data/old-src/post-restore
 chmod +x /data/old-src/post-restore
-SERVICE_DIRECTORIES=/data/old-src/ ARCHIVER_PIPELINE=bash archiver backup >/tmp/b3 2>&1 || { cat /tmp/b3; die "backup of the legacy service failed"; }
+# Written by duplicacy itself, as a pre-migration release's backup would have been.
+(cd /data/old-src && DUPLICACY_LOCAL_PASSWORD=testpassword duplicacy init -e -key /opt/archiver/keys/public.pem \
+  -storage-name local "$HOST-old-src" "$STORE" >/tmp/b3 2>&1 && DUPLICACY_LOCAL_PASSWORD=testpassword duplicacy backup >>/tmp/b3 2>&1 \
+  && rm -rf .duplicacy) || { cat /tmp/b3; die "backup of the legacy service failed"; }
 
 log "restored into a scratch directory, the settings file stays as backed up"
 expect 0 '' "scratch restore" -- SNAPSHOT_ID="$HOST-old-src" LOCAL_DIR=/data/scratch archiver auto-restore
 [ -f /data/scratch/service-backup-settings.sh ] && [ ! -e /data/scratch/pre-backup ] || die "a scratch restore was migrated"
 
-log "restored into a service directory while no service has executable hooks, it stays for the bash pipeline"
+log "restored into a service directory, it is migrated and the post-restore hook runs"
 mkdir -p /data/services/old
-expect 0 '' "service restore, bash deployment" -- SNAPSHOT_ID="$HOST-old-src" LOCAL_DIR=/data/services/old archiver auto-restore
-[ -f /data/services/old/service-backup-settings.sh ] && [ ! -e /data/services/old/pre-backup ] || die "a bash deployment's restored settings file was migrated"
-
-log "restored into a service directory of a Go deployment, it is migrated and the post-restore hook runs"
-rm -rf /data/services/old && mkdir -p /data/services/old
-printf '#!/bin/sh\ntrue\n' >/data/services/app/pre-backup && chmod +x /data/services/app/pre-backup
 expect 0 '' "service restore" -- SNAPSHOT_ID="$HOST-old-src" LOCAL_DIR=/data/services/old RUN_RESTORE_SERVICE=1 archiver auto-restore
 [ -x /data/services/old/pre-backup ] && [ ! -e /data/services/old/service-backup-settings.sh ] || { cat /tmp/out; die "the restored settings file was not migrated"; }
 grep -q "post-restore $HOST-old-src r1" /data/services/old/post-restore-ran || die "the post-restore hook did not run with its variables"
 archiver backup >/tmp/b4 2>&1 || { cat /tmp/b4; die "the backup after a migrating restore failed"; }
 
 log "restored over a directory whose own hooks survive, the conflict is reported, not silent"
-rm -f /data/services/app/pre-backup
 mkdir -p /data/services/old3 && echo '+*' >/data/services/old3/filters
 expect 0 'filters already exists' "restore over surviving hooks" -- SNAPSHOT_ID="$HOST-old-src" LOCAL_DIR=/data/services/old3 archiver auto-restore
 
