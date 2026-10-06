@@ -1,15 +1,22 @@
-name: Nightly real-service backends
+name: Real-service backends
 
 # Round trips through the storage types no emulator covers, against dedicated test accounts
-# (ADR 25). Advisory: it runs on main nightly and on demand, never on pull requests, since
-# outside services flake. A backend without its NIGHTLY_<TYPE> secret is skipped.
+# (ADRs 25, 27). It runs weekly on main and on demand, never on pull requests, since outside
+# services flake; the release workflow runs it too before tagging. A backend without its
+# NIGHTLY_<TYPE> secret is skipped.
 on:
   schedule:
-    - cron: '17 6 * * *'
+    - cron: '17 6 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+# The release workflow runs these round trips too, against the same test storages and snapshot
+# IDs: sharing its group means two runs never back up one snapshot at once.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   real-backends:

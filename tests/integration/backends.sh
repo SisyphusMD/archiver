@@ -2,7 +2,7 @@
 # Round trips through every storage type an emulator can stand in for (ADRs 23, 25): each is
 # the primary of a fresh archiver container, which backs up, places the recovery kit, and
 # restores. The kit is fetched back through a remote written here, not by archiver's code,
-# and decrypted with plain openssl. Types only a real service provides run nightly.
+# and decrypted with plain openssl. Types only a real service provides run in the real-service job (ADRs 25, 27).
 #
 # One TLS front (Caddy, a throwaway CA the archiver containers trust) serves the HTTPS
 # names: Garage for minios/s3c/wasabi (virtual-host style needs the bucket alias), Azurite
@@ -283,7 +283,7 @@ copy_lifecycle() {
 
   if [ -n "${NO_MOVE:-}" ]; then
     # Deleting a revision fossilizes chunks with the storage's move, which this one's emulator lacks.
-    echo "--- $name: mirroring and exhaustive prune not run here ($NO_MOVE); the nightly real-service job covers them"
+    echo "--- $name: mirroring and exhaustive prune not run here ($NO_MOVE); the real-service job covers them (ADR 27)"
   else
     log "$name: a revision local prunes is mirrored off it"
     docker exec -w /data/fixtures -e DUPLICACY_LOCAL_PASSWORD=testpassword -e DUPLICACY_LOCAL_RSA_PASSPHRASE=testpassphrase "$P-$name" \
@@ -472,7 +472,7 @@ if wanted gcs; then
   run_case gcs "$BUCKET/%D" TYPE="google cloud storage" SERVICE_ACCOUNT_FILE=/run/secrets/storage_target_1_gcs_token BUCKET_POLICY_ONLY=true
 fi
 
-# Dropbox has no emulator (its round trip runs nightly, ADR 25). This proves the wiring: the
+# Dropbox has no emulator (its round trip runs against a real account, ADRs 25, 27). This proves the wiring: the
 # app's credentials reach Duplicacy, which refreshes at Dropbox's own token endpoint with
 # them and calls the API with the token it got, never duplicacy.com.
 if wanted dropbox; then

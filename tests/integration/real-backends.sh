@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Nightly round trips through real services (ADR 25), for the types no emulator covers and for
+# Round trips through real services (ADRs 25, 27: weekly, and before every release), for the
+# types no emulator covers and for
 # what an emulator cannot do (Wasabi's own MOVE request). For each backend whose credentials are
 # present, the same two phases as tests/integration/backends.sh:
 #   1. the service as the primary, with a local copy: backup, inline copy, the recovery kit
@@ -7,10 +8,10 @@
 #   2. the service as the copy of a local primary: an inline copy, then under the daemon its
 #      copy worker's hand-off, check, mirroring of a revision local pruned and exhaustive prune,
 #      pause, resume and stop, a restore from it, and maintenance (prune -all to 7 days).
-# Phase 1 backs up one snapshot ID every night, so its 7-day prune keeps the primary storage
+# Phase 1 backs up one snapshot ID every run, so its 7-day prune keeps the primary storage
 # bounded. Phase 2 needs a new ID each night (a copy cannot continue an ID whose history its
 # fresh local primary lacks), and Duplicacy keeps every ID's newest revision, so the copy
-# storage gains one revision of a few kilobytes a night.
+# storage gains one revision of a few kilobytes a run.
 # Each backend keeps its storages in a dedicated test account: nothing outside them is written
 # or deleted.
 #
@@ -20,9 +21,9 @@
 # differs between the phases ("primary", "copy"): put it in the type's path, container or
 # bucket field. A backend without credentials is skipped, not failed. NIGHTLY_RSA_KEY is the
 # RSA private key (PEM, passphrase "nightlypassphrase") every night uses: a storage keeps the
-# public key it was created with, so a new key each night could not restore.
+# public key it was created with, so a new key each run could not restore.
 #
-# HOST-DRIVEN, ADVISORY: run on the docker host; failures report but never gate a PR.
+# HOST-DRIVEN: run on the docker host; failures never gate a PR, but stop a release (ADR 27).
 #
 #   IMAGE=archiver:dev NIGHTLY_RSA_KEY=... NIGHTLY_B2='...' bash tests/integration/real-backends.sh [type ...]
 

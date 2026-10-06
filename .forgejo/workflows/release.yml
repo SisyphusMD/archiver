@@ -12,6 +12,11 @@ on:
           - minor
           - major
           - alpha
+      skip_real_backends:
+        description: 'Release without the real-service round trips (only for an outside service outage; the release notes say so)'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: release
@@ -217,6 +222,51 @@ jobs:
             exit 1
           fi
           echo "Smoke test passed"
+
+      # ADR 27: a release first proves the backends without an emulator still work against
+      # their real services. A failure stops the release before anything is tagged.
+      - name: Real-service round trips
+        if: ${{ !inputs.skip_real_backends }}
+        env:
+          IMAGE: smoke-test:local
+          NIGHTLY_RSA_KEY: ${{ secrets.NIGHTLY_RSA_KEY }}
+          NIGHTLY_B2: ${{ secrets.NIGHTLY_B2 }}
+          NIGHTLY_B2_CUSTOM: ${{ secrets.NIGHTLY_B2_CUSTOM }}
+          NIGHTLY_GCD: ${{ secrets.NIGHTLY_GCD }}
+          NIGHTLY_ONE: ${{ secrets.NIGHTLY_ONE }}
+          NIGHTLY_ODB: ${{ secrets.NIGHTLY_ODB }}
+          NIGHTLY_DROPBOX: ${{ secrets.NIGHTLY_DROPBOX }}
+          NIGHTLY_STORJ: ${{ secrets.NIGHTLY_STORJ }}
+          NIGHTLY_FABRIC: ${{ secrets.NIGHTLY_FABRIC }}
+          NIGHTLY_AZURE: ${{ secrets.NIGHTLY_AZURE }}
+          NIGHTLY_GCS: ${{ secrets.NIGHTLY_GCS }}
+          NIGHTLY_WASABI: ${{ secrets.NIGHTLY_WASABI }}
+        run: |
+          # Until the test accounts exist there is nothing to run against.
+          if [ -z "$NIGHTLY_RSA_KEY" ]; then
+            echo "::warning::No real-service test accounts are configured yet (NIGHTLY_RSA_KEY); round trips not run"
+            exit 0
+          fi
+          bash tests/integration/real-backends.sh
+
+      - name: Record a release without the real-service round trips
+        if: ${{ inputs.skip_real_backends }}
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          awk -v ver="$VERSION" '
+            { print }
+            !done && index($0, "## [" ver "]") == 1 {
+              print ""
+              print "### Notes"
+              print ""
+              print "- Released without the real-service round trips (ADR 27): an outside service was failing at release time."
+              done = 1
+            }
+          ' CHANGELOG.md > CHANGELOG.md.new
+          mv CHANGELOG.md.new CHANGELOG.md
+          grep -A4 "## \[$VERSION\]" CHANGELOG.md
 
       - name: Commit, tag, and push
         env:
