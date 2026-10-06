@@ -237,7 +237,7 @@ func (e *Env) postRestore(dir, id string, rev int, t config.Target, stdin io.Rea
 	case isFile(filepath.Join(dir, hooks.LegacyRestore)):
 		fmt.Fprintf(out, "Running %s...\n", hooks.LegacyRestore)
 		cmd = exec.Command("bash", hooks.LegacyRestore)
-		// What it saw under bash: the restore's variables, for this service (auto-restore-all
+		// What it always saw: the restore's variables, for this service (auto-restore-all
 		// runs one restore per service), last so they override any the caller set.
 		env = append(env, "SNAPSHOT_ID="+id, "LOCAL_DIR="+dir)
 	default:

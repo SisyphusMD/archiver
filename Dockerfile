@@ -96,17 +96,10 @@ RUN ARCH_SUFFIX="" && \
 
 WORKDIR /opt/archiver
 
-COPY archiver.sh ./
-COPY lib/ ./lib/
+COPY lib/logos/ ./lib/logos/
 COPY docs/examples/ ./examples/
 
-RUN mkdir -p /opt/archiver/logs \
-    /opt/archiver/keys \
-    /opt/archiver/exports \
-    /opt/archiver/import
-
-RUN chmod +x /opt/archiver/archiver.sh && \
-    chmod +x /opt/archiver/lib/scripts/*.sh
+RUN mkdir -p /opt/archiver/logs /opt/archiver/keys
 
 COPY --from=cli /out/archiver /usr/local/bin/archiver
 

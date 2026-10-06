@@ -119,7 +119,7 @@ func code(err error) (int, error) {
 // PID is the program's process ID.
 func (p *Proc) PID() int { return p.cmd.Process.Pid }
 
-// Terminate ends the program as bash's stop did: TERM to its children and itself, then
+// Terminate ends the program: TERM to its children and itself, then
 // KILL after a two-second grace. A paused (stopped) program cannot handle TERM, so a caller
 // that knows the run is paused passes kill to go straight to KILL.
 func (p *Proc) Terminate(kill bool) {

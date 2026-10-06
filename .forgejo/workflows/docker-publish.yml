@@ -32,7 +32,7 @@ jobs:
           args: >-
             --severity=warning
             --shell=bash
-            archiver.sh
+            .forgejo/scripts/next-version.sh
 
   validate-changelog:
     name: Validate CHANGELOG structure
@@ -293,14 +293,6 @@ jobs:
         run: |
           docker run -i --rm --hostname rk-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/recovery-kit.sh
-      - name: Recovery kit parity (the Go kit records the bash kit's fingerprint and decrypts to identical files)
-        run: |
-          docker run -i --rm --hostname kp-host --cap-drop ALL --cap-add DAC_OVERRIDE \
-            --entrypoint bash roundtrip:local -s < tests/integration/kit-parity.sh
-      - name: Envelope parity (the Go envelope gives the bash fingerprint and byte-identical HTML and PDF)
-        run: |
-          docker run -i --rm --hostname ep-host --cap-drop ALL --cap-add DAC_OVERRIDE \
-            --entrypoint bash roundtrip:local -s < tests/integration/envelope-parity.sh
       - name: Maintenance pipeline (check/prune split, exhaustive frequency, lock waits, stop)
         run: |
           docker run -i --rm --hostname mt-host --cap-drop ALL --cap-add DAC_OVERRIDE \

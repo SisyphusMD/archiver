@@ -17,8 +17,8 @@ import (
 
 // payload writes the kit's contents into dir and returns their fingerprint: a hash over every
 // file's path and content (and the extras' modes), so any changed, added, renamed or removed
-// value changes it. It is the same hash the bash kit records, so switching implementations
-// re-uploads nothing.
+// value changes it. It is the hash existing deployments recorded, so an upgrade re-uploads
+// nothing.
 func (r *Run) payload(dir string, s *config.Settings) (string, error) {
 	keys := map[string]string{
 		"rsa_private_key": r.Layout.RSAPrivateKey(),

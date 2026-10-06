@@ -14,7 +14,7 @@ import (
 )
 
 // runControl runs `archiver stop`, `pause` and `resume`; ok is false for any other command.
-// A malformed command line is left to archiver.sh, which prints its usage.
+// A malformed command line gets the usage.
 func runControl(cmd string, args []string) (code int, ok bool) {
 	switch cmd {
 	case "stop":
@@ -31,7 +31,7 @@ func runControl(cmd string, args []string) (code int, ok bool) {
 			}
 		}
 		if targets > 1 {
-			return 0, false // ambiguous: archiver.sh says so
+			return 0, false // ambiguous
 		}
 		return runctl.Stop(controlEnv(), target, immediate), true
 	case "pause":

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Removed
+- **The bash implementation:** `archiver.sh` and `lib/` (all but the logo) are gone from the image. `docs/examples` (in the image at `/opt/archiver/examples`) now holds `pre-backup`, `post-backup`, `filters` and `post-restore` examples in place of `service-backup-settings.sh.example` and `restore-service.sh.example`.
 - **The bash backup pipeline.** Every command runs in Go. A container whose services still hold `service-backup-settings.sh` refuses to start, naming them; convert them with `migrate hooks` as the container's command (`docker compose run --rm archiver migrate hooks`), which the entrypoint now accepts, and start again. `ARCHIVER_PIPELINE` is gone, and a restored `service-backup-settings.sh` in a configured service directory is always migrated. `archiver help` exits 0.
 - **Bundles are no longer read.** A container that finds a mounted `bundle.tar.enc`, a `config.sh`, a `bundle_password` secret or `BUNDLE_PASSWORD` in its environment refuses to start and prints the conversion: one `docker run` of the 0.11 image (`run migrate`, from 0.11.4) writes the same configuration as `archiver.env` plus secret files, keeping snapshot IDs, storages and keys. `archiver bundle export`, `bundle import` and `migrate` are removed (`migrate hooks` stays), `init` writes env-native materials only, and the configuration is read from environment variables and secret files alone. See the README's "Upgrading from a bundle".
 

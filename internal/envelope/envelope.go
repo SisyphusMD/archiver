@@ -1,6 +1,6 @@
-// Package envelope reads what the bash envelope feature records about the printed
-// break-glass envelope: the fingerprint confirmed printed, and the fingerprint the page would
-// have now (refreshed after each recovery-kit run). Neither file holds a secret.
+// Package envelope builds the printable break-glass envelope and keeps its state: the
+// fingerprint confirmed printed, and the fingerprint the page would have now (refreshed after
+// each recovery-kit run). Neither file holds a secret.
 package envelope
 
 import (

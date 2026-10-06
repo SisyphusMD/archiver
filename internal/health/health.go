@@ -126,10 +126,9 @@ func Run(w io.Writer, l layout.Layout, env Env, now time.Time) int {
 	checkOn, pruneOn := maintenanceToggles(l, env)
 	if checkOn || pruneOn {
 		storages, _ := lockstate.ReadMaintenance(l.MaintenanceState())
-		// Secondaries kept by copy workers are no longer in bash maintenance's record; how
-		// overdue their checks are is status's to show (ADR 17), not health's.
-		// Only while a running daemon says its workers keep them: saved state alone outlives
-		// a switch back to bash maintenance.
+		// Secondaries kept by copy workers are not in maintenance's record; how overdue their
+		// checks are is status's to show (ADR 17), not health's. Only while a running daemon
+		// says its workers keep them: saved state alone outlives a configuration change.
 		workers := map[string]copier.State{}
 		if reply, err := daemon.Send(l.DaemonSocket(), daemon.CmdWorkers); err == nil && reply == daemon.ReplyOK {
 			workers = (&copier.Store{Path: l.CopyWorkersState()}).Load()

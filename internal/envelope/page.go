@@ -67,8 +67,8 @@ func (p *Page) addQR(s Source, data string) bool {
 	return false
 }
 
-// Build lays out the page. Its fingerprint and wording are the bash envelope's: a page
-// confirmed printed by either is current for both.
+// Build lays out the page. Its wording and fingerprint must not change without reason: a
+// change marks every confirmed print out of date.
 func Build(s Source) *Page {
 	p := &Page{password: s.Settings.Secret("RECOVERY_PASSWORD")}
 	kit := "archiver-recovery-kit-" + s.Hostname + ".tar.enc"

@@ -1,10 +1,9 @@
 // Package runctl implements `archiver stop`, `pause` and `resume` (ADR 10): acting on the
 // running backup, the running maintenance, and the copy workers (ADR 15).
 //
-// A Go pipeline watches its own lock: it ends gracefully when the stop flag appears and
-// starts no program while the run is recorded paused, so for it these commands record the
-// request and signal what is already running. A bash pipeline (a deployment still on legacy
-// hooks) does neither, so it is stopped from outside as bash's own stop did.
+// A pipeline watches its own lock: it ends gracefully when the stop flag appears and starts
+// no program while the run is recorded paused, so these commands record the request and
+// signal what is already running.
 package runctl
 
 import (
@@ -161,51 +160,22 @@ func Stop(e Env, target string, immediate bool) int {
 	fmt.Fprintf(e.Out, "Stopping backup (PID: %d, context: %s, stage: %s)...\n", l.PID, l.Context, l.Stage)
 	e.Log.Message(logging.Info, "", fmt.Sprintf("Stop requested (PID: %d, context: %s, stage: %s).", l.PID, l.Context, l.Stage))
 
-	if runlock.HeldByGo(e.Layout.BackupLock()) {
-		touch(e.stopFlag())
-		if l.Paused() {
-			e.resume(l)
-		}
-		if immediate {
-			// Its SIGTERM handling is the graceful-stop contract: post-backup hooks still run.
-			signalTree(l.PID, syscall.SIGTERM)
-			syscall.Kill(l.PID, syscall.SIGTERM)
-		}
-		fmt.Fprintln(e.Out, "Stop requested. The backup ends its current step, runs its post-backup hooks, and reports the stop.")
-		// The final stop of the copy workers (deferred) must come after the backup can no
-		// longer hand them its copies.
-		if e.waitForEnd(l.PID, StopWait) {
-			fmt.Fprintln(e.Out, "Backup stopped.")
-		} else {
-			fmt.Fprintf(e.Out, "The backup is still stopping after %s (its post-backup hooks may still be running).\n", StopWait)
-		}
-		return 0
+	touch(e.stopFlag())
+	if l.Paused() {
+		e.resume(l)
 	}
-
-	// A bash pipeline: between services it reads the stop flag itself; inside duplicacy it
-	// has to be ended from outside.
-	if immediate || l.Context == "duplicacy" {
-		runlock.Append(e.Layout.BackupLock(), "stopped", e.Now())
-		took := logging.Duration(e.Now().Unix() - l.StartedAt())
-		msg := "Stopped after " + took + "."
-		fmt.Fprintln(e.Out, "Backup stopped. "+msg)
-		e.Log.Message(logging.Info, "", "Backup stopped. "+msg)
-		e.Notify("Backup Stopped", msg)
-		sig := syscall.SIGTERM
-		if l.Paused() {
-			sig = syscall.SIGKILL // a stopped process cannot act on TERM
-		}
-		signalTree(l.PID, sig)
-		syscall.Kill(l.PID, sig)
-		return 0
+	if immediate {
+		// Its SIGTERM handling is the graceful-stop contract: post-backup hooks still run.
+		signalTree(l.PID, syscall.SIGTERM)
+		syscall.Kill(l.PID, syscall.SIGTERM)
 	}
-	if strings.HasPrefix(l.Context, "service:") {
-		e.Log.Message(logging.Info, "", "Setting stop flag for service cleanup.")
-		touch(e.stopFlag())
-		if l.Paused() {
-			e.resume(l)
-		}
-		fmt.Fprintln(e.Out, "Stop flag set. Service will complete cleanup and terminate.")
+	fmt.Fprintln(e.Out, "Stop requested. The backup ends its current step, runs its post-backup hooks, and reports the stop.")
+	// The final stop of the copy workers (deferred) must come after the backup can no
+	// longer hand them its copies.
+	if e.waitForEnd(l.PID, StopWait) {
+		fmt.Fprintln(e.Out, "Backup stopped.")
+	} else {
+		fmt.Fprintf(e.Out, "The backup is still stopping after %s (its post-backup hooks may still be running).\n", StopWait)
 	}
 	return 0
 }

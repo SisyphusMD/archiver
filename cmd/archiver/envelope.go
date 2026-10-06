@@ -42,7 +42,7 @@ func envelopeCheck(l layout.Layout, src config.Source, log *logging.Log, notify 
 }
 
 // envelopeCommand runs `archiver envelope [DIR]` and `archiver envelope confirm`; ok is false
-// for any other command line, which archiver.sh rejects with its usage.
+// for any other command line, which gets the usage.
 func envelopeCommand(args []string) (code int, ok bool) {
 	if len(args) > 1 {
 		return 0, false

@@ -1,5 +1,4 @@
-// Package layout names the files archiver keeps inside the image. The bash implementation
-// declares the same paths in lib/core/common.sh; while both run side by side they must agree.
+// Package layout names the files archiver keeps inside the image.
 package layout
 
 import "path/filepath"

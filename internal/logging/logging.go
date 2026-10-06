@@ -1,4 +1,4 @@
-// Package logging writes a pipeline's log the way lib/core/logging.sh does: one line per
+// Package logging writes a pipeline's log: one line per
 // message in archiver.log (a symlink to the current run's file under prior_logs), warnings
 // and errors echoed to stdout, and every error counted and sent to the notifier. status,
 // healthcheck, and logs read these files, so the line format is load-bearing.

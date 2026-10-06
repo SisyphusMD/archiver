@@ -1,0 +1,15 @@
+#!/bin/bash
+#########################################################################################
+# post-backup                                                                           #
+#                                                                                       #
+# Optional. Runs in the service directory after the service's backup: restart what      #
+# pre-backup stopped, clean up. Make it executable (chmod +x post-backup).              #
+#                                                                                       #
+# It runs whenever pre-backup ran, even after a failed pre-backup, a failed backup or a #
+# stop, so it can restart whatever pre-backup stopped. ARCHIVER_BACKUP_RESULT says how  #
+# the backup went: success, failed, skipped or stopped. A non-zero exit is reported.    #
+#                                                                                       #
+# It receives the same variables as pre-backup, never storage credentials.              #
+#########################################################################################
+
+# Example: docker compose start

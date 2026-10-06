@@ -1,8 +1,7 @@
 // Package runlock holds a pipeline's lock. A kernel lock (flock) on a side file is the
 // mutual exclusion: the kernel drops it when its holder dies, so a crashed run never blocks
-// the next. The lock file itself keeps the bash format (PID, context and stage, then state
-// events), because the bash stop, pause, resume and status commands read it, and a bash run
-// (a deployment not yet on the Go pipeline) is still refused by its PID being alive.
+// the next. The lock file records the run (PID, context and stage, then state events) for
+// stop, pause, resume and status.
 package runlock
 
 import (
@@ -62,7 +61,7 @@ func Acquire(path, stopFlag, context, stage string) (l *Lock, stale bool, err er
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	// A bash run holds no flock; its live PID in the lock file is what excludes it.
+	// A live PID in the lock file excludes too, though every holder also takes the flock.
 	if prev, ok, _ := lockstate.ReadLock(path); ok {
 		if prev.PID != os.Getpid() && prev.Alive() {
 			f.Close()
@@ -132,21 +131,6 @@ func Append(path, state string, at time.Time) error {
 		}
 		return err
 	})
-}
-
-// HeldByGo reports whether a Go pipeline holds the run lock at path. A bash run takes no
-// kernel lock, only the lock file.
-func HeldByGo(path string) bool {
-	f, err := os.OpenFile(path+".flock", os.O_RDWR, 0o644)
-	if err != nil {
-		return false
-	}
-	defer f.Close()
-	if syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil {
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
-		return false
-	}
-	return true
 }
 
 // StopRequested reports whether `archiver stop` asked this run to end.

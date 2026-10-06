@@ -33,7 +33,7 @@ type Notifier struct {
 	sending bool
 }
 
-// Send sends one notification, prefixed with the host and time as the bash notifier did.
+// Send sends one notification, prefixed with the host and time.
 // A failure while reporting a failure is not reported again, which would loop.
 func (n *Notifier) Send(title, message string) {
 	if n == nil || !n.Pushover {
