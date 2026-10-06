@@ -61,7 +61,7 @@ If you're currently running Archiver v0.6.5 or earlier directly on your host sys
 
 ## Storage Backend Setup
 
-Prepare at least one storage location before running init. Expand the sections below for setup instructions.
+Prepare at least one storage location before running init. Expand the sections below for setup instructions; every other type Duplicacy supports is listed under [Storage types](#storage-types).
 
 ### Local Disk
 
@@ -414,9 +414,9 @@ The settings below define what to backup and where. Supply them as environment v
 
 Environment variables carry the non-secret settings and files under `/run/secrets` carry the secrets and keys, so the configuration stays under version control (compose file / ConfigMap) and the secrets stay in a secret store. Nothing is read from a configuration file, and nothing configured is ever executed.
 
-**Non-secret settings (plain env vars).** `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, `LOCAL_PATH`, `SFTP_URL`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PATH`, `B2_BUCKETNAME`, `S3_BUCKETNAME`, `S3_ENDPOINT`, `S3_REGION`), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, `NOTIFICATION_SERVICE`, and `RECOVERY_KIT_EXTRA_PATHS`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine).
+**Non-secret settings (plain env vars).** `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, and each type's settings in [Storage types](#storage-types)), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, `NOTIFICATION_SERVICE`, and `RECOVERY_KIT_EXTRA_PATHS`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine).
 
-**Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's `B2_ID`, `B2_KEY`, `S3_ID`, `S3_SECRET` and optional [break-glass credentials](#break-glass-envelope). For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `storage_password`) is picked up with no extra configuration.
+**Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's type's secrets (see [Storage types](#storage-types)) and optional [break-glass credentials](#break-glass-envelope). For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `storage_password`) is picked up with no extra configuration.
 
 **Keys (files).** Keys are always files under `/opt/archiver/keys`. The RSA keypair must be provided as files at `/run/secrets/rsa_private_key` and `/run/secrets/rsa_public_key` (override the paths with `RSA_PRIVATE_KEY_FILE` / `RSA_PUBLIC_KEY_FILE`). The SFTP keypair is optional, for sftp targets, at `/run/secrets/ssh_private_key` and `/run/secrets/ssh_public_key` (override with `SSH_PRIVATE_KEY_FILE` / `SSH_PUBLIC_KEY_FILE`; restore needs both halves).
 
@@ -447,7 +447,7 @@ Each directory's name becomes part of its snapshot ID (`<hostname>-<name>`), whi
 
 ### Storage Targets
 
-Define multiple storage locations (local disk, SFTP, B2, S3):
+Define multiple storage locations of any [type](#storage-types):
 
 > **Note:** Storage names should only contain letters, numbers, and underscores. Other characters will be automatically sanitized (e.g., `my-storage` → `my_storage`).
 
@@ -481,6 +481,44 @@ STORAGE_TARGET_4_S3_REGION="none"
 STORAGE_TARGET_4_S3_ID="id"
 STORAGE_TARGET_4_S3_SECRET="secret"
 ```
+
+### Storage types
+
+Every storage Duplicacy 3.2.5 supports is a type (ADR 23). Settings are plain `STORAGE_TARGET_N_<NAME>` variables; secrets are files (`/run/secrets/storage_target_n_<name>`, or `STORAGE_TARGET_N_<NAME>_FILE`). Settings in *italics* are optional; a `_PATH` places the storage in a folder inside its bucket, share or drive.
+
+| Type | Settings | Secrets | Notes |
+|---|---|---|---|
+| `local` | `LOCAL_PATH` | | A path mounted into the container. |
+| `sftp`, `sftpc` | `SFTP_URL`, `SFTP_PORT` (default 22), `SFTP_USER`, `SFTP_PATH` | the SSH keypair (see [Keys](#configuration-sources)) | `sftpc` also offers older ciphers and key exchanges, for old servers. The path must exist. |
+| `b2` | `B2_BUCKETNAME`, *`B2_PATH`* | `B2_ID`, `B2_KEY` | |
+| `b2-custom` | `B2_DOWNLOAD_HOST`, `B2_BUCKETNAME`, *`B2_PATH`* | `B2_ID`, `B2_KEY` | Downloads through your own host (a CDN in front of B2). |
+| `s3`, `s3c`, `minio`, `minios` | `S3_BUCKETNAME`, `S3_ENDPOINT`, *`S3_REGION`* (default `none`), *`S3_PATH`* | `S3_ID`, `S3_SECRET` | `s3c` is for providers that need V2 signatures; `minio` (HTTP) and `minios` (HTTPS) use path-style addressing for self-hosted servers. |
+| `wasabi` | `WASABI_BUCKETNAME`, `WASABI_ENDPOINT` (default `s3.wasabisys.com`), `WASABI_REGION` (default `us-east-1`), *`WASABI_PATH`* | `WASABI_KEY`, `WASABI_SECRET` | |
+| `azure` | `AZURE_ACCOUNT`, `AZURE_CONTAINER` | `AZURE_KEY` | The container must exist. |
+| `gcs` | `GCS_BUCKETNAME`, *`GCS_PATH`* | `GCS_TOKEN`: a service-account JSON key | |
+| `gcd` | `GCD_PATH` and/or *`GCD_DRIVE`* (a shared drive's ID, from its URL) | `GCD_TOKEN`: a service-account JSON key, or a token from your own OAuth app (below) | Google Drive. |
+| `one` | `ONE_PATH`, `ONE_CLIENT_ID` | `ONE_TOKEN`, `ONE_CLIENT_SECRET` | OneDrive personal, through your own app registration (below). |
+| `odb` | `ODB_PATH` and/or *`ODB_DRIVE_ID`*, `ODB_CLIENT_ID` | `ODB_TOKEN`, `ODB_CLIENT_SECRET` | OneDrive for Business or SharePoint, through your own app registration (below). |
+| `dropbox` | `DROPBOX_PATH`, `DROPBOX_APP_KEY` | `DROPBOX_TOKEN` (a refresh token), `DROPBOX_APP_SECRET` | Through your own Dropbox app (below). |
+| `swift` | `SWIFT_URL`: `user@auth-host/v3/container[/path][?domain=…&tenant=…]` | `SWIFT_KEY` | OpenStack Swift, in Duplicacy's URL form; add `protocol=http` for plain HTTP. |
+| `webdav`, `webdav-http` | `WEBDAV_HOST` (host[:port]), `WEBDAV_USER`, `WEBDAV_PATH` | `WEBDAV_PASSWORD` | HTTPS or plain HTTP. The path must exist. |
+| `smb` | `SMB_HOST` (host[:port]), `SMB_USER`, `SMB_SHARE`, *`SMB_PATH`* | `SMB_PASSWORD` | SMB 2/3. The path must exist. |
+| `storj` | `STORJ_SATELLITE` (host:port), `STORJ_BUCKET`, *`STORJ_PATH`* | `STORJ_KEY`, `STORJ_PASSPHRASE` | |
+| `fabric` | `FABRIC_ENDPOINT`, *`FABRIC_PATH`* | `FABRIC_TOKEN` | Storage Made Easy File Fabric. |
+
+When Duplicacy cannot open a storage, the error says why: the storage's directory does not exist (Duplicacy does not create it on SFTP, WebDAV or SMB), or the storage cannot be reached, with the reason.
+
+Checks default to daily on object storage and weekly on SFTP, WebDAV, SMB, File Fabric and the consumer drives (`STORAGE_TARGET_N_CHECK_INTERVAL` overrides). Every type receives the [recovery kit](#automatic-recovery-kit), and the [envelope](#break-glass-envelope) prints each type's settings and credentials.
+
+**Your own app for Google Drive, OneDrive and Dropbox.** Archiver never refreshes tokens through duplicacy.com. Create an app with the provider (a Google Cloud OAuth client of type Desktop, a Microsoft Entra app registration with a client secret, or a Dropbox app), then get a token with the `rclone` in the image, on any machine with a browser (or with `rclone authorize` on your desktop):
+
+```bash
+docker run -it --rm --entrypoint rclone ghcr.io/sisyphusmd/archiver authorize dropbox "APP_KEY" "APP_SECRET"
+docker run -it --rm --entrypoint rclone ghcr.io/sisyphusmd/archiver authorize onedrive "CLIENT_ID" "CLIENT_SECRET"
+docker run -it --rm --entrypoint rclone ghcr.io/sisyphusmd/archiver authorize drive "CLIENT_ID" "CLIENT_SECRET"
+```
+
+Each prints a token as JSON. For Dropbox, `DROPBOX_TOKEN` is its `refresh_token`. For OneDrive, the whole JSON is `ONE_TOKEN` (or `ODB_TOKEN`). Microsoft replaces the token each time it is refreshed, so Duplicacy works from a copy under `logs/.tokens` and the recovery kit carries the latest one; the envelope cannot, and points to signing in to OneDrive instead. For Google Drive, `GCD_TOKEN` is `{"client_id": "CLIENT_ID", "client_secret": "CLIENT_SECRET", "end_point": {"TokenURL": "https://oauth2.googleapis.com/token"}, "token": <the JSON>}`; a service-account key needs none of this.
 
 ### Copies to secondary storages
 
@@ -545,15 +583,16 @@ docker exec archiver archiver envelope confirm
 rm -rf ./envelope
 ```
 
-The page holds the recovery password, the decrypt command, and for each storage target where the kit sits (address, user, bucket, path) with a credential that can read it, as text and as QR codes, plus space to write account-recovery codes by hand. The files are plaintext, owner-only, and never sent anywhere: print one and delete them.
+The page holds the recovery password, the decrypt command, and for each storage target where the kit sits (address, user, bucket, path) with a credential that can read it, as text and as QR codes, plus space to write account-recovery codes by hand. Each storage's block also has a command that downloads the kit from any machine: `sftp` for an SFTP storage, and for the others one `rclone copyto` line that needs nothing but rclone (no config file; it carries the credential shown). A OneDrive token changes as it is used, so a OneDrive block says to sign in and download the kit instead. The files are plaintext, owner-only, and never sent anywhere: print one and delete them.
 
 **Break-glass credentials.** By default each storage's block carries its backup credential, marked **FULL ACCESS**, because whoever holds the page could also delete those backups. Where the provider allows a narrower credential, create one that can only read the bucket and give it to archiver as a secret file; the page then carries it instead (archiver never uses it for anything else):
 
 | Storage type | Secret files (`/run/secrets/...`) |
 |---|---|
-| B2 | `storage_target_N_breakglass_b2_id`, `storage_target_N_breakglass_b2_key` (a key with `listBuckets`, `listFiles`, `readFiles` on the bucket) |
-| S3 | `storage_target_N_breakglass_s3_id`, `storage_target_N_breakglass_s3_secret` |
-| SFTP | `storage_target_N_breakglass_ssh_key` (a private key for a read-only account, whose name goes in the `STORAGE_TARGET_N_BREAKGLASS_SFTP_USER` env var; otherwise the page carries the backup key, since the kit holding it is itself on that server) |
+| B2 (`b2`, `b2-custom`) | `storage_target_N_breakglass_b2_id`, `storage_target_N_breakglass_b2_key` (a key with `listBuckets`, `listFiles`, `readFiles` on the bucket) |
+| S3 (`s3`, `s3c`, `minio`, `minios`) | `storage_target_N_breakglass_s3_id`, `storage_target_N_breakglass_s3_secret` |
+| SFTP (`sftp`, `sftpc`) | `storage_target_N_breakglass_ssh_key` (a private key for a read-only account, whose name goes in the `STORAGE_TARGET_N_BREAKGLASS_SFTP_USER` env var; otherwise the page carries the backup key, since the kit holding it is itself on that server) |
+| Any other type | `storage_target_N_breakglass_<secret>` for each of its keys, passwords and tokens that has one: `wasabi_key`/`wasabi_secret`, `azure_key`, `swift_key`, `webdav_password`, `smb_password`, `storj_key`, `fabric_token` (the S3 and B2 variants use the rows above). The page uses them only when all of a target's are set. Drive tokens, app secrets, service-account keys and the Storj passphrase have none: the page carries the backup ones, marked **FULL ACCESS**. |
 
 **Keeping it current.** `archiver envelope confirm` records a fingerprint of what the page says (a hash keyed by the recovery password; it reveals nothing). After every recovery-kit run archiver compares it with what the page would say now: when a secret or storage on it changes, `archiver status` shows `Envelope: OUT OF DATE`, healthcheck warns, and one notification is sent. A year after confirming, the same happens as a reminder to check the envelope is still there and readable.
 

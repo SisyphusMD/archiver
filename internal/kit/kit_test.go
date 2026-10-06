@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -306,17 +305,12 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
-// Every storage type a configuration accepts can hold the kit: a type added to config without
-// an uploader fails here, not at a deployment's first kit refresh.
-func TestEveryStorageTypeHasAnUploader(t *testing.T) {
-	for _, typ := range config.StorageTypes {
-		if _, ok := remotes[typ]; !ok {
-			t.Errorf("storage type %q has no recovery-kit uploader", typ)
-		}
-	}
-	for typ := range remotes {
-		if !slices.Contains(config.StorageTypes, typ) {
-			t.Errorf("uploader for %q, a type config does not accept", typ)
+// Every storage type a configuration accepts can hold the kit: a type without an rclone
+// remote fails here, not at a deployment's first kit refresh.
+func TestEveryStorageTypeHasARemote(t *testing.T) {
+	for _, name := range config.StorageTypes {
+		if config.Types[name].Remote == nil {
+			t.Errorf("storage type %q has no recovery-kit remote", name)
 		}
 	}
 }
@@ -325,8 +319,8 @@ func TestEveryStorageTypeHasAnUploader(t *testing.T) {
 func TestRemoteCredentialsStayOffArgv(t *testing.T) {
 	f := newFixture(t, 0)
 	for _, tgt := range []config.Target{
-		{Name: "b", Type: "b2", B2Bucket: "bkt", B2ID: "keyid", B2Key: "b2-secret"},
-		{Name: "s", Type: "s3", S3Bucket: "bkt", S3Endpoint: "s3.example.com", S3ID: "akid", S3Secret: "s3-secret"},
+		{Name: "b", Type: "b2", Values: config.Values{"B2_BUCKETNAME": "bkt", "B2_ID": "keyid", "B2_KEY": "b2-secret"}},
+		{Name: "s", Type: "s3", Values: config.Values{"S3_BUCKETNAME": "bkt", "S3_ENDPOINT": "s3.example.com", "S3_ID": "akid", "S3_SECRET": "s3-secret"}},
 	} {
 		os.Remove(filepath.Join(f.root, "rclone.args"))
 		os.Remove(filepath.Join(f.root, "rclone.env"))

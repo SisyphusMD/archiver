@@ -12,6 +12,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/daemon"
+	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/notify"
@@ -143,6 +144,7 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 			Bin: "duplicacy", Repo: copier.RepoDir(l.LogDir(), cfg.Targets[0], t), Env: env, Log: log, Threads: cfg.Threads,
 			PrivKey: l.RSAPrivateKey(), PubKey: filepath.Join(l.Root, "keys", "public.pem"),
 			SnapshotID: host + "-archiver-copies", Primary: cfg.Targets[0], Target: t, InitLock: l.StorageInit,
+			Diagnose: func(t config.Target) string { return kit.Diagnose(l, "", t) },
 		}
 		w := copier.New(name, cfg.Targets[0].StorageName(), d, realClock{}, copier.Events{
 			Log:    func(level, msg string) { log.Message(level, name, msg) },

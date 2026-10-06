@@ -20,8 +20,8 @@ func TestInit(t *testing.T) {
 		"", "my store-1",       // name: empty is asked again; spaces dropped, '-' becomes '_'
 		"tape", "LOCAL", "/backup", // an unknown type is asked again
 		"y", "off", "sftp", "nas.lan/", "2222", "backup", "/volume1/archiver/",
-		"y", "cloud", "b2", "bucket", "keyid", "app key",
-		"y", "s3store", "s3", "bkt", "s3.example.com", "", "AKID", "sec",
+		"y", "cloud", "b2", "bucket", "", "keyid", "app key", // no path inside the bucket
+		"y", "s3store", "s3", "bkt", "s3.example.com", "", "", "AKID", "sec", // default region, no path
 		"n",
 		"y", "ukey", "atoken",
 	}, "\n") + "\n"
@@ -94,7 +94,7 @@ STORAGE_TARGET_4_TYPE=s3
 	if _, err := os.Stat(filepath.Join(keys, "private.pem.backup.20261005-120000")); err != nil {
 		t.Error("the existing key was not set aside")
 	}
-	for _, msg := range []string{"Error: Storage name is required", "Error: Must be one of local, sftp, b2, s3", "RECOVERY PASSWORD: the single key", read("recovery_password")} {
+	for _, msg := range []string{"Error: Storage name is required", "Error: Must be one of local, sftp, sftpc, b2,", "RECOVERY PASSWORD: the single key", read("recovery_password")} {
 		if !strings.Contains(out.String(), msg) {
 			t.Errorf("output lacks %q", msg)
 		}
@@ -146,5 +146,40 @@ func TestInitKeepsAKeyItCannotSetAside(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(keys, "private.pem")); string(b) != "only copy" {
 		t.Fatalf("the key was overwritten: %q", b)
+	}
+}
+
+// A type beyond the first four takes its fields from the storage-type table: a token file's
+// contents become its secret, and a plain secret is written as given.
+func TestInitTableTypes(t *testing.T) {
+	root := t.TempDir()
+	token := filepath.Join(root, "sa.json")
+	os.WriteFile(token, []byte(`{"type":"service_account"}`+"\n"), 0o600)
+	answers := strings.Join([]string{
+		"/srv/*/",
+		"gstore", "gcs", "bkt", "", token, // no path inside the bucket
+		"y", "az", "azure", "acct", "cont", "azkey",
+		"n", "n",
+	}, "\n") + "\n"
+	var out bytes.Buffer
+	s := &Init{KeysDir: filepath.Join(root, "keys"), SetupDir: filepath.Join(root, "setup"), In: strings.NewReader(answers), Out: &out}
+	if code := s.Run(); code != 0 {
+		t.Fatalf("exit %d:\n%s", code, out.String())
+	}
+	env, _ := os.ReadFile(filepath.Join(root, "setup", "env-native", "archiver.env"))
+	for _, line := range []string{"STORAGE_TARGET_1_TYPE=gcs", "STORAGE_TARGET_1_GCS_BUCKETNAME=bkt", "STORAGE_TARGET_2_TYPE=azure",
+		"STORAGE_TARGET_2_AZURE_ACCOUNT=acct", "STORAGE_TARGET_2_AZURE_CONTAINER=cont"} {
+		if !strings.Contains(string(env), line+"\n") {
+			t.Errorf("archiver.env lacks %s:\n%s", line, env)
+		}
+	}
+	if strings.Contains(string(env), "GCS_PATH") {
+		t.Error("an unanswered optional field was written")
+	}
+	secrets := filepath.Join(root, "setup", "env-native", "secrets")
+	for n, v := range map[string]string{"storage_target_1_gcs_token": `{"type":"service_account"}`, "storage_target_2_azure_key": "azkey"} {
+		if b, _ := os.ReadFile(filepath.Join(secrets, n)); string(b) != v {
+			t.Errorf("secrets/%s = %q, want %q", n, b, v)
+		}
 	}
 }

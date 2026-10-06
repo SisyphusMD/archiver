@@ -22,6 +22,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/hooks"
+	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/notify"
@@ -462,11 +463,15 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 	if b.runInit(storage, b.duplicacy(svc.Dir, svc.Name, "init", "-e", "-key", filepath.Join(b.Layout.Root, "keys", "public.pem"),
 		"-storage-name", storage, svc.SnapshotID, url)) != 0 {
 		log(logging.Error, fmt.Sprintf("Primary storage initialization failed for %s service.", svc.Name))
+		if why := kit.Diagnose(b.Layout, "", primary); why != "" {
+			log(logging.Error, why)
+		}
 	}
 	if b.run(b.duplicacy(svc.Dir, svc.Name, "list", "-storage", storage)) != 0 {
 		log(logging.Error, fmt.Sprintf("Primary storage verification failed for %s service.", svc.Name))
+	} else {
+		log(logging.Info, fmt.Sprintf("Primary storage verified for %s service.", svc.Name))
 	}
-	log(logging.Info, fmt.Sprintf("Primary storage verified for %s service.", svc.Name))
 
 	content := strings.Join(filters, "\n")
 	if content != "" {
@@ -552,6 +557,9 @@ func (b *Backup) addStorages(svc hooks.Service, log func(string, string)) {
 				log(logging.Warning, fmt.Sprintf("Could not add %s storage %s for %s service; its copy worker reports that storage's health.", t.Type, t.StorageName(), svc.Name))
 			} else {
 				log(logging.Error, fmt.Sprintf("Failed to add %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
+				if why := kit.Diagnose(b.Layout, "", t); why != "" {
+					log(logging.Error, why)
+				}
 			}
 		}
 	}
@@ -844,7 +852,15 @@ func (b *Backup) finish() {
 	var status string
 	switch s.EndState {
 	case "completed":
-		status = "Backup completed successfully"
+		// "completed" means the run reached its end, not that every step succeeded.
+		switch n := b.log.Errors(); n {
+		case 0:
+			status = "Backup completed successfully"
+		case 1:
+			status = "Backup completed with 1 error"
+		default:
+			status = fmt.Sprintf("Backup completed with %d errors", n)
+		}
 	case "stopped":
 		status = "Backup stopped before completion"
 	default:

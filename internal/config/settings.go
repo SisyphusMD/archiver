@@ -10,10 +10,32 @@ import (
 	"strings"
 )
 
-var nonSecretVar = regexp.MustCompile(`^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|CHECK_INTERVAL|DUPLICACY_THREADS|NOTIFICATION_SERVICE|RECOVERY_KIT_EXTRA_PATHS|STORAGE_TARGET_[0-9]+_(NAME|TYPE|LOCAL_PATH|SFTP_URL|SFTP_PORT|SFTP_USER|SFTP_PATH|B2_BUCKETNAME|S3_BUCKETNAME|S3_ENDPOINT|S3_REGION|CHECK_INTERVAL|BREAKGLASS_SFTP_USER))$`)
+var globalSetting = regexp.MustCompile(`^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|CHECK_INTERVAL|DUPLICACY_THREADS|NOTIFICATION_SERVICE|RECOVERY_KIT_EXTRA_PATHS)$`)
 
-// IsSetting reports whether a variable name is a non-secret setting.
-func IsSetting(name string) bool { return nonSecretVar.MatchString(name) }
+// IsSetting reports whether a variable name is a non-secret setting: a global one, or a
+// storage target's name, type, check interval, break-glass SFTP user, or any storage type's
+// non-secret field.
+func IsSetting(name string) bool {
+	if globalSetting.MatchString(name) {
+		return true
+	}
+	m := targetVar.FindStringSubmatch(name)
+	if m == nil {
+		return false
+	}
+	switch m[1] {
+	case "NAME", "TYPE", "CHECK_INTERVAL", "BREAKGLASS_SFTP_USER":
+		return true
+	}
+	for _, t := range Types {
+		for _, f := range t.Fields {
+			if !f.Secret && f.Name == m[1] {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // Setting is one configuration variable and its value.
 type Setting struct{ Name, Value string }
@@ -59,14 +81,24 @@ func Snapshot(src Source, environ []string) (*Settings, error) {
 	sort.Slice(s.NonSecret, func(i, j int) bool { return versionLess(s.NonSecret[i].Name, s.NonSecret[j].Name) })
 
 	names := []string{"STORAGE_PASSWORD", "RSA_PASSPHRASE", "RECOVERY_PASSWORD", "PUSHOVER_USER_KEY", "PUSHOVER_API_TOKEN"}
+	rotating := map[string]string{}
 	for n := 1; src.Getenv(fmt.Sprintf("STORAGE_TARGET_%d_NAME", n)) != ""; n++ {
 		p := fmt.Sprintf("STORAGE_TARGET_%d_", n)
-		switch src.Getenv(p + "TYPE") {
-		case "b2":
-			names = append(names, p+"B2_ID", p+"B2_KEY", p+"BREAKGLASS_B2_ID", p+"BREAKGLASS_B2_KEY")
-		case "s3":
-			names = append(names, p+"S3_ID", p+"S3_SECRET", p+"BREAKGLASS_S3_ID", p+"BREAKGLASS_S3_SECRET")
-		case "sftp":
+		typ := src.Getenv(p + "TYPE")
+		var breakglass []string
+		for _, f := range Types[typ].Fields {
+			if f.Rotates {
+				rotating[p+f.Name] = tokenCopy(Target{Name: src.Getenv(p + "NAME")}, f)
+			}
+			if f.Secret {
+				names = append(names, p+f.Name)
+				if f.BreakGlass {
+					breakglass = append(breakglass, p+"BREAKGLASS_"+f.Name)
+				}
+			}
+		}
+		names = append(names, breakglass...)
+		if typ == "sftp" || typ == "sftpc" {
 			names = append(names, p+"BREAKGLASS_SSH_KEY")
 		}
 	}
@@ -76,6 +108,11 @@ func Snapshot(src Source, environ []string) (*Settings, error) {
 			return nil, err
 		}
 		if ok {
+			// A token Duplicacy has refreshed since it was configured: the kit must carry the
+			// current one, the original may no longer work.
+			if path, rotates := rotating[name]; rotates {
+				v = string(currentToken(path, []byte(v)))
+			}
 			s.Secrets = append(s.Secrets, Setting{name, v})
 		}
 	}

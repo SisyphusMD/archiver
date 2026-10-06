@@ -1,0 +1,55 @@
+name: Nightly real-service backends
+
+# Round trips through the storage types no emulator covers, against dedicated test accounts
+# (ADR 25). Advisory: it runs on main nightly and on demand, never on pull requests, since
+# outside services flake. A backend without its NIGHTLY_<TYPE> secret is skipped.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-backends:
+    name: Real-service round trips
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+            [registry."ghcr.io"]
+              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+      - name: Build amd64 (load locally)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: nightly:local
+          build-args: |
+            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+      - name: Round trips (backup, copy, kit, restore, maintenance)
+        env:
+          IMAGE: nightly:local
+          NIGHTLY_RSA_KEY: ${{ secrets.NIGHTLY_RSA_KEY }}
+          NIGHTLY_B2: ${{ secrets.NIGHTLY_B2 }}
+          NIGHTLY_B2_CUSTOM: ${{ secrets.NIGHTLY_B2_CUSTOM }}
+          NIGHTLY_GCD: ${{ secrets.NIGHTLY_GCD }}
+          NIGHTLY_ONE: ${{ secrets.NIGHTLY_ONE }}
+          NIGHTLY_ODB: ${{ secrets.NIGHTLY_ODB }}
+          NIGHTLY_DROPBOX: ${{ secrets.NIGHTLY_DROPBOX }}
+          NIGHTLY_STORJ: ${{ secrets.NIGHTLY_STORJ }}
+          NIGHTLY_FABRIC: ${{ secrets.NIGHTLY_FABRIC }}
+          NIGHTLY_AZURE: ${{ secrets.NIGHTLY_AZURE }}
+          NIGHTLY_GCS: ${{ secrets.NIGHTLY_GCS }}
+          NIGHTLY_WASABI: ${{ secrets.NIGHTLY_WASABI }}
+        run: bash tests/integration/real-backends.sh

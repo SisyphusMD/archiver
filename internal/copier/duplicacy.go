@@ -39,6 +39,8 @@ type Duplicacy struct {
 	// InitLock names the lock held around creating one storage (layout.StorageInit), so a
 	// worker never creates a storage at the same time as another worker or a backup.
 	InitLock func(storage string) string
+	// Diagnose explains why a storage could not be opened (kit.Diagnose); nil adds nothing.
+	Diagnose func(t config.Target) string
 
 	mu       sync.Mutex
 	prepared bool
@@ -72,7 +74,7 @@ func (d *Duplicacy) Prepare(ctx context.Context) error {
 	if out, err := d.locked(ctx, d.Primary.StorageName(), func() (string, error) {
 		return d.outputContext(ctx, "init", "-e", "-key", d.PubKey, "-storage-name", d.Primary.StorageName(), d.SnapshotID, purl)
 	}); err != nil {
-		return fmt.Errorf("preparing %s: %v: %s", d.Primary.StorageName(), err, lastLine(out))
+		return fmt.Errorf("preparing %s: %v: %s%s", d.Primary.StorageName(), err, lastLine(out), d.diagnose(d.Primary))
 	}
 	turl, err := d.Target.URL()
 	if err != nil {
@@ -81,10 +83,20 @@ func (d *Duplicacy) Prepare(ctx context.Context) error {
 	if out, err := d.locked(ctx, d.Target.StorageName(), func() (string, error) {
 		return d.outputContext(ctx, "add", "-e", "-copy", d.Primary.StorageName(), "-bit-identical", "-key", d.PubKey, d.Target.StorageName(), d.SnapshotID, turl)
 	}); err != nil {
-		return fmt.Errorf("preparing %s: %v: %s", d.Target.StorageName(), err, lastLine(out))
+		return fmt.Errorf("preparing %s: %v: %s%s", d.Target.StorageName(), err, lastLine(out), d.diagnose(d.Target))
 	}
 	d.prepared = true
 	return nil
+}
+
+func (d *Duplicacy) diagnose(t config.Target) string {
+	if d.Diagnose == nil {
+		return ""
+	}
+	if why := d.Diagnose(t); why != "" {
+		return " (" + why + ")"
+	}
+	return ""
 }
 
 // locked runs f under storage's creation lock.

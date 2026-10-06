@@ -49,11 +49,11 @@ func TestURL(t *testing.T) {
 		t    Target
 		want string
 	}{
-		{Target{Type: "local", LocalPath: "/mnt/backups/local"}, "/mnt/backups/local"},
-		{Target{Type: "sftp", SFTPUser: "backup", SFTPURL: "sftp.example.com", SFTPPort: "2222", SFTPPath: "srv/duplicacy"}, "sftp://backup@sftp.example.com:2222//srv/duplicacy"},
-		{Target{Type: "b2", B2Bucket: "my-b2-bucket"}, "b2://my-b2-bucket"},
-		{Target{Type: "s3", S3Region: "us-east-1", S3Endpoint: "s3.amazonaws.com", S3Bucket: "archive"}, "s3://us-east-1@s3.amazonaws.com/archive"},
-		{Target{Type: "s3", S3Endpoint: "nyc3.digitaloceanspaces.com", S3Bucket: "archive"}, "s3://none@nyc3.digitaloceanspaces.com/archive"},
+		{Target{Type: "local", Values: Values{"LOCAL_PATH": "/mnt/backups/local"}}, "/mnt/backups/local"},
+		{Target{Type: "sftp", Values: Values{"SFTP_USER": "backup", "SFTP_URL": "sftp.example.com", "SFTP_PORT": "2222", "SFTP_PATH": "srv/duplicacy"}}, "sftp://backup@sftp.example.com:2222//srv/duplicacy"},
+		{Target{Type: "b2", Values: Values{"B2_BUCKETNAME": "my-b2-bucket"}}, "b2://my-b2-bucket"},
+		{Target{Type: "s3", Values: Values{"S3_REGION": "us-east-1", "S3_ENDPOINT": "s3.amazonaws.com", "S3_BUCKETNAME": "archive"}}, "s3://us-east-1@s3.amazonaws.com/archive"},
+		{Target{Type: "s3", Values: Values{"S3_ENDPOINT": "nyc3.digitaloceanspaces.com", "S3_BUCKETNAME": "archive"}}, "s3://none@nyc3.digitaloceanspaces.com/archive"},
 	} {
 		got, err := tc.t.URL()
 		if err != nil || got != tc.want {
@@ -72,8 +72,8 @@ func TestDuplicacyEnv(t *testing.T) {
 		want []string
 	}{
 		{Target{Name: "localdisk", Type: "local"}, []string{"DUPLICACY_LOCALDISK_PASSWORD=pw", "DUPLICACY_LOCALDISK_RSA_PASSPHRASE=rp"}},
-		{Target{Name: "default", Type: "b2", B2ID: "keyid", B2Key: "appkey"}, []string{"DUPLICACY_PASSWORD=pw", "DUPLICACY_RSA_PASSPHRASE=rp", "DUPLICACY_B2_ID=keyid", "DUPLICACY_B2_KEY=appkey"}},
-		{Target{Name: "do-spaces", Type: "s3", S3ID: "AKIAxxx", S3Secret: "shhh"}, []string{"DUPLICACY_DO_SPACES_PASSWORD=pw", "DUPLICACY_DO_SPACES_RSA_PASSPHRASE=rp", "DUPLICACY_DO_SPACES_S3_ID=AKIAxxx", "DUPLICACY_DO_SPACES_S3_SECRET=shhh"}},
+		{Target{Name: "default", Type: "b2", Values: Values{"B2_ID": "keyid", "B2_KEY": "appkey"}}, []string{"DUPLICACY_PASSWORD=pw", "DUPLICACY_RSA_PASSPHRASE=rp", "DUPLICACY_B2_ID=keyid", "DUPLICACY_B2_KEY=appkey"}},
+		{Target{Name: "do-spaces", Type: "s3", Values: Values{"S3_ID": "AKIAxxx", "S3_SECRET": "shhh"}}, []string{"DUPLICACY_DO_SPACES_PASSWORD=pw", "DUPLICACY_DO_SPACES_RSA_PASSPHRASE=rp", "DUPLICACY_DO_SPACES_S3_ID=AKIAxxx", "DUPLICACY_DO_SPACES_S3_SECRET=shhh"}},
 		{Target{Name: "cowanserver", Type: "sftp"}, []string{"DUPLICACY_COWANSERVER_PASSWORD=pw", "DUPLICACY_COWANSERVER_RSA_PASSPHRASE=rp", "DUPLICACY_COWANSERVER_SSH_KEY_FILE=/k/id_ed25519"}},
 	} {
 		if got := c.DuplicacyEnv(tc.t, "/k/id_ed25519"); !slices.Equal(got, tc.want) {
@@ -150,7 +150,7 @@ func TestTargetsAndDefaults(t *testing.T) {
 	if !slices.Equal(c.ServiceDirectories, []string{"/a/*/", "/b/", "/c/"}) {
 		t.Errorf("ServiceDirectories = %q", c.ServiceDirectories)
 	}
-	if len(c.Targets) != 2 || c.Targets[1].B2ID != "id" || c.Targets[1].B2Key != "key" {
+	if len(c.Targets) != 2 || c.Targets[1].Get("B2_ID") != "id" || c.Targets[1].Get("B2_KEY") != "key" {
 		t.Errorf("Targets = %+v (the list stops at the first gap)", c.Targets)
 	}
 	if c.PruneBackups || !c.CheckBackups {
@@ -169,7 +169,7 @@ func TestValidate(t *testing.T) {
 	valid := func() *Config {
 		return &Config{
 			ServiceDirectories: []string{"/srv/*/"},
-			Targets:            []Target{{N: 1, Name: "local", Type: "local", LocalPath: "/s"}},
+			Targets:            []Target{{N: 1, Name: "local", Type: "local", Values: Values{"LOCAL_PATH": "/s"}}},
 			StoragePassword:    "longenough", RSAPassphrase: "rp",
 			PruneExhaustiveFrequency: "monthly",
 		}
@@ -185,13 +185,17 @@ func TestValidate(t *testing.T) {
 		{"no service dirs", func(c *Config) { c.ServiceDirectories = nil }, "SERVICE_DIRECTORIES is not set"},
 		{"no targets", func(c *Config) { c.Targets = nil }, "No storage targets specified"},
 		{"no type", func(c *Config) { c.Targets[0].Type = "" }, "Missing storage name or type for storage target 1"},
-		{"local path", func(c *Config) { c.Targets[0].LocalPath = "" }, "Missing LOCAL_PATH configuration for the local storage"},
-		{"sftp port", func(c *Config) {
-			c.Targets[0] = Target{N: 1, Name: "s", Type: "sftp", SFTPURL: "h", SFTPUser: "u", SFTPPath: "p"}
-		}, "Missing SFTP configuration setting SFTP_PORT"},
-		{"b2 key", func(c *Config) { c.Targets[0] = Target{N: 1, Name: "b", Type: "b2", B2Bucket: "x", B2ID: "i"} },
+		{"local path", func(c *Config) { c.Targets[0].Values["LOCAL_PATH"] = "" }, "Missing LOCAL configuration setting LOCAL_PATH for the local storage"},
+		{"sftp user", func(c *Config) {
+			c.Targets[0] = Target{N: 1, Name: "s", Type: "sftp", Values: Values{"SFTP_URL": "h", "SFTP_PATH": "p"}}
+		}, "Missing SFTP configuration setting SFTP_USER"},
+		{"b2 key", func(c *Config) {
+			c.Targets[0] = Target{N: 1, Name: "b", Type: "b2", Values: Values{"B2_BUCKETNAME": "x", "B2_ID": "i"}}
+		},
 			"Missing B2 secret B2_KEY for the b storage. Secrets are file-only (never env vars): provide /run/secrets/storage_target_1_b2_key or set STORAGE_TARGET_1_B2_KEY_FILE."},
-		{"s3 endpoint", func(c *Config) { c.Targets[0] = Target{N: 1, Name: "s", Type: "s3", S3Bucket: "x"} }, "Missing S3 configuration setting S3_ENDPOINT"},
+		{"s3 endpoint", func(c *Config) {
+			c.Targets[0] = Target{N: 1, Name: "s", Type: "s3", Values: Values{"S3_BUCKETNAME": "x"}}
+		}, "Missing S3 configuration setting S3_ENDPOINT"},
 		{"type", func(c *Config) { c.Targets[0].Type = "ftp" }, "The storage type ftp is not supported. Please check your STORAGE_TARGET_1_TYPE configuration."},
 		{"rsa", func(c *Config) { c.RSAPassphrase = "" }, "The required secret RSA_PASSPHRASE is not set"},
 		{"short password", func(c *Config) { c.StoragePassword = "seven77" }, "STORAGE_PASSWORD must be at least 8 characters (a Duplicacy requirement); got 7."},
@@ -279,7 +283,7 @@ func TestIntervals(t *testing.T) {
 	if c.TargetCheckInterval(sftp) != 0 {
 		t.Error("CHECK_BACKUPS=false means no checks")
 	}
-	v := &Config{ServiceDirectories: []string{"/s"}, Targets: []Target{{N: 1, Name: "l", Type: "local", LocalPath: "/x"}, {N: 2, Name: "o", Type: "local", LocalPath: "/y", CheckInterval: "soon"}},
+	v := &Config{ServiceDirectories: []string{"/s"}, Targets: []Target{{N: 1, Name: "l", Type: "local", Values: Values{"LOCAL_PATH": "/x"}}, {N: 2, Name: "o", Type: "local", Values: Values{"LOCAL_PATH": "/y"}, CheckInterval: "soon"}},
 		StoragePassword: "longenough", RSAPassphrase: "r", PruneExhaustiveFrequency: "monthly"}
 	if err := v.Validate("/run/secrets"); err == nil || !strings.Contains(err.Error(), "STORAGE_TARGET_2_CHECK_INTERVAL") {
 		t.Errorf("a bad interval must fail validation: %v", err)

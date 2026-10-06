@@ -64,5 +64,7 @@ grep -q "Backup to local completed for fixtures service" "$LOG" \
   && die "log claims the failed backup completed"
 grep -q "Completed successfully" "$LOG" \
   && die "completion notification claims success despite the failure"
+grep -q "Backup session summary: Backup completed successfully" "$LOG" \
+  && die "session summary claims success despite the failure"
 
 echo "=== BACKUP-FAILURE OK: failed backup exits ${rc}, logs ERROR, no false success ==="

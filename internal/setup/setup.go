@@ -312,80 +312,88 @@ func (s *Init) storage(n int, primary bool) error {
 	}
 	fmt.Fprintln(s.Out)
 	p := "STORAGE_TARGET_" + strconv.Itoa(n) + "_"
-	set := func(k, v string) { s.values[p+k] = v }
 	name, err := s.askUntil("  Storage name: ", "  Error: Storage name is required (letters, numbers, underscores only)", cleanName)
 	if err != nil {
 		return err
 	}
 	typ, err := s.askUntil("  Storage type ("+strings.Join(config.StorageTypes, "/")+"): ", "  Error: Must be one of "+strings.Join(config.StorageTypes, ", "), func(v string) string {
 		v = strings.ToLower(strings.Join(strings.Fields(v), ""))
-		for _, t := range config.StorageTypes {
-			if v == t {
-				return v
-			}
+		if _, ok := config.Types[v]; ok {
+			return v
 		}
 		return ""
 	})
 	if err != nil {
 		return err
 	}
-	set("NAME", name)
-	set("TYPE", typ)
-	trim := strings.TrimSpace
-	ask := func(key, prompt, problem string, clean func(string) string) error {
-		v, err := s.askUntilHidden(prompt, problem, clean, key == "B2_KEY" || key == "S3_SECRET")
-		if err == nil {
-			set(key, v)
+	s.values[p+"NAME"] = name
+	s.values[p+"TYPE"] = typ
+	for _, f := range config.Types[typ].Fields {
+		clean := cleaner(f.Name)
+		prompt := "  " + f.Prompt
+		switch {
+		case f.Default != "":
+			prompt += " [" + f.Default + "]"
+		case f.Optional:
+			prompt += " (optional)"
 		}
-		return err
-	}
-	switch typ {
-	case "local":
-		err = ask("LOCAL_PATH", "  Local path: ", "  Error: Path cannot be empty", cleanPath)
-	case "sftp":
-		if err = ask("SFTP_URL", "  SFTP host (IP or FQDN): ", "  Error: Host cannot be empty", cleanHost); err != nil {
-			return err
+		if f.Path {
+			prompt += " (its path in this container: put it in the mounted setup directory, /opt/archiver/setup)"
 		}
-		port, _ := s.ask("  SFTP port [22]: ")
-		set("SFTP_PORT", cleanPort(port))
-		if err = ask("SFTP_USER", "  SFTP user: ", "  Error: User cannot be empty", trim); err != nil {
-			return err
-		}
-		err = ask("SFTP_PATH", "  SFTP path: ", "  Error: Path cannot be empty", func(v string) string {
-			return strings.Trim(cleanPath(v), "/")
-		})
-	case "b2":
-		for _, q := range []struct{ key, prompt, problem string }{
-			{"B2_BUCKETNAME", "  B2 bucket name: ", "  Error: Bucket name cannot be empty"},
-			{"B2_ID", "  B2 key ID: ", "  Error: Key ID cannot be empty"},
-			{"B2_KEY", "  B2 application key: ", "  Error: Application key cannot be empty"},
-		} {
-			if err = ask(q.key, q.prompt, q.problem, trim); err != nil {
-				return err
+		prompt += ": "
+		var v string
+		if f.Optional || f.Default != "" {
+			// An empty answer takes the default, or leaves an optional field unset.
+			if v, err = s.ask(prompt); err != nil {
+				return fmt.Errorf("input ended before setup was complete")
 			}
-		}
-	case "s3":
-		if err = ask("S3_BUCKETNAME", "  S3 bucket name: ", "  Error: Bucket name cannot be empty", trim); err != nil {
+			if v = clean(v); v == "" {
+				v = f.Default
+			}
+		} else if v, err = s.askUntilHidden(prompt, "  Error: "+f.Prompt+" cannot be empty", clean, f.Secret && !f.Path); err != nil {
 			return err
 		}
-		if err = ask("S3_ENDPOINT", "  S3 endpoint: ", "  Error: Endpoint cannot be empty", cleanHost); err != nil {
-			return err
+		if v == "" {
+			continue
 		}
-		region, _ := s.ask("  S3 region [none]: ")
-		if region == "" {
-			region = "none"
+		if f.Path {
+			// A token or service-account file: its contents become the secret.
+			b, err := os.ReadFile(v)
+			if err != nil {
+				return fmt.Errorf("cannot read %s: %v", v, err)
+			}
+			v = strings.TrimSpace(string(b))
 		}
-		set("S3_REGION", region)
-		if err = ask("S3_ID", "  S3 access key ID: ", "  Error: Access key ID cannot be empty", trim); err != nil {
-			return err
-		}
-		err = ask("S3_SECRET", "  S3 secret key: ", "  Error: Secret key cannot be empty", trim)
-	}
-	if err != nil {
-		return err
+		s.values[p+f.Name] = v
 	}
 	s.success("Storage target configured")
 	return nil
+}
+
+// cleaner is how init tidies an answer for a field: hosts lose trailing slashes, a port
+// falls back to 22, an SFTP path loses its slashes, a local path is trimmed.
+func cleaner(field string) func(string) string {
+	switch {
+	case field == "SFTP_PORT":
+		return func(v string) string {
+			if v == "" {
+				return ""
+			}
+			return cleanPort(v)
+		}
+	case field == "SFTP_PATH":
+		return func(v string) string { return strings.Trim(cleanPath(v), "/") }
+	case field == "LOCAL_PATH":
+		return cleanPath
+	case field == "SFTP_URL" || strings.HasSuffix(field, "_ENDPOINT") || strings.HasSuffix(field, "_HOST"):
+		return func(v string) string {
+			if v = strings.TrimSpace(v); v == "" {
+				return ""
+			}
+			return cleanHost(v)
+		}
+	}
+	return strings.TrimSpace
 }
 
 var nonName = regexp.MustCompile(`[^a-zA-Z0-9_]`)
