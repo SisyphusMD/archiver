@@ -188,6 +188,40 @@ func TestRunsRefusedBackupNotifies(t *testing.T) {
 	}
 }
 
+// TestRunsBackupRefusedDuringRestore: while a restore into a service directory runs (here
+// parked in its post-restore hook), a backup is refused and writes nothing: it would save
+// a half-restored directory. Once the restore ends, backups run again.
+func TestRunsBackupRefusedDuringRestore(t *testing.T) {
+	in := newRunsInstall(t)
+	gate := in.GatePostRestore(t, "app")
+	writeSmall(t, in.svc, "one")
+	in.Start(t)
+	in.mustBackup(t, 1)
+
+	restore := in.StartArchiver(t, map[string]string{
+		"SNAPSHOT_ID": in.SnapshotID("app"), "LOCAL_DIR": in.ServiceDir("app"),
+		"OVERWRITE": "1", "RUN_RESTORE_SERVICE": "1",
+	}, "auto-restore")
+	harness.Poll(t, time.Minute, "the restore to reach its post-restore hook", func() bool {
+		return restore.Done() || gate.Entered(t) == 1
+	})
+	if restore.Done() {
+		t.Fatalf("restore ended before its hook: %+v", restore.Wait(t, 0))
+	}
+
+	writeSmall(t, in.svc, "two")
+	if r := in.Backup(t); r.Code == 0 {
+		t.Fatalf("a backup ran during a restore into its service directory:\n%s", r.Output())
+	}
+	in.wantRevisions(t, "after the backup refused during the restore", 1)
+
+	gate.Open(t)
+	if r := restore.Wait(t, 2*time.Minute); r.Code != 0 {
+		t.Fatalf("restore exited %d:\n%s", r.Code, r.Output())
+	}
+	in.mustBackup(t, 1, 2)
+}
+
 // TestRunsMaintenanceAlongsideBackup: maintenance succeeds while a backup is in progress,
 // and the backup still completes.
 func TestRunsMaintenanceAlongsideBackup(t *testing.T) {

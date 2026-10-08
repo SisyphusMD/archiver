@@ -23,6 +23,7 @@ func (e *Env) Interactive() int {
 	if !e.load() {
 		return 1
 	}
+	defer e.release()
 	in := bufio.NewReader(e.Stdin)
 	code, err := e.interactive(in)
 	if err != nil {
@@ -84,12 +85,12 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 		return 1, err
 	}
 	fmt.Fprintf(out, "Chosen local directory path: %s\n", dir)
-	// Again now: a scheduled backup may have started while the questions were answered.
-	if e.backupRunning() {
-		return 1, fmt.Errorf("a backup started; restore once it has finished")
-	}
 	if dir, err = prepare(dir); err != nil {
 		return 1, fmt.Errorf("cannot create the restore directory: %w", err)
+	}
+	// Again now: a scheduled backup may have started while the questions were answered.
+	if err := e.guard(dir); err != nil {
+		return 1, err
 	}
 	if err := e.connect(dir, t, id, out); err != nil {
 		return 1, err

@@ -2,6 +2,7 @@ package restore
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
 func TestParseRevisions(t *testing.T) {
@@ -277,17 +279,19 @@ func TestAutoAll(t *testing.T) {
 		t.Fatalf("summary: %s", f.out.String())
 	}
 	f.out.Reset()
-	// A backup starting once app is restored stops web from restoring under it.
-	f.env.Environ = append(f.env.Environ, "FAKE_LOCK="+f.env.Layout.BackupLock())
+	// Another restore into a service directory holds the restore lock: nothing restores.
+	other, ok, err := runlock.Hold(f.env.Layout.RestoreLock())
+	if err != nil || !ok {
+		t.Fatalf("hold: %v %v", ok, err)
+	}
 	os.Remove(filepath.Join(f.root, "services", "web", "restored.txt"))
-	if code := f.env.AutoAll(); code != NotFound || !strings.Contains(f.out.String(), "restored: app\nFAILED:   web\n") {
+	if code := f.env.AutoAll(); code != NotFound || !strings.Contains(f.out.String(), "FAILED:   app web\n") {
 		t.Fatalf("exit %d: %s", code, f.out.String())
 	}
 	if _, err := os.Stat(filepath.Join(f.root, "services", "web", "restored.txt")); err == nil {
-		t.Fatal("web restored while a backup ran")
+		t.Fatal("web restored alongside another restore")
 	}
-	os.Remove(f.env.Layout.BackupLock())
-	f.env.Environ = f.env.Environ[:len(f.env.Environ)-1]
+	other.Close()
 
 	f.out.Reset()
 	f.vars["STORAGE_TARGET_1_LOCAL_PATH"], f.vars["STORAGE_TARGET_2_LOCAL_PATH"] = "/down1", "/down2"
@@ -336,5 +340,97 @@ func TestInteractive(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "restored.txt")); err == nil {
 		t.Fatal("restored while a backup ran")
+	}
+}
+
+// The guard covers a restore into, above or below a service directory (one not created yet
+// or reached through a symlink too), refuses when a backup is running, and holds the
+// restore lock until released.
+func TestGuard(t *testing.T) {
+	f := newFixture(t)
+	if !f.env.load() {
+		t.Fatal(f.err.String())
+	}
+	svc := filepath.Join(f.root, "services", "app")
+	os.MkdirAll(svc, 0o755)
+	alias := filepath.Join(f.root, "alias")
+	os.Symlink(filepath.Join(f.root, "services"), alias)
+	// A service directory that is a symlink, restored through its target.
+	target := filepath.Join(f.root, "data", "web")
+	os.MkdirAll(target, 0o755)
+	os.Symlink(target, filepath.Join(f.root, "services", "web"))
+	for dir, want := range map[string]bool{
+		svc: true, filepath.Join(svc, "sub"): true, filepath.Join(f.root, "services"): true, "/": true,
+		filepath.Join(f.root, "services", "not-yet"): true, // a service directory a restore will create
+		filepath.Join(alias, "app"):                  true, // reached through a symlink
+		target:                                       true,
+		filepath.Join(f.root, "elsewhere"):           false,
+		filepath.Join(f.root, "servicesX"):           false,
+	} {
+		if got := f.env.inServiceDir(dir); got != want {
+			t.Errorf("inServiceDir(%s) = %v, want %v", dir, got, want)
+		}
+	}
+
+	if err := f.env.guard(filepath.Join(f.root, "elsewhere")); err != nil || f.env.held != nil {
+		t.Fatalf("outside the service directories: %v, held %v", err, f.env.held != nil)
+	}
+	if err := f.env.guard(svc); err != nil {
+		t.Fatal(err)
+	}
+	if _, free, _ := runlock.Hold(f.env.Layout.RestoreLock()); free {
+		t.Fatal("the restore lock is free while the guard holds it")
+	}
+	f.env.release()
+	probe, free, _ := runlock.Hold(f.env.Layout.RestoreLock())
+	if !free {
+		t.Fatal("the restore lock is still held after release")
+	}
+	probe.Close()
+
+	os.WriteFile(f.env.Layout.BackupLock(), []byte(fmt.Sprintf("%d duplicacy pre-backup\n1 running\n", os.Getpid())), 0o644)
+	if err := f.env.guard(svc); err != errBackupRunning || f.env.held != nil {
+		t.Fatalf("with a backup running: %v, held %v", err, f.env.held != nil)
+	}
+	if err := f.env.guard(filepath.Join(f.root, "elsewhere")); err != errBackupRunning {
+		t.Fatalf("outside the service directories with a backup running: %v", err)
+	}
+}
+
+// Patterns the restore cannot match exactly keep backups out.
+func TestOverlapsConservative(t *testing.T) {
+	for _, c := range []struct {
+		dir, pattern string
+		want         bool
+	}{
+		{"/srv/web", "/srv/[!a]*/", true},
+		{"/srv/web/x", "/srv/[[:alpha:]]*", true},
+		{"/srv", "/srv/*/", true},
+		{"/srvx/web", "/srv/*/", false},
+		{"/other", "/srv/*/", false},
+	} {
+		if got := overlaps(c.dir, c.pattern); got != c.want {
+			t.Errorf("overlaps(%s, %s) = %v, want %v", c.dir, c.pattern, got, c.want)
+		}
+	}
+}
+
+// A service directory not created yet below a wildcard-matched symlink is found through
+// the symlink's target.
+func TestInServiceDirBehindWildcardSymlink(t *testing.T) {
+	f := newFixture(t)
+	f.vars["SERVICE_DIRECTORIES"] = filepath.Join(f.root, "hosts") + "/*/app"
+	if !f.env.load() {
+		t.Fatal(f.err.String())
+	}
+	target := filepath.Join(f.root, "data", "host")
+	os.MkdirAll(target, 0o755)
+	os.MkdirAll(filepath.Join(f.root, "hosts"), 0o755)
+	os.Symlink(target, filepath.Join(f.root, "hosts", "host"))
+	if !f.env.inServiceDir(target) {
+		t.Fatal("the symlink's target, which will hold app, is not covered")
+	}
+	if f.env.inServiceDir(filepath.Join(f.root, "data", "other")) {
+		t.Fatal("an unrelated directory is covered")
 	}
 }
