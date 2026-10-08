@@ -74,7 +74,7 @@ func controlEnv() runctl.Env {
 				if failed {
 					level = logging.Error
 				}
-				log.Message(level, "", msg)
+				log.Unnotified(level, "", msg)
 			},
 		}
 		e.Notify = func(title, msg string) { n.Send(title, msg) }

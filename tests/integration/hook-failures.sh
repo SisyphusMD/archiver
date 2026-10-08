@@ -36,6 +36,8 @@ export STORAGE_TARGET_1_NAME="local"
 export STORAGE_TARGET_1_TYPE="local"
 export STORAGE_TARGET_1_LOCAL_PATH="${STORE}"
 export SERVICE_DIRECTORIES="${SERVICES}/*/"
+# One service at a time: what this checks is the order services run in.
+export BACKUP_PARALLELISM=1
 
 log "svc-a's pre hook fails, svc-b is healthy, svc-c's pre hook is not executable"
 mkdir -p "$SERVICES/svc-a" "$SERVICES/svc-b" "$SERVICES/svc-c"

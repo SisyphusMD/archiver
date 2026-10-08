@@ -35,6 +35,8 @@ echo "service a data" >"$SERVICES/svc-a/a.txt"
 echo "service b data" >"$SERVICES/svc-b/b.txt"
 
 export SERVICE_DIRECTORIES="${SERVICES}/*/"
+# One service at a time: what this checks is the order services run in.
+export BACKUP_PARALLELISM=1
 export STORAGE_TARGET_1_NAME="local"
 export STORAGE_TARGET_1_TYPE="local"
 export STORAGE_TARGET_1_LOCAL_PATH="${STORE}"

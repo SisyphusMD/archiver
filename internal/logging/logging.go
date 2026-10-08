@@ -62,7 +62,13 @@ func (l *Log) AddErrors(n int) {
 
 // Message logs one line for service ("archiver" when empty). An error is counted and
 // notified; a line that cannot be written is reported on stdout and counted, never fatal.
-func (l *Log) Message(level, service, msg string) {
+func (l *Log) Message(level, service, msg string) { l.message(level, service, msg, true) }
+
+// Unnotified logs like Message but never notifies: for the outcome of a notification, whose
+// failure must not set off another one (which would fail too, and loop).
+func (l *Log) Unnotified(level, service, msg string) { l.message(level, service, msg, false) }
+
+func (l *Log) message(level, service, msg string, notify bool) {
 	if service == "" {
 		service = "archiver"
 	}
@@ -83,7 +89,7 @@ func (l *Log) Message(level, service, msg string) {
 	if (level == Warning || level == Error) && l.Stdout != nil {
 		fmt.Fprintln(l.Stdout, line)
 	}
-	if level == Error && l.Notify != nil {
+	if notify && level == Error && l.Notify != nil {
 		l.Notify(l.ErrorTitle, fmt.Sprintf("[%s] %s", service, msg))
 	}
 }

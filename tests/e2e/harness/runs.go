@@ -179,12 +179,58 @@ func (d *Deployment) GatePreHook(t testing.TB, service string) *Gate {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const inContainer = "/e2e-gate"
+	inContainer := "/e2e-gate-" + service // one per service, so services can each have one
 	d.Mount(dir, inContainer)
 	hook := `  echo entered >> ` + inContainer + `/entered
   while [ ! -e ` + inContainer + `/open ]; do sleep 0.2; done`
 	writeServiceFiles(t, d.Image, d.Services[service], serviceFiles{pre: &hook})
 	return &Gate{dir: dir}
+}
+
+// Barrier installs on each service a pre-backup hook that marks itself waiting and waits up
+// to five seconds for another hook to be waiting too, then clears its mark: Together counts
+// the hooks that met another, which only services backed up at the same time can do. It
+// must be called before Start; the hooks take the form d's image runs.
+func (d *Deployment) Barrier(t testing.TB, services ...string) *Barrier {
+	t.Helper()
+	dir, err := os.MkdirTemp(filepath.Dir(d.Keys.PrivatePath), "barrier-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const inContainer = "/e2e-barrier"
+	d.Mount(dir, inContainer)
+	hook := fmt.Sprintf(`  touch %[1]s/waiting-$$
+  result=alone
+  for _ in $(seq 50); do
+    if [ "$(ls %[1]s | grep -c '^waiting-')" -ge 2 ]; then result=together; break; fi
+    sleep 0.1
+  done
+  echo $result >> %[1]s/result
+  sleep 0.5 # so a hook that arrived just now still sees this one
+  rm -f %[1]s/waiting-$$`, inContainer)
+	for _, svc := range services {
+		writeServiceFiles(t, d.Image, d.Services[svc], serviceFiles{pre: &hook})
+	}
+	return &Barrier{dir: dir}
+}
+
+// Barrier is the record of the hooks Barrier installs.
+type Barrier struct{ dir string }
+
+// Together is how many hooks met all the others; Alone, how many gave up waiting.
+func (b *Barrier) Together(t testing.TB) int { return b.count(t, "together") }
+func (b *Barrier) Alone(t testing.TB) int    { return b.count(t, "alone") }
+
+func (b *Barrier) count(t testing.TB, word string) int {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(b.dir, "result"))
+	if os.IsNotExist(err) {
+		return 0
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Count(string(data), word+"\n")
 }
 
 // Entered is how many backups have reached the hook so far.

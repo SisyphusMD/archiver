@@ -29,6 +29,8 @@ printf 'testpassword' >"$SECRETS_DIR/storage_password"
 printf 'rp' >"$SECRETS_DIR/rsa_passphrase"
 printf 'recovery-pass-123' >"$SECRETS_DIR/recovery_password"
 export SERVICE_DIRECTORIES="/data/services/*/"
+# One service at a time: what this checks is the order services run in.
+export BACKUP_PARALLELISM=1
 export STORAGE_TARGET_1_NAME=local STORAGE_TARGET_1_TYPE=local STORAGE_TARGET_1_LOCAL_PATH="$STORE"
 export STORAGE_TARGET_2_NAME=offsite STORAGE_TARGET_2_TYPE=local STORAGE_TARGET_2_LOCAL_PATH="$OFFSITE"
 echo "content" >"$SVC/file.txt"

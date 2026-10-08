@@ -63,6 +63,7 @@ type Config struct {
 	PruneExhaustiveFrequency string
 	Threads                  string
 	CheckInterval            string // CHECK_INTERVAL: the default for every target
+	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
 }
 
 var globalSecret = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN)$`)
@@ -127,6 +128,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		PruneExhaustiveFrequency: strings.ToLower(src.Getenv("PRUNE_EXHAUSTIVE_FREQUENCY")),
 		Threads:                  src.Getenv("DUPLICACY_THREADS"),
 		CheckInterval:            src.Getenv("CHECK_INTERVAL"),
+		Parallelism:              src.Getenv("BACKUP_PARALLELISM"),
 	}
 
 	prune := src.Getenv("PRUNE_BACKUPS")
@@ -247,6 +249,9 @@ func (c *Config) Validate(secretsDir string) error {
 	if _, err := ParseInterval(c.CheckInterval); err != nil {
 		return fmt.Errorf("CHECK_INTERVAL: %v", err)
 	}
+	if _, err := c.BackupParallelism(); err != nil {
+		return err
+	}
 	for _, t := range c.Targets {
 		if _, err := ParseInterval(t.CheckInterval); err != nil {
 			return fmt.Errorf("STORAGE_TARGET_%d_CHECK_INTERVAL: %v", t.N, err)
@@ -356,3 +361,16 @@ func (c *Config) ExhaustiveInterval() time.Duration {
 
 // Pushover reports whether notifications go to Pushover.
 func (c *Config) Pushover() bool { return strings.ToLower(c.NotificationService) == "pushover" }
+
+// BackupParallelism is how many services a backup processes at once: BACKUP_PARALLELISM,
+// 2 by default. 1 backs them up one after another.
+func (c *Config) BackupParallelism() (int, error) {
+	if c.Parallelism == "" {
+		return 2, nil
+	}
+	n, err := strconv.Atoi(c.Parallelism)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("BACKUP_PARALLELISM must be a whole number of at least 1 (got '%s').", c.Parallelism)
+	}
+	return n, nil
+}

@@ -3,8 +3,11 @@ package notify
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/SisyphusMD/archiver/internal/logging"
 )
 
 func TestSend(t *testing.T) {
@@ -28,7 +31,8 @@ func TestSend(t *testing.T) {
 	(&Notifier{}).Send("x", "y") // not configured: nothing to do
 }
 
-// A failed send is reported once, and the error that report raises is not sent again.
+// Wired as the commands wire it (the log notifies through the notifier, the notifier
+// reports through Unnotified), a failed send is logged and counted once and not sent again.
 func TestFailureDoesNotLoop(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,17 +40,16 @@ func TestFailureDoesNotLoop(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 	defer srv.Close()
-	var n *Notifier
-	failures := 0
-	n = &Notifier{Pushover: true, URL: srv.URL, Logf: func(failed bool, msg string) {
+	log := &logging.Log{Dir: t.TempDir(), Basename: "archiver", ErrorTitle: "Backup Error"}
+	n := &Notifier{Pushover: true, URL: srv.URL, Logf: func(failed bool, msg string) {
 		if failed {
-			failures++
-			n.Send("Backup Error", msg) // what logging an error does
+			log.Unnotified(logging.Error, "", msg)
 		}
 	}}
-	n.Send("Backup Error", "boom")
-	if calls != 1 || failures != 1 {
-		t.Fatalf("calls %d failures %d", calls, failures)
+	log.Notify = n.Send
+	log.Message(logging.Error, "app", "boom")
+	if calls != 1 || log.Errors() != 2 {
+		t.Fatalf("sends %d, errors %d (want 1 send; the error and the failed send logged)", calls, log.Errors())
 	}
 }
 
@@ -102,5 +105,32 @@ func TestRetriesNetworkError(t *testing.T) {
 	n.Send("Backup Error", "boom")
 	if calls != 2 || msg != "Pushover notification sent successfully." {
 		t.Fatalf("calls %d msg %q", calls, msg)
+	}
+}
+
+// Two alerts sent at once both arrive: the second waits for the first instead of being
+// dropped as if it were a failure report looping.
+func TestConcurrentSendsBothArrive(t *testing.T) {
+	var mu sync.Mutex
+	got := 0
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-release
+		mu.Lock()
+		got++
+		mu.Unlock()
+	}))
+	defer srv.Close()
+	n := &Notifier{Pushover: true, URL: srv.URL, Logf: func(bool, string) {}}
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); n.Send("Backup Error", "boom") }()
+	}
+	time.Sleep(100 * time.Millisecond) // both inside Send, one holding the turn
+	close(release)
+	wg.Wait()
+	if got != 2 {
+		t.Fatalf("server got %d of 2 concurrent alerts", got)
 	}
 }

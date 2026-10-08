@@ -81,7 +81,7 @@ func TestSecretAndSettingNames(t *testing.T) {
 			t.Errorf("%s should be a secret", n)
 		}
 	}
-	for _, n := range []string{"STORAGE_TARGET_3_AZURE_ACCOUNT", "STORAGE_TARGET_1_DROPBOX_APP_KEY", "STORAGE_TARGET_2_S3_PATH", "STORAGE_TARGET_1_SFTP_PORT", "STORAGE_TARGET_1_BREAKGLASS_SFTP_USER"} {
+	for _, n := range []string{"STORAGE_TARGET_3_AZURE_ACCOUNT", "STORAGE_TARGET_1_DROPBOX_APP_KEY", "STORAGE_TARGET_2_S3_PATH", "STORAGE_TARGET_1_SFTP_PORT", "STORAGE_TARGET_1_BREAKGLASS_SFTP_USER", "BACKUP_PARALLELISM"} {
 		if !IsSetting(n) || IsSecret(n) {
 			t.Errorf("%s should be a setting", n)
 		}

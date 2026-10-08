@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
@@ -48,16 +49,17 @@ type Backup struct {
 	env    []string // the environment duplicacy runs with: no raw secrets, every credential
 	// workers: a daemon's copy workers keep the secondaries caught up and report their
 	// health, so a secondary's failure here is not this run's.
-	workers        bool
-	failingTargets map[string]bool // secondaries the workers report retrying or down
-	oldPrefs       []byte          // the service's preferences before this run rebuilt them
-	kitMarker      string          // created by the recovery-kit step once the primary holds the kit
-	ctx            context.Context // ended by a signal or a stop request
-	cancel         context.CancelFunc
+	workers   bool
+	kitMarker string          // created by the recovery-kit step once the primary holds the kit
+	ctx       context.Context // ended by a signal or a stop request
+	cancel    context.CancelFunc
 
+	// Services back up in parallel (BACKUP_PARALLELISM), so what they share is under mu.
 	mu       sync.Mutex
 	running  []*proc.Proc
 	signaled bool
+	failing  map[string]bool   // secondaries the workers report retrying or down
+	oldPrefs map[string][]byte // each service's preferences before this run rebuilt them
 }
 
 var snapshotIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
@@ -78,9 +80,9 @@ func (b *Backup) Run() int {
 		Hostname: b.Hostname,
 		Logf: func(failed bool, msg string) {
 			if failed {
-				b.log.Message(logging.Error, "", msg)
+				b.log.Unnotified(logging.Error, "", msg)
 			} else {
-				b.log.Message(logging.Info, "", msg)
+				b.log.Unnotified(logging.Info, "", msg)
 			}
 		},
 	}
@@ -173,18 +175,44 @@ func (b *Backup) verifyConfig() ([]string, bool) {
 }
 
 func (b *Backup) main(dirs []string) int {
-	lastWorking := ""
-	for _, dir := range dirs {
+	n, _ := b.cfg.BackupParallelism() // validated with the rest of the configuration
+	groups := groupServices(dirs, n)
+	ok := make([]bool, len(dirs))
+	var stop atomic.Bool
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, n)
+	for _, group := range groups {
+		slots <- struct{}{}
 		// Starting another service would run its pre hook (stopping its database, say) for
 		// a backup that will never happen.
-		if b.stopped() {
+		if stop.Load() || b.stopped() {
+			<-slots
 			break
 		}
-		ok, stop := b.processService(dir)
-		if stop {
-			return b.handleStop()
-		}
-		if ok {
+		wg.Add(1)
+		go func() {
+			defer func() { <-slots; wg.Done() }()
+			for _, i := range group {
+				if stop.Load() || b.stopped() {
+					return
+				}
+				var s bool
+				ok[i], s = b.processService(dirs[i])
+				if s {
+					stop.Store(true)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	if stop.Load() {
+		return b.handleStop()
+	}
+	// The copies run from the last service in order that backed up, as they did one by one.
+	lastWorking := ""
+	for i, dir := range dirs {
+		if ok[i] {
 			lastWorking = dir
 		}
 	}
@@ -216,6 +244,65 @@ func (b *Backup) main(dirs []string) int {
 	b.lock.Record("completed")
 	b.complete()
 	return b.exitCode()
+}
+
+// groupServices groups the indexes of dirs that must not back up at the same time, in
+// order of first appearance: those with one snapshot ID (its base name: the same directory
+// listed twice, or two with one name), since two backups of one snapshot ID must never run
+// at once, and those that are one directory under two names (a symlink), since they share
+// its repository. A group goes one directory after another; groups run in parallel. With a
+// parallelism of 1 everything is one group, in the order configured.
+func groupServices(dirs []string, parallelism int) [][]int {
+	if parallelism <= 1 {
+		all := make([]int, len(dirs))
+		for i := range dirs {
+			all[i] = i
+		}
+		return [][]int{all}
+	}
+	// Union-find over directories, joined by shared snapshot ID or shared real path.
+	parent := make([]int, len(dirs))
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(i int) int {
+		if parent[i] != i {
+			parent[i] = find(parent[i])
+		}
+		return parent[i]
+	}
+	byKey := map[string]int{}
+	for i, dir := range dirs {
+		abs, err := filepath.Abs(dir)
+		if err != nil {
+			abs = filepath.Clean(dir)
+		}
+		keys := []string{"id:" + filepath.Base(abs)}
+		if real, err := filepath.EvalSymlinks(abs); err == nil {
+			keys = append(keys, "path:"+real)
+		}
+		for _, k := range keys {
+			if j, seen := byKey[k]; seen {
+				parent[find(i)] = find(j)
+			} else {
+				byKey[k] = i
+			}
+		}
+	}
+	var groups [][]int
+	index := map[int]int{}
+	for i := range dirs {
+		r := find(i)
+		g, seen := index[r]
+		if !seen {
+			g = len(groups)
+			index[r] = g
+			groups = append(groups, nil)
+		}
+		groups[g] = append(groups[g], i)
+	}
+	return groups
 }
 
 func (b *Backup) exitCode() int {
@@ -455,7 +542,13 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 		return hooks.Failed
 	}
 	repo := filepath.Join(svc.Dir, ".duplicacy")
-	b.oldPrefs, _ = os.ReadFile(filepath.Join(repo, "preferences"))
+	old, _ := os.ReadFile(filepath.Join(repo, "preferences"))
+	b.mu.Lock()
+	if b.oldPrefs == nil {
+		b.oldPrefs = map[string][]byte{}
+	}
+	b.oldPrefs[svc.Dir] = old
+	b.mu.Unlock()
 	if err := os.Remove(filepath.Join(repo, "preferences")); err != nil && !os.IsNotExist(err) {
 		log(logging.Error, fmt.Sprintf("Error removing preferences file for the %s service.", svc.Name))
 	}
@@ -535,10 +628,13 @@ func (b *Backup) addStorages(svc hooks.Service, log func(string, string)) {
 			// With copy workers the backup never needs to reach a secondary: maintenance only
 			// needs it registered here, and the last run's registration is carried over while
 			// its URL is unchanged. Only a new or changed one is contacted.
-			if carryOverStorage(prefs, b.oldPrefs, t.StorageName(), url) == nil {
+			b.mu.Lock()
+			old := b.oldPrefs[svc.Dir]
+			b.mu.Unlock()
+			if carryOverStorage(prefs, old, t.StorageName(), url) == nil {
 				continue
 			}
-			if b.failingTargets[t.StorageName()] {
+			if b.isFailing(t.StorageName()) {
 				log(logging.Warning, fmt.Sprintf("Not adding %s storage %s for %s service: its copy worker reports it failing.", t.Type, t.StorageName(), svc.Name))
 				continue
 			}
@@ -571,12 +667,21 @@ func (b *Backup) refreshFailing() {
 	if !b.workers {
 		return
 	}
-	b.failingTargets = map[string]bool{}
+	failing := map[string]bool{}
 	for name, st := range (&copier.Store{Path: b.Layout.CopyWorkersState()}).Load() {
 		if st.Status == copier.Retrying || st.Status == copier.Down || st.DownSince != 0 {
-			b.failingTargets[name] = true
+			failing[name] = true
 		}
 	}
+	b.mu.Lock()
+	b.failing = failing
+	b.mu.Unlock()
+}
+
+func (b *Backup) isFailing(storage string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.failing[storage]
 }
 
 // copyWorkersRun asks the daemon whether copy workers keep the secondaries caught up.
@@ -742,11 +847,13 @@ func (b *Backup) startPlain(path string, args ...string) (*proc.Proc, error) {
 	if b.kitMarker != "" {
 		env = append(append([]string(nil), env...), "ARCHIVER_KIT_PRIMARY_MARKER="+b.kitMarker)
 	}
-	if len(b.failingTargets) > 0 {
-		var names []string
-		for n := range b.failingTargets {
-			names = append(names, n)
-		}
+	b.mu.Lock()
+	var names []string
+	for n := range b.failing {
+		names = append(names, n)
+	}
+	b.mu.Unlock()
+	if len(names) > 0 {
 		sort.Strings(names)
 		env = append(append([]string(nil), env...), "ARCHIVER_KIT_SKIP_TARGETS="+strings.Join(names, " "))
 	}
