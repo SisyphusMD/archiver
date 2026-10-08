@@ -6,7 +6,6 @@ package pipeline
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -58,8 +57,7 @@ type Backup struct {
 	mu       sync.Mutex
 	running  []*proc.Proc
 	signaled bool
-	failing  map[string]bool   // secondaries the workers report retrying or down
-	oldPrefs map[string][]byte // each service's preferences before this run rebuilt them
+	failing  map[string]bool // secondaries the workers report retrying or down
 }
 
 var snapshotIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
@@ -470,32 +468,6 @@ func (b *Backup) runInit(storage string, s proc.Spec) int {
 	return b.run(s)
 }
 
-// AddLimit bounds a secondary's registration when copy workers own the copies.
-var AddLimit = 5 * time.Minute
-
-// runAddBounded registers a secondary without letting it hold up the backup: it does not
-// wait for a worker that is creating the storage (the worker owns it), and the add itself
-// is ended after AddLimit.
-func (b *Backup) runAddBounded(storage string, s proc.Spec) int {
-	ctx, cancel := context.WithTimeout(b.ctx, time.Second)
-	release, err := runlock.Exclusive(ctx, b.Layout.StorageInit(storage))
-	cancel()
-	if err != nil {
-		return -1
-	}
-	defer release()
-	p, err := b.start(s)
-	if err != nil {
-		return -1
-	}
-	defer b.forget(p)
-	if b.waitBounded(p, AddLimit) {
-		p.Terminate(false)
-	}
-	code, _ := p.Wait()
-	return code
-}
-
 // waitBounded waits for p, counting only time the run is not paused toward limit (a
 // paused run stays resumable); true means the limit was reached.
 func (b *Backup) waitBounded(p *proc.Proc, limit time.Duration) bool {
@@ -558,13 +530,6 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 		return hooks.Failed
 	}
 	repo := filepath.Join(svc.Dir, ".duplicacy")
-	old, _ := os.ReadFile(filepath.Join(repo, "preferences"))
-	b.mu.Lock()
-	if b.oldPrefs == nil {
-		b.oldPrefs = map[string][]byte{}
-	}
-	b.oldPrefs[svc.Dir] = old
-	b.mu.Unlock()
 	if err := os.Remove(filepath.Join(repo, "preferences")); err != nil && !os.IsNotExist(err) {
 		log(logging.Error, fmt.Sprintf("Error removing preferences file for the %s service.", svc.Name))
 	}
@@ -628,50 +593,29 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 	}
 }
 
-// addStorages adds every secondary storage to the service's repository: copy-compatible
-// with the primary (bit-identical) and RSA-encrypted, as every existing secondary was made.
+// addStorages adds every secondary storage to the service's repository, for the copies
+// this run makes: copy-compatible with the primary (bit-identical) and RSA-encrypted, as
+// every existing secondary was made. With copy workers the run makes no copies and never
+// contacts a secondary: the workers and maintenance register storages in repositories of
+// their own.
 func (b *Backup) addStorages(svc hooks.Service, log func(string, string)) {
-	b.refreshFailing()
+	if b.workers {
+		return
+	}
 	primary := b.cfg.Targets[0].StorageName()
-	prefs := filepath.Join(svc.Dir, ".duplicacy", "preferences")
 	for _, t := range b.cfg.Targets[1:] {
 		url, err := t.URL()
 		if err != nil {
 			log(logging.Error, err.Error()+".")
 			continue
 		}
-		if b.workers {
-			// With copy workers the backup never needs to reach a secondary: maintenance only
-			// needs it registered here, and the last run's registration is carried over while
-			// its URL is unchanged. Only a new or changed one is contacted.
-			b.mu.Lock()
-			old := b.oldPrefs[svc.Dir]
-			b.mu.Unlock()
-			if carryOverStorage(prefs, old, t.StorageName(), url) == nil {
-				continue
-			}
-			if b.isFailing(t.StorageName()) {
-				log(logging.Warning, fmt.Sprintf("Not adding %s storage %s for %s service: its copy worker reports it failing.", t.Type, t.StorageName(), svc.Name))
-				continue
-			}
-		}
 		log(logging.Info, fmt.Sprintf("Adding %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
 		spec := b.duplicacy(svc.Dir, svc.Name, "add", "-e", "-copy", primary, "-bit-identical", "-key",
 			filepath.Join(b.Layout.Root, "keys", "public.pem"), t.StorageName(), svc.SnapshotID, url)
-		var code int
-		if b.workers {
-			code = b.runAddBounded(t.StorageName(), spec)
-		} else {
-			code = b.runInit(t.StorageName(), spec)
-		}
-		if code != 0 {
-			if b.workers {
-				log(logging.Warning, fmt.Sprintf("Could not add %s storage %s for %s service; its copy worker reports that storage's health.", t.Type, t.StorageName(), svc.Name))
-			} else {
-				log(logging.Error, fmt.Sprintf("Failed to add %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
-				if why := kit.Diagnose(b.Layout, "", t); why != "" {
-					log(logging.Error, why)
-				}
+		if b.runInit(t.StorageName(), spec) != 0 {
+			log(logging.Error, fmt.Sprintf("Failed to add %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
+			if why := kit.Diagnose(b.Layout, "", t); why != "" {
+				log(logging.Error, why)
 			}
 		}
 	}
@@ -1007,45 +951,4 @@ func Hostname(getenv func(string) string) string {
 	}
 	h, _ := os.Hostname()
 	return h
-}
-
-// carryOverStorage copies storage's entry from the old preferences into the new ones, if
-// it is there with the same URL.
-func carryOverStorage(prefsPath string, old []byte, storage, url string) error {
-	var before, now []map[string]any
-	if len(old) == 0 {
-		return fmt.Errorf("no previous registration")
-	}
-	if err := json.Unmarshal(old, &before); err != nil {
-		return err
-	}
-	cur, err := os.ReadFile(prefsPath)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(cur, &now); err != nil {
-		return err
-	}
-	for _, e := range now {
-		if e["name"] == storage {
-			return nil
-		}
-	}
-	for _, e := range before {
-		if e["name"] == storage && e["storage"] == url {
-			// Preferences written before credentials moved to environment variables can
-			// hold them in plain text here; the rebuilt file must not.
-			e["keys"] = nil
-			out, err := json.MarshalIndent(append(now, e), "", "    ")
-			if err != nil {
-				return err
-			}
-			tmp := prefsPath + ".tmp"
-			if err := os.WriteFile(tmp, out, 0o600); err != nil {
-				return err
-			}
-			return os.Rename(tmp, prefsPath)
-		}
-	}
-	return fmt.Errorf("no previous registration")
 }
