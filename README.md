@@ -634,6 +634,8 @@ If multiple archiver deployments back up to the same storage target, **only ONE 
 
 See the [Duplicacy prune documentation](https://forum.duplicacy.com/t/prune-command-details/1005) for more details on the two-step fossil collection algorithm.
 
+Maintenance runs from a repository of its own in `logs/.maintenance-repo/`, whose cache holds the pending fossil collections of the storages it prunes; mount the logs directory so they survive container restarts (otherwise their chunks wait for the next exhaustive prune). On its first run it takes over the collections earlier versions left in the service directories' repositories.
+
 #### Secondary storages under copy workers
 
 When copy workers run (a schedule and at least one secondary), maintenance keeps to the primary, and each worker maintains its own secondary once it has caught up:
