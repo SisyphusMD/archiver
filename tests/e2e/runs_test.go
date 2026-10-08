@@ -258,6 +258,40 @@ func TestRunsStopStartsNoMoreServices(t *testing.T) {
 	}
 }
 
+// TestRunsBackupRefusedDuringRestore: while a restore into a service directory runs (here
+// parked in its post-restore hook), a backup is refused and writes nothing: it would save
+// a half-restored directory. Once the restore ends, backups run again.
+func TestRunsBackupRefusedDuringRestore(t *testing.T) {
+	in := newRunsInstall(t)
+	gate := in.GatePostRestore(t, "app")
+	writeSmall(t, in.svc, "one")
+	in.Start(t)
+	in.mustBackup(t, 1)
+
+	restore := in.StartArchiver(t, map[string]string{
+		"SNAPSHOT_ID": in.SnapshotID("app"), "LOCAL_DIR": in.ServiceDir("app"),
+		"OVERWRITE": "1", "RUN_RESTORE_SERVICE": "1",
+	}, "auto-restore")
+	harness.Poll(t, time.Minute, "the restore to reach its post-restore hook", func() bool {
+		return restore.Done() || gate.Entered(t) == 1
+	})
+	if restore.Done() {
+		t.Fatalf("restore ended before its hook: %+v", restore.Wait(t, 0))
+	}
+
+	writeSmall(t, in.svc, "two")
+	if r := in.Backup(t); r.Code == 0 {
+		t.Fatalf("a backup ran during a restore into its service directory:\n%s", r.Output())
+	}
+	in.wantRevisions(t, "after the backup refused during the restore", 1)
+
+	gate.Open(t)
+	if r := restore.Wait(t, 2*time.Minute); r.Code != 0 {
+		t.Fatalf("restore exited %d:\n%s", r.Code, r.Output())
+	}
+	in.mustBackup(t, 1, 2)
+}
+
 // TestRunsMaintenanceAlongsideBackup: maintenance succeeds while a backup is in progress,
 // and the backup still completes.
 func TestRunsMaintenanceAlongsideBackup(t *testing.T) {
@@ -339,6 +373,85 @@ func TestRunsPruneOnlyInMaintenance(t *testing.T) {
 		t.Fatalf("the second maintenance pruned exhaustively within the daily interval: the new orphan is %s, want %s", s, harness.ChunkLive)
 	}
 	in.wantRevisions(t, "after maintenance with the default retention", 1, 2)
+}
+
+// TestRunsFossilsKeptForNewService: a fossil collection one maintenance leaves pending is
+// finished by the next, even after a service that sorts first is added: duplicacy keeps
+// the collection in the cache of the repository that pruned, and a new service must not
+// take that repository's place. It holds both for a collection this image made (logs
+// mounted, as compose does) and for one the baseline release left in the first service's
+// repository, which the upgrade takes over.
+func TestRunsFossilsKeptForNewService(t *testing.T) {
+	baseline, current := images(t)
+	for _, c := range []struct{ name, first string }{
+		{"made by this image", current},
+		{"made by the baseline release", baseline},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			in := newRunsInstall(t)
+			in.SetMaintenance(harness.MaintenanceConfig{Prune: true, Exhaustive: harness.ExhaustiveDaily})
+			logs := filepath.Join(filepath.Dir(filepath.Dir(in.svc)), "logs")
+			if err := os.MkdirAll(logs, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			in.Mount(logs, "/opt/archiver/logs")
+			in.Image = c.first
+			in.Start(t)
+
+			orphan := harness.PlantOrphanChunk(t, in.storage)
+			writeSmall(t, in.svc, "one")
+			in.mustBackup(t, 1)
+			in.mustMaintain(t)
+			if s := harness.StateOf(t, orphan); s != harness.ChunkFossil {
+				t.Fatalf("the first maintenance did not prune exhaustively: the orphan is %s, want %s", s, harness.ChunkFossil)
+			}
+			in.Stop(t)
+
+			// "aaa" sorts before "app", and has a repository once it is backed up.
+			early := filepath.Join(filepath.Dir(in.svc), "aaa")
+			if err := os.MkdirAll(early, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			writeSmall(t, early, "early")
+			in.Services["aaa"] = early
+			in.Image = current
+			in.Start(t)
+			time.Sleep(1100 * time.Millisecond) // see TestRunsPruneOnlyInMaintenance
+			writeSmall(t, in.svc, "two")
+			in.mustBackup(t, 1, 2)
+
+			in.mustMaintain(t)
+			if s := harness.StateOf(t, orphan); s != harness.ChunkGone {
+				t.Fatalf("maintenance after adding a service did not finish the pending collection: the fossil is %s, want %s", s, harness.ChunkGone)
+			}
+		})
+	}
+}
+
+// TestRunsMaintenanceGoesOnPastBadSecondary: a secondary maintenance cannot open fails on
+// its own, and the primary is still pruned; the run reports the failure.
+func TestRunsMaintenanceGoesOnPastBadSecondary(t *testing.T) {
+	in := newRunsInstall(t)
+	in.SetMaintenance(harness.MaintenanceConfig{Prune: true, Exhaustive: harness.ExhaustiveDaily})
+	writeSmall(t, in.svc, "one")
+	in.Start(t)
+	in.mustBackup(t, 1)
+	in.Stop(t)
+
+	// A secondary whose path is a file: no storage can be made or opened there.
+	bad := filepath.Join(filepath.Dir(in.storage), "not-a-dir")
+	if err := os.WriteFile(bad, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	in.Storages = append(in.Storages, harness.Storage{Name: "offsite", Dir: bad})
+	in.Start(t)
+	orphan := harness.PlantOrphanChunk(t, in.storage)
+	if r := in.Maintenance(t); r.Code == 0 {
+		t.Fatalf("maintenance exited 0 with a secondary it cannot open:\n%s", r.Output())
+	}
+	if s := harness.StateOf(t, orphan); s != harness.ChunkFossil {
+		t.Fatalf("the primary was not pruned past the bad secondary: the orphan is %s, want %s", s, harness.ChunkFossil)
+	}
 }
 
 // TestRunsExhaustivePruneOff: with the exhaustive interval off, maintenance prunes but

@@ -104,6 +104,22 @@ func (b *Backup) Run() int {
 		b.log.Message(logging.Error, "", "Could not take the backup lock: "+err.Error())
 		return 1
 	}
+	// Probed with the backup lock already held, which a restore checks after taking its own:
+	// whichever starts second sees the other.
+	switch f, free, err := runlock.Hold(b.Layout.RestoreLock()); {
+	case err != nil:
+		// Unable to tell is not the same as no restore: refuse rather than risk it.
+		lock.Release()
+		b.log.Message(logging.Error, "", "Could not check for a running restore, so not starting a backup: "+err.Error())
+		return 1
+	case !free:
+		lock.Release()
+		fmt.Fprintln(b.Stderr, "A restore into a service directory is running. Not starting a backup.")
+		b.notify.Send("Backup Skipped", "A backup was not started because a restore into a service directory is running; it would have saved the directory half-restored.")
+		return 1
+	default:
+		f.Close()
+	}
 	b.lock = lock
 	defer b.finish()
 	// A wait on a storage-creation lock ends on a signal or a stop request, like the rest.

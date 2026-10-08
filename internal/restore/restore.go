@@ -25,6 +25,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
+	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
 // Exit codes of the non-interactive commands.
@@ -51,7 +52,8 @@ type Env struct {
 	// uses it to migrate a restored service-backup-settings.sh. Nil does nothing.
 	AfterRestore func(dir string)
 
-	cfg *config.Config
+	cfg  *config.Config
+	held *os.File // the restore lock, while a restore into a service directory runs
 }
 
 func (e *Env) getenv(name string) string { return e.Source.Getenv(name) }
@@ -81,6 +83,131 @@ func (e *Env) backupRunning() bool {
 	return ok && l.Alive()
 }
 
+// guard keeps backups out while dir, already created, is restored, when dir is, holds or lies
+// in a configured service directory: a backup then would save it half-restored, and both rewrite its
+// repository. The restore lock is taken before the backup lock is checked and a backup
+// takes its own before probing this one, so whichever starts second sees the other. The
+// lock lasts until release, through the restore hook. Restores elsewhere only check that no
+// backup is running.
+func (e *Env) guard(dir string) error {
+	if e.held != nil {
+		return nil
+	}
+	if !e.inServiceDir(dir) {
+		// No lock to take, but a restore still never starts during a backup.
+		if e.backupRunning() {
+			return errBackupRunning
+		}
+		return nil
+	}
+	f, ok, err := runlock.Hold(e.Layout.RestoreLock())
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("another restore into a service directory is running")
+	}
+	if e.backupRunning() {
+		f.Close()
+		return errBackupRunning
+	}
+	e.held = f
+	return nil
+}
+
+var errBackupRunning = errors.New("a backup is running; restore once it has finished (or stop it with 'archiver stop backup')")
+
+// release ends the guard, at the end of the command.
+func (e *Env) release() {
+	if e.held != nil {
+		e.held.Close()
+		e.held = nil
+	}
+}
+
+// inServiceDir reports whether dir, which exists, is, lies in or holds a service directory:
+// one of the directories SERVICE_DIRECTORIES expands to, the backup's own expansion, with
+// symlinks resolved on both sides. A pattern also counts when dir holds where it points,
+// for a service directory the restore will create; a pattern component this cannot match
+// exactly (a bracket class) counts as matching, keeping backups out rather than in.
+func (e *Env) inServiceDir(dir string) bool {
+	if e.cfg == nil {
+		return false
+	}
+	d, err := filepath.Abs(dir)
+	if err != nil {
+		return true // cannot tell: keep backups out
+	}
+	d = resolved(d)
+	dirs, _ := config.ExpandServiceDirectories(e.cfg.ServiceDirectories)
+	for _, sd := range dirs {
+		if abs, err := filepath.Abs(sd); err == nil && overlaps(d, resolved(abs)) {
+			return true
+		}
+	}
+	for _, pattern := range e.cfg.ServiceDirectories {
+		abs, err := filepath.Abs(pattern)
+		if err != nil {
+			return true
+		}
+		if overlaps(d, abs) {
+			return true
+		}
+		// Each leading part that exists, found as the backup finds it and with symlinks
+		// resolved, followed by the rest of the pattern.
+		c := components(abs)
+		for k := 1; k < len(c); k++ {
+			found, _ := config.ExpandServiceDirectories([]string{"/" + strings.Join(c[:k], "/")})
+			for _, m := range found {
+				if overlaps(d, filepath.Join(append([]string{resolved(m)}, c[k:]...)...)) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// overlaps reports whether dir and a path pattern matches are the same, or one holds the
+// other: every component they both have matches.
+func overlaps(dir, pattern string) bool {
+	dc, pc := components(dir), components(pattern)
+	for i := 0; i < len(dc) && i < len(pc); i++ {
+		if strings.Contains(pc[i], "[") {
+			continue
+		}
+		if ok, err := filepath.Match(pc[i], dc[i]); err != nil || !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func components(p string) []string {
+	var c []string
+	for _, s := range strings.Split(filepath.Clean(p), "/") {
+		if s != "" {
+			c = append(c, s)
+		}
+	}
+	return c
+}
+
+// resolved resolves the symlinks of p's longest existing ancestor, for a path that may not
+// exist yet.
+func resolved(p string) string {
+	rest := ""
+	for cur := p; ; cur = filepath.Dir(cur) {
+		if r, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(r, rest)
+		}
+		if cur == filepath.Dir(cur) {
+			return p
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+	}
+}
+
 // pinnedTarget resolves STORAGE_TARGET, a storage name or number.
 func (e *Env) pinnedTarget(v string) (config.Target, bool) {
 	if n, err := strconv.Atoi(v); err == nil {
@@ -104,7 +231,16 @@ func (e *Env) duplicacy(dir string, out io.Writer, args ...string) *exec.Cmd {
 	cmd.Dir = dir
 	cmd.Env = e.cfg.DuplicacyEnviron(e.Environ, e.Layout.SSHPrivateKey())
 	cmd.Stdout, cmd.Stderr = out, out
+	e.inherit(cmd)
 	return cmd
+}
+
+// inherit passes the restore lock to a duplicacy child, so one that outlives a killed
+// restore still keeps backups out until it ends.
+func (e *Env) inherit(cmd *exec.Cmd) {
+	if e.held != nil {
+		cmd.ExtraFiles = append(cmd.ExtraFiles, e.held)
+	}
 }
 
 // connect makes dir a duplicacy repository of snapshot id on t, replacing any it was.
@@ -221,7 +357,7 @@ func (e *Env) restore(dir string, t config.Target, id string, rev int, o Options
 	cmd := e.duplicacy(dir, out, args...)
 	// duplicacy shares the registration's lock, so a restore that outlives this process
 	// (killed mid-restore) still keeps its revision from being pruned.
-	cmd.ExtraFiles = []*os.File{h.File()}
+	cmd.ExtraFiles = append(cmd.ExtraFiles, h.File())
 	return cmd.Run()
 }
 
@@ -251,6 +387,8 @@ func (e *Env) postRestore(dir, id string, rev int, t config.Target, stdin io.Rea
 	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, out, out
+	// The hook does not inherit the restore lock: a service it starts in the background
+	// would hold it, and keep backups out, for as long as that service runs.
 	// A reader stdin is copied by a goroutine that may sit blocked on a terminal after the
 	// hook exits; don't wait for it long.
 	cmd.WaitDelay = time.Second

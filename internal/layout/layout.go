@@ -21,6 +21,7 @@ func (l Layout) SSHPrivateKey() string     { return filepath.Join(l.Root, "keys"
 func (l Layout) Logo() string              { return filepath.Join(l.Root, "lib", "logos", "logo.ascii") }
 func (l Layout) BackupLock() string        { return filepath.Join(l.Lock, "archiver-main.lock") }
 func (l Layout) MaintenanceLock() string   { return filepath.Join(l.Lock, "archiver-maintenance.lock") }
+func (l Layout) RestoreLock() string       { return filepath.Join(l.Lock, "archiver-restore.lock") }
 func (l Layout) DaemonSocket() string      { return filepath.Join(l.Lock, "archiver-daemon.sock") }
 func (l Layout) CopyWorkersState() string  { return filepath.Join(l.LogDir(), ".copy-workers.json") }
 func (l Layout) InUseDir() string          { return filepath.Join(l.Lock, "archiver-in-use") }
