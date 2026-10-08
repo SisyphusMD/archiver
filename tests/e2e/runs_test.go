@@ -188,6 +188,76 @@ func TestRunsRefusedBackupNotifies(t *testing.T) {
 	}
 }
 
+// TestRunsServicesInParallel: services back up two at a time by default, so two services'
+// pre-backup hooks run at once; BACKUP_PARALLELISM=1 backs them up one after another.
+func TestRunsServicesInParallel(t *testing.T) {
+	for _, c := range []struct {
+		name            string
+		parallelism     string
+		together, alone int
+	}{{"default", "", 2, 0}, {"one at a time", "1", 0, 2}} {
+		t.Run(c.name, func(t *testing.T) {
+			in := newRunsInstall(t)
+			other := filepath.Join(filepath.Dir(in.svc), "web")
+			if err := os.MkdirAll(other, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			in.Services["web"] = other
+			writeSmall(t, in.svc, "one")
+			writeSmall(t, other, "web")
+			if c.parallelism != "" {
+				if in.Extra == nil {
+					in.Extra = map[string]string{}
+				}
+				in.Extra["BACKUP_PARALLELISM"] = c.parallelism
+			}
+			barrier := in.Barrier(t, "app", "web")
+			in.Start(t)
+			if r := in.Backup(t); r.Code != 0 {
+				t.Fatalf("backup exited %d:\n%s", r.Code, r.Output())
+			}
+			if got, alone := barrier.Together(t), barrier.Alone(t); got != c.together || alone != c.alone {
+				t.Fatalf("hooks together %d, alone %d; want %d, %d", got, alone, c.together, c.alone)
+			}
+			in.wantRevisions(t, "after the backup", 1)
+		})
+	}
+}
+
+// TestRunsStopStartsNoMoreServices: with services backing up two at a time, a stop while
+// the first two are in their pre-backup hooks lets them end and starts no other service.
+func TestRunsStopStartsNoMoreServices(t *testing.T) {
+	in := newRunsInstall(t)
+	for _, n := range []string{"web", "zzz"} {
+		dir := filepath.Join(filepath.Dir(in.svc), n)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		in.Services[n] = dir
+		writeSmall(t, dir, n)
+	}
+	writeSmall(t, in.svc, "one")
+	app, web := in.GatePreHook(t, "app"), in.GatePreHook(t, "web")
+	in.Start(t)
+
+	run := in.StartBackup(t)
+	harness.Poll(t, time.Minute, "app and web to reach their pre-backup hooks", func() bool {
+		return run.Done() || (app.Entered(t) == 1 && web.Entered(t) == 1)
+	})
+	if run.Done() {
+		t.Fatalf("backup ended at the gates: %+v", run.Wait(t, 0))
+	}
+	in.RequestStop(t)
+	app.Open(t)
+	web.Open(t)
+	if r := run.Wait(t, 2*time.Minute); r.Code == 0 {
+		t.Fatalf("a stopped backup exited 0:\n%s", r.Output())
+	}
+	if revs := harness.Revisions(t, in.storage, in.SnapshotID("zzz")); len(revs) != 0 {
+		t.Fatalf("zzz was backed up after the stop: revisions %v", revs)
+	}
+}
+
 // TestRunsBackupRefusedDuringRestore: while a restore into a service directory runs (here
 // parked in its post-restore hook), a backup is refused and writes nothing: it would save
 // a half-restored directory. Once the restore ends, backups run again.

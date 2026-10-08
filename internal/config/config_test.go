@@ -289,3 +289,16 @@ func TestIntervals(t *testing.T) {
 		t.Errorf("a bad interval must fail validation: %v", err)
 	}
 }
+
+func TestBackupParallelism(t *testing.T) {
+	for v, want := range map[string]int{"": 2, "1": 1, "8": 8} {
+		if n, err := (&Config{Parallelism: v}).BackupParallelism(); err != nil || n != want {
+			t.Errorf("%q: %d, %v; want %d", v, n, err, want)
+		}
+	}
+	for _, v := range []string{"0", "-1", "two", "1.5"} {
+		if _, err := (&Config{Parallelism: v}).BackupParallelism(); err == nil {
+			t.Errorf("%q accepted", v)
+		}
+	}
+}

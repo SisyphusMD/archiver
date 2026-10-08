@@ -414,7 +414,7 @@ The settings below define what to backup and where. Supply them as environment v
 
 Environment variables carry the non-secret settings and files under `/run/secrets` carry the secrets and keys, so the configuration stays under version control (compose file / ConfigMap) and the secrets stay in a secret store. Nothing is read from a configuration file, and nothing configured is ever executed.
 
-**Non-secret settings (plain env vars).** `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, and each type's settings in [Storage types](#storage-types)), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, `NOTIFICATION_SERVICE`, and `RECOVERY_KIT_EXTRA_PATHS`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine).
+**Non-secret settings (plain env vars).** `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, and each type's settings in [Storage types](#storage-types)), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, `BACKUP_PARALLELISM`, `NOTIFICATION_SERVICE`, and `RECOVERY_KIT_EXTRA_PATHS`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine).
 
 **Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's type's secrets (see [Storage types](#storage-types)) and optional [break-glass credentials](#break-glass-envelope). For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `storage_password`) is picked up with no extra configuration.
 
@@ -650,9 +650,12 @@ Each worker keeps a small repository in `logs/.copy-repos/` whose cache holds Du
 
 ```bash
 DUPLICACY_THREADS="10"
+BACKUP_PARALLELISM="2"
 ```
 
-Number of parallel upload/download threads for duplicacy operations. (Default: 4)
+`DUPLICACY_THREADS` is the number of parallel upload/download threads for each duplicacy operation. (Default: 4)
+
+`BACKUP_PARALLELISM` is how many services a backup processes at once, each with its pre-backup hook, backup and post-backup hook. (Default: 2.) Set `1` to back them up one after another, in order, as before v1, for example when one service's hook depends on another's having finished. Each running service uses `DUPLICACY_THREADS` threads, so peak load grows with both.
 
 
 ### Notifications

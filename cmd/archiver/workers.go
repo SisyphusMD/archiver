@@ -126,7 +126,7 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 				if failed {
 					level = logging.Warning
 				}
-				log.Message(level, "", msg)
+				log.Unnotified(level, "", msg)
 			},
 		}
 	}

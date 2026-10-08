@@ -29,11 +29,13 @@ type Notifier struct {
 	Waits []time.Duration
 
 	// Logf records the outcome in the pipeline's log. failed reports a send that did not
-	// succeed, which the pipeline counts as an error.
+	// succeed, which the pipeline counts as an error. It must not notify (logging.Log's
+	// Unnotified): a report of a failed send would fail too, and loop.
 	Logf func(failed bool, msg string)
 
-	mu      sync.Mutex
-	sending bool
+	// Sends go one at a time: services back up in parallel, and a second alert must wait
+	// its turn rather than be lost.
+	sendMu sync.Mutex
 }
 
 // DefaultWaits retry a transient failure twice. Pushover asks for at least 5 seconds
@@ -41,25 +43,30 @@ type Notifier struct {
 // about a minute, which bounds how long a failing run waits on its alert.
 var DefaultWaits = []time.Duration{5 * time.Second, 10 * time.Second}
 
-// Send sends one notification, prefixed with the host and time.
-// A failure while reporting a failure is not reported again, which would loop.
+// Send sends one notification, prefixed with the host and time, waiting for any send in
+// progress.
 func (n *Notifier) Send(title, message string) {
 	if n == nil || !n.Pushover {
 		return
 	}
-	n.mu.Lock()
-	if n.sending {
-		n.mu.Unlock()
+	n.sendMu.Lock()
+	transient, attempts, err := n.send(title, message)
+	n.sendMu.Unlock()
+	if n.Logf == nil {
 		return
 	}
-	n.sending = true
-	n.mu.Unlock()
-	defer func() {
-		n.mu.Lock()
-		n.sending = false
-		n.mu.Unlock()
-	}()
+	switch {
+	case err != nil && transient:
+		n.Logf(true, fmt.Sprintf("Failed to send pushover notification after %d attempts (%v).", attempts, err))
+	case err != nil:
+		n.Logf(true, fmt.Sprintf("Failed to send pushover notification (%v). Check the Pushover secrets.", err))
+	default:
+		n.Logf(false, "Pushover notification sent successfully.")
+	}
+}
 
+// send makes the attempts for one notification.
+func (n *Notifier) send(title, message string) (transient bool, attempts int, err error) {
 	now := time.Now
 	if n.Now != nil {
 		now = n.Now
@@ -82,9 +89,6 @@ func (n *Notifier) Send(title, message string) {
 	if waits == nil {
 		waits = DefaultWaits
 	}
-	var err error
-	transient := false
-	attempts := 0
 	for {
 		attempts++
 		transient, err = post(client, endpoint, body.Encode())
@@ -93,18 +97,7 @@ func (n *Notifier) Send(title, message string) {
 		}
 		time.Sleep(waits[attempts-1])
 	}
-	if n.Logf == nil {
-		return
-	}
-	switch {
-	case err != nil && transient:
-		n.Logf(true, fmt.Sprintf("Failed to send pushover notification after %d attempts (%v).", attempts, err))
-		return
-	case err != nil:
-		n.Logf(true, fmt.Sprintf("Failed to send pushover notification (%v). Check the Pushover secrets.", err))
-		return
-	}
-	n.Logf(false, "Pushover notification sent successfully.")
+	return transient, attempts, err
 }
 
 // post makes one attempt. A network error, a rate limit or a server error is transient;

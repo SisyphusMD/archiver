@@ -70,7 +70,7 @@ func (r *Run) Execute() int {
 			if failed {
 				level = logging.Error
 			}
-			r.log.Message(level, "", msg)
+			r.log.Unnotified(level, "", msg)
 		},
 	}
 	r.log.Notify = r.notify.Send
