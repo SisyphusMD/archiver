@@ -7,7 +7,8 @@ import (
 	"github.com/SisyphusMD/archiver/internal/config"
 )
 
-// Values with quotes survive both rclone's and the shell's quoting; a password is obscured;
+// Values with quotes survive the shell's quoting, credentials stay off rclone's command line,
+// a password is obscured;
 // types reached otherwise get no command.
 func TestFetchCommand(t *testing.T) {
 	real := Obscure
@@ -17,7 +18,7 @@ func TestFetchCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `rclone copyto ':webdav,pass="obscured(p""w)",url="https://dav",user="o'\''brien":/b/kit.tar.enc' kit.tar.enc`
+	want := `RCLONE_CONFIG_KIT_TYPE=webdav RCLONE_CONFIG_KIT_PASS='obscured(p"w)' RCLONE_CONFIG_KIT_URL='https://dav' RCLONE_CONFIG_KIT_USER='o'\''brien' rclone --config /dev/null copyto 'kit:/b/kit.tar.enc' kit.tar.enc`
 	if got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
@@ -27,7 +28,7 @@ func TestFetchCommand(t *testing.T) {
 		}
 	}
 	c, _ := fetchCommand("gcs", config.Values{"GCS_BUCKETNAME": "b", "GCS_TOKEN": "{\n  \"type\": \"service_account\",\n\t\"private_key\": \"a\\nb\"\n}\n"}, "k")
-	if !strings.HasPrefix(c, "rclone copyto ':gcs,") || strings.ContainsAny(c, "\n\t") || !strings.Contains(c, `""private_key"":""a\nb""`) {
+	if !strings.HasPrefix(c, "RCLONE_CONFIG_KIT_TYPE=gcs ") || strings.ContainsAny(c, "\n\t") || !strings.Contains(c, `"private_key":"a\nb"`) {
 		t.Errorf("gcs: %q", c)
 	}
 }
