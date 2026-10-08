@@ -102,6 +102,7 @@ func (e *Env) Auto() int {
 	if code != OK {
 		return code
 	}
+	defer e.release()
 	return e.run(req)
 }
 
@@ -114,7 +115,8 @@ Optional env: REVISION (default 'latest'), STORAGE_TARGET (name or id),
               after a successful file restore),
               RESTORE_THREADS (default matches DUPLICACY_THREADS)
 Exit codes: 0=restored, 1=snapshot not found, restore failed, or the restore hook failed,
-            2=unreachable or invalid env, 3=a backup is running
+            2=unreachable or invalid env, 3=a backup or another restore into a
+            service directory is running
 `)
 }
 
@@ -156,6 +158,10 @@ func (e *Env) run(req request) int {
 	if err != nil {
 		fmt.Fprintf(e.Stderr, "ERROR: Failed to create '%s': %v\n", req.dir, err)
 		return Unreachable
+	}
+	if err := e.guard(dir); err != nil {
+		fmt.Fprintln(e.Stderr, "ERROR:", err)
+		return Busy
 	}
 	unreachable := 0
 	for _, t := range req.targets {
@@ -256,18 +262,13 @@ func (e *Env) AutoAll() int {
 		fmt.Fprintln(e.Stderr, "ERROR: No service directories resolved from SERVICE_DIRECTORIES")
 		return NotFound
 	}
+	defer e.release()
 	var restored, failed []string
 	for _, dir := range dirs {
 		service := filepath.Base(filepath.Clean(dir))
 		id := e.Hostname + "-" + service
 		fmt.Fprintf(e.Stdout, "\n=== %s: restoring '%s' -> %s ===\n", service, id, dir)
 		req, code := e.request(id, dir)
-		// A backup that started after the first services restored must not have its
-		// repositories replaced under it.
-		if code == OK && e.backupRunning() {
-			fmt.Fprintln(e.Stderr, "ERROR: Archiver backup lock is held; not restoring this service")
-			code = Busy
-		}
 		if code == OK {
 			code = e.run(req)
 		}

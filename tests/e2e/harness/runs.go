@@ -187,7 +187,28 @@ func (d *Deployment) GatePreHook(t testing.TB, service string) *Gate {
 	return &Gate{dir: dir}
 }
 
-// Entered is how many backups have reached the hook so far.
+// GatePostRestore installs a post-restore hook on service that records each entry and
+// then waits for the gate, so a test can keep a restore in progress. It must be called
+// before Start; the hook is executable, the form v1 runs.
+func (d *Deployment) GatePostRestore(t testing.TB, service string) *Gate {
+	t.Helper()
+	dir, err := os.MkdirTemp(filepath.Dir(d.Keys.PrivatePath), "gate-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const inContainer = "/e2e-restore-gate"
+	d.Mount(dir, inContainer)
+	src := "#!/bin/bash\necho entered >> " + inContainer + "/entered\nwhile [ ! -e " + inContainer + "/open ]; do sleep 0.2; done\n"
+	if err := os.WriteFile(filepath.Join(d.Services[service], "post-restore"), []byte(src), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return &Gate{dir: dir}
+}
+
+// ServiceDir is service's directory inside the container.
+func (d *Deployment) ServiceDir(service string) string { return containerServiceDir(service) }
+
+// Entered is how many runs have reached the hook so far.
 func (g *Gate) Entered(t testing.TB) int {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(g.dir, "entered"))
@@ -200,7 +221,7 @@ func (g *Gate) Entered(t testing.TB) int {
 	return strings.Count(string(b), "\n")
 }
 
-// Open lets waiting and future backups through.
+// Open lets waiting and future runs through.
 func (g *Gate) Open(t testing.TB) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(g.dir, "open"), nil, 0o644); err != nil {
@@ -208,7 +229,7 @@ func (g *Gate) Open(t testing.TB) {
 	}
 }
 
-// Close holds future backups again.
+// Close holds future runs again.
 func (g *Gate) Close(t testing.TB) {
 	t.Helper()
 	if err := os.Remove(filepath.Join(g.dir, "open")); err != nil && !os.IsNotExist(err) {

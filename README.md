@@ -814,6 +814,8 @@ docker exec -it archiver archiver restore
 
 The restore destination can be any path accessible within the container. If you need to restore to a new location not currently mounted, add a volume mount and restart the container first.
 
+A restore refuses to start while a backup runs. A restore into a configured service directory (or a directory inside or above one) also keeps backups out until it ends, its restore hook included: a backup that starts meanwhile is skipped with a notification, since it would save the directory half-restored. Restores elsewhere do not affect backups.
+
 ### One-Off Restore with Temporary Container
 
 For a one-time restore without modifying your running container, start a temporary container and exec the interactive restore into it:
@@ -874,7 +876,7 @@ Exit codes:
 - `0` — snapshot restored (and, if `RUN_RESTORE_SERVICE` set, the restore hook succeeded)
 - `1` — snapshot not found on any reachable target, the restore itself failed, or the restore hook failed (whatever code it exited with)
 - `2` — all targets unreachable, or invalid env
-- `3` — an Archiver backup is in progress; restore skipped
+- `3` — an Archiver backup is in progress, or another restore into a service directory is running; restore skipped
 
 Example (gate-and-restore against a running container):
 
