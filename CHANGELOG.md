@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver` is now a small Go program, the first step of the v1 rewrite. For now it runs the same bash commands as before, so every command, flag, exit code, and output is unchanged; scheduled runs, `docker stop`, and `init` go through it too. `archiver init` also works inside a running container.
 
 ### Fixed
+- A notification that fails on a network error, a rate limit or a Pushover server error is retried twice (after 5 and 10 seconds) instead of being lost, and only a refusal such as bad credentials still says to check the Pushover secrets.
 - A backup that had errors no longer ends its session summary with "Backup completed successfully" (it gives the error count), and "Primary storage verified" is logged only when the verification passed.
 - `archiver pause` now freezes everything a backup runs, including a hook's own programs (a dump, a `docker exec`), and nothing new starts until `archiver resume`. It used to stop only the programs running at that instant, so a pause landing between two steps let the next one run unpaused. `archiver stop` on the Go pipeline lets the backup stop itself, running its post-backup hooks and reporting its real error count; it used to end it from outside during copies and report no errors.
 - `archiver restore`, `migrate`, `bundle export`/`import`, `stop`, `pause`, `resume` and `logs` now exit with their command's status. A failure, such as a restore that could not run, used to exit 0.
