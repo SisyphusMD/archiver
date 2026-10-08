@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver migrate hooks` converts each service's `service-backup-settings.sh` into executable `pre-backup` and `post-backup` hooks and a `filters` file. The generated hooks call your existing functions, so they keep working unchanged.
 
 ### Security
+- **A restore warns about links in its destination that lead outside it.** Duplicacy writes a snapshot's files through an existing symlinked directory rather than replacing it, so files can land in another service's directory; each such link is named before the restore starts.
 - The Pushover API token and user key no longer appear on `curl`'s command line, where any process in the container could read them from `/proc`. They now reach `curl` on stdin, like every other secret.
 
 ### Changed
