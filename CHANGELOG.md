@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Hook tools in the image:** `btrfs-progs`, and Python 3 with the `lmdb` module, so a hook can take a read-only btrfs snapshot right before its service's backup and compact an LMDB index (such as Garage's) from it without starting a helper container. A btrfs snapshot needs the `SYS_ADMIN` capability, an opt-in the README documents; Archiver itself still needs only `DAC_OVERRIDE` (and `CHOWN` and `FOWNER` to restore ownership).
+
 ## [0.11.6] - 2026-10-05
 
 ### Fixed
