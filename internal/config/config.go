@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Source is where configuration comes from. Tests supply their own.
@@ -322,6 +323,11 @@ func (c *Config) ValidateStorage(secretsDir string) error {
 			return fmt.Errorf("The storage type %s is not supported. Please check your %sTYPE configuration.", t.Type, p)
 		}
 		for _, f := range Types[t.Type].Fields {
+			// A setting reaches command lines and sftp batch files, where a newline would
+			// start a command of its own.
+			if !f.Secret && strings.IndexFunc(t.Values[f.Name], unicode.IsControl) >= 0 {
+				return fmt.Errorf("%s%s contains a control character (such as a newline); remove it.", p, f.Name)
+			}
 			if f.Optional || f.Default != "" || t.Values[f.Name] != "" {
 				continue
 			}
