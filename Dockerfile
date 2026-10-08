@@ -83,6 +83,9 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
     iputils-ping \
     systemd \
     zfsutils-linux \
+    btrfs-progs \
+    python3 \
+    python3-lmdb \
     && { sed -i "s#${DEBIAN_MIRROR}#http://deb.debian.org#g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/contrib.list 2>/dev/null || true; } \
     && rm -rf /var/lib/apt/lists/*
 
