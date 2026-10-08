@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/SisyphusMD/archiver/internal/config"
 )
 
 // Microsoft's endpoints; tests point them at a fake.
@@ -44,7 +46,7 @@ func oneDrive(tokenFile, clientID, clientSecret, driveID string) (token, id, dri
 			return "", "", "", err
 		}
 		out, _ := json.Marshal(t)
-		if err := os.WriteFile(tokenFile, out, 0o600); err != nil {
+		if err := config.WritePrivate(tokenFile, out); err != nil {
 			return "", "", "", err
 		}
 	}
