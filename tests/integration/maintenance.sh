@@ -40,12 +40,9 @@ export STORAGE_TARGET_2_LOCAL_PATH="${STORE2}"
 export PRUNE_EXHAUSTIVE_FREQUENCY="daily"
 echo "maintenance test content" >"$FIXTURES/file.txt"
 
-log "maintenance before any backup must refuse with guidance"
-set +e
-OUT=$(archiver maintenance 2>&1); rc=$?
-set -e
-[ "$rc" -ne 0 ] || die "maintenance exited 0 with no repository"
-grep -rq "Run a backup before maintenance" /opt/archiver/logs/ || die "no 'run a backup first' guidance"
+log "maintenance before any backup runs from its own repository (check only, so the first prune below is still the first)"
+PRUNE_BACKUPS=false archiver maintenance || die "maintenance before any backup exited non-zero"
+[ -f /opt/archiver/logs/.maintenance-repo/.duplicacy/preferences ] || die "no maintenance repository"
 
 log "backup (parallel copy path to the second target)"
 archiver backup || die "backup exited non-zero"
@@ -152,4 +149,4 @@ for _ in $(seq 1 30); do [ ! -e /var/lock/archiver-maintenance.lock ] && break; 
 grep -q "Maintenance session summary: Maintenance stopped" "$MLOG" || die "no stopped summary"
 mv "${REAL}.real" "$REAL"
 
-echo "=== MAINTENANCE OK: pre-backup-refusal/check+prune/exhaustive-frequency/toggles/alias/staleness/deprecation/stop ==="
+echo "=== MAINTENANCE OK: pre-backup/check+prune/exhaustive-frequency/toggles/alias/staleness/deprecation/stop ==="
