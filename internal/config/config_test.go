@@ -302,3 +302,21 @@ func TestBackupParallelism(t *testing.T) {
 		}
 	}
 }
+
+// A raw secret leaves the environment, so no child inherits it, but Load (in this process
+// or a child archiver) still warns about it.
+func TestPurgeRawSecrets(t *testing.T) {
+	t.Setenv("STORAGE_PASSWORD", "hunter2")
+	t.Setenv(PurgedVar, "")
+	PurgeRawSecrets()
+	if _, ok := os.LookupEnv("STORAGE_PASSWORD"); ok {
+		t.Fatal("STORAGE_PASSWORD is still in the environment")
+	}
+	if got := os.Getenv(PurgedVar); got != "STORAGE_PASSWORD" {
+		t.Fatalf("%s=%q", PurgedVar, got)
+	}
+	_, warnings, _ := Load(Source{Getenv: func(string) string { return "" }, SecretsDir: t.TempDir()}, os.Environ())
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "Ignoring STORAGE_PASSWORD") {
+		t.Fatalf("warnings %q", warnings)
+	}
+}

@@ -46,6 +46,7 @@ var ported = map[string]func() int{
 }
 
 func main() {
+	config.PurgeRawSecrets()
 	if len(os.Args) >= 2 && os.Args[1] == "entrypoint" {
 		os.Exit(entrypointCommand(os.Args[2:]))
 	}
