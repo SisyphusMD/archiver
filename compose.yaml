@@ -18,6 +18,7 @@ services:
       # by root (or run the restore with IGNORE_OWNERSHIP=1).
       - CHOWN                     # Restore: recreate files under their original owner
       - FOWNER                    # Restore: set mode/timestamps on files owned by other UIDs
+      # - SYS_ADMIN               # Only for a hook that takes btrfs snapshots (see README)
     security_opt:
       - no-new-privileges:true
 

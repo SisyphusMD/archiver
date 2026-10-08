@@ -329,6 +329,10 @@ jobs:
         run: |
           docker run -i --rm --hostname ev-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/envelope.sh
+      - name: Hook tools are in the image (btrfs, python3 + lmdb)
+        run: |
+          docker run -i --rm --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/hook-tools.sh
       - name: Pause reaches a hook's own programs and holds the next program
         run: |
           docker run -i --rm --hostname pt-host --cap-drop ALL --cap-add DAC_OVERRIDE \

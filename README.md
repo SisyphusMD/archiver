@@ -339,6 +339,17 @@ volumes:
 
 **Security Warning**: This grants the container access to all ZFS pools on the host. It can create, destroy, or modify any dataset or snapshot. Only use if your restore scripts take ZFS snapshots.
 
+If a hook takes a btrfs snapshot (for example a read-only snapshot of a service's data right before its backup, so files that must agree are saved from one instant), the image has `btrfs-progs`, and the container needs the `SYS_ADMIN` capability and a mount of the whole btrfs subvolume:
+
+```yaml
+cap_add:
+  - SYS_ADMIN   # Only for hooks that run btrfs subvolume snapshot
+volumes:
+  - /volume1/repo:/volume1/repo
+```
+
+**Security Warning**: `SYS_ADMIN` is a broad capability (mounts, namespaces and more). Archiver itself never needs it; add it only for a hook that snapshots btrfs. The image also has Python 3 with the `lmdb` module, for hooks that compact an LMDB database (such as Garage's metadata index) from such a snapshot.
+
 ### Security Hardening (Advanced)
 
 We recommend dropping all capabilities and adding back only what Archiver needs. The example `compose.yaml` above includes this by default.
