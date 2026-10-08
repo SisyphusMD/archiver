@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,6 +22,15 @@ import (
 // migrate hooks [DIR...]]`.
 func entrypointCommand(args []string) int {
 	l := layout.Default()
+	// LOG_FORMAT=json covers the long-running container: everything it and its children
+	// print goes through JSONLines. init and migrate are interactive, and run replaces this
+	// process with the command, so those stay text.
+	interactive := len(args) > 0 && (args[0] == "init" || args[0] == "migrate" || args[0] == "run")
+	stdout := os.Stdout
+	if os.Getenv("LOG_FORMAT") == "json" && !interactive {
+		flush := jsonStdio()
+		defer flush()
+	}
 	e := &entrypoint.Env{Layout: l, Getenv: os.Getenv, SecretsDir: config.FromEnvironment().SecretsDir,
 		Stdout: os.Stdout, Stderr: os.Stderr, Self: selfPath}
 	fmt.Println("===================================")
@@ -90,15 +101,20 @@ func entrypointCommand(args []string) int {
 	e.ClearLocks()
 
 	stopTailers := make(chan struct{})
+	jsonLogs := os.Getenv("LOG_FORMAT") == "json" && !interactive
 	if fi, err := os.Stat(l.LogDir()); err == nil && fi.IsDir() {
-		if logo, err := os.ReadFile(l.Logo()); err == nil {
+		if logo, err := os.ReadFile(l.Logo()); err == nil && !jsonLogs {
 			os.Stdout.Write(logo)
 			fmt.Println()
 		}
-		for _, t := range []struct{ file, banner string }{
-			{"archiver.log", "Archiver Logs"}, {"maintenance.log", "Maintenance Logs"}, {"copies.log", "Copy Logs"},
+		for _, t := range []struct{ file, banner, log string }{
+			{"archiver.log", "Archiver Logs", "archiver"}, {"maintenance.log", "Maintenance Logs", "maintenance"}, {"copies.log", "Copy Logs", "copies"},
 		} {
-			go entrypoint.Follow(filepath.Join(l.LogDir(), t.file), t.banner, os.Stdout, stopTailers)
+			var w io.Writer = os.Stdout
+			if jsonLogs {
+				w = entrypoint.JSONLines(t.log, stdout)
+			}
+			go entrypoint.Follow(filepath.Join(l.LogDir(), t.file), t.banner, w, stopTailers)
 		}
 	}
 	fatal, warnings := e.Warnings()
@@ -178,4 +194,40 @@ func shutdown(e *entrypoint.Env, stopTailers chan struct{}) {
 		time.Sleep(time.Second)
 	}
 	close(stopTailers)
+}
+
+// jsonStdio sends this process's stdout and stderr, and so its children's, through
+// JSONLines as the "entrypoint" log (stderr lines as ERROR); flush waits, up to 5 seconds, until everything
+// written has been printed.
+func jsonStdio() (flush func()) {
+	out := os.Stdout
+	outR, outW, err1 := os.Pipe()
+	errR, errW, err2 := os.Pipe()
+	if err1 != nil || err2 != nil {
+		return func() {}
+	}
+	os.Stdout, os.Stderr = outW, errW
+	var wg sync.WaitGroup
+	for _, p := range []struct {
+		r     *os.File
+		level string
+	}{{outR, "INFO"}, {errR, "ERROR"}} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			io.Copy(entrypoint.JSONLinesAt("entrypoint", p.level, out), p.r)
+		}()
+	}
+	return func() {
+		outW.Close()
+		errW.Close()
+		// A child still running (the scheduler died mid-backup) holds the write ends open,
+		// so the readers never see EOF; the container must exit anyway.
+		done := make(chan struct{})
+		go func() { wg.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+		}
+	}
 }

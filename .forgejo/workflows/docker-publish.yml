@@ -389,6 +389,8 @@ jobs:
         run: IMAGE=hosttests:local bash tests/integration/sigterm-stop.sh
       - name: Malformed BACKUP_SCHEDULE fails the container fast
         run: IMAGE=hosttests:local bash tests/integration/invalid-cron.sh
+      - name: LOG_FORMAT=json makes every docker logs line JSON
+        run: IMAGE=hosttests:local bash tests/integration/json-logs.sh
       - name: s3 runtime against Garage (backup + restore over the s3 wire, TLS)
         run: IMAGE=hosttests:local bash tests/integration/s3-garage.sh
       - name: sftp runtime against sshd (backup + restore over ssh)

@@ -393,6 +393,7 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 | `BACKUP_SCHEDULE` | No | Standard 5-field cron expression for the backup pipeline (empty = manual mode) |
 | `MAINTENANCE_SCHEDULE` | No | Cron expression for the maintenance pipeline (check + prune); unset = maintenance only runs via `archiver maintenance` |
 | `TZ` | No | Timezone for scheduled backups and log timestamps (default: UTC) |
+| `LOG_FORMAT` | No | `text` (default) or `json`: how the container prints its logs to `docker logs`. `json` gives one object per line (`time`, `level`, `service`, `log`, `msg`) for a log collector such as Alloy or Loki, covering everything the running container prints (one-shot `run`, `init` and `migrate` stay text); the files in the logs volume stay text |
 | `SYSTEMCTL_FORCE_BUS` | No | Set to `1` to enable systemctl access to host services via D-Bus socket (requires socket mounts, see above) |
 
 Archiver's configuration itself (service directories, storage targets, secrets) is likewise environment variables plus file-based secrets. See [Configuration Sources](#configuration-sources).
