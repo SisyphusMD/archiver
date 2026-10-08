@@ -310,7 +310,9 @@ func init() {
 		CheckInterval: 7 * day,
 		Remote: func(v Values) (map[string]string, string) {
 			return map[string]string{"TYPE": "dropbox", "CLIENT_ID": v["DROPBOX_APP_KEY"], "CLIENT_SECRET": v["DROPBOX_APP_SECRET"],
-				"TOKEN": `{"refresh_token":"` + v["DROPBOX_TOKEN"] + `","expiry":"2000-01-01T00:00:00Z"}`}, "/" + strings.Trim(v["DROPBOX_PATH"], "/")
+				// Relative, as Duplicacy's path is: rclone sends an absolute one with a path-root
+				// header, which Dropbox refuses for an app-folder app.
+				"TOKEN": `{"refresh_token":"` + v["DROPBOX_TOKEN"] + `","expiry":"2000-01-01T00:00:00Z"}`}, strings.Trim(v["DROPBOX_PATH"], "/")
 		},
 	})
 	register(Type{
