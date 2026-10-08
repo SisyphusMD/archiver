@@ -177,3 +177,11 @@ func TestSnapshotCarriesRefreshedToken(t *testing.T) {
 		t.Errorf("kit token %s, want the user's new one", got)
 	}
 }
+
+// The kit's Dropbox path is relative: an absolute one makes rclone send a path-root header
+// that Dropbox refuses for an app-folder app ("path root is not supported for sandbox app").
+func TestDropboxRemotePathRelative(t *testing.T) {
+	if _, dir := Types["dropbox"].Remote(Values{"DROPBOX_PATH": "/archiver/primary/"}); dir != "archiver/primary" {
+		t.Errorf("dir %q", dir)
+	}
+}
