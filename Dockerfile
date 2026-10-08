@@ -21,6 +21,9 @@ RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.l
     iputils-ping \
     systemd \
     zfsutils-linux \
+    btrfs-progs \
+    python3 \
+    python3-lmdb \
     && rm -rf /var/lib/apt/lists/*
 
 # Every download below is checked against a pinned SHA-256 per architecture: HTTPS
