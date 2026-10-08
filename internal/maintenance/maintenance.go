@@ -46,6 +46,8 @@ type Run struct {
 	lock    *runlock.Lock
 	env     []string
 	repo    string
+	dirs    []string          // the service directories, whose repositories may hold fossil collections
+	urls    map[string]string // each storage's URL, by storage name
 	stopped bool
 	pruned  bool // the primary's prune deleted revisions
 }
@@ -105,20 +107,9 @@ func (r *Run) Execute() int {
 	}
 	r.env = cfg.DuplicacyEnviron(r.Environ, r.Layout.SSHPrivateKey())
 
-	// check and prune are repository-context commands; any initialized service repository
-	// knows every storage. A new service that sorts first has none until its first backup.
-	dirs, _ := config.ExpandServiceDirectories(cfg.ServiceDirectories)
-	for _, d := range dirs {
-		if _, err := os.Stat(filepath.Join(d, ".duplicacy", "preferences")); err == nil {
-			r.repo = d
-			break
-		}
-	}
-	if r.repo == "" {
-		r.log.Message(logging.Error, "", "No initialized repository found (expected a service dir with .duplicacy/preferences). Run a backup before maintenance.")
-		r.lock.Record("failed")
-		return 1
-	}
+	// check and prune are repository-context commands, run from maintenance's own repository.
+	r.dirs, _ = config.ExpandServiceDirectories(cfg.ServiceDirectories)
+	r.repo = RepoDir(r.Layout.LogDir())
 
 	r.main()
 	if r.log.Errors() > 0 || r.stopped {
@@ -167,7 +158,29 @@ func (r *Run) main() {
 		}
 	}
 
+	switch stopped, err := r.watched(r.prepare); {
+	case stopped:
+		r.endStopped()
+		return
+	case err != nil:
+		r.log.Message(logging.Error, "", "Cannot prepare the maintenance repository: "+err.Error())
+		r.lock.Record("failed")
+		return
+	}
 	for i := 0; i < last; i++ {
+		if i > 0 {
+			// A secondary that cannot be registered fails on its own, as its check would.
+			stopped, err := r.watched(func(ctx context.Context) error { return r.addSecondary(ctx, i) })
+			if stopped {
+				r.endStopped()
+				return
+			}
+			if err != nil {
+				name := cfg.Targets[i].StorageName()
+				r.log.Message(logging.Error, name, fmt.Sprintf("Cannot maintain %s this run: %v", name, err))
+				continue
+			}
+		}
 		if r.stopRequested() || !r.storage(i) {
 			r.endStopped()
 			return
@@ -195,6 +208,34 @@ func (r *Run) main() {
 	}
 	fmt.Fprintln(r.Stdout, msg)
 	r.notify.Send("Maintenance Complete", msg)
+}
+
+// watched runs f with a context a stop cancels, so a registration that hangs on a storage
+// or waits for its creation lock still ends when asked; stopped reports that.
+func (r *Run) watched(f func(context.Context) error) (stopped bool, err error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				if r.stopRequested() {
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	err = f(ctx)
+	stopped = ctx.Err() != nil
+	cancel()
+	<-done
+	return stopped, err
 }
 
 // workers sends cmd, for this run's storages, to the daemon's copy workers; true means they
