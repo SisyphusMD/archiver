@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Raw secret environment variables are removed at start,** not just ignored: tar, openssl, rclone, ssh and every later archiver process no longer inherit a `STORAGE_PASSWORD` (or any other secret) set as a plain variable. The warning still names each one.
 - **Storage settings with a control character are refused.** A newline in `SFTP_PATH` (or any other storage setting) reached the sftp batch the kit upload writes, where `!` lines run local commands.
 - **Token copies under `logs/.tokens` are written as new 0600 files renamed into place,** so a symlink or readable file planted at the path never receives the token, and a directory others can write is refused.
+- **`RECOVERY_KIT_EXTRA_PATHS` copies only regular files and directories:** a link to a device (`/dev/zero`) or a FIFO no longer fills the disk or blocks the kit, and a directory linked into itself is skipped.
 - The Pushover API token and user key no longer appear on `curl`'s command line, where any process in the container could read them from `/proc`. They now reach `curl` on stdin, like every other secret.
 
 ### Changed
