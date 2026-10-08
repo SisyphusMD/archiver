@@ -49,3 +49,58 @@ func TestFailureDoesNotLoop(t *testing.T) {
 		t.Fatalf("calls %d failures %d", calls, failures)
 	}
 }
+
+// A transient failure is retried; a refusal that would fail the same way again is not.
+func TestRetries(t *testing.T) {
+	cases := []struct {
+		name     string
+		statuses []int // one per attempt; the last repeats
+		calls    int
+		failed   bool
+		msg      string
+	}{
+		{"server error then success", []int{503, 200}, 2, false, "Pushover notification sent successfully."},
+		{"rate limited then success", []int{429, 200}, 2, false, "Pushover notification sent successfully."},
+		{"server error throughout", []int{500}, 3, true, "Failed to send pushover notification after 3 attempts (HTTP 500 Internal Server Error)."},
+		{"bad credentials", []int{400}, 1, true, "Failed to send pushover notification (HTTP 400 Bad Request). Check the Pushover secrets."},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			calls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(c.statuses[min(calls, len(c.statuses)-1)])
+				calls++
+			}))
+			defer srv.Close()
+			var failed bool
+			var msg string
+			n := &Notifier{Pushover: true, URL: srv.URL, Waits: []time.Duration{time.Millisecond, time.Millisecond},
+				Logf: func(f bool, m string) { failed, msg = f, m }}
+			n.Send("Backup Error", "boom")
+			if calls != c.calls || failed != c.failed || msg != c.msg {
+				t.Fatalf("calls %d failed %v msg %q", calls, failed, msg)
+			}
+		})
+	}
+}
+
+// A connection that never answers is a network error, retried like a server error.
+func TestRetriesNetworkError(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			conn, _, _ := w.(http.Hijacker).Hijack()
+			conn.Close()
+			return
+		}
+	}))
+	defer srv.Close()
+	var msg string
+	n := &Notifier{Pushover: true, URL: srv.URL, Waits: []time.Duration{time.Millisecond},
+		Logf: func(_ bool, m string) { msg = m }}
+	n.Send("Backup Error", "boom")
+	if calls != 2 || msg != "Pushover notification sent successfully." {
+		t.Fatalf("calls %d msg %q", calls, msg)
+	}
+}
