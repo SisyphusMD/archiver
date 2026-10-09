@@ -309,6 +309,10 @@ jobs:
         run: |
           docker run -i --rm --hostname fk-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/fault-kill.sh
+      - name: Notifications are one per incident, repeat on ALERT_REPEAT_INTERVAL and announce recovery (ADRs 33, 36)
+        run: |
+          docker run -i --rm --hostname ic-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/incidents.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \

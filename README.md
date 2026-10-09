@@ -47,7 +47,7 @@ If you're currently running Archiver v0.6.5 or earlier directly on your host sys
 - **Multiple Backends**: Local disk, SFTP, BackBlaze B2, S3-compatible storage
 - **Automated Rotation**: Configurable retention policies (keep daily, weekly, monthly snapshots)
 - **Service Integration**: Pre/post-backup scripts, custom restore procedures
-- **Notifications**: Pushover alerts for successes and failures
+- **Notifications**: Pushover, Apprise and ntfy; one alert per incident, repeated on an interval while it lasts, and a notice when it clears
 - **Easy Restoration**: Interactive restore script to recover specific revisions
 
 ---
@@ -708,6 +708,8 @@ Archiver sends to any combination of Pushover, an [Apprise API](https://github.c
 | `everything` | Also routine news: backup and maintenance completed, a run paused, resumed or stopped |
 
 `NOTIFY_ON` sets every destination; `PUSHOVER_NOTIFY_ON`, `APPRISE_NOTIFY_ON` and `NTFY_NOTIFY_ON` override it for one (for example `failures` to your phone, `everything` to ntfy). Log levels (INFO, WARNING, ERROR) are about log lines and do not decide notifications.
+
+A notification is one per incident, not one per error line: a failed backup sends one message listing its errors (the first ten; the log has them all) when it ends, a storage down is one alert, not one per retry. While an incident lasts it is notified again every `ALERT_REPEAT_INTERVAL` (default `24h`; `6h`, `2d`, or `0` for never), and when it clears (a clean backup, a storage caught up, a check or drill passing again) one recovery notice goes to the destinations the alert went to. The open incidents are kept in `logs/.incidents.json`. `archiver notify test` sends one message to every destination, saying which events it receives.
 
 ```bash
 # Pushover

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/inuse"
+	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -22,8 +23,6 @@ var Backoff = []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, 30
 const (
 	// DownAfter is how long a target must keep failing to count as down.
 	DownAfter = 30 * time.Minute
-	// Remind is how often a down target is reported again.
-	Remind = 24 * time.Hour
 	// SafetyWake re-checks a caught-up target even when nothing says local changed.
 	SafetyWake = 6 * time.Hour
 )
@@ -53,7 +52,6 @@ type State struct {
 	DownSince      int64  `json:"down_since,omitempty"` // kept through retries, so down is reported once
 	NextRetry      int64  `json:"next_retry,omitempty"`
 	LastError      string `json:"last_error,omitempty"`
-	LastAlert      int64  `json:"last_alert,omitempty"`
 	LastMirror     int64  `json:"last_mirror,omitempty"`
 	LastExhaustive int64  `json:"last_exhaustive,omitempty"`
 	LastCheck      int64  `json:"last_check,omitempty"`
@@ -92,9 +90,12 @@ type Clock interface {
 
 // Events are what a worker tells the rest of Archiver.
 type Events struct {
-	Log    func(level, msg string)
-	Notify func(title, msg string)
-	Save   func(State)
+	Log func(level, msg string)
+	// Raise and Clear open and close an incident (ADRs 33, 36): notified once, repeated on
+	// ALERT_REPEAT_INTERVAL while it lasts, and its recovery said.
+	Raise func(key string, k notify.Kind, title, msg string)
+	Clear func(key, title, msg string)
+	Save  func(State)
 }
 
 // Upkeep is a worker's maintenance of its target (ADRs 12, 17, 18). Shared storages are
@@ -511,8 +512,6 @@ func (w *Worker) caughtUp(stops int) {
 		w.mu.Unlock()
 		return
 	}
-	wasDown := w.state.DownSince != 0
-	failingSince := w.state.FailingSince
 	now := w.Clock.Now()
 	w.state.Status, w.state.Since, w.state.Behind = Idle, now.Unix(), 0
 	w.state.LastSuccess, w.state.FailingSince, w.state.NextRetry, w.state.LastError = now.Unix(), 0, 0, ""
@@ -520,9 +519,9 @@ func (w *Worker) caughtUp(stops int) {
 	w.attempt = 0
 	w.save()
 	w.mu.Unlock()
-	if wasDown && w.Events.Notify != nil {
-		w.Events.Notify("Storage Recovered", fmt.Sprintf("%s storage is caught up again after %s of failed copies.", w.Target, now.Sub(time.Unix(failingSince, 0)).Round(time.Minute)))
-	}
+	// Every caught-up pass, not only the first: a recovery notice an outage kept from a
+	// destination is retried here (Clear says nothing when no incident is open).
+	w.clear("copy:"+w.Target, "Storage Recovered", fmt.Sprintf("%s storage is caught up again.", w.Target))
 }
 
 // failed schedules the next try and reports the target down once it has kept failing. A
@@ -548,14 +547,13 @@ func (w *Worker) failed(stops int, err error) {
 	}
 	w.state.NextRetry, w.state.LastError = now.Add(delay).Unix(), err.Error()
 	failing := now.Sub(time.Unix(w.state.FailingSince, 0))
-	var title, note string
-	switch {
-	case failing >= DownAfter && w.state.DownSince == 0:
-		w.state.DownSince, w.state.LastAlert = now.Unix(), now.Unix()
-		title, note = "Storage Down", fmt.Sprintf("Copies to %s storage have failed for %s (%v). Archiver keeps retrying every %s.", w.Target, failing.Round(time.Minute), err, Backoff[len(Backoff)-1])
-	case w.state.DownSince != 0 && now.Sub(time.Unix(w.state.LastAlert, 0)) >= Remind:
-		w.state.LastAlert = now.Unix()
-		title, note = "Storage Still Down", fmt.Sprintf("Copies to %s storage have failed for %s (%v).", w.Target, failing.Round(time.Minute), err)
+	var note string
+	if failing >= DownAfter {
+		if w.state.DownSince == 0 {
+			w.state.DownSince = now.Unix()
+		}
+		// Raised at every failure once down; the incident repeats only on its interval.
+		note = fmt.Sprintf("Copies to %s storage have failed for %s (%v). Archiver keeps retrying every %s.", w.Target, failing.Round(time.Minute), err, Backoff[len(Backoff)-1])
 	}
 	w.state.Status, w.state.Since = Retrying, now.Unix()
 	if w.state.DownSince != 0 {
@@ -564,8 +562,20 @@ func (w *Worker) failed(stops int, err error) {
 	w.save()
 	w.mu.Unlock()
 	w.log("WARNING", fmt.Sprintf("Copy to %s storage failed (%v); retrying in %s.", w.Target, err, delay))
-	if title != "" && w.Events.Notify != nil {
-		w.Events.Notify(title, note)
+	if note != "" {
+		w.raise("copy:"+w.Target, notify.Failure, "Storage Down", note)
+	}
+}
+
+func (w *Worker) raise(key string, k notify.Kind, title, msg string) {
+	if w.Events.Raise != nil {
+		w.Events.Raise(key, k, title, msg)
+	}
+}
+
+func (w *Worker) clear(key, title, msg string) {
+	if w.Events.Clear != nil {
+		w.Events.Clear(key, title, msg)
 	}
 }
 

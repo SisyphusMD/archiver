@@ -27,6 +27,7 @@ func (l Layout) DrillStopFlag() string     { return filepath.Join(l.Lock, "archi
 func (l Layout) DrillState() string        { return filepath.Join(l.LogDir(), ".drill-state.json") }
 func (l Layout) DaemonSocket() string      { return filepath.Join(l.Lock, "archiver-daemon.sock") }
 func (l Layout) CopyWorkersState() string  { return filepath.Join(l.LogDir(), ".copy-workers.json") }
+func (l Layout) Incidents() string         { return filepath.Join(l.LogDir(), ".incidents.json") }
 func (l Layout) InUseDir() string          { return filepath.Join(l.Lock, "archiver-in-use") }
 func (l Layout) EnvelopeConfirmed() string { return filepath.Join(l.LogDir(), ".envelope-confirmed") }
 func (l Layout) EnvelopeCurrent() string   { return filepath.Join(l.LogDir(), ".envelope-current") }

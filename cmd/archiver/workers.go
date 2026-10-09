@@ -113,17 +113,20 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 		return
 	}
 	host := pipeline.Hostname(os.Getenv)
-	log := &logging.Log{Dir: l.LogDir(), Basename: "copies", ErrorTitle: "Copy Error", Stdout: os.Stdout}
+	log := &logging.Log{Dir: l.LogDir(), Basename: "copies", Stdout: os.Stdout}
 	// One notifier per worker, so one worker's slow send never holds up another's.
 	notifier := func() *notify.Notifier {
-		return notify.FromConfig(cfg, host, func(failed bool, msg string) {
+		n := notify.FromConfig(cfg, host, func(failed bool, msg string) {
 			level := logging.Info
 			if failed {
 				level = logging.Warning
 			}
 			log.Unnotified(level, "", msg)
 		})
+		n.Incidents = l.Incidents()
+		return n
 	}
+	notifier().WatchLog(log)
 	env := cfg.DuplicacyEnviron(os.Environ(), l.SSHPrivateKey())
 	store := &copier.Store{Path: l.CopyWorkersState()}
 	saved := store.Load()
@@ -140,10 +143,12 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 			SnapshotID: host + "-archiver-copies", Primary: cfg.Targets[0], Target: t, InitLock: l.StorageInit,
 			Diagnose: func(t config.Target) string { return kit.Diagnose(l, "", t) },
 		}
+		n := notifier()
 		w := copier.New(name, cfg.Targets[0].StorageName(), d, realClock{}, copier.Events{
-			Log:    func(level, msg string) { log.Message(level, name, msg) },
-			Notify: notifier().Send,
-			Save:   func(s copier.State) { store.Save(s) },
+			Log:   func(level, msg string) { log.Message(level, name, msg) },
+			Raise: n.Raise,
+			Clear: n.Clear,
+			Save:  func(s copier.State) { store.Save(s) },
 		}, saved[name])
 		w.CopyLock = l.CopyLock
 		w.InUseDir = l.InUseDir()
