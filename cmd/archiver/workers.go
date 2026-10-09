@@ -114,21 +114,15 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 	}
 	host := pipeline.Hostname(os.Getenv)
 	log := &logging.Log{Dir: l.LogDir(), Basename: "copies", ErrorTitle: "Copy Error", Stdout: os.Stdout}
-	// One notifier per worker: a notifier drops a send made while it is already sending
-	// (its guard against a failed notification looping), which would lose one of two
-	// targets that go down or recover together.
+	// One notifier per worker, so one worker's slow send never holds up another's.
 	notifier := func() *notify.Notifier {
-		return &notify.Notifier{
-			Pushover: cfg.Pushover() && cfg.PushoverAPIToken != "" && cfg.PushoverUserKey != "",
-			Token:    cfg.PushoverAPIToken, User: cfg.PushoverUserKey, Hostname: host,
-			Logf: func(failed bool, msg string) {
-				level := logging.Info
-				if failed {
-					level = logging.Warning
-				}
-				log.Unnotified(level, "", msg)
-			},
-		}
+		return notify.FromConfig(cfg, host, func(failed bool, msg string) {
+			level := logging.Info
+			if failed {
+				level = logging.Warning
+			}
+			log.Unnotified(level, "", msg)
+		})
 	}
 	env := cfg.DuplicacyEnviron(os.Environ(), l.SSHPrivateKey())
 	store := &copier.Store{Path: l.CopyWorkersState()}

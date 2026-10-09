@@ -672,11 +672,29 @@ BACKUP_PARALLELISM="2"
 
 ### Notifications
 
+Archiver sends to any combination of Pushover, an [Apprise API](https://github.com/caronc/apprise-api) server and [ntfy](https://ntfy.sh). Each destination receives the kinds of notification its setting asks for:
+
+| `NOTIFY_ON` | Sent |
+|---|---|
+| `failures` (default) | A backup, copy, restore or drill that failed; a refused backup; a storage down or a failed storage check, and its recovery |
+| `problems` | Also warning signs, such as a mirror pass refused for deleting too much |
+| `everything` | Also routine news: backup and maintenance completed, a run paused, resumed or stopped |
+
+`NOTIFY_ON` sets every destination; `PUSHOVER_NOTIFY_ON`, `APPRISE_NOTIFY_ON` and `NTFY_NOTIFY_ON` override it for one (for example `failures` to your phone, `everything` to ntfy). Log levels (INFO, WARNING, ERROR) are about log lines and do not decide notifications.
+
 ```bash
-NOTIFICATION_SERVICE="Pushover"
-PUSHOVER_USER_KEY="userKey"
-PUSHOVER_API_TOKEN="apiToken"
+# Pushover
+NOTIFICATION_SERVICE="Pushover"   # with secrets pushover_user_key and pushover_api_token
+
+# Apprise API: the notify URL (with user:password@ if the server needs basic auth) is the
+# secret apprise_url; APPRISE_TAGS optionally sends each kind with an Apprise tag
+APPRISE_TAGS="failure=critical,problem=alerts,routine=quiet"
+
+# ntfy: server and topic; an access token, if the topic needs one, is the secret ntfy_token
+NTFY_URL="https://ntfy.sh/my-archiver"
 ```
+
+Apprise receives `title`, `body`, a `type` (info, warning, failure) and the kind's tag when `APPRISE_TAGS` names one (otherwise none, so the server notifies all its URLs); a partial delivery (HTTP 424 with "Sent") counts as delivered. ntfy gets priority 2 for routine news, 3 for problems and 4 for failures.
 
 ---
 

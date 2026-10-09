@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var globalSetting = regexp.MustCompile(`^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|CHECK_INTERVAL|DUPLICACY_THREADS|BACKUP_PARALLELISM|LOG_FORMAT|NOTIFICATION_SERVICE|RECOVERY_KIT_EXTRA_PATHS)$`)
+var globalSetting = regexp.MustCompile(`^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|CHECK_INTERVAL|DUPLICACY_THREADS|BACKUP_PARALLELISM|LOG_FORMAT|NOTIFICATION_SERVICE|NOTIFY_ON|APPRISE_NOTIFY_ON|NTFY_NOTIFY_ON|PUSHOVER_NOTIFY_ON|APPRISE_TAGS|NTFY_URL|RECOVERY_KIT_EXTRA_PATHS)$`)
 
 // IsSetting reports whether a variable name is a non-secret setting: a global one, or a
 // storage target's name, type, check interval, break-glass SFTP user, or any storage type's
@@ -80,7 +80,7 @@ func Snapshot(src Source, environ []string) (*Settings, error) {
 	}
 	sort.Slice(s.NonSecret, func(i, j int) bool { return versionLess(s.NonSecret[i].Name, s.NonSecret[j].Name) })
 
-	names := []string{"STORAGE_PASSWORD", "RSA_PASSPHRASE", "RECOVERY_PASSWORD", "PUSHOVER_USER_KEY", "PUSHOVER_API_TOKEN"}
+	names := []string{"STORAGE_PASSWORD", "RSA_PASSPHRASE", "RECOVERY_PASSWORD", "PUSHOVER_USER_KEY", "PUSHOVER_API_TOKEN", "APPRISE_URL", "NTFY_TOKEN"}
 	rotating := map[string]string{}
 	for n := 1; src.Getenv(fmt.Sprintf("STORAGE_TARGET_%d_NAME", n)) != ""; n++ {
 		p := fmt.Sprintf("STORAGE_TARGET_%d_", n)

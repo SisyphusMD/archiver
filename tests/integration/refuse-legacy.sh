@@ -49,7 +49,7 @@ log "the conversion runs as the container's command, and then it starts"
 docker run --rm --network none "${ARGS[@]}" "$IMAGE" migrate hooks >/tmp/rl-migrate.out 2>&1 || { cat /tmp/rl-migrate.out; die "migrate hooks failed"; }
 grep -q "Migrated 1 service directories" /tmp/rl-migrate.out || { cat /tmp/rl-migrate.out; die "nothing migrated"; }
 docker run -d --name "$NAME" --network none "${ARGS[@]}" "$IMAGE" >/dev/null || die "start after migration"
-for _ in $(seq 1 60); do docker logs "$NAME" 2>&1 | grep -q "Container is ready" && break; sleep 0.5; done
-docker logs "$NAME" 2>&1 | grep -q "Container is ready" || { docker logs "$NAME" 2>&1 | tail -8; die "did not start after migration"; }
+for _ in $(seq 1 60); do grep -q "Container is ready" <<<"$(docker logs "$NAME" 2>&1)" && break; sleep 0.5; done
+grep -q "Container is ready" <<<"$(docker logs "$NAME" 2>&1)" || { docker logs "$NAME" 2>&1 | tail -8; die "did not start after migration"; }
 
 echo "=== REFUSE-LEGACY OK: legacy settings refuse start with the conversion; migrate hooks runs as the command; then it starts ==="

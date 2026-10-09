@@ -19,10 +19,7 @@ func kitRun(src config.Source) *kit.Run {
 	host := pipeline.Hostname(os.Getenv)
 	log := &logging.Log{Dir: l.LogDir(), Basename: "archiver", ErrorTitle: "Backup Error", Stdout: os.Stdout}
 	if cfg, _, err := config.Load(src, os.Environ()); err == nil {
-		n := &notify.Notifier{
-			Pushover: cfg.Pushover() && cfg.PushoverAPIToken != "" && cfg.PushoverUserKey != "",
-			Token:    cfg.PushoverAPIToken, User: cfg.PushoverUserKey, Hostname: host,
-		}
+		n := notify.FromConfig(cfg, host, nil)
 		log.Notify = n.Send
 	}
 	r := &kit.Run{
