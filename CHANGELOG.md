@@ -40,7 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - The Pushover API token and user key no longer appear on `curl`'s command line, where any process in the container could read them from `/proc`. They now reach `curl` on stdin, like every other secret.
 
 ### Changed
-- **The recovery kit's RECREATE.txt lists the services backed up,** so `archiver recover` restores exactly those and reports any it cannot find. The kit changes with it: every deployment uploads its kit once after upgrading, and again when its set of services changes.
+- **The recovery kit's RECREATE.txt lists each service's directory,** so `archiver recover` restores exactly those services to where they were and reports any it cannot find. The kit changes with it: every deployment uploads its kit once after upgrading, and again when its set of services changes.
 - **Routine notifications are opt-in:** with the default `NOTIFY_ON=failures`, "Backup Complete", "Maintenance Complete" and pause, resume and stop notices are no longer sent. Set `NOTIFY_ON=everything` (or `PUSHOVER_NOTIFY_ON=everything`) to keep receiving them.
 - With copy workers running, a backup no longer contacts secondary storages at all. It used to register a new or changed secondary in each service's repository (waiting up to 5 minutes on an unreachable one); the workers and maintenance register storages in repositories of their own.
 - **Services back up two at a time** by default (`BACKUP_PARALLELISM`, default 2), each with its own hooks, so one slow service no longer holds up the rest. Set `BACKUP_PARALLELISM=1` to keep backing them up one after another, in order, for example when one service's hook depends on another's having finished.

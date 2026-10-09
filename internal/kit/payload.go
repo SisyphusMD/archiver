@@ -263,29 +263,37 @@ func (r *Run) recreateNotes(s *config.Settings) string {
 	w("")
 	w("Facts this deployment depended on:")
 	w("  - hostname: %s   (keep it: snapshot IDs and this kit's filename derive from it)", r.Hostname)
-	// The services by name, so a recovery restores exactly these: a snapshot ID alone
-	// cannot say which host it belongs to when one host's name prefixes another's.
-	// Only names a backup accepts (its snapshot ID valid, so no spaces in the list); a
-	// literal path is listed even while it is not mounted, so a service whose directory is
-	// missing for a moment does not drop out of the recovery.
+	// Each service's directory, so a recovery restores exactly these and to where they
+	// were: a snapshot ID cannot say which host owns it when one host's name prefixes
+	// another's, nor which of two globs a name came from. Only services a backup accepts
+	// (a valid snapshot ID); a literal path is listed even while it is not mounted, so a
+	// service missing for a moment does not drop out of the recovery. One per line, so a
+	// directory may hold spaces.
 	sdirs, _ := s.Get("SERVICE_DIRECTORIES")
 	found, unmatched := config.ExpandServiceDirectories(strings.Split(sdirs, ":"))
 	for _, u := range unmatched {
 		if !config.HasMeta(u) {
-			found = append(found, u)
+			found = append(found, config.Unescape(u))
 		}
 	}
 	seen := map[string]bool{}
-	var names []string
+	var dirs []string
 	for _, d := range found {
-		name := filepath.Base(filepath.Clean(d))
+		// Absolute, as backups resolve a relative entry.
+		if abs, err := filepath.Abs(d); err == nil {
+			d = abs
+		}
+		name := filepath.Base(d)
 		if config.ValidSnapshotID(r.Hostname+"-"+name) && !seen[name] {
 			seen[name] = true
-			names = append(names, name)
+			dirs = append(dirs, d)
 		}
 	}
-	sort.Strings(names)
-	w("  - services backed up: %s", strings.Join(names, " "))
+	sort.Strings(dirs)
+	w("%s", ServicesHeader)
+	for _, d := range dirs {
+		w("      %s", d)
+	}
 	for _, name := range []string{"BACKUP_SCHEDULE", "MAINTENANCE_SCHEDULE", "RESTORE_DRILL_SCHEDULE", "TZ"} {
 		if v := r.getenv(name); v != "" {
 			w("  - %s: %s", name, v)
@@ -316,6 +324,10 @@ func (r *Run) recreateNotes(s *config.Settings) string {
 	w("    plus CHOWN + FOWNER to restore files under their original ownership")
 	return b.String()
 }
+
+// ServicesHeader opens RECREATE.txt's list of service directories, one per following line
+// indented by six spaces.
+const ServicesHeader = "  - services backed up (one directory per line):"
 
 func hasVisible(dir string) bool {
 	entries, _ := os.ReadDir(dir)

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/SisyphusMD/archiver/internal/kit"
 )
 
 // A fresh host's service directories do not exist yet: a glob places each of the host's
@@ -77,13 +79,58 @@ func TestPlaceServicesHyphenated(t *testing.T) {
 	}
 }
 
-// With the kit's list, exactly the listed services are planned, other IDs are ignored, and a
-// listed service with no snapshot is missing.
+// With the kit's list, exactly the listed services are planned, each into its recorded
+// directory, other IDs are ignored, and a listed service with no snapshot is missing.
 func TestPlaceRecorded(t *testing.T) {
 	listing := map[string]SnapshotInfo{"nas-app": {}, "nas-home-app": {}}
-	plan, unplaced, missing := placeRecorded([]string{"app", "db"}, listing, "nas", []string{"/srv/*/"})
-	if len(plan) != 1 || plan[0].id != "nas-app" || len(unplaced) != 0 || strings.Join(missing, " ") != "db" {
-		t.Fatalf("plan %v unplaced %v missing %v", plan, unplaced, missing)
+	plan, missing := placeRecorded([]string{"/srv/databases/app", "/srv/apps/db"}, listing, "nas")
+	if len(plan) != 1 || plan[0].id != "nas-app" || plan[0].dir != "/srv/databases/app" || strings.Join(missing, " ") != "db" {
+		t.Fatalf("plan %v missing %v", plan, missing)
+	}
+}
+
+// The kit's list is read back exactly, a directory with spaces included.
+func TestRecordedServices(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "RECREATE.txt")
+	os.WriteFile(p, []byte("Facts:\n  - hostname: nas\n"+kit.ServicesHeader+"\n      /srv/apps/app\n      /srv/with space\n  - TZ: UTC\n"), 0o600)
+	dirs, ok := recordedServices(p)
+	if !ok || strings.Join(dirs, "|") != "/srv/apps/app|/srv/with space" {
+		t.Fatalf("got %q %v", dirs, ok)
+	}
+	os.WriteFile(p, []byte("Facts:\n  - hostname: nas\n"), 0o600)
+	if _, ok := recordedServices(p); ok {
+		t.Fatal("a kit without the list read as having one")
+	}
+}
+
+// Without the kit's list, two globs that both take a name leave it for a person.
+func TestDirForAmbiguousGlobs(t *testing.T) {
+	if got := dirFor("db", []string{"/srv/apps/*/", "/srv/databases/*/"}); got != "" {
+		t.Fatalf("an ambiguous name was placed at %q", got)
+	}
+	if got := dirFor("db", []string{"/srv/apps/*/", "/srv/databases/d*/"}); got != "" {
+		t.Fatalf("an ambiguous name was placed at %q", got)
+	}
+	if got := dirFor("app", []string{"/srv/apps/a*/", "/srv/databases/d*/"}); got != "/srv/apps/app" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+// The output is written fresh: a link left in its place is replaced, never followed.
+func TestWritePrivateDoesNotFollowLinks(t *testing.T) {
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "victim")
+	os.WriteFile(victim, []byte("keep"), 0o644)
+	target := filepath.Join(dir, "secret")
+	os.Symlink(victim, target)
+	if err := writePrivate(target, 0o600, strings.NewReader("pw")); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "keep" {
+		t.Fatalf("the link was followed: victim now %q", b)
+	}
+	if fi, _ := os.Lstat(target); fi.Mode()&os.ModeSymlink != 0 || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("target mode %v", fi.Mode())
 	}
 }
 
