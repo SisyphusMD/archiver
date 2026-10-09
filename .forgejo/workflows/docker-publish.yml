@@ -297,6 +297,10 @@ jobs:
         run: |
           docker run -i --rm --hostname rp-host --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/restore-preview.sh
+      - name: archiver recover rebuilds a lost host from the kit alone (ADR 29)
+        run: |
+          docker run -i --rm --hostname rc-host --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+            --entrypoint bash roundtrip:local -s < tests/integration/recover.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \

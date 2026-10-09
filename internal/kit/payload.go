@@ -263,6 +263,29 @@ func (r *Run) recreateNotes(s *config.Settings) string {
 	w("")
 	w("Facts this deployment depended on:")
 	w("  - hostname: %s   (keep it: snapshot IDs and this kit's filename derive from it)", r.Hostname)
+	// The services by name, so a recovery restores exactly these: a snapshot ID alone
+	// cannot say which host it belongs to when one host's name prefixes another's.
+	// Only names a backup accepts (its snapshot ID valid, so no spaces in the list); a
+	// literal path is listed even while it is not mounted, so a service whose directory is
+	// missing for a moment does not drop out of the recovery.
+	sdirs, _ := s.Get("SERVICE_DIRECTORIES")
+	found, unmatched := config.ExpandServiceDirectories(strings.Split(sdirs, ":"))
+	for _, u := range unmatched {
+		if !config.HasMeta(u) {
+			found = append(found, u)
+		}
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, d := range found {
+		name := filepath.Base(filepath.Clean(d))
+		if config.ValidSnapshotID(r.Hostname+"-"+name) && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	w("  - services backed up: %s", strings.Join(names, " "))
 	for _, name := range []string{"BACKUP_SCHEDULE", "MAINTENANCE_SCHEDULE", "RESTORE_DRILL_SCHEDULE", "TZ"} {
 		if v := r.getenv(name); v != "" {
 			w("  - %s: %s", name, v)

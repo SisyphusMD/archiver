@@ -249,3 +249,15 @@ var classes = map[string]func(byte) bool{
 
 func isAlpha(c byte) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }
 func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+// MatchName reports whether a service name matches one pattern component as
+// ExpandServiceDirectories matches it (bash rules: a leading dot is never matched by a
+// wildcard, [!...] negates, POSIX classes), for placing services that do not exist yet.
+func MatchName(pattern, name string) bool { return match(pattern, name) }
+
+// HasMeta reports whether a path or component holds glob characters.
+func HasMeta(s string) bool { return hasMeta(s) }
+
+// Unescape removes a pattern's backslash escapes, as expansion does to a path it uses
+// literally (tenant\-one is the directory tenant-one).
+func Unescape(s string) string { return unescape(s) }
