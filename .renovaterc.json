@@ -7,6 +7,7 @@
   "gitAuthor": "Renovate Bot <renovate@bryantserver.local>",
   "prConcurrentLimit": 0,
   "prHourlyLimit": 0,
+  "platformAutomerge": false,
   "separateMinorPatch": true,
   "fetchChangeLogs": "pr",
   "enabledManagers": ["dockerfile", "github-actions", "gomod", "custom.regex"],
@@ -61,9 +62,14 @@
       "addLabels": ["patch-update"]
     },
     {
-      "description": "Automerge patches and digests; manual workflow_dispatch cuts the release later",
+      "description": "Automerge patches and digests once CI passes; manual workflow_dispatch cuts the release later",
       "matchUpdateTypes": ["patch", "digest"],
       "automerge": true
+    },
+    {
+      "description": "Downloads pinned by checksum in the Dockerfile (*_SHA256*): Renovate bumps the version but not the checksum, so the bump fails CI until the checksums are updated by hand; never automerged",
+      "matchDepNames": ["rclone/rclone", "moby/moby", "gilbertchen/duplicacy"],
+      "automerge": false
     }
   ]
 }
