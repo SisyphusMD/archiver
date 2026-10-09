@@ -71,19 +71,13 @@ func (b *Backup) Run() int {
 		return 1
 	}
 	b.cfg = cfg
-	b.notify = &notify.Notifier{
-		Pushover: cfg.Pushover() && cfg.PushoverAPIToken != "" && cfg.PushoverUserKey != "",
-		Token:    cfg.PushoverAPIToken,
-		User:     cfg.PushoverUserKey,
-		Hostname: b.Hostname,
-		Logf: func(failed bool, msg string) {
-			if failed {
-				b.log.Unnotified(logging.Error, "", msg)
-			} else {
-				b.log.Unnotified(logging.Info, "", msg)
-			}
-		},
-	}
+	b.notify = notify.FromConfig(cfg, b.Hostname, func(failed bool, msg string) {
+		if failed {
+			b.log.Unnotified(logging.Error, "", msg)
+		} else {
+			b.log.Unnotified(logging.Info, "", msg)
+		}
+	})
 	b.log.Notify = b.notify.Send
 	for _, w := range warnings {
 		b.log.Message(logging.Warning, "", w)

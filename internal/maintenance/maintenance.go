@@ -62,17 +62,13 @@ func (r *Run) Execute() int {
 		return 1
 	}
 	r.cfg = cfg
-	r.notify = &notify.Notifier{
-		Pushover: cfg.Pushover() && cfg.PushoverAPIToken != "" && cfg.PushoverUserKey != "",
-		Token:    cfg.PushoverAPIToken, User: cfg.PushoverUserKey, Hostname: r.Hostname,
-		Logf: func(failed bool, msg string) {
-			level := logging.Info
-			if failed {
-				level = logging.Error
-			}
-			r.log.Unnotified(level, "", msg)
-		},
-	}
+	r.notify = notify.FromConfig(cfg, r.Hostname, func(failed bool, msg string) {
+		level := logging.Info
+		if failed {
+			level = logging.Error
+		}
+		r.log.Unnotified(level, "", msg)
+	})
 	r.log.Notify = r.notify.Send
 
 	lock, stale, err := runlock.Acquire(r.Layout.MaintenanceLock(), r.stopFlag(), "maintenance", "starting")

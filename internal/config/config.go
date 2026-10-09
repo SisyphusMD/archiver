@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -56,6 +57,17 @@ type Config struct {
 	NotificationService string // "Pushover" or "None", as configured
 	PushoverUserKey     string
 	PushoverAPIToken    string
+	// Apprise and ntfy are enabled by their URLs (ADR 36). APPRISE_URL is a secret since
+	// it may carry basic-auth credentials.
+	AppriseURL  string
+	AppriseTags string // APPRISE_TAGS: "failure=critical,problem=alerts,routine=quiet"
+	NtfyURL     string // server and topic, e.g. https://ntfy.sh/archiver
+	NtfyToken   string
+	// NOTIFY_ON (failures, problems or everything) and each destination's override.
+	NotifyOn         string
+	AppriseNotifyOn  string
+	NtfyNotifyOn     string
+	PushoverNotifyOn string
 
 	PruneBackups             bool
 	CheckBackups             bool
@@ -67,7 +79,7 @@ type Config struct {
 	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
 }
 
-var globalSecret = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN)$`)
+var globalSecret = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|APPRISE_URL|NTFY_TOKEN)$`)
 var targetVar = regexp.MustCompile(`^STORAGE_TARGET_[0-9]+_(.+)$`)
 
 // IsSecret reports whether a variable name is a secret, which is read only from a file: a
@@ -125,6 +137,14 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		NotificationService:      src.Getenv("NOTIFICATION_SERVICE"),
 		PushoverUserKey:          secret("PUSHOVER_USER_KEY"),
 		PushoverAPIToken:         secret("PUSHOVER_API_TOKEN"),
+		AppriseURL:               secret("APPRISE_URL"),
+		AppriseTags:              src.Getenv("APPRISE_TAGS"),
+		NtfyURL:                  src.Getenv("NTFY_URL"),
+		NtfyToken:                secret("NTFY_TOKEN"),
+		NotifyOn:                 strings.ToLower(src.Getenv("NOTIFY_ON")),
+		AppriseNotifyOn:          strings.ToLower(src.Getenv("APPRISE_NOTIFY_ON")),
+		NtfyNotifyOn:             strings.ToLower(src.Getenv("NTFY_NOTIFY_ON")),
+		PushoverNotifyOn:         strings.ToLower(src.Getenv("PUSHOVER_NOTIFY_ON")),
 		PruneKeep:                src.Getenv("PRUNE_KEEP"),
 		PruneExhaustiveFrequency: strings.ToLower(src.Getenv("PRUNE_EXHAUSTIVE_FREQUENCY")),
 		Threads:                  src.Getenv("DUPLICACY_THREADS"),
@@ -241,6 +261,29 @@ func (c *Config) Validate(secretsDir string) error {
 			if s.v == "" {
 				return fmt.Errorf("Notification service is set to %s, but %s is not set. Provide it as a secret file.", c.NotificationService, s.name)
 			}
+		}
+	}
+	for _, v := range []struct{ name, val string }{
+		{"NOTIFY_ON", c.NotifyOn}, {"APPRISE_NOTIFY_ON", c.AppriseNotifyOn},
+		{"NTFY_NOTIFY_ON", c.NtfyNotifyOn}, {"PUSHOVER_NOTIFY_ON", c.PushoverNotifyOn},
+	} {
+		switch v.val {
+		case "", "failures", "problems", "everything":
+		default:
+			return fmt.Errorf("%s must be one of: failures, problems, everything (got '%s').", v.name, v.val)
+		}
+	}
+	if _, err := c.AppriseTagMap(); err != nil {
+		return err
+	}
+	if c.NtfyURL != "" {
+		if u, err := url.Parse(c.NtfyURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || strings.Trim(u.Path, "/") == "" {
+			return fmt.Errorf("NTFY_URL must be the server and topic, such as https://ntfy.sh/archiver (got '%s').", c.NtfyURL)
+		}
+	}
+	if c.AppriseURL != "" {
+		if u, err := url.Parse(c.AppriseURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") {
+			return fmt.Errorf("APPRISE_URL must be an Apprise API notify URL, such as http://apprise:8000/notify/archiver.")
 		}
 	}
 	switch c.PruneExhaustiveFrequency {
@@ -385,4 +428,24 @@ func (c *Config) BackupParallelism() (int, error) {
 		return 0, fmt.Errorf("BACKUP_PARALLELISM must be a whole number of at least 1 (got '%s').", c.Parallelism)
 	}
 	return n, nil
+}
+
+// AppriseTagMap reads APPRISE_TAGS ("failure=critical,problem=alerts,routine=quiet"): the
+// Apprise tag each kind of notification is sent with. A kind left out is sent untagged,
+// which an Apprise configuration delivers to all its URLs.
+func (c *Config) AppriseTagMap() (map[string]string, error) {
+	m := map[string]string{}
+	for _, part := range strings.Split(c.AppriseTags, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		k, v, ok := strings.Cut(part, "=")
+		k, v = strings.TrimSpace(k), strings.TrimSpace(v)
+		if !ok || v == "" || (k != "failure" && k != "problem" && k != "routine") {
+			return nil, fmt.Errorf("APPRISE_TAGS entries are kind=tag with kind failure, problem or routine (got '%s').", part)
+		}
+		m[k] = v
+	}
+	return m, nil
 }
