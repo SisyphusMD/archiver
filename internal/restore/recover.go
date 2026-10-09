@@ -15,9 +15,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
+	"github.com/SisyphusMD/archiver/internal/kit"
 )
 
 // RecoverOptions are `archiver recover`'s inputs.
@@ -83,7 +85,15 @@ func (e *Env) Recover(o RecoverOptions) int {
 	if err := os.MkdirAll(o.Out, 0o700); err != nil {
 		return fail("%v", err)
 	}
-	if err := os.WriteFile(mark, []byte(id+"\n"), 0o600); err != nil {
+	// The secrets land here in plaintext: the directory is made the recovery's alone before
+	// anything is written, and nothing in it is followed (see copyPrivate).
+	if fi, err := os.Lstat(o.Out); err != nil || !fi.IsDir() {
+		return fail("%s must be a directory, not a link to one", o.Out)
+	}
+	if err := os.Chmod(o.Out, 0o700); err != nil {
+		return fail("%v", err)
+	}
+	if err := writePrivate(mark, 0o600, strings.NewReader(id+"\n")); err != nil {
 		return fail("%v", err)
 	}
 	for _, name := range []string{"archiver.env", "secrets", "RECREATE.txt", "deployment", "extra"} {
@@ -163,7 +173,7 @@ func (e *Env) Recover(o RecoverOptions) int {
 	var plan []placement
 	var unplaced, missing []string
 	if haveList {
-		plan, unplaced, missing = placeRecorded(recorded, listing, host, e.cfg.ServiceDirectories)
+		plan, missing = placeRecorded(recorded, listing, host)
 	} else {
 		fmt.Fprintln(out, "  (The kit predates its list of services: they are found from the snapshots; a name that may be another host's is left for you.)")
 		plan, unplaced = placeServices(listing, host, e.cfg.ServiceDirectories)
@@ -279,12 +289,12 @@ func copyPrivate(src, dst string) error {
 		rel, _ := filepath.Rel(src, p)
 		target := filepath.Join(dst, rel)
 		if fi.IsDir() {
-			return os.MkdirAll(target, 0o700)
+			return privateDir(target)
 		}
 		if !fi.Mode().IsRegular() {
 			return nil
 		}
-		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		if err := privateDir(filepath.Dir(target)); err != nil {
 			return err
 		}
 		// Owner-only, keeping the owner's execute bit: the kit's extras carry scripts.
@@ -297,19 +307,40 @@ func copyPrivate(src, dst string) error {
 			return err
 		}
 		defer in.Close()
-		dst, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(dst, in); err != nil {
-			dst.Close()
-			return err
-		}
-		if err := dst.Close(); err != nil {
-			return err
-		}
-		return os.Chmod(target, mode)
+		return writePrivate(target, mode, in)
 	})
+}
+
+// privateDir makes dir owner-only, refusing a link where a directory belongs.
+func privateDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() {
+		return fmt.Errorf("%s is a link, not a directory", dir)
+	}
+	return os.Chmod(dir, 0o700)
+}
+
+// writePrivate writes a new file at target, never through whatever was there: an entry
+// left from an earlier run (or put there before the directory was locked) is removed, and
+// the file is created exclusively without following links.
+func writePrivate(target string, mode os.FileMode, r io.Reader) error {
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	f, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(f, r); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Chmod(target, mode)
 }
 
 // payloadHash identifies a kit's contents: every file's path and bytes.
@@ -402,17 +433,24 @@ func literal(name string, patterns []string) bool {
 	return false
 }
 
-var recordedList = regexp.MustCompile(`(?m)^\s*- services backed up:(.*)$`)
-
-// recordedServices is the service names RECREATE.txt lists; ok is false for a kit made
-// before it listed them.
-func recordedServices(path string) (names []string, ok bool) {
+// recordedServices is the service directories RECREATE.txt lists; ok is false for a kit
+// made before it listed them.
+func recordedServices(path string) (dirs []string, ok bool) {
 	b, _ := os.ReadFile(path)
-	m := recordedList.FindSubmatch(b)
-	if m == nil {
-		return nil, false
+	lines := strings.Split(string(b), "\n")
+	for i, l := range lines {
+		if l != kit.ServicesHeader {
+			continue
+		}
+		for _, d := range lines[i+1:] {
+			if !strings.HasPrefix(d, "      ") || strings.TrimSpace(d) == "" {
+				break
+			}
+			dirs = append(dirs, strings.TrimPrefix(d, "      "))
+		}
+		return dirs, true
 	}
-	return strings.Fields(string(m[1])), true
+	return nil, false
 }
 
 // dirFor is where SERVICE_DIRECTORIES puts service name: beside its siblings under a glob
@@ -434,35 +472,37 @@ func dirFor(name string, patterns []string) string {
 			return clean
 		}
 	}
+	// The matcher backups expand SERVICE_DIRECTORIES with, so every service a backup found
+	// under a pattern is placed under it again. Two globs that both take the name could each
+	// have been its home, so that is left for a person.
+	found := ""
 	for _, p := range patterns {
 		clean := filepath.Clean(p)
 		base, parent := filepath.Base(clean), filepath.Dir(clean)
-		// The matcher backups expand SERVICE_DIRECTORIES with, so every service a backup
-		// found under a pattern is placed under it again.
 		if config.MatchName(base, name) && !config.HasMeta(parent) {
-			return filepath.Join(config.Unescape(parent), name)
+			dir := filepath.Join(config.Unescape(parent), name)
+			if found != "" && found != dir {
+				return ""
+			}
+			found = dir
 		}
 	}
-	return ""
+	return found
 }
 
-// placeRecorded plans the services the kit lists: unplaced have no directory from the
-// patterns, missing have no snapshot on any readable storage.
-func placeRecorded(names []string, listing map[string]SnapshotInfo, host string, patterns []string) (plan []placement, unplaced, missing []string) {
-	for _, name := range names {
+// placeRecorded plans the services the kit lists, each back into its own directory;
+// missing have no snapshot on any readable storage.
+func placeRecorded(dirs []string, listing map[string]SnapshotInfo, host string) (plan []placement, missing []string) {
+	for _, dir := range dirs {
+		name := filepath.Base(dir)
 		id := host + "-" + name
 		if _, ok := listing[id]; !ok {
 			missing = append(missing, name)
 			continue
 		}
-		dir := dirFor(name, patterns)
-		if dir == "" {
-			unplaced = append(unplaced, id)
-			continue
-		}
 		plan = append(plan, placement{id, dir})
 	}
-	return plan, unplaced, missing
+	return plan, missing
 }
 
 // missingLiterals are the services named by literal SERVICE_DIRECTORIES paths that no
