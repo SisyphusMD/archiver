@@ -1,8 +1,11 @@
 package notify
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -18,7 +21,7 @@ func TestSend(t *testing.T) {
 	}))
 	defer srv.Close()
 	var logs []string
-	n := &Notifier{Pushover: true, Token: "tok", User: "usr", Hostname: "nas", URL: srv.URL,
+	n := &Notifier{Hostname: "nas", Destinations: pushoverTo(srv.URL),
 		Now:  func() time.Time { return time.Date(2026, 10, 1, 8, 0, 0, 0, time.Local) },
 		Logf: func(failed bool, msg string) { logs = append(logs, msg) }}
 	n.Send("Backup Complete", "done")
@@ -41,7 +44,7 @@ func TestFailureDoesNotLoop(t *testing.T) {
 	}))
 	defer srv.Close()
 	log := &logging.Log{Dir: t.TempDir(), Basename: "archiver", ErrorTitle: "Backup Error"}
-	n := &Notifier{Pushover: true, URL: srv.URL, Logf: func(failed bool, msg string) {
+	n := &Notifier{Destinations: pushoverTo(srv.URL), Logf: func(failed bool, msg string) {
 		if failed {
 			log.Unnotified(logging.Error, "", msg)
 		}
@@ -65,7 +68,7 @@ func TestRetries(t *testing.T) {
 		{"server error then success", []int{503, 200}, 2, false, "Pushover notification sent successfully."},
 		{"rate limited then success", []int{429, 200}, 2, false, "Pushover notification sent successfully."},
 		{"server error throughout", []int{500}, 3, true, "Failed to send pushover notification after 3 attempts (HTTP 500 Internal Server Error)."},
-		{"bad credentials", []int{400}, 1, true, "Failed to send pushover notification (HTTP 400 Bad Request). Check the Pushover secrets."},
+		{"bad credentials", []int{400}, 1, true, "Failed to send pushover notification (HTTP 400 Bad Request). Check its settings and secrets."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -77,7 +80,7 @@ func TestRetries(t *testing.T) {
 			defer srv.Close()
 			var failed bool
 			var msg string
-			n := &Notifier{Pushover: true, URL: srv.URL, Waits: []time.Duration{time.Millisecond, time.Millisecond},
+			n := &Notifier{Destinations: pushoverTo(srv.URL), Waits: []time.Duration{time.Millisecond, time.Millisecond},
 				Logf: func(f bool, m string) { failed, msg = f, m }}
 			n.Send("Backup Error", "boom")
 			if calls != c.calls || failed != c.failed || msg != c.msg {
@@ -100,7 +103,7 @@ func TestRetriesNetworkError(t *testing.T) {
 	}))
 	defer srv.Close()
 	var msg string
-	n := &Notifier{Pushover: true, URL: srv.URL, Waits: []time.Duration{time.Millisecond},
+	n := &Notifier{Destinations: pushoverTo(srv.URL), Waits: []time.Duration{time.Millisecond},
 		Logf: func(_ bool, m string) { msg = m }}
 	n.Send("Backup Error", "boom")
 	if calls != 2 || msg != "Pushover notification sent successfully." {
@@ -121,7 +124,7 @@ func TestConcurrentSendsBothArrive(t *testing.T) {
 		mu.Unlock()
 	}))
 	defer srv.Close()
-	n := &Notifier{Pushover: true, URL: srv.URL, Logf: func(bool, string) {}}
+	n := &Notifier{Destinations: pushoverTo(srv.URL), Logf: func(bool, string) {}}
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
@@ -132,5 +135,106 @@ func TestConcurrentSendsBothArrive(t *testing.T) {
 	wg.Wait()
 	if got != 2 {
 		t.Fatalf("server got %d of 2 concurrent alerts", got)
+	}
+}
+
+func pushoverTo(url string) []Destination {
+	return []Destination{{&Pushover{Token: "tok", User: "usr", URL: url}, "everything"}}
+}
+
+// Each destination gets the kinds its setting admits; a title not classified is a failure.
+func TestKindsReachDestinations(t *testing.T) {
+	var mu sync.Mutex
+	got := map[string][]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		mu.Lock()
+		got[r.URL.Path] = append(got[r.URL.Path], r.Form.Get("title"))
+		mu.Unlock()
+	}))
+	defer srv.Close()
+	n := &Notifier{Destinations: []Destination{
+		{&Pushover{URL: srv.URL + "/failures"}, "failures"},
+		{&Pushover{URL: srv.URL + "/problems"}, "problems"},
+		{&Pushover{URL: srv.URL + "/everything"}, "everything"},
+	}}
+	for _, title := range []string{"Backup Complete", "Mirror Refused", "Storage Down", "Something New"} {
+		n.Send(title, "m")
+	}
+	want := map[string][]string{
+		"/failures":   {"Storage Down", "Something New"},
+		"/problems":   {"Mirror Refused", "Storage Down", "Something New"},
+		"/everything": {"Backup Complete", "Mirror Refused", "Storage Down", "Something New"},
+	}
+	for path, titles := range want {
+		if strings.Join(got[path], ",") != strings.Join(titles, ",") {
+			t.Errorf("%s got %v, want %v", path, got[path], titles)
+		}
+	}
+}
+
+// Apprise: JSON with the kind's tag and type, basic auth from the URL, never in the URL
+// sent; a partial delivery (424 "Sent") counts as delivered and is not retried.
+func TestApprise(t *testing.T) {
+	calls := 0
+	var body map[string]string
+	var user, pass, path string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		user, pass, _ = r.BasicAuth()
+		path = r.URL.Path
+		json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(http.StatusFailedDependency)
+		w.Write([]byte(`{"error":"partial","details":[["Sent"],["Failed"]]}`))
+	}))
+	defer srv.Close()
+	u := strings.Replace(srv.URL, "http://", "http://me:secret@", 1) + "/notify/archiver"
+	var msg string
+	n := &Notifier{Hostname: "nas", Destinations: []Destination{{&Apprise{URL: u, Tags: map[string]string{"failure": "critical"}}, "failures"}},
+		Waits: []time.Duration{time.Millisecond}, Logf: func(_ bool, m string) { msg = m }}
+	n.Send("Storage Down", "offsite unreachable")
+	if calls != 1 || user != "me" || pass != "secret" || path != "/notify/archiver" {
+		t.Fatalf("calls %d auth %q/%q path %q", calls, user, pass, path)
+	}
+	if body["tag"] != "critical" || body["type"] != "failure" || body["title"] != "Storage Down" || !strings.HasSuffix(body["body"], "offsite unreachable") {
+		t.Fatalf("body %v", body)
+	}
+	if msg != "Apprise notification sent successfully." {
+		t.Fatalf("log %q", msg)
+	}
+	// Without a tag for the kind, none is sent (Apprise then notifies every URL).
+	body = nil
+	n.Destinations[0].On = "everything"
+	n.Send("Backup Complete", "done")
+	if _, ok := body["tag"]; ok || body["type"] != "info" {
+		t.Fatalf("untagged body %v", body)
+	}
+}
+
+// ntfy: the message as the body, title and priority in headers, the token as a bearer.
+func TestNtfy(t *testing.T) {
+	var title, prio, auth, bodyText string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		title, prio, auth = r.Header.Get("Title"), r.Header.Get("Priority"), r.Header.Get("Authorization")
+		b := new(strings.Builder)
+		io.Copy(b, r.Body)
+		bodyText = b.String()
+	}))
+	defer srv.Close()
+	n := &Notifier{Hostname: "nas", Destinations: []Destination{{&Ntfy{URL: srv.URL + "/archiver", Token: "tk_1"}, "everything"}}}
+	n.Send("Mirror Refused", "too many deletions")
+	if title != "Mirror Refused" || prio != "3" || auth != "Bearer tk_1" || !strings.HasSuffix(bodyText, "too many deletions") {
+		t.Fatalf("title %q prio %q auth %q body %q", title, prio, auth, bodyText)
+	}
+}
+
+// A malformed APPRISE_URL is reported without the password inside it.
+func TestAppriseBadURLHidesPassword(t *testing.T) {
+	var msg string
+	n := &Notifier{Destinations: []Destination{{&Apprise{URL: "http://me:s3cret@apprise:80x/notify"}, "everything"}},
+		Logf: func(_ bool, m string) { msg = m }}
+	n.Send("Storage Down", "x")
+	if msg == "" || strings.Contains(msg, "s3cret") {
+		t.Fatalf("log %q", msg)
 	}
 }

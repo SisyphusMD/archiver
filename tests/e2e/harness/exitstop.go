@@ -147,6 +147,9 @@ func (d *Deployment) NotifyTo(t testing.TB, n *Notifier, dir string) {
 	d.Extra["NOTIFICATION_SERVICE"] = "pushover"
 	d.Extra["PUSHOVER_API_TOKEN_FILE"] = inContainer + "/pushover_api_token"
 	d.Extra["PUSHOVER_USER_KEY_FILE"] = inContainer + "/pushover_user_key"
+	// Routine notices too (v1 sends only failures by default), so a successful run gives
+	// a test a notification to watch; a release without NOTIFY_ON ignores it.
+	d.Extra["PUSHOVER_NOTIFY_ON"] = "everything"
 }
 
 // Secrets are the notifier credentials the deployment sends, by name.

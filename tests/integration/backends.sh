@@ -484,8 +484,8 @@ if wanted dropbox; then
   docker exec "$P-dropbox" timeout 120 archiver backup >/dev/null 2>&1 && die "dropbox: a backup against the refusing stand-in succeeded"
   logs="$(docker logs "$P-proxy" 2>&1)"
   basic="Basic $(printf 'app-key:app-secret' | base64)"
-  grep '"uri":"/oauth2/token"' <<<"$logs" | grep -qF "$basic" || die "dropbox: no token refresh with the app's credentials"
-  if ! grep '"uri":"/2/' <<<"$logs" | grep -qF 'Bearer fake-access'; then
+  grep -qF "$basic" <<<"$(grep '"uri":"/oauth2/token"' <<<"$logs")" || die "dropbox: no token refresh with the app's credentials"
+  if ! grep -qF 'Bearer fake-access' <<<"$(grep '"uri":"/2/' <<<"$logs")"; then
     grep -o '"uri":"[^"]*"' <<<"$logs" >&2
     fail dropbox "no API call with the refreshed token"
   fi
