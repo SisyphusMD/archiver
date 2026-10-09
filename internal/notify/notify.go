@@ -230,7 +230,7 @@ func (p *Pushover) Delivered(status int, _ []byte) bool { return status == http.
 // credentials in the URL if it needs them, with the tag APPRISE_TAGS gives the kind.
 type Apprise struct {
 	URL  string
-	Tags map[string]string // kind -> tag; a kind without one goes untagged
+	Tags map[string]string // kind -> tag; a kind without one goes to "all"
 }
 
 func (a *Apprise) Name() string { return "apprise" }
@@ -245,6 +245,9 @@ func (a *Apprise) Request(k Kind, title, message string) (*http.Request, error) 
 		"title": title, "body": message,
 		"type": map[Kind]string{Routine: "info", Problem: "warning", Failure: "failure"}[k],
 	}
+	// A stateful Apprise API key given no tag notifies only its untagged URLs: "all" is
+	// what reaches every one.
+	payload["tag"] = "all"
 	if tag := a.Tags[k.String()]; tag != "" {
 		payload["tag"] = tag
 	}
@@ -263,11 +266,10 @@ func (a *Apprise) Request(k Kind, title, message string) (*http.Request, error) 
 	return req, nil
 }
 
-// Delivered counts Apprise's partial delivery (424 with a "Sent" detail: some of the
-// tag's URLs took it) as delivered, so a retry never sends it twice to those that did.
-func (a *Apprise) Delivered(status int, body []byte) bool {
-	return status == http.StatusOK || (status == http.StatusFailedDependency && bytes.Contains(body, []byte("Sent")))
-}
+// Delivered is a 200. Apprise answers 424 when any of a tag's URLs failed, without saying
+// whether others took it: that is reported as a failure, and, being a 4xx, not retried, so
+// the URLs that did take it never get it twice.
+func (a *Apprise) Delivered(status int, _ []byte) bool { return status == http.StatusOK }
 
 // Ntfy publishes to a topic on an ntfy server, with an access token if the topic needs
 // one, at the priority the kind maps to.
