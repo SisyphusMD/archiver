@@ -658,6 +658,17 @@ When copy workers run (a schedule and at least one secondary), maintenance keeps
 
 Each worker keeps a small repository in `logs/.copy-repos/` whose cache holds Duplicacy's pending fossil collections; mount the logs directory so they survive container restarts (otherwise their chunks wait for the next exhaustive prune).
 
+### Checking a deployment (`archiver doctor`)
+
+`docker exec archiver archiver doctor` checks the whole deployment in one pass and prints a line per check, `OK`, `WARN` or `FAIL`, saying what to do about anything wrong (exit 1 on any failure). It never creates a storage or writes data to one (it reads one small file to prove the RSA key decrypts it):
+
+- **Configuration and secrets:** every setting and required secret, the RSA private key decrypting with `rsa_passphrase` and matching `public.pem`, the recovery kit password, and the notification destinations (`--notify` sends each a test).
+- **Storages:** each reachable with its credentials and holding a Duplicacy storage that opens with the storage password, whose data decrypts with the mounted RSA key (checked on the smallest file up to 64 MB). A storage that does not exist yet is reported, never created.
+- **Container:** the capabilities, the logs directory being a mounted volume (its state survives a recreate only then), free space for logs and the drill directory, the service directories, and the hooks (executable, and safe to run).
+- **Freshness:** each service's newest revision on every storage (flagged when older than twice `BACKUP_SCHEDULE`'s interval), the copy workers, the recovery kit on every storage, the envelope, and the last restore drill.
+
+Run it after setting up or changing a deployment, and after restoring one.
+
 ### Restore drills
 
 A backup nobody has restored is a hope. With `RESTORE_DRILL_SCHEDULE` set (a cron schedule, like the others; unset means no drills), Archiver regularly restores real revisions and proves they come back:
@@ -757,6 +768,7 @@ archiver backup --detach   # Run it in the background (follow with 'archiver log
 archiver maintenance       # Run per-storage check + prune now (synchronous)
 archiver maintenance exhaustive  # Same, forcing the full-listing exhaustive prune
 archiver drill [SERVICE] [STORAGE]  # Run a restore drill now (README "Restore drills")
+archiver doctor [--notify]  # Check everything read-only (README "Checking a deployment"); --notify sends a test
 archiver stop [backup|maintenance|drill|all]  # Stop gracefully (default all: backup, maintenance and a drill)
 archiver stop --immediate  # Stop immediately (skip cleanup); combine with a target
 archiver pause             # Pause backup (experimental)

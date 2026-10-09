@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/daemon"
+	"github.com/SisyphusMD/archiver/internal/doctor"
 	"github.com/SisyphusMD/archiver/internal/health"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
@@ -69,6 +71,9 @@ func main() {
 		if code, ok := maintenanceCommand(os.Args[2:]); ok {
 			os.Exit(code)
 		}
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "doctor" && (len(os.Args) == 2 || (len(os.Args) == 3 && os.Args[2] == "--notify")) {
+		os.Exit(doctorCommand(len(os.Args) == 3))
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "drill" && len(os.Args) <= 4 {
 		o := restore.DrillOptions{}
@@ -253,4 +258,21 @@ func noteDrillSchedule(jobs []daemon.Job) {
 			lockstate.WriteDrillState(l.DrillState(), s)
 		}
 	}
+}
+
+// doctorCommand runs `archiver doctor` (ADR 30); notify also sends a test notification.
+func doctorCommand(notify bool) int {
+	re := restoreEnv()
+	re.Stdout, re.Stderr = io.Discard, io.Discard
+	return doctor.Run(doctor.Env{
+		Layout:    re.Layout,
+		Source:    re.Source,
+		Environ:   re.Environ,
+		Hostname:  re.Hostname,
+		Duplicacy: re.Duplicacy,
+		Out:       os.Stdout,
+		CapEff:    re.CapEff,
+		Notify:    notify,
+		Probe:     re.Snapshots,
+	})
 }

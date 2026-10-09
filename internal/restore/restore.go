@@ -8,6 +8,7 @@ package restore
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -508,4 +510,197 @@ func linkedDirs(dir string) [][2]string {
 		return nil
 	})
 	return found
+}
+
+// attach makes dir a repository of t by writing its preferences, without duplicacy init:
+// init creates a storage that does not exist, and a probe must never write one. Every
+// Archiver storage is encrypted.
+func attach(dir string, t config.Target, id string) error {
+	url, err := t.URL()
+	if err != nil {
+		return err
+	}
+	prefs, _ := json.Marshal([]map[string]any{{
+		"name": t.StorageName(), "id": id, "repository": "", "storage": url, "encrypted": true,
+		"no_backup": true, "no_restore": false, "no_save_password": true, "keys": nil,
+	}})
+	if err := os.MkdirAll(filepath.Join(dir, ".duplicacy"), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, ".duplicacy", "preferences"), prefs, 0o600)
+}
+
+// tail keeps the last bytes written to it: duplicacy prints its errors on stdout, among
+// whatever else it writes there.
+type tail struct{ b []byte }
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.b = append(t.b, p...)
+	if len(t.b) > 4096 {
+		t.b = t.b[len(t.b)-4096:]
+	}
+	return len(p), nil
+}
+
+// SnapshotInfo is a snapshot ID's newest revision on a storage.
+type SnapshotInfo struct {
+	Revision int
+	Created  time.Time
+}
+
+// Snapshots lists every snapshot ID's newest revision on t, through a scratch repository
+// that is deleted afterwards, and checks the RSA key decrypts its data. It never creates a
+// missing storage.
+func (e *Env) Snapshots(t config.Target) (map[string]SnapshotInfo, error) {
+	if e.cfg == nil {
+		cfg, _, err := config.Load(e.Source, e.Environ)
+		if err != nil {
+			return nil, err
+		}
+		e.cfg = cfg
+	}
+	dir, err := os.MkdirTemp("", "archiver-probe-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	var out strings.Builder
+	if err := attach(dir, t, "archiver-probe"); err != nil {
+		return nil, err
+	}
+	// The newest revisions are listed and held in use under the storage's gate, so no prune
+	// removes one before the key probe reads it (ADR 19).
+	release, err := inuse.Gate(e.context(), e.Layout.InUseDir(), t.StorageName(), false)
+	if err != nil {
+		return nil, err
+	}
+	out.Reset()
+	if err := e.duplicacy(dir, &out, "list", "-a").Run(); err != nil {
+		release()
+		return nil, fmt.Errorf("listing its snapshots failed: %s", lastLine(out.String()))
+	}
+	found := parseSnapshots(out.String())
+	var revs []inuse.Revision
+	for id, s := range found {
+		revs = append(revs, inuse.Revision{Storage: t.StorageName(), ID: id, Rev: s.Revision})
+	}
+	held, err := inuse.Hold(e.Layout.InUseDir(), "doctor", revs)
+	release()
+	if err != nil {
+		return nil, err
+	}
+	defer held.Release()
+	return found, e.decrypts(dir, found, held.File())
+}
+
+// KeyError is a storage whose data the mounted RSA private key cannot decrypt: init and
+// listing never touch a chunk, so a storage made with another key pair passes both.
+type KeyError struct{ Detail string }
+
+func (k *KeyError) Error() string {
+	return "its data does not decrypt with the mounted RSA private key: " + k.Detail
+}
+
+var listedWithHash = regexp.MustCompile(`(?m)^ *(\d+) \S+ \S+ [0-9a-f]+ (.+)$`)
+
+// KeyProbeLimit is the largest file the RSA key probe reads: it must download all of it.
+const KeyProbeLimit = 64 << 20
+
+// KeyUnchecked is a storage whose snapshots hold no non-empty file small enough to read for
+// the key check; the storage itself opened fine.
+type KeyUnchecked struct{ Smallest int64 }
+
+func (k *KeyUnchecked) Error() string {
+	if k.Smallest == 0 {
+		return "the RSA key was not checked: no revision holds a non-empty file to read"
+	}
+	return fmt.Sprintf("the RSA key was not checked: its smallest file is %d MB", k.Smallest>>20)
+}
+
+// decrypts reads, with the RSA private key, the smallest non-empty file among the snapshot
+// IDs' newest revisions (nothing written), when one is at most KeyProbeLimit.
+// hold is the in-use registration, passed to each duplicacy child so one outliving a killed
+// doctor still keeps its revision from being pruned.
+func (e *Env) decrypts(dir string, found map[string]SnapshotInfo, hold *os.File) error {
+	type candidate struct {
+		id, rev, path string
+		size          int64
+	}
+	var cands []candidate
+	ids := make([]string, 0, len(found))
+	for id := range found {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		rev := strconv.Itoa(found[id].Revision)
+		var listing strings.Builder
+		list := e.duplicacy(dir, &listing, "list", "-files", "-r", rev, "-id", id)
+		list.ExtraFiles = append(list.ExtraFiles, hold)
+		if err := list.Run(); err != nil {
+			return &KeyError{fmt.Sprintf("listing %s revision %s: %s", id, rev, lastLine(listing.String()))}
+		}
+		for _, m := range listedWithHash.FindAllStringSubmatch(listing.String(), -1) {
+			if size, _ := strconv.ParseInt(m[1], 10, 64); size > 0 {
+				cands = append(cands, candidate{id, rev, m[2], size})
+			}
+		}
+		if len(cands) > 0 && cands[0].size <= 1<<20 {
+			break // a small file found; no need to list every ID
+		}
+	}
+	sort.SliceStable(cands, func(a, b int) bool { return cands[a].size < cands[b].size })
+	if len(cands) == 0 {
+		return &KeyUnchecked{0}
+	}
+	if cands[0].size > KeyProbeLimit {
+		return &KeyUnchecked{cands[0].size}
+	}
+	// A path the line-oriented listing cut short (a newline in a file name) is not found;
+	// the next smallest is tried instead.
+	for _, c := range cands[:min(len(cands), 5)] {
+		if c.size > KeyProbeLimit {
+			break
+		}
+		out := &tail{}
+		cmd := e.duplicacy(dir, out, "cat", "-r", c.rev, "-id", c.id, "-key", e.Layout.RSAPrivateKey(), "--", c.path)
+		cmd.ExtraFiles = append(cmd.ExtraFiles, hold)
+		err := cmd.Run()
+		if err == nil {
+			return nil
+		}
+		if msg := lastLine(string(out.b)); !strings.Contains(msg, "No file") {
+			return &KeyError{fmt.Sprintf("%s revision %s: %s", c.id, c.rev, msg)}
+		}
+	}
+	return &KeyUnchecked{0}
+}
+
+// parseSnapshots reads `duplicacy list -a`: "Snapshot <id> revision <n> created at <date>
+// <time> ...", keeping each ID's newest revision.
+func parseSnapshots(listing string) map[string]SnapshotInfo {
+	found := map[string]SnapshotInfo{}
+	for _, line := range strings.Split(listing, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 8 || f[0] != "Snapshot" || f[2] != "revision" || f[4] != "created" || f[5] != "at" {
+			continue
+		}
+		n, err := strconv.Atoi(f[3])
+		if err != nil {
+			continue
+		}
+		created, _ := time.ParseInLocation("2006-01-02 15:04", f[6]+" "+f[7], time.Local)
+		if cur, ok := found[f[1]]; !ok || n > cur.Revision {
+			found[f[1]] = SnapshotInfo{Revision: n, Created: created}
+		}
+	}
+	return found
+}
+
+func lastLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.LastIndex(s, "\n"); i >= 0 {
+		return s[i+1:]
+	}
+	return s
 }

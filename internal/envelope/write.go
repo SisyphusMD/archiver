@@ -222,3 +222,21 @@ func Check(l layout.Layout, p *Page, now time.Time) (*Stale, error) {
 		"Envelope: the printed break-glass envelope was confirmed over 365 days ago. Check the paper is still there and readable, reprint if needed, and run 'archiver envelope confirm'.",
 		"The break-glass envelope was confirmed over a year ago. Check it is still there and readable, then run 'archiver envelope confirm'."}, nil
 }
+
+// Compared is a page measured against the printed envelope, read-only.
+type Compared struct {
+	Confirmed   bool      // an envelope has been confirmed printed
+	Matches     bool      // it says what this page says
+	ConfirmedAt time.Time // when it was confirmed
+	Due         bool      // older than MaxAge: its yearly check is due
+}
+
+// Compare measures p against the confirmed envelope without recording anything.
+func Compare(l layout.Layout, p *Page, now time.Time) Compared {
+	c, ok := read(l.EnvelopeConfirmed())
+	if !ok {
+		return Compared{}
+	}
+	return Compared{Confirmed: true, Matches: c.Fingerprint == p.Fingerprint(), ConfirmedAt: c.At,
+		Due: now.Sub(c.At) > MaxAge}
+}

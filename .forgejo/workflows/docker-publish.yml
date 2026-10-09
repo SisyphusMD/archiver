@@ -289,6 +289,10 @@ jobs:
         run: |
           docker run -i --rm --hostname rd-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/restore-drill.sh
+      - name: archiver doctor passes a healthy deployment, writes nothing, and finds what is broken (ADR 30)
+        run: |
+          docker run -i --rm --hostname dr-host --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+            --entrypoint bash roundtrip:local -s < tests/integration/doctor.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \
