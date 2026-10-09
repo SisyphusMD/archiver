@@ -201,6 +201,9 @@ func TestValidate(t *testing.T) {
 		{"short password", func(c *Config) { c.StoragePassword = "seven77" }, "STORAGE_PASSWORD must be at least 8 characters (a Duplicacy requirement); got 7."},
 		{"pushover", func(c *Config) { c.NotificationService = "PushOver"; c.PushoverUserKey = "u" }, "Notification service is set to PushOver, but PUSHOVER_API_TOKEN is not set"},
 		{"frequency", func(c *Config) { c.PruneExhaustiveFrequency = "hourly" }, "PRUNE_EXHAUSTIVE_FREQUENCY must be one of"},
+		{"newline in a setting", func(c *Config) {
+			c.Targets[0] = Target{N: 1, Name: "s", Type: "sftp", Values: Values{"SFTP_URL": "h", "SFTP_USER": "u", "SFTP_PATH": "p\n!id\n#"}}
+		}, "STORAGE_TARGET_1_SFTP_PATH contains a control character"},
 	} {
 		c := valid()
 		tc.mutate(c)
@@ -300,5 +303,23 @@ func TestBackupParallelism(t *testing.T) {
 		if _, err := (&Config{Parallelism: v}).BackupParallelism(); err == nil {
 			t.Errorf("%q accepted", v)
 		}
+	}
+}
+
+// A raw secret leaves the environment, so no child inherits it, but Load (in this process
+// or a child archiver) still warns about it.
+func TestPurgeRawSecrets(t *testing.T) {
+	t.Setenv("STORAGE_PASSWORD", "hunter2")
+	t.Setenv(PurgedVar, "")
+	PurgeRawSecrets()
+	if _, ok := os.LookupEnv("STORAGE_PASSWORD"); ok {
+		t.Fatal("STORAGE_PASSWORD is still in the environment")
+	}
+	if got := os.Getenv(PurgedVar); got != "STORAGE_PASSWORD" {
+		t.Fatalf("%s=%q", PurgedVar, got)
+	}
+	_, warnings, _ := Load(Source{Getenv: func(string) string { return "" }, SecretsDir: t.TempDir()}, os.Environ())
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "Ignoring STORAGE_PASSWORD") {
+		t.Fatalf("warnings %q", warnings)
 	}
 }

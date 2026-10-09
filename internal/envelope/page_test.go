@@ -155,7 +155,7 @@ func TestFetchUsesDefaults(t *testing.T) {
 			cmd = e.Text
 		}
 	}
-	if !strings.Contains(cmd, `endpoint="https://s3.wasabisys.com"`) || !strings.Contains(cmd, `region="us-east-1"`) {
+	if !strings.Contains(cmd, `RCLONE_CONFIG_KIT_ENDPOINT='https://s3.wasabisys.com'`) || !strings.Contains(cmd, `RCLONE_CONFIG_KIT_REGION='us-east-1'`) {
 		t.Errorf("fetch command %s", cmd)
 	}
 }

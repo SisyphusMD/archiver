@@ -24,6 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver migrate hooks` converts each service's `service-backup-settings.sh` into executable `pre-backup` and `post-backup` hooks and a `filters` file. The generated hooks call your existing functions, so they keep working unchanged.
 
 ### Security
+- **Raw secret environment variables are removed at start,** not just ignored: tar, openssl, rclone, ssh and every later archiver process no longer inherit a `STORAGE_PASSWORD` (or any other secret) set as a plain variable. The warning still names each one.
+- **Storage settings with a control character are refused.** A newline in `SFTP_PATH` (or any other storage setting) reached the sftp batch the kit upload writes, where `!` lines run local commands.
+- **Token copies under `logs/.tokens` are written as new 0600 files renamed into place,** so a symlink or readable file planted at the path never receives the token, and a directory others can write is refused.
+- **`RECOVERY_KIT_EXTRA_PATHS` copies only regular files and directories:** a link to a device (`/dev/zero`) or a FIFO no longer fills the disk or blocks the kit, and a directory linked into itself is skipped.
+- **The envelope's rclone fetch commands pass credentials in `RCLONE_CONFIG_KIT_*` variables** instead of on rclone's command line, where other users of the machine could read them from the process list.
 - **A restore warns about links in its destination that lead outside it.** Duplicacy writes a snapshot's files through an existing symlinked directory rather than replacing it, so files can land in another service's directory; each such link is named before the restore starts.
 - **Kit placement on local storage no longer follows symlinks.** Setting the kit's owner and mode went through a link, so a user who owns the storage directory could swap one in after the upload and take ownership of the secrets or keys; the kit is now adjusted through a descriptor opened without following links.
 - The Pushover API token and user key no longer appear on `curl`'s command line, where any process in the container could read them from `/proc`. They now reach `curl` on stdin, like every other secret.

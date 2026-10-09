@@ -149,7 +149,8 @@ var chmod = (*os.File).Chmod
 // link: a symlink put where the kit was would otherwise hand them ownership of whatever it
 // points at (the secrets, the keys).
 func (r *Run) localAccess(t config.Target, names []string) int {
-	ref, err := os.Lstat(filepath.Join(t.Get("LOCAL_PATH"), "config"))
+	// Read through a link (only the kit's own files are written to, never through one).
+	ref, err := os.Stat(filepath.Join(t.Get("LOCAL_PATH"), "config"))
 	if err != nil || !ref.Mode().IsRegular() {
 		return OK
 	}

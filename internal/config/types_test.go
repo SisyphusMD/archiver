@@ -186,6 +186,30 @@ func TestDropboxRemotePathRelative(t *testing.T) {
 	}
 }
 
+// A token copy never writes through what is already at its path.
+func TestWritePrivateReplacesALink(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "tokens")
+	os.Mkdir(dir, 0o700)
+	planted := filepath.Join(t.TempDir(), "readable")
+	os.WriteFile(planted, nil, 0o644)
+	p := filepath.Join(dir, "od-one_token")
+	os.Symlink(planted, p)
+	if err := WritePrivate(p, []byte("tok")); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(planted); len(b) != 0 {
+		t.Fatal("the token was written through the link")
+	}
+	fi, err := os.Lstat(p)
+	if err != nil || !fi.Mode().IsRegular() || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("%v %v", fi.Mode(), err)
+	}
+	os.Chmod(dir, 0o777)
+	if WritePrivate(p, []byte("tok")) == nil {
+		t.Fatal("a world-writable directory was accepted")
+	}
+}
+
 // The recovery kit carries the notification secrets, so a recovered host keeps notifying.
 func TestSnapshotCarriesNotificationSecrets(t *testing.T) {
 	secrets := t.TempDir()

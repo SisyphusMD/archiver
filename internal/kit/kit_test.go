@@ -389,6 +389,29 @@ func TestTrustedAlgorithms(t *testing.T) {
 	}
 }
 
+// Extras copy regular files through links, but never a FIFO or device (which would block or
+// never end) and never round a directory linked into its own ancestry.
+func TestCopyTreeSkipsSpecialFilesAndCycles(t *testing.T) {
+	src, dst := t.TempDir(), filepath.Join(t.TempDir(), "out")
+	os.WriteFile(filepath.Join(src, "a.conf"), []byte("a"), 0o644)
+	if err := syscall.Mkfifo(filepath.Join(src, "pipe"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.Symlink("/dev/zero", filepath.Join(src, "zero"))
+	os.Symlink(src, filepath.Join(src, "loop"))
+	if err := copyTree(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dst, "a.conf")); string(b) != "a" {
+		t.Fatal("the regular file was not copied")
+	}
+	for _, n := range []string{"pipe", "zero", "loop"} {
+		if _, err := os.Lstat(filepath.Join(dst, n)); err == nil {
+			t.Errorf("%s was copied", n)
+		}
+	}
+}
+
 // A symlink where the kit belongs is never followed: its target keeps its owner and mode,
 // and the placement is Unverified (retried next run).
 func TestLocalAccessFollowsNoLink(t *testing.T) {
