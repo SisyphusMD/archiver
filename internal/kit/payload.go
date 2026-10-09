@@ -263,7 +263,7 @@ func (r *Run) recreateNotes(s *config.Settings) string {
 	w("")
 	w("Facts this deployment depended on:")
 	w("  - hostname: %s   (keep it: snapshot IDs and this kit's filename derive from it)", r.Hostname)
-	for _, name := range []string{"BACKUP_SCHEDULE", "MAINTENANCE_SCHEDULE", "TZ"} {
+	for _, name := range []string{"BACKUP_SCHEDULE", "MAINTENANCE_SCHEDULE", "RESTORE_DRILL_SCHEDULE", "TZ"} {
 		if v := r.getenv(name); v != "" {
 			w("  - %s: %s", name, v)
 		}

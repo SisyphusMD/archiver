@@ -17,7 +17,9 @@ import (
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/health"
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logview"
+	"github.com/SisyphusMD/archiver/internal/restore"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
 
@@ -67,6 +69,16 @@ func main() {
 		if code, ok := maintenanceCommand(os.Args[2:]); ok {
 			os.Exit(code)
 		}
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "drill" && len(os.Args) <= 4 {
+		o := restore.DrillOptions{}
+		if len(os.Args) >= 3 {
+			o.Service = os.Args[2]
+		}
+		if len(os.Args) == 4 {
+			o.Storage = os.Args[3]
+		}
+		os.Exit(restoreEnv().Drill(o))
 	}
 	// Extra arguments were always ignored.
 	if len(os.Args) >= 2 && os.Args[1] == "init" {
@@ -144,6 +156,7 @@ func runDaemon(args []string) int {
 	if check {
 		return 0
 	}
+	noteDrillSchedule(jobs)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	l := layout.Default()
@@ -224,4 +237,20 @@ func mirrorCommand(args []string) int {
 		}
 	}
 	return rc
+}
+
+// noteDrillSchedule records when drills were first scheduled, so the healthcheck can tell
+// drills that never run (each failing before it records anything) from ones not yet due.
+func noteDrillSchedule(jobs []daemon.Job) {
+	for _, j := range jobs {
+		if j.Name != "drill" {
+			continue
+		}
+		l := layout.Default()
+		s, err := lockstate.ReadDrillState(l.DrillState())
+		if err == nil && s.Scheduled == 0 {
+			s.Scheduled = time.Now().Unix()
+			lockstate.WriteDrillState(l.DrillState(), s)
+		}
+	}
 }

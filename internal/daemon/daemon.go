@@ -29,6 +29,7 @@ func Jobs(getenv func(string) string, now time.Time) ([]Job, error) {
 	for _, j := range []Job{
 		{Name: "backup", Env: "BACKUP_SCHEDULE"},
 		{Name: "maintenance", Env: "MAINTENANCE_SCHEDULE"},
+		{Name: "drill", Env: "RESTORE_DRILL_SCHEDULE"},
 	} {
 		j.Spec = getenv(j.Env)
 		if j.Spec == "" {
@@ -104,4 +105,20 @@ func schedule(ctx context.Context, clock Clock, log io.Writer, j Job, run func(J
 		code := run(j)
 		fmt.Fprintf(log, "archiver daemon: %s exited %d\n", j.Name, code)
 	}
+}
+
+// Interval is the time between a schedule's next two runs after now, the period the
+// healthcheck allows for a scheduled job; ok is false for a schedule that does not parse or
+// has fewer than two runs left.
+func Interval(spec string, now time.Time) (time.Duration, bool) {
+	expr, err := cronexpr.ParseStrict(spec)
+	if err != nil {
+		return 0, false
+	}
+	a := expr.Next(now)
+	b := expr.Next(a)
+	if a.IsZero() || b.IsZero() {
+		return 0, false
+	}
+	return b.Sub(a), true
 }

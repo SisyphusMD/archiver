@@ -25,6 +25,7 @@ services:
     environment:
       BACKUP_SCHEDULE: "0 3 * * *"        # backup pipeline: daily at 3am (omit for manual mode)
       MAINTENANCE_SCHEDULE: "0 13 * * *"  # check + prune: daily at 1pm, opposite the backup window
+      # RESTORE_DRILL_SCHEDULE: "0 5 * * 0"  # weekly restore drill (README "Restore drills")
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
       # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
 

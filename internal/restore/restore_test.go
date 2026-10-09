@@ -35,7 +35,7 @@ func TestMissingCaps(t *testing.T) {
 }
 
 // fakeDuplicacy stands in for duplicacy, failing any command run without -no-script: a storage URL holding "down" fails init; list
-// prints the revisions in <storage URL>/revs; restore writes what it restored, its flags,
+// prints the revisions in <storage URL>/revs (with -files, as many file lines as <storage URL>/files says, else 3; <storage URL>/empty makes restore write nothing); restore writes what it restored, its flags,
 // what its fd 3 is, and, when the storage has one, a restore hook. With FAKE_LOCK, restore
 // then starts a "backup" (a lock held by the test process).
 const fakeDuplicacy = `#!/bin/sh
@@ -48,9 +48,16 @@ init)
   mkdir -p .duplicacy && echo "$url" > .duplicacy/url ;;
 list)
   url=$(cat .duplicacy/url)
+  case " $* " in *" -files "*)
+    f=$(cat "$url/files" 2>/dev/null || echo 3)
+    [ "$f" = none ] && f=0
+    i=0; while [ $i -lt $f ]; do i=$((i+1)); echo "    1 2026-10-09 12:00:00 abc file$i"; done
+    echo "Total size: 10, file chunks: 1"; exit 0 ;;
+  esac
   for r in $(cat "$url/revs" 2>/dev/null); do echo "Snapshot $3 revision $r created at x"; done ;;
 restore)
   url=$(cat .duplicacy/url); shift
+  [ -f "$url/empty" ] && exit 0
   echo "$2 from $url" > restored.txt; echo "$*" > flags.txt
   readlink /proc/$$/fd/3 > fd3.txt 2>/dev/null
   [ -n "$FAKE_LOCK" ] && echo "$PPID backup backup" > "$FAKE_LOCK"

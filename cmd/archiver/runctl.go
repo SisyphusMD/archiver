@@ -23,7 +23,7 @@ func runControl(cmd string, args []string) (code int, ok bool) {
 			switch a {
 			case "--immediate":
 				immediate = true
-			case "backup", "maintenance", "all":
+			case "backup", "maintenance", "drill", "all":
 				target = a
 				targets++
 			default:

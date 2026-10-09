@@ -8,11 +8,12 @@ import (
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
 )
 
-const usageText = `Usage: archiver {backup|maintenance|stop|pause|resume|logs|status|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|help}
+const usageText = `Usage: archiver {backup|maintenance|drill|stop|pause|resume|logs|status|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|help}
 Note:
   backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background.
   maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune.
-  stop takes an optional target (backup|maintenance|all, default all) and --immediate.
+  drill [SERVICE] [STORAGE] restores newest revisions into RESTORE_DRILL_DIR, checks them and deletes them (normally scheduled via RESTORE_DRILL_SCHEDULE).
+  stop takes an optional target (backup|maintenance|drill|all, default all) and --immediate.
   resume may be used in combination with logs.
   mirror --dry-run shows what the copy workers' next mirror pass would delete on each secondary; mirror --allow-large lets that pass exceed the cap.
   migrate hooks [DIR...] converts each service's service-backup-settings.sh into executable pre-backup/post-backup hooks and a filters file.
@@ -63,17 +64,17 @@ func usage(args []string) int {
 		targets := 0
 		for _, a := range rest {
 			switch a {
-			case "backup", "maintenance", "all":
+			case "backup", "maintenance", "drill", "all":
 				targets++
 			case "--immediate":
 			default:
-				fmt.Printf("'%s' is not valid for 'archiver stop' (allowed: backup, maintenance, all, --immediate).\n", a)
+				fmt.Printf("'%s' is not valid for 'archiver stop' (allowed: backup, maintenance, drill, all, --immediate).\n", a)
 				fmt.Print(usageText)
 				return 1
 			}
 		}
 		if targets > 1 {
-			fmt.Println("'archiver stop' takes at most one target (backup|maintenance|all).")
+			fmt.Println("'archiver stop' takes at most one target (backup|maintenance|drill|all).")
 		}
 	case "resume":
 		fmt.Printf("'%s' is not valid for 'archiver resume'.\n", strings.Join(rest, " "))

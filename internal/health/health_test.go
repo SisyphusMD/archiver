@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/lockstate"
 )
 
 var now = time.Unix(2_000_000_000, 0)
@@ -157,5 +158,44 @@ func TestLastLines(t *testing.T) {
 	got := lastLines(p, 100)
 	if len(got) != 100 || got[0] != "line 199900" || got[99] != "line 199999" {
 		t.Errorf("got %d lines, first %q last %q", len(got), got[0], got[len(got)-1])
+	}
+}
+
+// A failed last drill warns; so does no passing drill within twice the schedule's interval.
+func TestDrillHealth(t *testing.T) {
+	l := layout.Layout{Root: t.TempDir(), Lock: t.TempDir()}
+	os.MkdirAll(l.LogDir(), 0o755)
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	env := func(k string) string {
+		if k == "RESTORE_DRILL_SCHEDULE" {
+			return "0 3 * * *"
+		}
+		return ""
+	}
+	run := func(s lockstate.DrillState) string {
+		lockstate.WriteDrillState(l.DrillState(), s)
+		var b strings.Builder
+		r := &report{w: &b}
+		drills(r, l, env, now)
+		return b.String()
+	}
+	if out := run(lockstate.DrillState{}); !strings.Contains(out, "none has run yet") || strings.Contains(out, "WARNING") {
+		t.Errorf("never run: %q", out)
+	}
+	if out := run(lockstate.DrillState{Scheduled: now.Add(-72 * time.Hour).Unix()}); !strings.Contains(out, "No restore drill has run since drills were scheduled") {
+		t.Errorf("never run in twice the interval: %q", out)
+	}
+	recent := now.Add(-20 * time.Hour).Unix()
+	if out := run(lockstate.DrillState{LastRun: recent, LastPass: recent}); strings.Contains(out, "WARNING") {
+		t.Errorf("a recent pass warned: %q", out)
+	}
+	if out := run(lockstate.DrillState{LastRun: recent, LastFailed: true, LastPass: now.Add(-30 * time.Hour).Unix()}); !strings.Contains(out, "last restore drill failed") {
+		t.Errorf("a failed drill did not warn: %q", out)
+	}
+	if out := run(lockstate.DrillState{LastRun: recent, LastPass: now.Add(-72 * time.Hour).Unix()}); !strings.Contains(out, "No restore drill has passed in over 2 days") {
+		t.Errorf("a stale pass did not warn: %q", out)
+	}
+	if out := run(lockstate.DrillState{LastRun: recent, Scheduled: recent}); strings.Contains(out, "WARNING") {
+		t.Errorf("a first drill that skipped everything warned at once: %q", out)
 	}
 }

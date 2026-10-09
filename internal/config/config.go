@@ -79,6 +79,11 @@ type Config struct {
 	CheckInterval            string // CHECK_INTERVAL: the default for every target
 	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
 	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
+	// Restore drills (ADR 28); their schedule, RESTORE_DRILL_SCHEDULE, is the daemon's.
+	DrillServices string // RESTORE_DRILL_SERVICES: how many services per storage per run, or "all"
+	DrillStorages string // RESTORE_DRILL_STORAGES: "all", "primary" or storage names
+	DrillDir      string // RESTORE_DRILL_DIR
+	DrillExclude  string // RESTORE_DRILL_EXCLUDE: service names never drilled
 }
 
 var globalSecret = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|APPRISE_URL|NTFY_TOKEN)$`)
@@ -192,6 +197,10 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		CheckInterval:            src.Getenv("CHECK_INTERVAL"),
 		Parallelism:              src.Getenv("BACKUP_PARALLELISM"),
 		HooksDir:                 src.Getenv("HOOKS_DIR"),
+		DrillServices:            src.Getenv("RESTORE_DRILL_SERVICES"),
+		DrillStorages:            src.Getenv("RESTORE_DRILL_STORAGES"),
+		DrillDir:                 src.Getenv("RESTORE_DRILL_DIR"),
+		DrillExclude:             src.Getenv("RESTORE_DRILL_EXCLUDE"),
 	}
 
 	prune := src.Getenv("PRUNE_BACKUPS")
@@ -334,6 +343,15 @@ func (c *Config) Validate(secretsDir string) error {
 	}
 	if _, err := ParseInterval(c.CheckInterval); err != nil {
 		return fmt.Errorf("CHECK_INTERVAL: %v", err)
+	}
+	if _, err := c.DrillCount(); err != nil {
+		return err
+	}
+	if _, err := c.DrillTargets(); err != nil {
+		return err
+	}
+	if c.DrillDir != "" && !filepath.IsAbs(c.DrillDir) {
+		return fmt.Errorf("RESTORE_DRILL_DIR must be an absolute path (got '%s').", c.DrillDir)
 	}
 	if _, err := c.BackupParallelism(); err != nil {
 		return err
@@ -494,4 +512,68 @@ func (c *Config) AppriseTagMap() (map[string]string, error) {
 		m[k] = v
 	}
 	return m, nil
+}
+
+// DrillCount is how many services a drill restores from each storage: RESTORE_DRILL_SERVICES,
+// 1 by default; 0 means all of them.
+func (c *Config) DrillCount() (int, error) {
+	switch v := strings.TrimSpace(c.DrillServices); v {
+	case "":
+		return 1, nil
+	case "all":
+		return 0, nil
+	default:
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return 0, fmt.Errorf("RESTORE_DRILL_SERVICES must be a whole number of at least 1 or 'all' (got '%s').", c.DrillServices)
+		}
+		return n, nil
+	}
+}
+
+// DrillTargets are the storages a drill restores from: RESTORE_DRILL_STORAGES, every storage
+// by default, "primary" for the first, or storage names separated by commas or spaces.
+func (c *Config) DrillTargets() ([]Target, error) {
+	v := strings.TrimSpace(c.DrillStorages)
+	switch v {
+	case "", "all":
+		return c.Targets, nil
+	case "primary":
+		if len(c.Targets) == 0 {
+			return nil, nil
+		}
+		return c.Targets[:1], nil
+	}
+	var out []Target
+	for _, name := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' }) {
+		found := false
+		for _, t := range c.Targets {
+			if t.Name == name {
+				out = append(out, t)
+				found = true
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("RESTORE_DRILL_STORAGES names '%s', which is not a configured storage (STORAGE_TARGET_N_NAME).", name)
+		}
+	}
+	return out, nil
+}
+
+// DrillDirectory is where drills restore: RESTORE_DRILL_DIR, /tmp/archiver-drill by default.
+func (c *Config) DrillDirectory() string {
+	if c.DrillDir != "" {
+		return c.DrillDir
+	}
+	return "/tmp/archiver-drill"
+}
+
+// DrillExcluded reports whether RESTORE_DRILL_EXCLUDE names service.
+func (c *Config) DrillExcluded(service string) bool {
+	for _, n := range strings.FieldsFunc(c.DrillExclude, func(r rune) bool { return r == ',' || r == ' ' }) {
+		if n == service {
+			return true
+		}
+	}
+	return false
 }

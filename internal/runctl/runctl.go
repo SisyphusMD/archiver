@@ -1,5 +1,6 @@
 // Package runctl implements `archiver stop`, `pause` and `resume` (ADR 10): acting on the
-// running backup, the running maintenance, and the copy workers (ADR 15).
+// running backup, the running maintenance, a running restore drill, and the copy workers
+// (ADRs 15, 28).
 //
 // A pipeline watches its own lock: it ends gracefully when the stop flag appears and starts
 // no program while the run is recorded paused, so these commands record the request and
@@ -48,11 +49,12 @@ func (e Env) backup() (lockstate.Lock, bool) {
 	return l, true
 }
 
-// Pause pauses the copy workers and the running backup.
+// Pause pauses the copy workers, a running restore drill, and the running backup.
 func Pause(e Env) int {
 	if e.Workers("pause") {
 		fmt.Fprintln(e.Out, "Copies to the secondary storages paused.")
 	}
+	e.pauseDrill()
 	l, ok := e.backup()
 	if !ok {
 		fmt.Fprintln(e.Out, "No running backup found.")
@@ -85,11 +87,12 @@ func Pause(e Env) int {
 	return 0
 }
 
-// Resume resumes the copy workers and a paused backup.
+// Resume resumes the copy workers, a paused restore drill, and a paused backup.
 func Resume(e Env) int {
 	if e.Workers("resume") {
 		fmt.Fprintln(e.Out, "Copies to the secondary storages resumed.")
 	}
+	e.resumeDrill()
 	l, ok := e.backup()
 	if !ok {
 		fmt.Fprintln(e.Out, "No paused backup found.")
@@ -139,6 +142,12 @@ func (e Env) waitForEnd(pid int, limit time.Duration) bool {
 // Stop stops the running maintenance and/or backup (target backup, maintenance or all) and
 // the copy workers. immediate ends them now instead of letting them finish cleanly.
 func Stop(e Env, target string, immediate bool) int {
+	if target == "drill" || target == "all" {
+		e.stopDrill(target, immediate)
+		if target == "drill" {
+			return 0
+		}
+	}
 	if target == "maintenance" || target == "all" {
 		e.stopMaintenance(target, immediate)
 		if target == "maintenance" {
@@ -197,6 +206,59 @@ func (e Env) stopMaintenance(target string, immediate bool) {
 		signalTree(m.PID, syscall.SIGTERM)
 		syscall.Kill(m.PID, syscall.SIGTERM)
 	}
+}
+
+// drill reads the drill lock; ok is false when no drill runs.
+func (e Env) drill() (lockstate.Lock, bool) {
+	l, held, err := lockstate.ReadLock(e.Layout.DrillLock())
+	if err != nil || !held || !l.Alive() {
+		return lockstate.Lock{}, false
+	}
+	return l, true
+}
+
+// stopDrill stops a running drill. Its restore is abandoned at once, immediate or not: a
+// drill's copy is thrown away anyway, and a shutdown should not wait on it.
+func (e Env) stopDrill(target string, _ bool) {
+	d, ok := e.drill()
+	if !ok {
+		if target == "drill" {
+			fmt.Fprintln(e.Out, "No running restore drill found.")
+		}
+		return
+	}
+	fmt.Fprintf(e.Out, "Stopping restore drill (PID: %d, %s)...\n", d.PID, d.Stage)
+	touch(e.Layout.DrillStopFlag())
+	if d.Paused() {
+		signalTree(d.PID, syscall.SIGCONT)
+		runlock.Append(e.Layout.DrillLock(), "running", e.Now())
+	}
+	signalTree(d.PID, syscall.SIGTERM)
+}
+
+// pauseDrill freezes a running drill's programs; the drill starts nothing more while paused.
+func (e Env) pauseDrill() {
+	d, ok := e.drill()
+	if !ok || d.Paused() {
+		return
+	}
+	if runlock.Append(e.Layout.DrillLock(), "paused", e.Now()) != nil {
+		return
+	}
+	signalTree(d.PID, syscall.SIGSTOP)
+	time.Sleep(300 * time.Millisecond)
+	signalTree(d.PID, syscall.SIGSTOP)
+	fmt.Fprintln(e.Out, "Restore drill paused.")
+}
+
+func (e Env) resumeDrill() {
+	d, ok := e.drill()
+	if !ok || !d.Paused() {
+		return
+	}
+	signalTree(d.PID, syscall.SIGCONT)
+	runlock.Append(e.Layout.DrillLock(), "running", e.Now())
+	fmt.Fprintln(e.Out, "Restore drill resumed.")
 }
 
 // signalTree sends sig to everything pid started: a child that leads its own process group

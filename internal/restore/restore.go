@@ -56,6 +56,18 @@ type Env struct {
 
 	cfg  *config.Config
 	held *os.File // the restore lock, while a restore into a service directory runs
+	// ctx ends every lock wait and duplicacy run when cancelled (a drill's stop); nil is
+	// never cancelled. beforeRun, when set, runs before each duplicacy program starts (a
+	// drill's pause gate).
+	ctx       context.Context
+	beforeRun func()
+}
+
+func (e *Env) context() context.Context {
+	if e.ctx != nil {
+		return e.ctx
+	}
+	return context.Background()
 }
 
 func (e *Env) getenv(name string) string { return e.Source.Getenv(name) }
@@ -229,7 +241,10 @@ func (e *Env) pinnedTarget(v string) (config.Target, bool) {
 }
 
 func (e *Env) duplicacy(dir string, out io.Writer, args ...string) *exec.Cmd {
-	cmd := exec.Command(e.Duplicacy, proc.NoScript(args...)...)
+	if e.beforeRun != nil {
+		e.beforeRun()
+	}
+	cmd := exec.CommandContext(e.context(), e.Duplicacy, proc.NoScript(args...)...)
 	cmd.Dir = dir
 	cmd.Env = e.cfg.DuplicacyEnviron(e.Environ, e.Layout.SSHPrivateKey())
 	cmd.Stdout, cmd.Stderr = out, out
@@ -262,6 +277,13 @@ func (e *Env) connect(dir string, t config.Target, id string, out io.Writer) err
 		return err
 	}
 	pub := filepath.Join(e.Layout.Root, "keys", "public.pem")
+	// init creates the storage when it does not exist yet; a backup, copy or maintenance
+	// creating it at the same time could leave two configurations, so it takes their lock.
+	release, err := runlock.Exclusive(e.context(), e.Layout.StorageInit(t.StorageName()))
+	if err != nil {
+		return err
+	}
+	defer release()
 	if err := e.duplicacy(dir, out, "init", "-e", "-key", pub, "-storage-name", t.StorageName(), id, url).Run(); err != nil {
 		if why := kit.Diagnose(e.Layout, "", t); why != "" {
 			return fmt.Errorf("duplicacy %s storage initialization failed for '%s': %s", t.Type, t.StorageName(), why)
@@ -348,7 +370,7 @@ func (e *Env) restore(dir string, t config.Target, id string, rev int, o Options
 		fmt.Fprintf(out, "[WARN] '%s' is a link to a directory outside '%s' ('%s'); Duplicacy restores through it, so files under it land there. Remove or move the link first if that is not intended.\n", l[0], dir, l[1])
 	}
 	// Registered in use, so no prune deletes the revision meanwhile (ADR 19).
-	release, err := inuse.Gate(context.Background(), e.Layout.InUseDir(), t.StorageName(), false)
+	release, err := inuse.Gate(e.context(), e.Layout.InUseDir(), t.StorageName(), false)
 	if err != nil {
 		return err
 	}

@@ -109,6 +109,7 @@ func entrypointCommand(args []string) int {
 		}
 		for _, t := range []struct{ file, banner, log string }{
 			{"archiver.log", "Archiver Logs", "archiver"}, {"maintenance.log", "Maintenance Logs", "maintenance"}, {"copies.log", "Copy Logs", "copies"},
+			{"drill.log", "Restore Drill Logs", "drill"},
 		} {
 			var w io.Writer = os.Stdout
 			if jsonLogs {
@@ -129,17 +130,20 @@ func entrypointCommand(args []string) int {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM)
 	var daemon *exec.Cmd
-	backup, maint := os.Getenv("BACKUP_SCHEDULE"), os.Getenv("MAINTENANCE_SCHEDULE")
-	if backup != "" || maint != "" {
+	backup, maint, drill := os.Getenv("BACKUP_SCHEDULE"), os.Getenv("MAINTENANCE_SCHEDULE"), os.Getenv("RESTORE_DRILL_SCHEDULE")
+	if backup != "" || maint != "" || drill != "" {
 		if backup != "" {
 			fmt.Println("Backups scheduled: " + backup)
 		}
 		if maint != "" {
 			fmt.Println("Maintenance scheduled: " + maint)
 		}
+		if drill != "" {
+			fmt.Println("Restore drills scheduled: " + drill)
+		}
 		// Fail fast on a malformed schedule instead of crash-looping the container.
 		if runDaemon([]string{"--check"}) != 0 {
-			fmt.Println("ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid.")
+			fmt.Println("ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid (or RESTORE_DRILL_SCHEDULE).")
 			return 1
 		}
 		fmt.Println("Starting scheduler...")
@@ -179,7 +183,7 @@ func entrypointCommand(args []string) int {
 	return 0
 }
 
-// shutdown stops whatever runs and waits for both pipelines to record the stop and release
+// shutdown stops whatever runs and waits for every run to record the stop and release
 // their locks: exiting first would tear down the PID namespace and kill that cleanup midway.
 // The wait is bounded well under the documented stop_grace_period of two minutes.
 func shutdown(e *entrypoint.Env, stopTailers chan struct{}) {

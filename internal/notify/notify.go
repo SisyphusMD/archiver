@@ -37,7 +37,7 @@ func (k Kind) String() string {
 // unclassified notification still reaches every destination.
 func KindOf(title string) Kind {
 	switch title {
-	case "Backup Complete", "Maintenance Complete", "Backup Paused", "Backup Resumed",
+	case "Backup Complete", "Maintenance Complete", "Restore Drill Complete", "Backup Paused", "Backup Resumed",
 		"Backup Stopped", "Maintenance Stopped":
 		return Routine
 	case "Mirror Refused":
