@@ -41,6 +41,8 @@ func TestMissingCaps(t *testing.T) {
 const fakeDuplicacy = `#!/bin/sh
 [ "$1" = -no-script ] || { echo "run without -no-script: $*"; exit 99; }
 shift
+# A repository attached without init has only preferences: take its storage from there.
+[ -f .duplicacy/url ] || [ ! -f .duplicacy/preferences ] || sed -n 's/.*"storage":"\([^"]*\)".*/\1/p' .duplicacy/preferences > .duplicacy/url
 case "$1" in
 init)
   url=""; for a in "$@"; do url="$a"; done
@@ -51,7 +53,7 @@ list)
   case " $* " in *" -files "*)
     f=$(cat "$url/files" 2>/dev/null || echo 3)
     [ "$f" = none ] && f=0
-    i=0; while [ $i -lt $f ]; do i=$((i+1)); echo "    1 2026-10-09 12:00:00 abc file$i"; done
+    i=0; while [ $i -lt $f ]; do i=$((i+1)); echo "    1 2026-10-09 12:00:00 abababababababababababababababababababababababababababababababab file$i"; done
     echo "Total size: 10, file chunks: 1"; exit 0 ;;
   esac
   for r in $(cat "$url/revs" 2>/dev/null); do echo "Snapshot $3 revision $r created at x"; done ;;
@@ -316,7 +318,7 @@ func TestInteractive(t *testing.T) {
 	dir := filepath.Join(f.root, "r")
 	// An invalid choice, then target 2; a revision not listed, then 1; customize: hash only,
 	// thread count 8; then yes to the hook.
-	f.env.Stdin = strings.NewReader("7\n2\nh-app\n" + dir + "\n5\n1\ny\ny\nn\nn\nn\nn\n8\ny\nfor the hook\n")
+	f.env.Stdin = strings.NewReader("7\n2\nh-app\n" + dir + "\n5\n1\ny\ny\nn\nn\nn\nn\n8\n\ny\nfor the hook\n")
 	if code := f.env.Interactive(); code != 0 {
 		t.Fatalf("exit %d: %s %s", code, f.out.String(), f.err.String())
 	}
