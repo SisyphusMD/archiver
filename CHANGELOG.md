@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver migrate hooks` converts each service's `service-backup-settings.sh` into executable `pre-backup` and `post-backup` hooks and a `filters` file. The generated hooks call your existing functions, so they keep working unchanged.
 
 ### Security
+- **Kit placement on local storage no longer follows symlinks.** Setting the kit's owner and mode went through a link, so a user who owns the storage directory could swap one in after the upload and take ownership of the secrets or keys; the kit is now adjusted through a descriptor opened without following links.
 - The Pushover API token and user key no longer appear on `curl`'s command line, where any process in the container could read them from `/proc`. They now reach `curl` on stdin, like every other secret.
 
 ### Changed
