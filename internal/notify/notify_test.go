@@ -174,7 +174,7 @@ func TestKindsReachDestinations(t *testing.T) {
 }
 
 // Apprise: JSON with the kind's tag and type, basic auth from the URL, never in the URL
-// sent; a partial delivery (424 "Sent") counts as delivered and is not retried.
+// sent; a 424 (some URL failed) is a failure, and not retried, so no URL gets it twice.
 func TestApprise(t *testing.T) {
 	calls := 0
 	var body map[string]string
@@ -184,14 +184,17 @@ func TestApprise(t *testing.T) {
 		user, pass, _ = r.BasicAuth()
 		path = r.URL.Path
 		json.NewDecoder(r.Body).Decode(&body)
-		w.WriteHeader(http.StatusFailedDependency)
-		w.Write([]byte(`{"error":"partial","details":[["Sent"],["Failed"]]}`))
+		if body["type"] == "failure" {
+			w.WriteHeader(http.StatusFailedDependency)
+			w.Write([]byte(`{"error":"One or more notification could not be sent"}`))
+		}
 	}))
 	defer srv.Close()
 	u := strings.Replace(srv.URL, "http://", "http://me:secret@", 1) + "/notify/archiver"
 	var msg string
+	var failed bool
 	n := &Notifier{Hostname: "nas", Destinations: []Destination{{&Apprise{URL: u, Tags: map[string]string{"failure": "critical"}}, "failures"}},
-		Waits: []time.Duration{time.Millisecond}, Logf: func(_ bool, m string) { msg = m }}
+		Waits: []time.Duration{time.Millisecond}, Logf: func(f bool, m string) { failed, msg = f, m }}
 	n.Send("Storage Down", "offsite unreachable")
 	if calls != 1 || user != "me" || pass != "secret" || path != "/notify/archiver" {
 		t.Fatalf("calls %d auth %q/%q path %q", calls, user, pass, path)
@@ -199,16 +202,16 @@ func TestApprise(t *testing.T) {
 	if body["tag"] != "critical" || body["type"] != "failure" || body["title"] != "Storage Down" || !strings.HasSuffix(body["body"], "offsite unreachable") {
 		t.Fatalf("body %v", body)
 	}
-	if msg != "Apprise notification sent successfully." {
-		t.Fatalf("log %q", msg)
+	if !failed || !strings.Contains(msg, "424") {
+		t.Fatalf("a 424 was not reported as a failure: %v %q", failed, msg)
 	}
 	// Without a tag for the kind, "all": an Apprise API key given no tag notifies only its
 	// untagged URLs.
 	body = nil
 	n.Destinations[0].On = "everything"
 	n.Send("Backup Complete", "done")
-	if body["tag"] != "all" || body["type"] != "info" {
-		t.Fatalf("body without a mapped tag %v", body)
+	if body["tag"] != "all" || body["type"] != "info" || failed || msg != "Apprise notification sent successfully." {
+		t.Fatalf("body without a mapped tag %v, log %v %q", body, failed, msg)
 	}
 }
 

@@ -266,11 +266,10 @@ func (a *Apprise) Request(k Kind, title, message string) (*http.Request, error) 
 	return req, nil
 }
 
-// Delivered counts Apprise's partial delivery (424 with a "Sent" detail: some of the
-// tag's URLs took it) as delivered, so a retry never sends it twice to those that did.
-func (a *Apprise) Delivered(status int, body []byte) bool {
-	return status == http.StatusOK || (status == http.StatusFailedDependency && bytes.Contains(body, []byte("Sent")))
-}
+// Delivered is a 200. Apprise answers 424 when any of a tag's URLs failed, without saying
+// whether others took it: that is reported as a failure, and, being a 4xx, not retried, so
+// the URLs that did take it never get it twice.
+func (a *Apprise) Delivered(status int, _ []byte) bool { return status == http.StatusOK }
 
 // Ntfy publishes to a topic on an ntfy server, with an access token if the topic needs
 // one, at the priority the kind maps to.
