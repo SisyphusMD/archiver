@@ -24,17 +24,32 @@ const (
 
 // Log is one pipeline's log. It is safe for concurrent use.
 type Log struct {
-	Dir        string // /opt/archiver/logs
-	Basename   string // "archiver" or "maintenance"
-	ErrorTitle string // notification title for an error, e.g. "Backup Error"
-	Stdout     io.Writer
-	Notify     func(title, message string)
+	Dir      string // /opt/archiver/logs
+	Basename string // "archiver" or "maintenance"
+	Stdout   io.Writer
+	// Unwritable is told that the log cannot be written (at the first failure, then hourly
+	// while it lasts), and Writable at the
+	// first line written and the first after a failure, so the incident can clear. Error
+	// lines do not notify one by one: a run notifies once with its Summary (ADR 36).
+	Unwritable func(message string)
+	Writable   func()
 	Now        func() time.Time
 
-	mu          sync.Mutex
-	errors      int
-	writeFailed bool
+	mu           sync.Mutex
+	errors       int
+	messages     []string // the first error lines, for the run's notification
+	reportable   int      // every error line a notification may carry
+	writeFailed  bool
+	wrote        bool
+	lastRaised   time.Time // when Unwritable was last told
+	lastWritable time.Time // when Writable was last told
 }
+
+// unwritableEvery is how often a log that keeps failing tells Unwritable again (and one
+// that keeps working, Writable), so the incident can repeat and retry missed destinations:
+// not every line, since with the logs volume full the incident state cannot be written
+// either, and nothing would deduplicate.
+const unwritableEvery = time.Hour
 
 func (l *Log) now() time.Time {
 	if l.Now != nil {
@@ -45,6 +60,14 @@ func (l *Log) now() time.Time {
 
 // Path is the log file messages are appended to.
 func (l *Log) Path() string { return filepath.Join(l.Dir, l.Basename+".log") }
+
+// Reportable is how many of the run's own errors were logged: those a notification
+// carries, not a notification's own failure or errors counted from elsewhere.
+func (l *Log) Reportable() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.reportable
+}
 
 // Errors is how many errors have been logged.
 func (l *Log) Errors() int {
@@ -61,13 +84,33 @@ func (l *Log) AddErrors(n int) {
 	l.mu.Unlock()
 }
 
-// Message logs one line for service ("archiver" when empty). An error is counted and
-// notified; a line that cannot be written is reported on stdout and counted, never fatal.
+// Message logs one line for service ("archiver" when empty). An error is counted and kept
+// for the run's notification; a line that cannot be written is reported on stdout and
+// counted, never fatal.
 func (l *Log) Message(level, service, msg string) { l.message(level, service, msg, true) }
 
-// Unnotified logs like Message but never notifies: for the outcome of a notification, whose
-// failure must not set off another one (which would fail too, and loop).
+// Unnotified logs like Message but leaves the line out of the run's notification: for the
+// outcome of a notification, whose failure must not set off another one (which would fail
+// too, and loop).
 func (l *Log) Unnotified(level, service, msg string) { l.message(level, service, msg, false) }
+
+// maxMessages bounds the error lines a notification carries; the log has them all.
+const maxMessages = 10
+
+// Summary is the run's errors for its one notification: the first lines and how many
+// more the log holds.
+func (l *Log) Summary() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var b strings.Builder
+	for _, m := range l.messages {
+		b.WriteString(m + "\n")
+	}
+	if more := l.reportable - len(l.messages); more > 0 {
+		fmt.Fprintf(&b, "... and %d more in %s.\n", more, l.Basename+".log")
+	}
+	return strings.TrimSuffix(b.String(), "\n")
+}
 
 func (l *Log) message(level, service, msg string, notify bool) {
 	if service == "" {
@@ -78,15 +121,30 @@ func (l *Log) message(level, service, msg string, notify bool) {
 	err := appendLine(l.Path(), line)
 	if level == Error {
 		l.errors++
+		if notify {
+			l.reportable++
+			if len(l.messages) < maxMessages {
+				l.messages = append(l.messages, fmt.Sprintf("[%s] %s", service, msg))
+			}
+		}
 	}
 	// Only a line that may notify claims the one notification, so a failure first met while
 	// recording a notification's outcome still gets said by the next line.
-	firstFailure := err != nil && notify && !l.writeFailed
+	firstFailure := err != nil && notify && (!l.writeFailed || l.now().Sub(l.lastRaised) >= unwritableEvery)
 	if err != nil {
 		l.errors++
 	}
 	if firstFailure {
+		l.lastRaised = l.now()
+	}
+	if firstFailure {
 		l.writeFailed = true
+	}
+	// Writable: the first line of the run, the first after a failure, and hourly after
+	// that, so a recovery notice an outage kept back is sent while writes keep working.
+	writable := err == nil && notify && l.Writable != nil && (!l.wrote || l.writeFailed || l.now().Sub(l.lastWritable) >= unwritableEvery)
+	if writable {
+		l.wrote, l.writeFailed, l.lastWritable = true, false, l.now()
 	}
 	l.mu.Unlock()
 	if err != nil && l.Stdout != nil {
@@ -98,11 +156,11 @@ func (l *Log) message(level, service, msg string, notify bool) {
 	}
 	// An unwritable log (a full logs volume) is a failure in itself, said once a run: every
 	// later line would fail the same way.
-	if firstFailure && l.Notify != nil {
-		l.Notify(l.ErrorTitle, fmt.Sprintf("Cannot write %s (%v); check its volume's free space. The run's messages go to stdout only.", l.Path(), err))
+	if writable && l.Writable != nil {
+		l.Writable()
 	}
-	if notify && level == Error && l.Notify != nil {
-		l.Notify(l.ErrorTitle, fmt.Sprintf("[%s] %s", service, msg))
+	if firstFailure && l.Unwritable != nil {
+		l.Unwritable(fmt.Sprintf("Cannot write %s (%v); check its volume's free space. The run's messages go to stdout only.", l.Path(), err))
 	}
 }
 

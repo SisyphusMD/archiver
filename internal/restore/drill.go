@@ -36,6 +36,9 @@ type drillRun struct {
 	state lockstate.DrillState
 	now   func() time.Time
 	root  string
+	// restored: the drill got as far as restoring, so its errors are its restores' own
+	// incidents.
+	restored bool
 }
 
 // Drill restores services' newest revisions into the drill directory, checks them, and
@@ -45,7 +48,7 @@ func (e *Env) Drill(o DrillOptions) int {
 	if now == nil {
 		now = time.Now
 	}
-	log := &logging.Log{Dir: e.Layout.LogDir(), Basename: "drill", ErrorTitle: "Restore Drill Failed", Stdout: e.Stdout, Now: now}
+	log := &logging.Log{Dir: e.Layout.LogDir(), Basename: "drill", Stdout: e.Stdout, Now: now}
 	cfg, warnings, err := config.Load(e.Source, e.Environ)
 	if err == nil {
 		err = cfg.Validate(e.Source.SecretsDir)
@@ -55,6 +58,7 @@ func (e *Env) Drill(o DrillOptions) int {
 		return 1
 	}
 	e.cfg = cfg
+	d := &drillRun{}
 	n := notify.FromConfig(cfg, e.Hostname, func(failed bool, msg string) {
 		level := logging.Info
 		if failed {
@@ -62,7 +66,15 @@ func (e *Env) Drill(o DrillOptions) int {
 		}
 		log.Unnotified(level, "", msg)
 	})
-	log.Notify = n.Send
+	n.Incidents = e.Layout.Incidents()
+	n.WatchLog(log)
+	// What fails before any restore (the selection, the drill directory) is the drill's own
+	// incident; each restore's is its service's on its storage.
+	defer func() {
+		if log.Reportable() > 0 && !d.restored {
+			n.Raise("drill", notify.Failure, "Restore Drill Failed", log.Summary())
+		}
+	}()
 
 	lock, stale, err := runlock.Acquire(e.Layout.DrillLock(), e.Layout.DrillStopFlag(), "drill", "starting")
 	if busy, ok := err.(*runlock.Busy); ok {
@@ -82,7 +94,7 @@ func (e *Env) Drill(o DrillOptions) int {
 		log.Message(logging.Warning, "", w)
 	}
 
-	d := &drillRun{e: e, log: log, lock: lock, now: now, root: cfg.DrillDirectory()}
+	d.e, d.log, d.lock, d.now, d.root = e, log, lock, now, cfg.DrillDirectory()
 	// A stop ends whatever the drill waits on (a lock a backup or prune holds) or runs, and a
 	// pause holds back every program it would start: with nothing running yet, there would
 	// be no process for the stop or pause to reach.
@@ -134,9 +146,12 @@ func (e *Env) Drill(o DrillOptions) int {
 		return 1
 	}
 	log.Message(logging.Info, "", fmt.Sprintf("Restore drill started: %d storage(s), drill directory %s.", len(targets), d.root))
+	d.restored = true
+	n.Clear("drill", "Restore Drills Running Again", "Restore drills start again.")
 
 	count, _ := cfg.DrillCount()
 	tried, failed, stopped := 0, 0, false
+	started := now()
 	for _, t := range targets {
 		for _, name := range d.pick(t, services, count, o.Service != "") {
 			if d.stopRequested() {
@@ -148,10 +163,14 @@ func (e *Env) Drill(o DrillOptions) int {
 				d.state.Results[t.StorageName()] = map[string]lockstate.DrillResult{}
 			}
 			d.state.Results[t.StorageName()][name] = r
+			key := "drill:" + t.StorageName() + ":" + name
 			if !r.Skipped {
 				tried++
 				if !r.OK {
 					failed++
+					n.Raise(key, notify.Failure, "Restore Drill Failed", fmt.Sprintf("Restore drill of %s-%s from '%s' failed: %s", e.Hostname, name, t.Name, r.Message))
+				} else {
+					n.Clear(key, "Restore Drill Passing", fmt.Sprintf("A restore drill of %s-%s from '%s' passes again.", e.Hostname, name, t.Name))
 				}
 			}
 			if lock.StopRequested() {
@@ -161,6 +180,23 @@ func (e *Env) Drill(o DrillOptions) int {
 		}
 		if stopped {
 			break
+		}
+	}
+
+	// A failure stays an incident until its service passes a drill, however far off its
+	// turn in the rotation is and whether later attempts were skipped: raised each run, it
+	// repeats on its own interval.
+	if !stopped {
+		open := notify.OpenIncidents(n.Incidents)
+		for _, t := range targets {
+			for _, name := range services {
+				key := "drill:" + t.StorageName() + ":" + name
+				r := d.state.Results[t.StorageName()][name]
+				if _, ok := open[key]; ok && (r.At < started.Unix() || r.Skipped) {
+					n.Raise(key, notify.Failure, "Restore Drill Failed",
+						fmt.Sprintf("No restore drill of %s-%s from '%s' has passed since one failed (the last: %s).", e.Hostname, name, t.Name, r.Message))
+				}
+			}
 		}
 	}
 

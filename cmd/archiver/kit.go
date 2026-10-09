@@ -14,13 +14,15 @@ import (
 )
 
 // kitRun is a kit refresh logging to the backup log, its errors notified as the backup's.
-func kitRun(src config.Source) *kit.Run {
+func kitRun(src config.Source) (*kit.Run, *notify.Notifier) {
 	l := layout.Default()
 	host := pipeline.Hostname(os.Getenv)
-	log := &logging.Log{Dir: l.LogDir(), Basename: "archiver", ErrorTitle: "Backup Error", Stdout: os.Stdout}
+	log := &logging.Log{Dir: l.LogDir(), Basename: "archiver", Stdout: os.Stdout}
+	var n *notify.Notifier
 	if cfg, _, err := config.Load(src, os.Environ()); err == nil {
-		n := notify.FromConfig(cfg, host, nil)
-		log.Notify = n.Send
+		n = notify.FromConfig(cfg, host, nil)
+		n.Incidents = l.Incidents()
+		n.WatchLog(log)
 	}
 	r := &kit.Run{
 		Layout:   l,
@@ -29,8 +31,31 @@ func kitRun(src config.Source) *kit.Run {
 		Hostname: host,
 		Log:      log,
 	}
-	r.EnvelopeCheck = func() error { return envelopeCheck(l, src, log, log.Notify) }
-	return r
+	r.EnvelopeCheck = func() error { return envelopeCheck(l, src, log, n.Send) }
+	return r, n
+}
+
+// kitExecute runs the kit as one incident (ADR 36): its errors notify together, and a kit
+// current everywhere again says so.
+func kitExecute(r *kit.Run, n *notify.Notifier) int {
+	code := r.Execute()
+	switch {
+	case r.Log.Reportable() > 0:
+		n.Raise("kit", notify.Failure, "Recovery Kit Failed", r.Log.Summary())
+	// A kit still missing from a storage skipped as down stays an incident, so it repeats
+	// and retries; one is not opened for it, since the storage's own alert says why.
+	case len(r.Skip) > 0:
+		if n.IsOpen("kit") {
+			n.Raise("kit", notify.Failure, "Recovery Kit Failed", "The recovery kit is not current on "+strings.Join(r.Skip, ", ")+": the storage is down, and the kit is placed when it is back.")
+		}
+	case code == kit.Unverified:
+		if n.IsOpen("kit") {
+			n.Raise("kit", notify.Failure, "Recovery Kit Failed", "The recovery kit was placed but could not be verified readable on every storage; it is placed again next run. See archiver.log.")
+		}
+	case code == kit.OK:
+		n.Clear("kit", "Recovery Kit Recovered", "The recovery kit is current on every storage again.")
+	}
+	return code
 }
 
 // recoveryKitCommand runs `archiver recovery-kit [force]`; ok is false for any other command
@@ -57,9 +82,9 @@ func recoveryKitCommand(args []string) (code int, ok bool) {
 		fmt.Fprintf(os.Stderr, "The recovery kit is not configured. Provide the recovery password at %s/recovery_password (or point RECOVERY_PASSWORD_FILE at it).\n", src.SecretsDir)
 		return 1, true
 	}
-	r := kitRun(src)
+	r, n := kitRun(src)
 	r.Force = force
-	switch r.Execute() {
+	switch kitExecute(r, n) {
 	case kit.OK:
 		fmt.Printf("Recovery kit complete: %s is current on all storage targets.\n", r.KitName())
 		return 0, true
@@ -75,8 +100,8 @@ func recoveryKitCommand(args []string) (code int, ok bool) {
 // bound and end it: exit 0, 1 (errors, each logged and notified), 2 (placed but not verified
 // readable everywhere) or 3 (only secondary uploads failed).
 func recoveryKitStep() int {
-	r := kitRun(config.FromEnvironment())
+	r, n := kitRun(config.FromEnvironment())
 	r.Skip = strings.Fields(os.Getenv("ARCHIVER_KIT_SKIP_TARGETS"))
 	r.PrimaryMarker = os.Getenv("ARCHIVER_KIT_PRIMARY_MARKER")
-	return r.Execute()
+	return kitExecute(r, n)
 }

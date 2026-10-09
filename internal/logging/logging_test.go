@@ -2,6 +2,7 @@ package logging
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,9 +14,7 @@ func TestMessageAndRotate(t *testing.T) {
 	dir := t.TempDir()
 	clock := time.Date(2026, 10, 1, 9, 5, 7, 0, time.Local)
 	var out bytes.Buffer
-	var notes []string
-	l := &Log{Dir: dir, Basename: "archiver", ErrorTitle: "Backup Error", Stdout: &out, Now: func() time.Time { return clock },
-		Notify: func(title, msg string) { notes = append(notes, title+": "+msg) }}
+	l := &Log{Dir: dir, Basename: "archiver", Stdout: &out, Now: func() time.Time { return clock }}
 	old := filepath.Join(dir, "prior_logs", "archiver-2026-09-01_000000.log")
 	os.MkdirAll(filepath.Dir(old), 0o755)
 	os.WriteFile(old, nil, 0o644)
@@ -46,8 +45,8 @@ func TestMessageAndRotate(t *testing.T) {
 	if !strings.Contains(out.String(), "careful") || !strings.Contains(out.String(), "broke") || strings.Contains(out.String(), "hello") {
 		t.Errorf("stdout should carry only warnings and errors:\n%s", out.String())
 	}
-	if l.Errors() != 1 || len(notes) != 1 || notes[0] != "Backup Error: [app] broke" {
-		t.Errorf("errors %d, notes %q", l.Errors(), notes)
+	if l.Errors() != 1 || l.Summary() != "[app] broke" {
+		t.Errorf("errors %d, summary %q", l.Errors(), l.Summary())
 	}
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
 		t.Error("a log older than eight days was kept")
@@ -116,12 +115,49 @@ func TestRotateSameSecond(t *testing.T) {
 // An unwritable log notifies once, however many lines fail to be written.
 func TestUnwritableLogNotifiesOnce(t *testing.T) {
 	var sent []string
-	l := &Log{Dir: filepath.Join(t.TempDir(), "missing"), Basename: "archiver", ErrorTitle: "Backup Error",
-		Notify: func(title, msg string) { sent = append(sent, msg) }}
+	l := &Log{Dir: filepath.Join(t.TempDir(), "missing"), Basename: "archiver",
+		Unwritable: func(msg string) { sent = append(sent, msg) }}
 	l.Unnotified(Info, "", "a notification's outcome")
 	l.Message(Info, "", "one")
 	l.Message(Info, "", "two")
 	if len(sent) != 1 || !strings.Contains(sent[0], "Cannot write") || l.Errors() != 3 {
 		t.Fatalf("sent %q, errors %d", sent, l.Errors())
+	}
+}
+
+// A run's summary carries its first error lines and counts the rest; a notification's own
+// failure is left out.
+func TestSummary(t *testing.T) {
+	l := &Log{Dir: t.TempDir(), Basename: "archiver"}
+	l.Unnotified(Error, "", "pushover failed")
+	for i := range 12 {
+		l.Message(Error, "app", fmt.Sprintf("failure %d", i))
+	}
+	s := l.Summary()
+	if !strings.HasPrefix(s, "[app] failure 0\n") || !strings.Contains(s, "[app] failure 9\n") || strings.Contains(s, "failure 10") ||
+		!strings.HasSuffix(s, "... and 2 more in archiver.log.") || strings.Contains(s, "pushover") {
+		t.Fatalf("summary:\n%s", s)
+	}
+}
+
+// Writable is told at the run's first line written and again after a failure clears.
+func TestWritableAfterFailure(t *testing.T) {
+	dir := t.TempDir()
+	var events []string
+	l := &Log{Dir: dir, Basename: "archiver",
+		Unwritable: func(string) { events = append(events, "unwritable") },
+		Writable:   func() { events = append(events, "writable") }}
+	l.Message(Info, "", "one")
+	l.Message(Info, "", "two")
+	// A directory where the log file belongs fails every write, root's included.
+	os.Remove(l.Path())
+	os.Mkdir(l.Path(), 0o700)
+	l.Message(Info, "", "three")
+	l.Message(Info, "", "three again")
+	os.Remove(l.Path())
+	l.Message(Info, "", "four")
+	l.Message(Info, "", "five")
+	if strings.Join(events, " ") != "writable unwritable writable" {
+		t.Fatalf("events %q", events)
 	}
 }

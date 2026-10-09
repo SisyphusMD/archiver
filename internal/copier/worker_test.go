@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/SisyphusMD/archiver/internal/notify"
 )
 
 // fakeClock moves only when told to, firing any timer it passes.
@@ -175,17 +177,39 @@ func (c *fakeCopy) Terminate() {
 func (c *fakeCopy) Pause()  { c.mu.Lock(); c.paused++; c.mu.Unlock() }
 func (c *fakeCopy) Resume() { c.mu.Lock(); c.resumed++; c.mu.Unlock() }
 
+// recorder notes what reaches a person: an incident notifies when raised, again a day
+// later while open, and on clearing (as notify's incidents do).
 type recorder struct {
 	mu    sync.Mutex
 	notes []string
 	logs  []string
+	open  map[string]time.Time
+	now   func() time.Time
 }
 
 func (r *recorder) events() Events {
 	return Events{
-		Log:    func(level, msg string) { r.mu.Lock(); r.logs = append(r.logs, level+" "+msg); r.mu.Unlock() },
-		Notify: func(title, msg string) { r.mu.Lock(); r.notes = append(r.notes, title); r.mu.Unlock() },
-		Save:   func(State) {},
+		Log: func(level, msg string) { r.mu.Lock(); r.logs = append(r.logs, level+" "+msg); r.mu.Unlock() },
+		Raise: func(key string, _ notify.Kind, title, msg string) {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if r.open == nil {
+				r.open = map[string]time.Time{}
+			}
+			if last, ok := r.open[key]; !ok || r.now().Sub(last) >= 24*time.Hour {
+				r.open[key] = r.now()
+				r.notes = append(r.notes, title)
+			}
+		},
+		Clear: func(key, title, msg string) {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if _, ok := r.open[key]; ok {
+				delete(r.open, key)
+				r.notes = append(r.notes, title)
+			}
+		},
+		Save: func(State) {},
 	}
 }
 
@@ -207,6 +231,7 @@ var t0 = time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
 
 func newWorker(r *fakeRunner, rec *recorder, saved State) (*Worker, *fakeClock) {
 	c := &fakeClock{now: t0}
+	rec.now = c.Now
 	return New("offsite", "local", r, c, rec.events(), saved), c
 }
 
@@ -247,7 +272,7 @@ func TestBackoffDownReminderRecovered(t *testing.T) {
 	c.Advance(24 * time.Hour)
 	w.pass(w.stops, nil)
 	w.pass(w.stops, nil)
-	if got := rec.titles(); len(got) != 2 || got[1] != "Storage Still Down" {
+	if got := rec.titles(); len(got) != 2 || got[1] != "Storage Down" {
 		t.Fatalf("notes %q: one reminder per day", got)
 	}
 	r.mu.Lock()
@@ -322,7 +347,7 @@ func TestPauseResumeRunningCopy(t *testing.T) {
 
 func TestRestartKeepsDownForgetsStop(t *testing.T) {
 	r := &fakeRunner{}
-	down := State{Status: Copying, FailingSince: t0.Add(-time.Hour).Unix(), DownSince: t0.Add(-time.Hour).Unix(), LastAlert: t0.Add(-time.Hour).Unix()}
+	down := State{Status: Copying, FailingSince: t0.Add(-time.Hour).Unix(), DownSince: t0.Add(-time.Hour).Unix()}
 	if w, _ := newWorker(r, &recorder{}, down); w.State().DownSince == 0 {
 		t.Fatal("a down target must stay down across a restart, or it is alerted again")
 	}

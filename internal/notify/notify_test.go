@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/SisyphusMD/archiver/internal/logging"
 )
@@ -34,8 +35,8 @@ func TestSend(t *testing.T) {
 	(&Notifier{}).Send("x", "y") // not configured: nothing to do
 }
 
-// Wired as the commands wire it (the log notifies through the notifier, the notifier
-// reports through Unnotified), a failed send is logged and counted once and not sent again.
+// Wired as the commands wire it (a run notifies its summary, the notifier reports through
+// Unnotified), a failed send is logged and counted once and never joins a summary.
 func TestFailureDoesNotLoop(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -43,16 +44,16 @@ func TestFailureDoesNotLoop(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 	defer srv.Close()
-	log := &logging.Log{Dir: t.TempDir(), Basename: "archiver", ErrorTitle: "Backup Error"}
+	log := &logging.Log{Dir: t.TempDir(), Basename: "archiver"}
 	n := &Notifier{Destinations: pushoverTo(srv.URL), Logf: func(failed bool, msg string) {
 		if failed {
 			log.Unnotified(logging.Error, "", msg)
 		}
 	}}
-	log.Notify = n.Send
 	log.Message(logging.Error, "app", "boom")
-	if calls != 1 || log.Errors() != 2 {
-		t.Fatalf("sends %d, errors %d (want 1 send; the error and the failed send logged)", calls, log.Errors())
+	n.Raise("backup", Failure, "Backup Failed", log.Summary())
+	if calls != 1 || log.Errors() != 2 || log.Summary() != "[app] boom" {
+		t.Fatalf("sends %d, errors %d, summary %q (want 1 send; the error and the failed send logged)", calls, log.Errors(), log.Summary())
 	}
 }
 
@@ -240,5 +241,192 @@ func TestAppriseBadURLHidesPassword(t *testing.T) {
 	n.Send("Storage Down", "x")
 	if msg == "" || strings.Contains(msg, "s3cret") {
 		t.Fatalf("log %q", msg)
+	}
+}
+
+// An incident notifies when raised, not again while open until the repeat interval has
+// passed, and once on clearing; a clear with nothing open says nothing. A repeat of 0 is
+// never.
+func TestIncidents(t *testing.T) {
+	var titles, messages []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		titles = append(titles, r.Form.Get("title"))
+		messages = append(messages, r.Form.Get("message"))
+	}))
+	defer srv.Close()
+	clock := time.Date(2026, 10, 1, 8, 0, 0, 0, time.Local)
+	state := t.TempDir() + "/incidents.json"
+	n := &Notifier{Hostname: "nas", Destinations: pushoverTo(srv.URL), Incidents: state, Repeat: 24 * time.Hour,
+		Now: func() time.Time { return clock }}
+	n.Clear("copy:offsite", "Storage Recovered", "nothing was down")
+	n.Raise("copy:offsite", Failure, "Storage Down", "refused")
+	clock = clock.Add(time.Hour)
+	n.Raise("copy:offsite", Failure, "Storage Down", "refused")
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	if got := OpenIncidents(state); len(got) != 2 || got["copy:offsite"] != "Storage Down" {
+		t.Fatalf("open %v", got)
+	}
+	clock = clock.Add(23 * time.Hour)
+	n.Raise("copy:offsite", Failure, "Storage Down", "refused")
+	n.Clear("copy:offsite", "Storage Recovered", "caught up")
+	n.Clear("copy:offsite", "Storage Recovered", "caught up")
+	want := "Storage Down|Backup Failed|Storage Down|Storage Recovered"
+	if strings.Join(titles, "|") != want {
+		t.Fatalf("sent %q, want %q", titles, want)
+	}
+	if !strings.Contains(messages[2], "Still happening, since 2026-10-01 08:00: refused") || !strings.Contains(messages[3], "caught up (after 24h0m0s)") {
+		t.Fatalf("messages %q", messages)
+	}
+
+	never := &Notifier{Destinations: pushoverTo(srv.URL), Incidents: t.TempDir() + "/i.json", Now: func() time.Time { return clock }}
+	titles = nil
+	never.Raise("kit", Failure, "Recovery Kit Failed", "x")
+	clock = clock.Add(30 * 24 * time.Hour)
+	never.Raise("kit", Failure, "Recovery Kit Failed", "x")
+	if len(titles) != 1 {
+		t.Fatalf("a repeat of 0 repeated: %q", titles)
+	}
+}
+
+// A notification an outage kept from a destination is tried again at the next raise,
+// interval or not; once it arrives the incident is quiet again.
+func TestIncidentRetriesMissedDestinations(t *testing.T) {
+	down := true
+	sent := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if down {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		sent++
+	}))
+	defer srv.Close()
+	n := &Notifier{Destinations: pushoverTo(srv.URL), Incidents: t.TempDir() + "/i.json", Repeat: 24 * time.Hour}
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	down = false
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	if sent != 1 {
+		t.Fatalf("sent %d after the destination came back, want exactly 1", sent)
+	}
+	// A send another process claimed is in flight: not sent again until its lease ends.
+	clock := time.Now()
+	n.Now = func() time.Time { return clock }
+	n.withIncidents(func(open map[string]incident) {
+		in := open["backup"]
+		in.Pending, in.Sending = []string{"pushover"}, clock.Unix()
+		open["backup"] = in
+	})
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	if sent != 1 {
+		t.Fatal("a claimed send was sent again")
+	}
+	clock = clock.Add(claimLease)
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	if sent != 2 {
+		t.Fatalf("sent %d: a send whose claim lapsed (its process died) must be sent again", sent)
+	}
+}
+
+// A recovery notice an outage kept from a destination is tried again at the next clear,
+// and only there.
+func TestRecoveryRetriedWhenMissed(t *testing.T) {
+	down := false
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if down {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		r.ParseForm()
+		got = append(got, r.Form.Get("title"))
+	}))
+	defer srv.Close()
+	state := t.TempDir() + "/i.json"
+	n := &Notifier{Destinations: pushoverTo(srv.URL), Incidents: state, Repeat: 24 * time.Hour}
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	down = true
+	n.Clear("backup", "Backup Recovered", "fine")
+	if len(OpenIncidents(state)) != 0 {
+		t.Fatal("a recovered incident still reads as open")
+	}
+	down = false
+	n.Clear("backup", "Backup Recovered", "fine")
+	n.Clear("backup", "Backup Recovered", "fine")
+	if strings.Join(got, "|") != "Backup Failed|Backup Recovered" {
+		t.Fatalf("sent %q", got)
+	}
+}
+
+// Pushover's limits are kept: a long summary is cut, saying so, rather than refused.
+func TestPushoverClipsLongMessages(t *testing.T) {
+	var msg string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		msg = r.Form.Get("message")
+	}))
+	defer srv.Close()
+	(&Notifier{Destinations: pushoverTo(srv.URL)}).Send("Backup Failed", strings.Repeat("é", 3000))
+	if n := len([]rune(msg)); n != 1024 || !strings.HasSuffix(msg, "(the rest is in the log)") {
+		t.Fatalf("message of %d characters: ...%s", n, msg[len(msg)-40:])
+	}
+	if got := clipBytes(strings.Repeat("é", 3000), 4096); len(got) > 4096 || !utf8.ValidString(got) {
+		t.Fatalf("clipBytes gave %d bytes, valid %v", len(got), utf8.ValidString(got))
+	}
+}
+
+// A clear while the alert is still being sent is delivered after it by its sender; a
+// destination configured while an incident is open is told of it.
+func TestClearDuringSendAndNewDestinations(t *testing.T) {
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		got = append(got, r.Form.Get("title"))
+	}))
+	defer srv.Close()
+	state := t.TempDir() + "/i.json"
+	quiet := &Notifier{Incidents: state, Repeat: 0}
+	quiet.Raise("backup", Failure, "Backup Failed", "boom")
+	n := &Notifier{Destinations: pushoverTo(srv.URL), Incidents: state, Repeat: 0}
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	if strings.Join(got, "|") != "Backup Failed" {
+		t.Fatalf("a newly configured destination: sent %q", got)
+	}
+	// Mid-send: the claim is held; the clear is queued, and the sender delivers it.
+	var in incident
+	n.withIncidents(func(open map[string]incident) {
+		in = open["backup"]
+		in.Pending, in.Sending = []string{"pushover"}, time.Now().Unix()
+		open["backup"] = in
+	})
+	n.Clear("backup", "Backup Recovered", "fine")
+	n.deliver("backup", in)
+	if strings.Join(got, "|") != "Backup Failed|Backup Failed|Backup Recovered" || len(OpenIncidents(state)) != 0 {
+		t.Fatalf("sent %q, open %v", got, OpenIncidents(state))
+	}
+}
+
+// An alert owed to a destination missing from the configuration stays owed until it is
+// back; a recovery owed to one is dropped.
+func TestPendingForUnconfiguredDestination(t *testing.T) {
+	sent := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent++ }))
+	defer srv.Close()
+	state := t.TempDir() + "/i.json"
+	n := &Notifier{Destinations: pushoverTo(srv.URL), Incidents: state}
+	n.withIncidents(func(open map[string]incident) {
+		open["backup"] = incident{Kind: Failure, Title: "Backup Failed", Message: "boom", To: []string{"pushover"}, Pending: []string{"pushover"}, Gen: 1}
+	})
+	none := &Notifier{Incidents: state}
+	none.Raise("backup", Failure, "Backup Failed", "boom")
+	n.Raise("backup", Failure, "Backup Failed", "boom")
+	if sent != 1 {
+		t.Fatalf("sent %d: the alert must wait for its destination, then go once", sent)
+	}
+	n.Clear("backup", "Backup Recovered", "fine")
+	if sent != 2 || len(OpenIncidents(state)) != 0 {
+		t.Fatalf("sent %d, open %v", sent, OpenIncidents(state))
 	}
 }

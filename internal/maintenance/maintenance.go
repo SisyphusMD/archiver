@@ -41,22 +41,32 @@ type Run struct {
 	Signals <-chan os.Signal
 	Now     func() time.Time
 
-	cfg     *config.Config
-	log     *logging.Log
-	notify  *notify.Notifier
-	lock    *runlock.Lock
-	env     []string
-	repo    string
-	dirs    []string          // the service directories, whose repositories may hold fossil collections
-	urls    map[string]string // each storage's URL, by storage name
-	stopped bool
-	pruned  bool // the primary's prune deleted revisions
+	cfg      *config.Config
+	log      *logging.Log
+	notify   *notify.Notifier
+	lock     *runlock.Lock
+	env      []string
+	repo     string
+	dirs     []string          // the service directories, whose repositories may hold fossil collections
+	urls     map[string]string // each storage's URL, by storage name
+	stopped  bool
+	pruned   bool // the primary's prune deleted revisions
+	reported bool // the run's outcome was notified
 }
 
 // Execute runs maintenance and returns the exit code: 1 when it failed, had errors, or was
 // stopped.
 func (r *Run) Execute() int {
-	r.log = &logging.Log{Dir: r.Layout.LogDir(), Basename: "maintenance", ErrorTitle: "Maintenance Error", Stdout: r.Stdout}
+	code := r.execute()
+	// A run that ended early with errors, before its summary, is still one notification.
+	if !r.reported && r.log.Reportable() > 0 {
+		r.notify.Raise("maintenance", notify.Failure, "Maintenance Failed", r.log.Summary())
+	}
+	return code
+}
+
+func (r *Run) execute() int {
+	r.log = &logging.Log{Dir: r.Layout.LogDir(), Basename: "maintenance", Stdout: r.Stdout}
 	cfg, warnings, err := config.Load(r.Source, r.Environ)
 	if err != nil {
 		r.log.Message(logging.Error, "", err.Error())
@@ -70,7 +80,8 @@ func (r *Run) Execute() int {
 		}
 		r.log.Unnotified(level, "", msg)
 	})
-	r.log.Notify = r.notify.Send
+	r.notify.Incidents = r.Layout.Incidents()
+	r.notify.WatchLog(r.log)
 
 	lock, stale, err := runlock.Acquire(r.Layout.MaintenanceLock(), r.stopFlag(), "maintenance", "starting")
 	if busy, ok := err.(*runlock.Busy); ok {
@@ -204,6 +215,13 @@ func (r *Run) main() {
 		msg = fmt.Sprintf("Completed in %s with %d errors.", took, n)
 	}
 	fmt.Fprintln(r.Stdout, msg)
+	// One notification per incident (ADR 36): the run's errors, or its recovery.
+	r.reported = true
+	if r.log.Reportable() > 0 {
+		r.notify.Raise("maintenance", notify.Failure, "Maintenance Failed", msg+"\n"+r.log.Summary())
+		return
+	}
+	r.notify.Clear("maintenance", "Maintenance Recovered", "Maintenance completes without errors again.")
 	r.notify.Send("Maintenance Complete", msg)
 }
 

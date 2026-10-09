@@ -57,11 +57,22 @@ type Backup struct {
 	running  []*proc.Proc
 	signaled bool
 	failing  map[string]bool // secondaries the workers report retrying or down
+
+	reported bool // the run's outcome was notified
 }
 
 // Run runs the pipeline and returns its exit code.
 func (b *Backup) Run() int {
-	b.log = &logging.Log{Dir: b.Layout.LogDir(), Basename: "archiver", ErrorTitle: "Backup Error", Stdout: b.Stdout}
+	code := b.pipeline()
+	// A run that ended early with errors, before its summary, is still one notification.
+	if !b.reported && b.log.Reportable() > 0 {
+		b.notify.Raise("backup", notify.Failure, "Backup Failed", b.log.Summary())
+	}
+	return code
+}
+
+func (b *Backup) pipeline() int {
+	b.log = &logging.Log{Dir: b.Layout.LogDir(), Basename: "archiver", Stdout: b.Stdout}
 	cfg, warnings, err := config.Load(b.Source, b.Environ)
 	if err != nil {
 		b.log.Message(logging.Error, "", err.Error())
@@ -75,7 +86,8 @@ func (b *Backup) Run() int {
 			b.log.Unnotified(logging.Info, "", msg)
 		}
 	})
-	b.log.Notify = b.notify.Send
+	b.notify.Incidents = b.Layout.Incidents()
+	b.notify.WatchLog(b.log)
 	for _, w := range warnings {
 		b.log.Message(logging.Warning, "", w)
 	}
@@ -85,7 +97,7 @@ func (b *Backup) Run() int {
 		h := busy.Holder
 		fmt.Fprintf(b.Stderr, "A backup is already running (PID %d). Not starting another.\n", h.PID)
 		// A refused scheduled run is a day without a backup, so it must not pass silently.
-		b.notify.Send("Backup Skipped", fmt.Sprintf("A backup was not started because the previous run is still going (PID %d, stage %s, started %s).",
+		b.notify.Raise("backup-skipped", notify.Failure, "Backup Skipped", fmt.Sprintf("A backup was not started because the previous run is still going (PID %d, stage %s, started %s).",
 			h.PID, h.Stage, logging.Timestamp(h.StartedAt())))
 		return 1
 	}
@@ -104,11 +116,12 @@ func (b *Backup) Run() int {
 	case !free:
 		lock.Release()
 		fmt.Fprintln(b.Stderr, "A restore into a service directory is running. Not starting a backup.")
-		b.notify.Send("Backup Skipped", "A backup was not started because a restore into a service directory is running; it would have saved the directory half-restored.")
+		b.notify.Raise("backup-skipped", notify.Failure, "Backup Skipped", "A backup was not started because a restore into a service directory is running; it would have saved the directory half-restored.")
 		return 1
 	default:
 		f.Close()
 	}
+	b.notify.Clear("backup-skipped", "Backups Running Again", "A backup started after one was skipped.")
 	b.lock = lock
 	defer b.finish()
 	// A wait on a storage-creation lock ends on a signal or a stop request, like the rest.
@@ -775,6 +788,8 @@ func (b *Backup) recoveryKit() {
 	if b.workers && b.waitBounded(p, KitDeadline) {
 		b.log.Message(logging.Warning, "", fmt.Sprintf("Recovery kit: still placing after %s; ending it so the backup does not wait on an offsite. A later run places it.", KitDeadline))
 		p.Terminate(false)
+		// Ended, the step cannot report what it found: the kit is not current everywhere.
+		b.notify.Raise("kit", notify.Failure, "Recovery Kit Failed", fmt.Sprintf("The recovery kit was still being placed after %s and was ended; it is not current on every storage. A later run places it; any errors are in archiver.log.", KitDeadline))
 	}
 	code, _ = p.Wait()
 	b.forget(p)
@@ -831,6 +846,15 @@ func (b *Backup) complete() {
 		msg = fmt.Sprintf("Completed in %s with %d errors.", took, n)
 	}
 	fmt.Fprintln(b.Stdout, msg)
+	// One notification per incident (ADR 36): a run with errors of its own raises the
+	// backup incident with them, a clean one closes it. The kit's errors are the kit's own
+	// incident, raised by its step, and a notification that failed is not the backup's.
+	b.reported = true
+	if b.log.Reportable() > 0 {
+		b.notify.Raise("backup", notify.Failure, "Backup Failed", msg+"\n"+b.log.Summary())
+		return
+	}
+	b.notify.Clear("backup", "Backup Recovered", "Backups complete without errors again.")
 	b.notify.Send("Backup Complete", msg)
 }
 

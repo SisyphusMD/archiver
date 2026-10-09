@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/SisyphusMD/archiver/internal/config"
 )
@@ -40,7 +41,7 @@ func KindOf(title string) Kind {
 	case "Backup Complete", "Maintenance Complete", "Restore Drill Complete", "Backup Paused", "Backup Resumed",
 		"Backup Stopped", "Maintenance Stopped":
 		return Routine
-	case "Mirror Refused":
+	case "Mirror Refused", "Envelope Out of Date", "Envelope Check Due":
 		return Problem
 	}
 	return Failure
@@ -88,6 +89,12 @@ type Notifier struct {
 	// Unnotified): a report of a failed send would fail too, and loop.
 	Logf func(failed bool, msg string)
 
+	// Incidents is the state file that makes Raise notify once per incident (ADRs 33, 36),
+	// shared by every process; empty, Raise always sends and Clear never does.
+	Incidents string
+	// Repeat is how often an incident still open is notified again; 0 is never.
+	Repeat time.Duration
+
 	// Sends go one at a time: services back up in parallel, and a second alert must wait
 	// its turn rather than be lost.
 	sendMu sync.Mutex
@@ -95,7 +102,7 @@ type Notifier struct {
 
 // FromConfig builds a notifier for the configured destinations.
 func FromConfig(cfg *config.Config, hostname string, logf func(failed bool, msg string)) *Notifier {
-	n := &Notifier{Hostname: hostname, Logf: logf}
+	n := &Notifier{Hostname: hostname, Logf: logf, Repeat: cfg.AlertRepeat()}
 	on := func(own string) string {
 		if own != "" {
 			return own
@@ -125,23 +132,33 @@ var DefaultWaits = []time.Duration{5 * time.Second, 10 * time.Second}
 
 // Send sends one notification, prefixed with the host and time, to every destination that
 // receives its kind, waiting for any send in progress.
-func (n *Notifier) Send(title, message string) {
+func (n *Notifier) Send(title, message string) { n.SendKind(KindOf(title), title, message) }
+
+// SendKind is Send with the kind given rather than read from the title.
+func (n *Notifier) SendKind(k Kind, title, message string) { n.sendTo(k, title, message, nil) }
+
+// sendTo sends to the destinations receiving kind k, or, when only is not nil, to those
+// it names whatever they receive now (an incident's recorded recipients), and returns the
+// names of those it did not reach.
+func (n *Notifier) sendTo(k Kind, title, message string, only map[string]bool) (missed []string) {
 	if n == nil || len(n.Destinations) == 0 {
-		return
+		return nil
 	}
-	k := KindOf(title)
 	now := time.Now
 	if n.Now != nil {
 		now = n.Now
 	}
 	text := fmt.Sprintf("[%s] [%s] %s", n.Hostname, now().Format("2006-01-02 15:04:05"), message)
 	for _, d := range n.Destinations {
-		if !admits(d.On, k) {
+		if (only == nil && !admits(d.On, k)) || (only != nil && !only[d.Name()]) {
 			continue
 		}
 		n.sendMu.Lock()
 		transient, attempts, err := n.send(d, k, title, text)
 		n.sendMu.Unlock()
+		if err != nil {
+			missed = append(missed, d.Name())
+		}
 		if n.Logf == nil {
 			continue
 		}
@@ -154,6 +171,7 @@ func (n *Notifier) Send(title, message string) {
 			n.Logf(false, fmt.Sprintf("%s notification sent successfully.", capitalize(d.Name())))
 		}
 	}
+	return missed
 }
 
 func capitalize(s string) string {
@@ -216,7 +234,9 @@ func (p *Pushover) Request(k Kind, title, message string) (*http.Request, error)
 	if endpoint == "" {
 		endpoint = PushoverURL
 	}
-	body := url.Values{"token": {p.Token}, "user": {p.User}, "title": {title}, "message": {message}}
+	// Pushover refuses a title over 250 characters or a message over 1024, the whole
+	// notification with it.
+	body := url.Values{"token": {p.Token}, "user": {p.User}, "title": {clip(title, 250)}, "message": {clip(message, 1024)}}
 	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(body.Encode()))
 	if err == nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -281,7 +301,9 @@ type Ntfy struct {
 func (n *Ntfy) Name() string { return "ntfy" }
 
 func (n *Ntfy) Request(k Kind, title, message string) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodPost, n.URL, strings.NewReader(message))
+	// ntfy turns a message over 4096 bytes into an attachment, or refuses it where
+	// attachments are off.
+	req, err := http.NewRequest(http.MethodPost, n.URL, strings.NewReader(clipBytes(message, 4096)))
 	if err != nil {
 		return nil, err
 	}
@@ -295,3 +317,26 @@ func (n *Ntfy) Request(k Kind, title, message string) (*http.Request, error) {
 }
 
 func (n *Ntfy) Delivered(status int, _ []byte) bool { return status == http.StatusOK }
+
+const clipped = " … (the rest is in the log)"
+
+// clip cuts s to at most n characters, saying so.
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-len([]rune(clipped))]) + clipped
+}
+
+// clipBytes cuts s to at most n bytes on a character boundary, saying so.
+func clipBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	cut := n - len(clipped)
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + clipped
+}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/inuse"
+	"github.com/SisyphusMD/archiver/internal/notify"
 )
 
 // AllowLarge lets the next mirror pass delete more than half of an ID's revisions on the
@@ -131,15 +132,24 @@ func (w *Worker) upkeep(ctx context.Context, stops int) (ok bool) {
 			msg := fmt.Sprintf("Check of %s storage failed (%v). Review copies.log.", w.Target, err)
 			w.record(stops, func(s *State) { s.CheckFailed, s.CheckTried = msg, w.Clock.Now().Unix() })
 			w.log("ERROR", msg)
-			if w.Events.Notify != nil {
-				w.Events.Notify("Storage Check Failed", msg)
-			}
+			w.raise("check:"+w.Target, notify.Failure, "Storage Check Failed", msg)
 			return true
 		}
+		w.clear("check:"+w.Target, "Storage Check Passing", fmt.Sprintf("The check of %s storage passes again.", w.Target))
 		w.record(stops, func(s *State) {
 			s.LastCheck, s.CheckTried, s.CheckFailed = w.Clock.Now().Unix(), w.Clock.Now().Unix(), ""
 		})
 		w.log("INFO", fmt.Sprintf("Check of %s storage completed.", w.Target))
+	} else {
+		// A failed check stays an incident until a check passes, however far off the next
+		// check is: raised each pass, it repeats on its own interval and reaches any
+		// destination it missed.
+		w.mu.Lock()
+		failed := w.state.CheckFailed
+		w.mu.Unlock()
+		if failed != "" {
+			w.raise("check:"+w.Target, notify.Failure, "Storage Check Failed", failed)
+		}
 	}
 	return true
 }
@@ -206,16 +216,15 @@ func (w *Worker) applyMirror(ctx context.Context, stops int, local, target map[s
 	sort.Strings(refused)
 	note := strings.Join(refused, ", ")
 	w.mu.Lock()
-	report := note != "" && note != w.state.MirrorRefused
 	w.state.MirrorRefused = note
 	w.save()
 	w.mu.Unlock()
 	if note != "" {
 		msg := fmt.Sprintf("Mirror deletions on %s storage refused: %s. If local's retention was shortened on purpose, run 'archiver mirror --allow-large'.", w.Target, note)
 		w.log("WARNING", msg)
-		if report && w.Events.Notify != nil {
-			w.Events.Notify("Mirror Refused", msg)
-		}
+		w.raise("mirror:"+w.Target, notify.Problem, "Mirror Refused", msg)
+	} else {
+		w.clear("mirror:"+w.Target, "Mirror Resumed", fmt.Sprintf("Mirroring local's retention onto %s storage proceeds again.", w.Target))
 	}
 
 	ids := make([]string, 0, len(plan.Delete))
