@@ -68,7 +68,7 @@ done
 EXIT_CODE=$(docker inspect -f '{{.State.ExitCode}}' "$NAME")
 LOGS=$(docker logs "$NAME" 2>&1)
 [ "$EXIT_CODE" -ne 0 ] || die "container exited 0 despite the malformed schedule"
-echo "$LOGS" | grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" || { echo "$LOGS" | tail -5; die "no clear invalid-schedule message"; }
+grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" <<<"$LOGS" || { echo "$LOGS" | tail -5; die "no clear invalid-schedule message"; }
 
 log "a malformed MAINTENANCE_SCHEDULE (valid BACKUP_SCHEDULE) must fail fast too"
 docker run -d --name "$NAME_MAINT" \
@@ -84,7 +84,7 @@ docker run -d --name "$NAME_MAINT" \
 MAINT_EXIT=$(wait_exit "$NAME_MAINT")
 [ "$MAINT_EXIT" != "running" ] || die "container still running with a malformed MAINTENANCE_SCHEDULE"
 [ "$MAINT_EXIT" -ne 0 ] || die "container exited 0 despite the malformed MAINTENANCE_SCHEDULE"
-docker logs "$NAME_MAINT" 2>&1 | grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" \
+grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" <<<"$(docker logs "$NAME_MAINT" 2>&1)" \
   || die "no clear invalid-schedule message for MAINTENANCE_SCHEDULE"
 
 log "a legacy CRON_SCHEDULE (valid cron) must fail fast with the rename message"
@@ -100,7 +100,7 @@ docker run -d --name "$NAME_RENAME" \
 RENAME_EXIT=$(wait_exit "$NAME_RENAME")
 [ "$RENAME_EXIT" != "running" ] || die "container still running despite legacy CRON_SCHEDULE"
 [ "$RENAME_EXIT" -ne 0 ] || die "container exited 0 despite legacy CRON_SCHEDULE"
-docker logs "$NAME_RENAME" 2>&1 | grep -q "CRON_SCHEDULE was renamed to BACKUP_SCHEDULE" \
+grep -q "CRON_SCHEDULE was renamed to BACKUP_SCHEDULE" <<<"$(docker logs "$NAME_RENAME" 2>&1)" \
   || die "no rename guidance for legacy CRON_SCHEDULE"
 
 log "a valid BACKUP_SCHEDULE + MAINTENANCE_SCHEDULE registers both jobs and announces them"
@@ -115,12 +115,12 @@ docker run -d --name "$NAME_OK" \
   -e STORAGE_TARGET_1_LOCAL_PATH=/backup-store \
   "$IMAGE" >/dev/null || die "valid-schedule container failed to start"
 for _ in $(seq 1 30); do
-  docker logs "$NAME_OK" 2>&1 | grep -q "next maintenance at" && break
+  grep -q "next maintenance at" <<<"$(docker logs "$NAME_OK" 2>&1)" && break
   sleep 1
 done
 OK_LOGS=$(docker logs "$NAME_OK" 2>&1)
-echo "$OK_LOGS" | grep -q "Backups scheduled: 0 3 \* \* \*" || die "backup schedule not announced"
-echo "$OK_LOGS" | grep -q "Maintenance scheduled: 0 13 \* \* \*" || die "maintenance schedule not announced"
+grep -q "Backups scheduled: 0 3 \* \* \*" <<<"$OK_LOGS" || die "backup schedule not announced"
+grep -q "Maintenance scheduled: 0 13 \* \* \*" <<<"$OK_LOGS" || die "maintenance schedule not announced"
 echo "$OK_LOGS" | grep -Eq "archiver daemon: next backup at [0-9-]+T03:00:00" || { echo "$OK_LOGS" | tail -5; die "daemon did not schedule the backup for 03:00"; }
 echo "$OK_LOGS" | grep -Eq "archiver daemon: next maintenance at [0-9-]+T13:00:00" || die "daemon did not schedule maintenance for 13:00"
 [ "$(docker inspect -f '{{.State.Running}}' "$NAME_OK")" = "true" ] || die "valid-schedule container is not running"

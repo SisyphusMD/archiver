@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -343,6 +344,9 @@ func (e *Env) restore(dir string, t config.Target, id string, rev int, o Options
 			o.IgnoreOwner = true
 		}
 	}
+	for _, l := range linkedDirs(dir) {
+		fmt.Fprintf(out, "[WARN] '%s' is a link to a directory outside '%s' ('%s'); Duplicacy restores through it, so files under it land there. Remove or move the link first if that is not intended.\n", l[0], dir, l[1])
+	}
 	// Registered in use, so no prune deletes the revision meanwhile (ADR 19).
 	release, err := inuse.Gate(context.Background(), e.Layout.InUseDir(), t.StorageName(), false)
 	if err != nil {
@@ -447,4 +451,39 @@ func yes(in *bufio.Reader) bool {
 	line, _ := in.ReadString('\n')
 	line = strings.TrimSpace(line)
 	return line == "y" || line == "Y"
+}
+
+// linkedDirs lists the symlinks under dir that resolve to a directory outside it, each with
+// its target, stopping after 20: Duplicacy writes a snapshot's files through such a link
+// rather than replacing it, so whoever could write dir chose where they go.
+func linkedDirs(dir string) [][2]string {
+	var found [][2]string
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return nil
+	}
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if len(found) >= 20 {
+			return filepath.SkipAll
+		}
+		if err != nil {
+			return nil
+		}
+		if d.Type()&fs.ModeSymlink == 0 {
+			return nil
+		}
+		target, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			return nil
+		}
+		if fi, err := os.Stat(target); err != nil || !fi.IsDir() {
+			return nil
+		}
+		if rel, err := filepath.Rel(root, target); err == nil && rel != ".." && !strings.HasPrefix(rel, "../") {
+			return nil
+		}
+		found = append(found, [2]string{p, target})
+		return nil
+	})
+	return found
 }

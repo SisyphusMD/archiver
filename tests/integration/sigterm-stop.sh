@@ -48,10 +48,10 @@ docker run -d --name "$NAME" \
   "$IMAGE" >/dev/null || die "container failed to start"
 
 for _ in $(seq 1 50); do
-  docker logs "$NAME" 2>&1 | grep -q "Container is ready" && break
+  grep -q "Container is ready" <<<"$(docker logs "$NAME" 2>&1)" && break
   sleep 0.2
 done
-docker logs "$NAME" 2>&1 | grep -q "Container is ready" || die "entrypoint never became ready"
+grep -q "Container is ready" <<<"$(docker logs "$NAME" 2>&1)" || die "entrypoint never became ready"
 
 log "fixture data + a duplicacy shadow whose 'backup' blocks (stoppable window)"
 docker exec "$NAME" bash -c '
@@ -87,7 +87,7 @@ docker cp "$NAME":/opt/archiver/logs/. "$LOGDIR"/ >/dev/null 2>&1 || die "could 
 echo "--- container logs (tail) ---"; echo "$LOGS" | tail -10; echo "-----------------------------"
 echo "stop took ${ELAPSED}s, container exit code ${EXIT_CODE}"
 
-echo "$LOGS" | grep -q "Received shutdown signal" || die "entrypoint SIGTERM trap never fired"
+grep -q "Received shutdown signal" <<<"$LOGS" || die "entrypoint SIGTERM trap never fired"
 grep -rq "Backup stopped\." "$LOGDIR" || die "no 'Backup stopped' record: graceful stop did not complete before teardown"
 grep -rq "Storage check completed" "$LOGDIR" && die "storage check ran after docker stop"
 grep -rq "Prune completed" "$LOGDIR" && die "prune ran after docker stop"
@@ -110,10 +110,10 @@ docker run -d --name "$NAME_MAINT" \
   "$IMAGE" >/dev/null || die "phase-2 container failed to start"
 
 for _ in $(seq 1 50); do
-  docker logs "$NAME_MAINT" 2>&1 | grep -q "Container is ready" && break
+  grep -q "Container is ready" <<<"$(docker logs "$NAME_MAINT" 2>&1)" && break
   sleep 0.2
 done
-docker logs "$NAME_MAINT" 2>&1 | grep -q "Container is ready" || die "phase-2 entrypoint never became ready"
+grep -q "Container is ready" <<<"$(docker logs "$NAME_MAINT" 2>&1)" || die "phase-2 entrypoint never became ready"
 
 log "fixture + one real backup (so a repository exists for maintenance), then shadow 'check' to block"
 docker exec "$NAME_MAINT" bash -c '
@@ -147,7 +147,7 @@ LOGS_M=$(docker logs "$NAME_MAINT" 2>&1)
 LOGDIR_M=$(mktemp -d)
 docker cp "$NAME_MAINT":/opt/archiver/logs/. "$LOGDIR_M"/ >/dev/null 2>&1 || die "could not copy phase-2 logs out"
 
-echo "$LOGS_M" | grep -q "Received shutdown signal" || die "phase-2 SIGTERM trap never fired"
+grep -q "Received shutdown signal" <<<"$LOGS_M" || die "phase-2 SIGTERM trap never fired"
 grep -rq "Maintenance session summary: Maintenance stopped" "$LOGDIR_M" || die "maintenance did not record a graceful stop"
 [ "$EXIT_M" = "0" ] || die "phase-2 container exited ${EXIT_M}, expected 0"
 [ "$ELAPSED_M" -lt 110 ] || die "phase-2 stop took ${ELAPSED_M}s; grace period nearly ran out"

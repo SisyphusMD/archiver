@@ -62,7 +62,7 @@ OUT=$(archiver backup 2>&1)
 rc=$?
 set -e
 [ "$rc" -ne 0 ] || die "second concurrent backup was admitted (exit 0)"
-echo "$OUT" | grep -q "already running" || die "refusal carries no explanation; got: $OUT"
+grep -q "already running" <<<"$OUT" || die "refusal carries no explanation; got: $OUT"
 
 log "detached 'archiver backup --detach' must ALSO refuse visibly (never a false success line)"
 set +e
@@ -70,8 +70,8 @@ OUT2=$(archiver backup --detach 2>&1)
 rc_start=$?
 set -e
 [ "$rc_start" -ne 0 ] || die "'backup --detach' exited 0 while a backup is running"
-echo "$OUT2" | grep -q "already running" || die "detach refusal carries no explanation; got: $OUT2"
-echo "$OUT2" | grep -q "started in the background" && die "detach printed the success line while refusing"
+grep -q "already running" <<<"$OUT2" || die "detach refusal carries no explanation; got: $OUT2"
+grep -q "started in the background" <<<"$OUT2" && die "detach printed the success line while refusing"
 
 log "removed commands must error with guidance, not act"
 set +e
@@ -79,9 +79,9 @@ OUT3=$(archiver start 2>&1); rc3=$?
 OUT4=$(archiver restart 2>&1); rc4=$?
 OUT5=$(archiver backup retain 2>&1); rc5=$?
 set -e
-[ "$rc3" -ne 0 ] && echo "$OUT3" | grep -q "was removed" || die "'start' did not error with removal guidance"
-[ "$rc4" -ne 0 ] && echo "$OUT4" | grep -q "was removed" || die "'restart' did not error with removal guidance"
-[ "$rc5" -ne 0 ] && echo "$OUT5" | grep -q "was removed" || die "'backup retain' did not error with removal guidance"
+[ "$rc3" -ne 0 ] && grep -q "was removed" <<<"$OUT3" || die "'start' did not error with removal guidance"
+[ "$rc4" -ne 0 ] && grep -q "was removed" <<<"$OUT4" || die "'restart' did not error with removal guidance"
+[ "$rc5" -ne 0 ] && grep -q "was removed" <<<"$OUT5" || die "'backup retain' did not error with removal guidance"
 
 log "stop the running backup with an explicit target + --immediate, wait for it to wind down"
 archiver stop backup --immediate >/dev/null 2>&1 || true
@@ -93,7 +93,7 @@ set +e
 OUT_MT=$(archiver stop backup maintenance 2>&1); rc_mt=$?
 set -e
 [ "$rc_mt" -ne 0 ] || die "'stop backup maintenance' was accepted (should reject multiple targets)"
-echo "$OUT_MT" | grep -q "at most one target" || die "no guidance rejecting multiple stop targets; got: $OUT_MT"
+grep -q "at most one target" <<<"$OUT_MT" || die "no guidance rejecting multiple stop targets; got: $OUT_MT"
 
 log "stale lock: a dead PID must be recovered AND the new run must hold the lock"
 echo "999999 duplicacy pre-backup" >"$LOCKFILE"

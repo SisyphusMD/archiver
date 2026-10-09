@@ -578,7 +578,6 @@ jobs:
               -e DST_CREDS \
               "$SKOPEO_IMAGE" \
               copy --all \
-                --dest-tls-verify=false \
                 --dest-creds "$DST_CREDS" \
                 oci-archive:/data/image.tar \
                 "docker://${dst}"
@@ -635,7 +634,6 @@ jobs:
               -e SRC_CREDS -e DST_CREDS \
               "$SKOPEO_IMAGE" \
               copy --all \
-                --src-tls-verify=false \
                 --src-creds "$SRC_CREDS" \
                 --dest-creds "$DST_CREDS" \
                 "docker://${src}" "docker://${dst}"
@@ -705,7 +703,7 @@ jobs:
             local attempt http delay hinted
             API_WRITE_ERROR=""
             for attempt in 1 2 3; do
-              http=$(curl -sSL -k -o /tmp/write-response.json -D /tmp/write-headers.txt -w "%{http_code}" \
+              http=$(curl -sSL -o /tmp/write-response.json -D /tmp/write-headers.txt -w "%{http_code}" \
                 -X "${method}" \
                 -H "${auth_header}" \
                 -H "Content-Type: application/json" \
@@ -769,7 +767,7 @@ jobs:
               auth_header="Authorization: token ${token}"
             fi
 
-            http=$(curl -sSL -k -o /tmp/existing.json -w "%{http_code}" \
+            http=$(curl -sSL -o /tmp/existing.json -w "%{http_code}" \
               -H "${auth_header}" \
               "${api}/tags/${tag}")
 
@@ -793,7 +791,7 @@ jobs:
               # A create is not idempotent: a 5xx returned after the host already
               # committed the release turns the retry into a 409/422, which would be
               # reported as a failure even though the release now exists and is right.
-              http=$(curl -sSL -k -o /tmp/existing.json -w "%{http_code}" \
+              http=$(curl -sSL -o /tmp/existing.json -w "%{http_code}" \
                 -H "${auth_header}" \
                 "${api}/tags/${tag}")
               if [ "$http" = "200" ] && release_matches /tmp/existing.json "${payload_file}"; then

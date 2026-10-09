@@ -86,15 +86,15 @@ printf 'local 1000 1000 1000\nsecond 1000 1000 1000\n' > "$STATE"
 set +e
 HC=$(archiver healthcheck 2>&1)
 set -e
-echo "$HC" | grep -q "No successful check on 'local' in over 8 days" || die "no staleness warning for check"
-echo "$HC" | grep -q "No successful prune on 'second' in over 8 days" || die "no staleness warning for prune"
+grep -q "No successful check on 'local' in over 8 days" <<<"$HC" || die "no staleness warning for check"
+grep -q "No successful prune on 'second' in over 8 days" <<<"$HC" || die "no staleness warning for prune"
 
 log "healthcheck suppresses the stale-check warning when CHECK_BACKUPS=false"
 set +e
 HC=$(CHECK_BACKUPS=false archiver healthcheck 2>&1)
 set -e
-echo "$HC" | grep -q "No successful check on" && die "check staleness warned although CHECK_BACKUPS=false"
-echo "$HC" | grep -q "No successful prune on 'second' in over 8 days" || die "prune staleness warning suppressed unexpectedly"
+grep -q "No successful check on" <<<"$HC" && die "check staleness warned although CHECK_BACKUPS=false"
+grep -q "No successful prune on 'second' in over 8 days" <<<"$HC" || die "prune staleness warning suppressed unexpectedly"
 
 log "belated exhaustive: a stale timestamp fires on the next run regardless of frequency"
 OLD_CHECK="$(grep '^local ' "$STATE" | cut -d' ' -f2)"
@@ -122,7 +122,7 @@ set +e
 OUT=$(archiver backup retain 2>&1); rc=$?
 set -e
 [ "$rc" -ne 0 ] || die "'backup retain' exited 0"
-echo "$OUT" | grep -q "was removed" || die "no removal guidance for retain"
+grep -q "was removed" <<<"$OUT" || die "no removal guidance for retain"
 
 log "'archiver stop maintenance' ends a running maintenance gracefully"
 REAL="$(command -v duplicacy)"
