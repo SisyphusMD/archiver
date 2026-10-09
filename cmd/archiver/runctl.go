@@ -65,18 +65,14 @@ func controlEnv() runctl.Env {
 	}
 	// Notifying needs the configuration; acting on the run does not, so a configuration
 	// error only costs the notification.
-	if cfg, _, err := config.Load(config.FromEnvironment(), nil); err == nil && cfg.Pushover() && cfg.PushoverAPIToken != "" && cfg.PushoverUserKey != "" {
-		n := &notify.Notifier{
-			Pushover: true, Token: cfg.PushoverAPIToken, User: cfg.PushoverUserKey,
-			Hostname: pipeline.Hostname(os.Getenv),
-			Logf: func(failed bool, msg string) {
-				level := logging.Info
-				if failed {
-					level = logging.Error
-				}
-				log.Unnotified(level, "", msg)
-			},
-		}
+	if cfg, _, err := config.Load(config.FromEnvironment(), nil); err == nil {
+		n := notify.FromConfig(cfg, pipeline.Hostname(os.Getenv), func(failed bool, msg string) {
+			level := logging.Info
+			if failed {
+				level = logging.Error
+			}
+			log.Unnotified(level, "", msg)
+		})
 		e.Notify = func(title, msg string) { n.Send(title, msg) }
 	}
 	return e
