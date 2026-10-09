@@ -878,6 +878,8 @@ docker exec -it archiver archiver restore
 
 The restore destination can be any path accessible within the container. If you need to restore to a new location not currently mounted, add a volume mount and restart the container first.
 
+**Before it restores**, the interactive restore shows a preview: how many files it would add, replace (or leave, without overwrite) and delete, and their sizes, judged by size and modification time against what the destination holds. It reads only the revision's file list, so it costs seconds to a minute, and cancelling leaves the destination exactly as it was. At a terminal it then asks "Restore now?"; `NO_PREVIEW=1` skips it. When the snapshot belongs to a configured service, the suggested destination is another directory: restoring over a service that is still running can leave it reading half-restored files, and a copy beside it can be checked first. The advanced options also restore only some paths of the snapshot (see `RESTORE_PATHS` below).
+
 A restore refuses to start while a backup runs. A restore into a configured service directory (or a directory inside or above one) also keeps backups out until it ends, its restore hook included: a backup that starts meanwhile is skipped with a notification, since it would save the directory half-restored. Restores elsewhere do not affect backups.
 
 ### One-Off Restore with Temporary Container
@@ -933,6 +935,8 @@ Iterates storage targets in configured order and restores from the first target 
 | `DELETE_EXTRA` | No | Non-empty enables `-delete` |
 | `HASH_COMPARE` | No | Non-empty enables `-hash` |
 | `IGNORE_OWNERSHIP` | No | Non-empty enables `-ignore-owner` |
+| `RESTORE_PATHS` | No | Restore only these paths in the snapshot (comma-separated; a directory brings everything under it), for example `config/,data/app.db` |
+| `DRY_RUN` | No | Non-empty shows what the restore would add, replace and delete, and restores nothing (the destination is not created or changed) |
 | `RUN_RESTORE_SERVICE` | No | Non-empty runs the restored directory's restore hook (`post-restore`, or `restore-service.sh`) after a successful file restore (DB reload, stack restart); its failure fails the restore |
 | `RESTORE_THREADS` | No | Override download thread count (default matches `DUPLICACY_THREADS`) |
 

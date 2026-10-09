@@ -102,8 +102,61 @@ func (e *Env) Auto() int {
 	if code != OK {
 		return code
 	}
+	if e.getenv("DRY_RUN") != "" {
+		return e.dryRun(req)
+	}
 	defer e.release()
 	return e.run(req)
+}
+
+// dryRun shows what req would do, from a scratch repository: the destination is only read,
+// and is neither created nor connected.
+func (e *Env) dryRun(req request) int {
+	dest, err := filepath.Abs(req.dir)
+	if err != nil {
+		fmt.Fprintln(e.Stderr, "ERROR:", err)
+		return Unreachable
+	}
+	unreachable := 0
+	for _, t := range req.targets {
+		fmt.Fprintf(e.Stdout, "Trying '%s' (%s)...\n", t.Name, t.Type)
+		work, err := os.MkdirTemp("", "archiver-preview-")
+		if err != nil {
+			fmt.Fprintln(e.Stderr, "ERROR:", err)
+			return Unreachable
+		}
+		defer os.RemoveAll(work)
+		if err := attach(work, t, req.id); err != nil {
+			fmt.Fprintln(e.Stdout, "  unreachable:", err)
+			unreachable++
+			continue
+		}
+		revs, err := e.revisions(work, req.id)
+		if err != nil {
+			fmt.Fprintln(e.Stdout, "  list failed")
+			unreachable++
+			continue
+		}
+		rev, ok := pick(revs, req.revision)
+		if !ok {
+			fmt.Fprintf(e.Stdout, "  revision %s not found\n", req.revision)
+			continue
+		}
+		files, err := e.listFiles(work, req.id, rev)
+		if err != nil {
+			fmt.Fprintln(e.Stderr, "ERROR:", err)
+			return NotFound
+		}
+		fmt.Fprintf(e.Stdout, "Dry run: revision %d of %s from '%s'; nothing is restored.\n", rev, req.id, t.Name)
+		plan(files, dest, req.opts).show(e.Stdout, dest)
+		return OK
+	}
+	if unreachable == len(req.targets) {
+		fmt.Fprintln(e.Stderr, "ERROR: All storage targets unreachable")
+		return Unreachable
+	}
+	fmt.Fprintf(e.Stderr, "ERROR: Snapshot '%s' not found on any reachable storage target\n", req.id)
+	return NotFound
 }
 
 func (e *Env) autoUsage() {
@@ -111,6 +164,9 @@ func (e *Env) autoUsage() {
 Required env: SNAPSHOT_ID, LOCAL_DIR
 Optional env: REVISION (default 'latest'), STORAGE_TARGET (name or id),
               OVERWRITE, DELETE_EXTRA, HASH_COMPARE, IGNORE_OWNERSHIP,
+              RESTORE_PATHS (paths in the snapshot, comma-separated: only these),
+              DRY_RUN (non-empty: show what would be restored, replaced and
+              deleted, and restore nothing),
               RUN_RESTORE_SERVICE (non-empty: run the service's post-restore hook
               after a successful file restore),
               RESTORE_THREADS (default matches DUPLICACY_THREADS)
@@ -135,6 +191,12 @@ func (e *Env) request(id, dir string) (request, int) {
 		Delete:      e.getenv("DELETE_EXTRA") != "",
 		IgnoreOwner: e.getenv("IGNORE_OWNERSHIP") != "",
 		Threads:     e.getenv("RESTORE_THREADS"),
+		Paths:       Paths(e.getenv("RESTORE_PATHS")),
+	}
+	// A value that names nothing must not become a restore of everything.
+	if v := e.getenv("RESTORE_PATHS"); v != "" && len(req.opts.Paths) == 0 {
+		fmt.Fprintf(e.Stderr, "ERROR: RESTORE_PATHS '%s' names no path\n", v)
+		return req, Unreachable
 	}
 	if req.opts.Threads == "" {
 		req.opts.Threads = e.cfg.Threads
