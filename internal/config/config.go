@@ -577,3 +577,9 @@ func (c *Config) DrillExcluded(service string) bool {
 	}
 	return false
 }
+
+var snapshotID = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// ValidSnapshotID reports whether Duplicacy accepts id as a snapshot ID: letters, digits,
+// '_' and '-' only. A backup refuses a service whose ID breaks this.
+func ValidSnapshotID(id string) bool { return snapshotID.MatchString(id) }

@@ -197,6 +197,35 @@ func (r *Run) primaryHasKit() {
 	}
 }
 
+// CurrentOn reports the storages holding the kit for the configuration as it is now:
+// configured is false without a recovery password. It builds the kit's contents locally to
+// fingerprint them and uploads nothing.
+func (r *Run) CurrentOn() (names []string, configured bool, err error) {
+	cfg, _, err := config.Load(r.Source, r.Environ)
+	if err != nil {
+		return nil, false, err
+	}
+	r.cfg = cfg
+	if cfg.RecoveryPassword == "" {
+		return nil, false, nil
+	}
+	settings, err := config.Snapshot(r.Source, r.Environ)
+	if err != nil {
+		return nil, true, err
+	}
+	work, err := os.MkdirTemp("", "archiver-recovery-kit.")
+	if err != nil {
+		return nil, true, err
+	}
+	defer os.RemoveAll(work)
+	os.Chmod(work, 0o700)
+	fp, err := r.payload(work, settings)
+	if err != nil {
+		return nil, true, err
+	}
+	return r.readState("v" + stateVersion + ":" + fp), true, nil
+}
+
 // readState returns the storages recorded as holding the kit with fingerprint fp: line 1 of
 // the state file is a fingerprint, the following lines storage names.
 func (r *Run) readState(fp string) []string {

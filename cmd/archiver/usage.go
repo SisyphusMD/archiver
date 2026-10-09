@@ -8,10 +8,11 @@ import (
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
 )
 
-const usageText = `Usage: archiver {backup|maintenance|drill|stop|pause|resume|logs|status|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|help}
+const usageText = `Usage: archiver {backup|maintenance|drill|doctor|stop|pause|resume|logs|status|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|help}
 Note:
   backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background.
   maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune.
+  doctor [--notify] checks configuration, secrets, storages (read-only), the container and how current backups, copies, the kit and drills are; --notify also sends a test notification.
   drill [SERVICE] [STORAGE] restores newest revisions into RESTORE_DRILL_DIR, checks them and deletes them (normally scheduled via RESTORE_DRILL_SCHEDULE).
   stop takes an optional target (backup|maintenance|drill|all, default all) and --immediate.
   resume may be used in combination with logs.

@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -59,8 +58,6 @@ type Backup struct {
 	signaled bool
 	failing  map[string]bool // secondaries the workers report retrying or down
 }
-
-var snapshotIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // Run runs the pipeline and returns its exit code.
 func (b *Backup) Run() int {
@@ -336,7 +333,7 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 	svc := hooks.Service{Name: name, Dir: dir, SnapshotID: b.Hostname + "-" + name, HookDir: hooks.Hooks(b.cfg.HooksDir, dir)}
 	// Checked before any hook runs: duplicacy rejects the ID at init, and by then the pre
 	// hook has already stopped whatever it stops.
-	if !snapshotIDPattern.MatchString(svc.SnapshotID) {
+	if !config.ValidSnapshotID(svc.SnapshotID) {
 		log(logging.Error, fmt.Sprintf("Cannot back up %s: its snapshot ID '%s' may contain only letters, digits, '_' and '-' (a Duplicacy rule). Rename the directory or the host.", dir, svc.SnapshotID))
 		return false, false
 	}
