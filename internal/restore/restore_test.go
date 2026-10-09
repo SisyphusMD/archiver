@@ -434,3 +434,24 @@ func TestInServiceDirBehindWildcardSymlink(t *testing.T) {
 		t.Fatal("an unrelated directory is covered")
 	}
 }
+
+// A link inside the destination to a directory outside it is reported; one that stays
+// inside, or points at a file, is not.
+func TestLinkedDirs(t *testing.T) {
+	dest, other := t.TempDir(), t.TempDir()
+	os.Mkdir(filepath.Join(dest, "inner"), 0o755)
+	os.Symlink(other, filepath.Join(dest, "db"))
+	os.Symlink(filepath.Join(dest, "inner"), filepath.Join(dest, "alias"))
+	os.WriteFile(filepath.Join(other, "f"), nil, 0o644)
+	os.Symlink(filepath.Join(other, "f"), filepath.Join(dest, "file-link"))
+	got := linkedDirs(dest)
+	if len(got) != 1 || got[0][0] != filepath.Join(dest, "db") {
+		t.Fatalf("%v", got)
+	}
+	// A destination reached through a link of its own is still scanned.
+	via := filepath.Join(t.TempDir(), "via")
+	os.Symlink(dest, via)
+	if got := linkedDirs(via); len(got) != 1 {
+		t.Fatalf("through a linked destination: %v", got)
+	}
+}
