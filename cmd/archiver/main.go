@@ -80,6 +80,9 @@ func main() {
 			os.Exit(code)
 		}
 	}
+	if len(os.Args) == 3 && os.Args[1] == "notify" && os.Args[2] == "test" {
+		os.Exit(notifyTest())
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "doctor" && (len(os.Args) == 2 || (len(os.Args) == 3 && os.Args[2] == "--notify")) {
 		os.Exit(doctorCommand(len(os.Args) == 3))
 	}

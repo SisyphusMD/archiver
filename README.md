@@ -709,7 +709,7 @@ Archiver sends to any combination of Pushover, an [Apprise API](https://github.c
 
 `NOTIFY_ON` sets every destination; `PUSHOVER_NOTIFY_ON`, `APPRISE_NOTIFY_ON` and `NTFY_NOTIFY_ON` override it for one (for example `failures` to your phone, `everything` to ntfy). Log levels (INFO, WARNING, ERROR) are about log lines and do not decide notifications.
 
-A notification is one per incident, not one per error line: a failed backup sends one message listing its errors (the first ten; the log has them all) when it ends, a storage down is one alert, not one per retry. While an incident lasts it is notified again every `ALERT_REPEAT_INTERVAL` (default `24h`; `6h`, `2d`, or `0` for never), and when it clears (a clean backup, a storage caught up, a check or drill passing again) one recovery notice goes to the destinations the alert went to. The open incidents are kept in `logs/.incidents.json`.
+A notification is one per incident, not one per error line: a failed backup sends one message listing its errors (the first ten; the log has them all) when it ends, a storage down is one alert, not one per retry. While an incident lasts it is notified again every `ALERT_REPEAT_INTERVAL` (default `24h`; `6h`, `2d`, or `0` for never), and when it clears (a clean backup, a storage caught up, a check or drill passing again) one recovery notice goes to the destinations the alert went to. The open incidents are kept in `logs/.incidents.json`. `archiver notify test` sends one message to every destination, saying which events it receives.
 
 ```bash
 # Pushover
