@@ -465,8 +465,8 @@ func (c *Config) BackupParallelism() (int, error) {
 }
 
 // AppriseTagMap reads APPRISE_TAGS ("failure=critical,problem=alerts,routine=quiet"): the
-// Apprise tag each kind of notification is sent with. A kind left out is sent untagged,
-// which an Apprise configuration delivers to all its URLs.
+// Apprise tag each kind of notification is sent with. A kind left out is sent with "all",
+// which reaches every URL of the Apprise configuration, tagged or not.
 func (c *Config) AppriseTagMap() (map[string]string, error) {
 	m := map[string]string{}
 	for _, part := range strings.Split(c.AppriseTags, ",") {

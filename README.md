@@ -693,7 +693,7 @@ APPRISE_TAGS="failure=critical,problem=alerts,routine=quiet"
 NTFY_URL="https://ntfy.sh/my-archiver"
 ```
 
-Apprise receives `title`, `body`, a `type` (info, warning, failure) and the kind's tag when `APPRISE_TAGS` names one (otherwise none, so the server notifies all its URLs); a partial delivery (HTTP 424 with "Sent") counts as delivered. ntfy gets priority 2 for routine news, 3 for problems and 4 for failures.
+Apprise receives `title`, `body`, a `type` (info, warning, failure) and the kind's tag when `APPRISE_TAGS` names one (otherwise `all`, so every URL of the configuration is notified, tagged or not); an HTTP 424 (some URL of the tag failed) is logged as a failed notification and not retried, so the URLs that did receive it are not sent it twice. ntfy gets priority 2 for routine news, 3 for problems and 4 for failures.
 
 ---
 
