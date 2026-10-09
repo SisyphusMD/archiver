@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/SisyphusMD/archiver/internal/logging"
+	"github.com/SisyphusMD/archiver/internal/proc"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -104,7 +105,7 @@ func (r *Run) register(ctx context.Context, storage string, args ...string) erro
 		return err
 	}
 	defer release()
-	cmd := exec.CommandContext(ctx, r.Duplicacy, args...)
+	cmd := exec.CommandContext(ctx, r.Duplicacy, proc.NoScript(args...)...)
 	cmd.Dir, cmd.Env = r.repo, r.env
 	out, err := cmd.CombinedOutput()
 	if err != nil {

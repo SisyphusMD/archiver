@@ -279,3 +279,95 @@ func TestMigrateWarnsAboutUnrewrittenFilters(t *testing.T) {
 		t.Fatalf("warnings %q", m.Warnings)
 	}
 }
+
+// A hook someone besides its owner could change is refused (ADR 45): group- or
+// world-writable, in such a directory, or a link to such a file; a link to a safe file runs.
+func TestUnsafeHooksRefused(t *testing.T) {
+	dir := t.TempDir()
+	os.Chmod(dir, 0o755)
+	write := func(p string, mode os.FileMode) {
+		os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755)
+		os.Chmod(p, mode)
+	}
+	write(filepath.Join(dir, PreBackup), 0o755)
+	if ok, err := Exists(dir, PreBackup); !ok || err != nil {
+		t.Fatalf("a safe hook: %v %v", ok, err)
+	}
+	write(filepath.Join(dir, PreBackup), 0o775)
+	if _, err := Exists(dir, PreBackup); err == nil || !strings.Contains(err.Error(), "chmod go-w") {
+		t.Fatalf("a group-writable hook: %v", err)
+	}
+	write(filepath.Join(dir, PreBackup), 0o755)
+	os.Chmod(dir, 0o777)
+	if _, err := Exists(dir, PreBackup); err == nil {
+		t.Fatal("a hook in a world-writable directory ran")
+	}
+	os.Chmod(dir, 0o755)
+	shared := t.TempDir()
+	os.Chmod(shared, 0o755)
+	write(filepath.Join(shared, "hook"), 0o755)
+	os.Remove(filepath.Join(dir, PreBackup))
+	os.Symlink(filepath.Join(shared, "hook"), filepath.Join(dir, PreBackup))
+	if ok, err := Exists(dir, PreBackup); !ok || err != nil {
+		t.Fatalf("a link to a safe hook: %v %v", ok, err)
+	}
+	os.Chmod(shared, 0o777)
+	if _, err := Exists(dir, PreBackup); err == nil {
+		t.Fatal("a link into a world-writable directory ran")
+	}
+}
+
+// Any directory above a hook counts: whoever can write one can swap the directories below
+// it. A sticky one (like /tmp) does not, since nobody can rename another user's entry in it.
+func TestUnsafeAncestorRefused(t *testing.T) {
+	top := t.TempDir()
+	dir := filepath.Join(top, "hooks", "app")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, PreBackup), []byte("#!/bin/sh\n"), 0o755)
+	os.Chmod(filepath.Join(top, "hooks"), 0o777)
+	if _, err := Exists(dir, PreBackup); err == nil || !strings.Contains(err.Error(), filepath.Join(top, "hooks")) {
+		t.Fatalf("a world-writable ancestor: %v", err)
+	}
+	os.Chmod(filepath.Join(top, "hooks"), os.ModeSticky|0o777)
+	if ok, err := Exists(dir, PreBackup); !ok || err != nil {
+		t.Fatalf("a sticky ancestor: %v %v", ok, err)
+	}
+}
+
+// A chain of links is checked at every hop: a link that passes through a directory others
+// can write is refused even when the chain ends at a safe file.
+func TestLinkChainThroughWritableDir(t *testing.T) {
+	top := t.TempDir()
+	safe, shared, dir := filepath.Join(top, "safe"), filepath.Join(top, "shared"), filepath.Join(top, "svc")
+	for _, d := range []string{safe, shared, dir} {
+		os.Mkdir(d, 0o755)
+	}
+	os.WriteFile(filepath.Join(safe, "hook"), []byte("#!/bin/sh\n"), 0o755)
+	os.Symlink(filepath.Join(safe, "hook"), filepath.Join(shared, "link"))
+	os.Symlink(filepath.Join(shared, "link"), filepath.Join(dir, PreBackup))
+	if ok, err := Exists(dir, PreBackup); !ok || err != nil {
+		t.Fatalf("a chain through safe directories: %v %v", ok, err)
+	}
+	os.Chmod(shared, 0o777)
+	if _, err := Exists(dir, PreBackup); err == nil || !strings.Contains(err.Error(), shared) {
+		t.Fatalf("a chain through a world-writable directory: %v", err)
+	}
+}
+
+// A ".." after a symlinked directory leaves the link's target, as the kernel resolves it,
+// so the file checked is the file run.
+func TestDotDotAfterLinkChecksWhatRuns(t *testing.T) {
+	top := t.TempDir()
+	trusted, unsafeDir, dir := filepath.Join(top, "trusted"), filepath.Join(top, "unsafe"), filepath.Join(top, "svc")
+	for _, d := range []string{trusted, filepath.Join(unsafeDir, "sub"), dir} {
+		os.MkdirAll(d, 0o755)
+	}
+	os.WriteFile(filepath.Join(trusted, "hook"), []byte("#!/bin/sh\n"), 0o755)
+	os.WriteFile(filepath.Join(unsafeDir, "hook"), []byte("#!/bin/sh\n"), 0o755)
+	os.Chmod(filepath.Join(unsafeDir, "hook"), 0o777)
+	os.Symlink(filepath.Join(unsafeDir, "sub"), filepath.Join(trusted, "link"))
+	os.Symlink(trusted+"/link/../hook", filepath.Join(dir, PreBackup)) // not Join, which would clean the ".." away
+	if _, err := Exists(dir, PreBackup); err == nil || !strings.Contains(err.Error(), filepath.Join(unsafeDir, "hook")) {
+		t.Fatalf("checked the wrong file: %v", err)
+	}
+}

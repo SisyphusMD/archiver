@@ -158,7 +158,7 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 	if e.AfterRestore != nil {
 		e.AfterRestore(dir)
 	}
-	if !hasRestoreHook(dir) {
+	if !e.hasRestoreHook(dir) {
 		return 0, nil
 	}
 	// RUN_RESTORE_SERVICE answers the question, so a scripted restore matches auto-restore.

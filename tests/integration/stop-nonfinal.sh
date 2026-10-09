@@ -47,7 +47,7 @@ REAL="$(command -v duplicacy)" || die "duplicacy not on PATH"
 mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<WRAP
 #!/usr/bin/env bash
-if [ "\${1:-}" = "backup" ] && [[ "\$PWD" == */svc-a ]]; then
+if [ "\${2:-}" = "backup" ] && [[ "\$PWD" == */svc-a ]]; then
   touch "${MARKER}"
   sleep 15
   exit 0

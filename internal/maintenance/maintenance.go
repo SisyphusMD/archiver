@@ -384,7 +384,7 @@ func (r *Run) exhaustiveDue(s state, name string) bool {
 // duplicacy runs one duplicacy command in the repository, ending it when a stop comes;
 // stopped reports that.
 func (r *Run) duplicacy(service string, args ...string) (code int, stopped bool) {
-	p, err := proc.Start(proc.Spec{Path: r.Duplicacy, Args: args, Dir: r.repo, Env: r.env, Log: r.log, Service: service})
+	p, err := proc.Start(proc.Spec{Path: r.Duplicacy, Args: proc.NoScript(args...), Dir: r.repo, Env: r.env, Log: r.log, Service: service})
 	if err != nil {
 		r.log.Message(logging.Error, service, fmt.Sprintf("Cannot run %s: %v", r.Duplicacy, err))
 		return -1, false
@@ -411,7 +411,7 @@ func (r *Run) duplicacy(service string, args ...string) (code int, stopped bool)
 // listing failed.
 func (r *Run) revisions(storage string) (map[string]bool, bool) {
 	var out strings.Builder
-	code, err := proc.Run(proc.Spec{Path: r.Duplicacy, Args: []string{"list", "-a", "-storage", storage}, Dir: r.repo, Env: r.env, Output: &out})
+	code, err := proc.Run(proc.Spec{Path: r.Duplicacy, Args: proc.NoScript("list", "-a", "-storage", storage), Dir: r.repo, Env: r.env, Output: &out})
 	if err != nil || code != 0 {
 		return nil, false
 	}

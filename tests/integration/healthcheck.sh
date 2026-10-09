@@ -63,7 +63,7 @@ grep -q "No errors in recent logs" /tmp/hc2.out || die "clean run not reflected"
 log "a FAILED but finished run: healthy-with-warning (transient error, run completed)"
 REAL="$(command -v duplicacy)"
 mv "$REAL" "${REAL}.real"
-printf '#!/usr/bin/env bash\nif [ "${1:-}" = backup ]; then echo boom >&2; exit 1; fi\nexec "$0.real" "$@"\n' >"$REAL"
+printf '#!/usr/bin/env bash\nif [ "${2:-}" = backup ]; then echo boom >&2; exit 1; fi\nexec "$0.real" "$@"\n' >"$REAL"
 chmod +x "$REAL"
 set +e
 archiver backup >/dev/null 2>&1

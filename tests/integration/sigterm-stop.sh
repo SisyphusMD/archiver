@@ -60,7 +60,7 @@ docker exec "$NAME" bash -c '
   echo "some content" > /data/fixtures/file.txt
   REAL="$(command -v duplicacy)"
   mv "$REAL" "${REAL}.real"
-  printf "#!/usr/bin/env bash\nif [ \"\${1:-}\" = backup ]; then touch /tmp/backup-started; sleep 60; exit 0; fi\nexec \"\$0.real\" \"\$@\"\n" > "$REAL"
+  printf "#!/usr/bin/env bash\nif [ \"\${2:-}\" = backup ]; then touch /tmp/backup-started; sleep 60; exit 0; fi\nexec \"\$0.real\" \"\$@\"\n" > "$REAL"
   chmod +x "$REAL"
 ' || die "in-container setup failed"
 
@@ -126,7 +126,7 @@ docker exec "$NAME_MAINT" bash -c '
   set -e
   REAL="$(command -v duplicacy)"
   mv "$REAL" "${REAL}.real"
-  printf "#!/usr/bin/env bash\nif [ \"\${1:-}\" = check ]; then touch /tmp/check-started; sleep 60; exit 0; fi\nexec \"\$0.real\" \"\$@\"\n" > "$REAL"
+  printf "#!/usr/bin/env bash\nif [ \"\${2:-}\" = check ]; then touch /tmp/check-started; sleep 60; exit 0; fi\nexec \"\$0.real\" \"\$@\"\n" > "$REAL"
   chmod +x "$REAL"
 ' || die "phase-2 duplicacy shadow failed"
 

@@ -189,3 +189,10 @@ func Children(pid int) []int {
 type nopCloser struct{ io.Writer }
 
 func (nopCloser) Close() error { return nil }
+
+// NoScript is args for a duplicacy command run with -no-script: Duplicacy otherwise runs
+// any .duplicacy/scripts/pre-<command> it finds, as root with every storage's credentials,
+// and a service directory's repository is writable by whoever owns the service (ADR 45).
+func NoScript(args ...string) []string {
+	return append([]string{"-no-script"}, args...)
+}

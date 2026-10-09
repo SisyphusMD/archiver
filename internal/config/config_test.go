@@ -201,6 +201,8 @@ func TestValidate(t *testing.T) {
 		{"short password", func(c *Config) { c.StoragePassword = "seven77" }, "STORAGE_PASSWORD must be at least 8 characters (a Duplicacy requirement); got 7."},
 		{"pushover", func(c *Config) { c.NotificationService = "PushOver"; c.PushoverUserKey = "u" }, "Notification service is set to PushOver, but PUSHOVER_API_TOKEN is not set"},
 		{"frequency", func(c *Config) { c.PruneExhaustiveFrequency = "hourly" }, "PRUNE_EXHAUSTIVE_FREQUENCY must be one of"},
+		{"relative hooks dir", func(c *Config) { c.HooksDir = "hooks" }, "HOOKS_DIR must be an absolute path"},
+		{"missing hooks dir", func(c *Config) { c.HooksDir = "/nonexistent-hooks" }, "HOOKS_DIR '/nonexistent-hooks' is not a directory"},
 		{"newline in a setting", func(c *Config) {
 			c.Targets[0] = Target{N: 1, Name: "s", Type: "sftp", Values: Values{"SFTP_URL": "h", "SFTP_USER": "u", "SFTP_PATH": "p\n!id\n#"}}
 		}, "STORAGE_TARGET_1_SFTP_PATH contains a control character"},

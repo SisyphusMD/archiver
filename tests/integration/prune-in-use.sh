@@ -47,7 +47,7 @@ REAL="$(command -v duplicacy)"
 cat >/tmp/fakebin/duplicacy <<EOF
 #!/usr/bin/env bash
 # A restore waits while /tmp/hold-restore exists, as a long restore would.
-if [ "\${1:-}" = "restore" ] && [ -e /tmp/hold-restore ]; then
+if [ "\${2:-}" = "restore" ] && [ -e /tmp/hold-restore ]; then
   touch /tmp/holding
   while [ -e /tmp/hold-restore ]; do sleep 0.2; done
 fi

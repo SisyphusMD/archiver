@@ -44,11 +44,27 @@ type Service struct {
 	Dir        string
 	SnapshotID string
 	StateDir   string // scratch space shared by this run's pre- and post-backup hooks
+	// HookDir holds the service's hooks: Dir, or HOOKS_DIR/<Name> when HOOKS_DIR is set.
+	HookDir string
+}
+
+// Hooks is where a service's hooks live (ADR 45): HOOKS_DIR/<service> when hooksDir is
+// set, else the service directory itself.
+func Hooks(hooksDir, serviceDir string) string {
+	if hooksDir == "" {
+		return serviceDir
+	}
+	// Absolute, so the hook checked is the hook run (a hook runs in its service directory).
+	abs, err := filepath.Abs(hooksDir)
+	if err != nil {
+		abs = hooksDir
+	}
+	return filepath.Join(abs, filepath.Base(serviceDir))
 }
 
 // Exists reports whether dir has the named hook. A path that exists but is not an
 // executable regular file is an error, so a hook missing its execute bit is not silently
-// skipped.
+// skipped; so is one that someone other than its owner could change (Safe).
 func Exists(dir, name string) (bool, error) {
 	path := filepath.Join(dir, name)
 	if _, err := os.Lstat(path); os.IsNotExist(err) {
@@ -61,7 +77,78 @@ func Exists(dir, name string) (bool, error) {
 	if !fi.Mode().IsRegular() || fi.Mode().Perm()&0o111 == 0 {
 		return false, fmt.Errorf("%s exists but is not an executable file (chmod +x %s)", name, filepath.Join(dir, name))
 	}
+	if err := Safe(path); err != nil {
+		return false, err
+	}
 	return true, nil
+}
+
+// Safe refuses a file that root would run although someone other than its owner could
+// change it (ADR 45): the file, or any directory above it, writable by group or others,
+// since whoever can write a directory can swap what is in it. A sticky directory (/tmp)
+// is fine: nobody can rename another user's entry in it. A symlinked hook's target is
+// checked the same way. Like sshd's StrictModes, it does not check who the owner is, so a
+// service's own user may keep its hooks.
+func Safe(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	hook := filepath.Base(path)
+	unsafe := func(q string, mode os.FileMode) error {
+		return fmt.Errorf("%s is not run because %s can be changed by users other than its owner (mode %o): run 'chmod go-w %s', or keep hooks in HOOKS_DIR", hook, q, mode.Perm(), q)
+	}
+	// Resolved one component at a time as the kernel does (a ".." after a symlinked
+	// directory leaves its target, not the link), checking every directory an entry on the
+	// way is read from: whoever can write one can swap that entry.
+	cur := "/"
+	rest := strings.Split(strings.TrimPrefix(abs, "/"), "/")
+	for hops := 0; len(rest) > 0; {
+		c := rest[0]
+		rest = rest[1:]
+		switch c {
+		case "", ".":
+			continue
+		case "..":
+			cur = filepath.Dir(cur)
+			continue
+		}
+		fi, err := os.Stat(cur)
+		if err != nil {
+			return err
+		}
+		if fi.Mode().Perm()&0o022 != 0 && fi.Mode()&os.ModeSticky == 0 {
+			return unsafe(cur, fi.Mode())
+		}
+		next := filepath.Join(cur, c)
+		li, err := os.Lstat(next)
+		if err != nil {
+			return err
+		}
+		if li.Mode()&os.ModeSymlink == 0 {
+			cur = next
+			continue
+		}
+		if hops++; hops > 40 {
+			return fmt.Errorf("%s is not run: too many symlinks on its path", hook)
+		}
+		t, err := os.Readlink(next)
+		if err != nil {
+			return err
+		}
+		if filepath.IsAbs(t) {
+			cur = "/"
+		}
+		rest = append(strings.Split(t, "/"), rest...)
+	}
+	fi, err := os.Stat(cur)
+	if err != nil {
+		return err
+	}
+	if fi.Mode().Perm()&0o022 != 0 {
+		return unsafe(cur, fi.Mode())
+	}
+	return nil
 }
 
 // credentialVar matches the variables Duplicacy reads a storage's credentials from: its
@@ -117,10 +204,17 @@ func RestoreEnviron(base []string, s Service, revision int, storage string) []st
 	)
 }
 
+func (s Service) hookDir() string {
+	if s.HookDir != "" {
+		return s.HookDir
+	}
+	return s.Dir
+}
+
 // Run runs one hook and returns its exit code.
 func Run(log *logging.Log, base []string, s Service, name, result string) (int, error) {
 	return proc.Run(proc.Spec{
-		Path:    filepath.Join(s.Dir, name),
+		Path:    filepath.Join(s.hookDir(), name),
 		Dir:     s.Dir,
 		Env:     Environ(base, s, result),
 		Log:     log,

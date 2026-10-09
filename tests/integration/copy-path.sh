@@ -70,7 +70,7 @@ mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<'WRAP'
 #!/usr/bin/env bash
 # `copy -from <p> -to secondary ...` — fail only that destination, pass everything else.
-if [ "${1:-}" = "copy" ] && printf '%s\n' "$@" | grep -qx secondary; then
+if [ "${2:-}" = "copy" ] && printf '%s\n' "$@" | grep -qx secondary; then
   echo "SIMULATED: copy to secondary failed" >&2
   exit 1
 fi
@@ -94,7 +94,7 @@ rm -f "$ATTEMPTS"
 cat >"$REAL" <<'WRAP'
 #!/usr/bin/env bash
 # Fail the FIRST `copy -to secondary`, pass the retry (and everything else).
-if [ "${1:-}" = "copy" ] && printf '%s\n' "$@" | grep -qx secondary; then
+if [ "${2:-}" = "copy" ] && printf '%s\n' "$@" | grep -qx secondary; then
   n=$(( $(cat /tmp/secondary-copy-attempts 2>/dev/null || echo 0) + 1 ))
   echo "$n" >/tmp/secondary-copy-attempts
   if [ "$n" -eq 1 ]; then

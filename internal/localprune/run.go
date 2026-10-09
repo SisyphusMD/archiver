@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/SisyphusMD/archiver/internal/inuse"
+	"github.com/SisyphusMD/archiver/internal/proc"
 )
 
 // Options is one local prune. Duplicacy runs in the working directory, a repository that
@@ -84,7 +85,7 @@ func (o Options) prune(ctx context.Context) (bool, error) {
 }
 
 func (o Options) duplicacy(ctx context.Context, out io.Writer, args ...string) error {
-	cmd := exec.CommandContext(ctx, o.Bin, args...)
+	cmd := exec.CommandContext(ctx, o.Bin, proc.NoScript(args...)...)
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.Dir = o.Dir
 	cmd.Env = o.Env
