@@ -26,7 +26,7 @@ var Obscure = func(pass string) (string, error) {
 // backends are rclone's names for the remote types whose name differs from its TYPE setting.
 var backends = map[string]string{"google cloud storage": "gcs"}
 
-// fetchCommand is a single rclone command that downloads the kit from a storage of type typ
+// fetchCommand is a single shell command that downloads the kit from a storage of type typ
 // with values v, needing nothing but rclone (an on-the-fly remote, no config file). It is
 // empty for types reached otherwise (a local disk, SFTP) or whose credential cannot be
 // written down (a token that changes as it is used).
@@ -67,14 +67,15 @@ func fetchCommand(typ string, v config.Values, kit string) (string, error) {
 		}
 	}
 	sort.Strings(keys)
+	// The credentials go in RCLONE_CONFIG_* variables, not in the remote string on the
+	// command line, where any user on the machine could read them from the process list.
 	var b strings.Builder
-	b.WriteString(":" + backend)
+	b.WriteString("RCLONE_CONFIG_KIT_TYPE=" + backend)
 	for _, k := range keys {
-		// rclone's own quoting: a double quote inside the value is doubled.
-		fmt.Fprintf(&b, `,%s="%s"`, strings.ToLower(k), strings.ReplaceAll(settings[k], `"`, `""`))
+		fmt.Fprintf(&b, " RCLONE_CONFIG_KIT_%s=%s", k, shellQuote(settings[k]))
 	}
-	b.WriteString(":" + strings.TrimSuffix(dir, "/") + "/" + kit)
-	return "rclone copyto " + shellQuote(b.String()) + " " + kit, nil
+	b.WriteString(" rclone --config /dev/null copyto " + shellQuote("kit:"+strings.TrimSuffix(dir, "/")+"/"+kit) + " " + kit)
+	return b.String(), nil
 }
 
 // shellQuote single-quotes s for a POSIX shell.

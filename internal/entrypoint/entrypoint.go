@@ -138,6 +138,9 @@ func (e *Env) Warnings() (fatal string, warnings []string) {
 		warnings = append(warnings, "WARNING: ROTATE_BACKUPS is deprecated; rename it to PRUNE_BACKUPS (still honored for now).")
 	}
 	// Check and prune run only on MAINTENANCE_SCHEDULE (or a manual `archiver maintenance`).
+	if f := e.Getenv("LOG_FORMAT"); f != "" && f != "text" && f != "json" {
+		warnings = append(warnings, fmt.Sprintf("WARNING: LOG_FORMAT='%s' is not text or json; using text.", f))
+	}
 	if e.Getenv("BACKUP_SCHEDULE") != "" && e.Getenv("MAINTENANCE_SCHEDULE") == "" {
 		warnings = append(warnings,
 			"WARNING: MAINTENANCE_SCHEDULE is not set: storage check and prune will never run automatically.",

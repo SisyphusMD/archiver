@@ -393,6 +393,7 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 | `BACKUP_SCHEDULE` | No | Standard 5-field cron expression for the backup pipeline (empty = manual mode) |
 | `MAINTENANCE_SCHEDULE` | No | Cron expression for the maintenance pipeline (check + prune); unset = maintenance only runs via `archiver maintenance` |
 | `TZ` | No | Timezone for scheduled backups and log timestamps (default: UTC) |
+| `LOG_FORMAT` | No | `text` (default) or `json`: how the container prints its logs to `docker logs`. `json` gives one object per line (`time`, `level`, `service`, `log`, `msg`) for a log collector such as Alloy or Loki, covering everything the running container prints (one-shot `run`, `init` and `migrate` stay text); the files in the logs volume stay text |
 | `SYSTEMCTL_FORCE_BUS` | No | Set to `1` to enable systemctl access to host services via D-Bus socket (requires socket mounts, see above) |
 
 Archiver's configuration itself (service directories, storage targets, secrets) is likewise environment variables plus file-based secrets. See [Configuration Sources](#configuration-sources).
@@ -594,7 +595,7 @@ docker exec archiver archiver envelope confirm
 rm -rf ./envelope
 ```
 
-The page holds the recovery password, the decrypt command, and for each storage target where the kit sits (address, user, bucket, path) with a credential that can read it, as text and as QR codes, plus space to write account-recovery codes by hand. Each storage's block also has a command that downloads the kit from any machine: `sftp` for an SFTP storage, and for the others one `rclone copyto` line that needs nothing but rclone (no config file; it carries the credential shown). A OneDrive token changes as it is used, so a OneDrive block says to sign in and download the kit instead. The files are plaintext, owner-only, and never sent anywhere: print one and delete them.
+The page holds the recovery password, the decrypt command, and for each storage target where the kit sits (address, user, bucket, path) with a credential that can read it, as text and as QR codes, plus space to write account-recovery codes by hand. Each storage's block also has a command that downloads the kit from any machine: `sftp` for an SFTP storage, and for the others one `rclone copyto` line that needs nothing but rclone (no config file; it carries the credential shown in `RCLONE_CONFIG_KIT_*` variables, so it never appears in the process list). A OneDrive token changes as it is used, so a OneDrive block says to sign in and download the kit instead. The files are plaintext, owner-only, and never sent anywhere: print one and delete them.
 
 **Break-glass credentials.** By default each storage's block carries its backup credential, marked **FULL ACCESS**, because whoever holds the page could also delete those backups. Where the provider allows a narrower credential, create one that can only read the bucket and give it to archiver as a secret file; the page then carries it instead (archiver never uses it for anything else):
 

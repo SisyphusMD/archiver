@@ -234,7 +234,7 @@ roundtrip() {
   docker exec "$P-$name" bash -c '
     set -e
     archiver envelope /tmp/env >/dev/null
-    cmd=$(grep -o "<pre>rclone copyto .*</pre>" /tmp/env/envelope-*.html | head -n 1 | sed -e "s#^<pre>##" -e "s#</pre>\$##" \
+    cmd=$(grep -o "<pre>RCLONE_CONFIG_KIT_TYPE=.*</pre>" /tmp/env/envelope-*.html | head -n 1 | sed -e "s#^<pre>##" -e "s#</pre>\$##" \
       -e "s/&quot;/\"/g" -e "s/&lt;/</g" -e "s/&gt;/>/g" -e "s/&amp;/\&/g")
     mkdir /tmp/fetch && cd /tmp/fetch
     if [ -z "$cmd" ]; then

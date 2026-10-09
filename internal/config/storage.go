@@ -134,10 +134,37 @@ func WritableToken(t Target, f Field) string {
 	if _, err := os.Stat(dst); err == nil && seeded(dst, seed) {
 		return dst
 	}
-	if os.MkdirAll(TokenDir, 0o700) != nil || os.WriteFile(dst, seed, 0o600) != nil || os.WriteFile(dst+".seed", []byte(seedMark(seed)), 0o600) != nil {
+	if WritePrivate(dst, seed) != nil || WritePrivate(dst+".seed", []byte(seedMark(seed))) != nil {
 		return src
 	}
 	return dst
+}
+
+// WritePrivate replaces path with a new 0600 file holding data. A new file is renamed over
+// the old entry, so nothing already at path (a symlink, a readable file someone with access
+// to the logs volume put there) receives the token; a directory others can write is refused,
+// since they could swap the entry back.
+func WritePrivate(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() || fi.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("%s is not a directory only its owner can write", dir)
+	}
+	f, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), path)
 }
 
 // tokenCopy is where t keeps its writable copy of the token field f.

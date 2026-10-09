@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Source is where configuration comes from. Tests supply their own.
@@ -106,13 +108,52 @@ func IsSecret(name string) bool {
 	return false
 }
 
+// PurgedVar carries the names (never the values) of the raw secret variables
+// PurgeRawSecrets removed, so a child archiver still warns about them.
+const PurgedVar = "ARCHIVER_PURGED_SECRETS"
+
+// PurgeRawSecrets removes secrets passed as plain environment variables from this process's
+// environment, so no child (tar, openssl, rclone, ssh, a later archiver) inherits them; Load
+// still warns about each. It runs first thing in main.
+func PurgeRawSecrets() {
+	names := map[string]bool{}
+	for _, n := range strings.Split(os.Getenv(PurgedVar), ",") {
+		if n != "" {
+			names[n] = true
+		}
+	}
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		if IsSecret(name) {
+			os.Unsetenv(name)
+			names[name] = true
+		}
+	}
+	if len(names) > 0 {
+		list := make([]string, 0, len(names))
+		for n := range names {
+			list = append(list, n)
+		}
+		sort.Strings(list)
+		os.Setenv(PurgedVar, strings.Join(list, ","))
+	}
+}
+
 // Load resolves the configuration. Secrets passed as plain environment variables are
 // ignored, with a warning each: they would leak through /proc and docker inspect. Load does
 // not validate; call Validate before using the result for a run.
 func Load(src Source, environ []string) (*Config, []string, error) {
 	var warnings []string
+	var names []string
 	for _, kv := range environ {
-		name, _, _ := strings.Cut(kv, "=")
+		name, value, _ := strings.Cut(kv, "=")
+		if name == PurgedVar {
+			names = append(names, strings.Split(value, ",")...)
+		} else {
+			names = append(names, name)
+		}
+	}
+	for _, name := range names {
 		if IsSecret(name) {
 			warnings = append(warnings, fmt.Sprintf("Ignoring %s from the environment: secrets are file-only. Put it in %s (or point %s_FILE at it) and remove the env var.",
 				name, filepath.Join(src.SecretsDir, strings.ToLower(name)), name))
@@ -337,6 +378,11 @@ func (c *Config) ValidateStorage(secretsDir string) error {
 			return fmt.Errorf("The storage type %s is not supported. Please check your %sTYPE configuration.", t.Type, p)
 		}
 		for _, f := range Types[t.Type].Fields {
+			// A setting reaches command lines and sftp batch files, where a newline would
+			// start a command of its own.
+			if !f.Secret && strings.IndexFunc(t.Values[f.Name], unicode.IsControl) >= 0 {
+				return fmt.Errorf("%s%s contains a control character (such as a newline); remove it.", p, f.Name)
+			}
 			if f.Optional || f.Default != "" || t.Values[f.Name] != "" {
 				continue
 			}

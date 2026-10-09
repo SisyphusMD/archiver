@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/SisyphusMD/archiver/internal/config"
 )
@@ -74,13 +75,29 @@ func copyVisible(src, dst string) error {
 	return nil
 }
 
-// copyTree copies src to dst like cp -RL: symlinks followed, modes kept.
+// copyTree copies src to dst like cp -RL: symlinks followed (a Kubernetes secret volume is
+// links into a timestamped directory), modes kept. Only regular files are copied: a device
+// would copy without end, a FIFO would block the kit forever. A directory linked back into
+// its own ancestry is skipped rather than followed round.
 func copyTree(src, dst string) error {
+	return copyTreeIn(src, dst, map[[2]uint64]bool{})
+}
+
+func copyTreeIn(src, dst string, ancestors map[[2]uint64]bool) error {
 	fi, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
 	if fi.IsDir() {
+		id := [2]uint64{}
+		if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+			id = [2]uint64{uint64(st.Dev), st.Ino}
+		}
+		if ancestors[id] {
+			return nil
+		}
+		ancestors[id] = true
+		defer delete(ancestors, id)
 		if err := os.MkdirAll(dst, fi.Mode().Perm()|0o700); err != nil {
 			return err
 		}
@@ -89,17 +106,23 @@ func copyTree(src, dst string) error {
 			return err
 		}
 		for _, e := range entries {
-			if err := copyTree(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+			if err := copyTreeIn(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name()), ancestors); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	in, err := os.Open(src)
+	if !fi.Mode().IsRegular() {
+		return nil
+	}
+	in, err := os.OpenFile(src, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
+	if now, err := in.Stat(); err != nil || !now.Mode().IsRegular() {
+		return nil // swapped since the Stat
+	}
 	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fi.Mode().Perm())
 	if err != nil {
 		return err
