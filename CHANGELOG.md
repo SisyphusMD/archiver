@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Token copies under `logs/.tokens` are written as new 0600 files renamed into place,** so a symlink or readable file planted at the path never receives the token, and a directory others can write is refused.
 - **`RECOVERY_KIT_EXTRA_PATHS` copies only regular files and directories:** a link to a device (`/dev/zero`) or a FIFO no longer fills the disk or blocks the kit, and a directory linked into itself is skipped.
 - **The envelope's rclone fetch commands pass credentials in `RCLONE_CONFIG_KIT_*` variables** instead of on rclone's command line, where other users of the machine could read them from the process list.
+- **Kit placement on local storage no longer follows symlinks.** Setting the kit's owner and mode went through a link, so a user who owns the storage directory could swap one in after the upload and take ownership of the secrets or keys; the kit is now adjusted through a descriptor opened without following links.
 - The Pushover API token and user key no longer appear on `curl`'s command line, where any process in the container could read them from `/proc`. They now reach `curl` on stdin, like every other secret.
 
 ### Changed
