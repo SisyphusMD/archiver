@@ -56,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - A restore that initializes a storage (connecting to one a backup or copy is creating at the same moment) now takes the same storage-creation lock they do, so the two can no longer write different storage configurations.
+- **An unwritable log (a full logs volume) now notifies,** once a run; before, every line failed silently apart from stdout.
 - A backup no longer starts while a restore into a service directory is running (the restore hook included); it is skipped with a notification, since it would have saved the directory half-restored. A restore already refused to start during a backup.
 - A notification that fails on a network error, a rate limit or a Pushover server error is retried twice (after 5 and 10 seconds) instead of being lost, and only a refusal such as bad credentials still says to check the Pushover secrets.
 - Maintenance runs from a repository of its own in `logs/.maintenance-repo/` instead of the first service directory with a repository, so adding a service that sorts first no longer strands the pending fossil collections of earlier prunes (their chunks waited for the next exhaustive prune). The first run takes over the collections service repositories hold, and maintenance no longer needs a backup to have run first.

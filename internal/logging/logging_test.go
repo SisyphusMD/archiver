@@ -112,3 +112,16 @@ func TestRotateSameSecond(t *testing.T) {
 		t.Fatalf("symlink -> %q", target)
 	}
 }
+
+// An unwritable log notifies once, however many lines fail to be written.
+func TestUnwritableLogNotifiesOnce(t *testing.T) {
+	var sent []string
+	l := &Log{Dir: filepath.Join(t.TempDir(), "missing"), Basename: "archiver", ErrorTitle: "Backup Error",
+		Notify: func(title, msg string) { sent = append(sent, msg) }}
+	l.Unnotified(Info, "", "a notification's outcome")
+	l.Message(Info, "", "one")
+	l.Message(Info, "", "two")
+	if len(sent) != 1 || !strings.Contains(sent[0], "Cannot write") || l.Errors() != 3 {
+		t.Fatalf("sent %q, errors %d", sent, l.Errors())
+	}
+}
