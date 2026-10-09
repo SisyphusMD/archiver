@@ -7,15 +7,18 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/damage"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/proc"
 	"github.com/SisyphusMD/archiver/internal/runlock"
@@ -152,26 +155,49 @@ func (d *Duplicacy) StartCopy(string) (Copy, error) {
 	if err != nil {
 		return nil, err
 	}
-	return running{p}, nil
+	return running{p: p}, nil
 }
 
-// Start runs another duplicacy command (prune, check) in the repository.
+// Start runs another duplicacy command (prune, check) in the repository. A failed check
+// names the revisions it found damaged.
 func (d *Duplicacy) Start(args ...string) (Copy, error) {
-	p, err := proc.Start(proc.Spec{Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: d.Target.StorageName(), Args: proc.NoScript(args...)})
+	spec := proc.Spec{Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: d.Target.StorageName(), Args: proc.NoScript(args...)}
+	var out *strings.Builder
+	var lw io.WriteCloser
+	if len(args) > 0 && args[0] == "check" {
+		out, lw = &strings.Builder{}, d.Log.Writer(logging.Info, d.Target.StorageName())
+		spec.Output = io.MultiWriter(lw, out)
+	}
+	p, err := proc.Start(spec)
 	if err != nil {
+		if lw != nil {
+			lw.Close()
+		}
 		return nil, err
 	}
-	return running{p}, nil
+	return running{p, out, lw}, nil
 }
 
-type running struct{ p *proc.Proc }
+type running struct {
+	p   *proc.Proc
+	out *strings.Builder // a check's output, read once it has exited
+	lw  io.WriteCloser
+}
 
 func (r running) Wait() error {
 	code, err := r.p.Wait()
+	if r.lw != nil {
+		r.lw.Close()
+	}
 	if err != nil {
 		return err
 	}
 	if code != 0 {
+		if r.out != nil {
+			if d := damage.Describe(r.out.String()); d != "" {
+				return fmt.Errorf("duplicacy exited %d; %s", code, d)
+			}
+		}
 		return fmt.Errorf("duplicacy exited %d", code)
 	}
 	return nil

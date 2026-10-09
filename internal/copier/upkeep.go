@@ -121,7 +121,7 @@ func (w *Worker) upkeep(ctx context.Context, stops int) (ok bool) {
 	if check && !changed {
 		w.log("INFO", fmt.Sprintf("Checking %s storage.", w.Target))
 		err, stopped := w.run(ctx, stops, Checking, 0, true, func() (Copy, error) {
-			return w.Runner.Start("check", "-all", "-storage", w.Target, "-fossils", "-resurrect", "-stats", "-threads", w.Upkeep.Threads)
+			return w.Runner.Start("check", "-all", "-storage", w.Target, "-fossils", "-resurrect", "-stats", "-persist", "-threads", w.Upkeep.Threads)
 		})
 		if stopped {
 			w.log("INFO", fmt.Sprintf("Check of %s storage interrupted; it runs again when the worker is next idle.", w.Target))
