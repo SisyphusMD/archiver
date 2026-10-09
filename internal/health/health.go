@@ -19,6 +19,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/envelope"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
+	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
 
@@ -151,6 +152,8 @@ func Run(w io.Writer, l layout.Layout, env Env, now time.Time) int {
 		}
 	}
 
+	drills(r, l, env, now)
+
 	if _, warning := envelope.Status(l, now, status.Age); warning != "" {
 		r.warn("Envelope: %s", warning)
 	}
@@ -255,4 +258,46 @@ func availableMB(dir string) (int64, error) {
 	}
 	avail := int64(st.Bavail) * int64(st.Bsize)
 	return (avail + (1<<20 - 1)) >> 20, nil
+}
+
+// drills reports the restore drills (ADR 28): a failed last drill, or none passing within
+// twice the schedule's interval. Warnings, like a failed backup: the healthcheck is the
+// container's liveness, and a restart would not fix a backup that cannot be restored.
+func drills(r *report, l layout.Layout, env Env, now time.Time) {
+	spec := env("RESTORE_DRILL_SCHEDULE")
+	ds, err := lockstate.ReadDrillState(l.DrillState())
+	if err != nil {
+		r.warn("Restore drill state is unreadable: %v", err)
+		return
+	}
+	if ds.LastRun == 0 {
+		if spec == "" {
+			return
+		}
+		if every, ok := daemon.Interval(spec, now); ok && ds.Scheduled > 0 && now.Sub(time.Unix(ds.Scheduled, 0)) > 2*every {
+			r.warn("No restore drill has run since drills were scheduled %s", status.Age(ds.Scheduled, now))
+			return
+		}
+		r.ok("Restore drills scheduled (%s); none has run yet", spec)
+		return
+	}
+	if ds.LastFailed {
+		r.warn("The last restore drill failed (%s); see 'archiver status' and drill.log", status.Age(ds.LastRun, now))
+	}
+	if spec == "" {
+		return
+	}
+	// Until a drill has passed, the clock runs from when drills were scheduled.
+	since := ds.LastPass
+	if since == 0 {
+		since = ds.Scheduled
+	}
+	if since == 0 {
+		since = ds.LastRun
+	}
+	if every, ok := daemon.Interval(spec, now); ok && now.Sub(time.Unix(since, 0)) > 2*every {
+		r.warn("No restore drill has passed in over %s (twice RESTORE_DRILL_SCHEDULE's interval)", logging.Duration(int64(2*every/time.Second)))
+	} else if !ds.LastFailed {
+		r.ok("Last passing restore drill %s", status.Age(ds.LastPass, now))
+	}
 }

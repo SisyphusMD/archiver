@@ -123,7 +123,8 @@ func (e *Env) PlaceKeys() error {
 // refused) and a leftover stop flag from ending the first backup.
 func (e *Env) ClearLocks() {
 	for _, name := range []string{"archiver-main.lock", "archiver-stop-requested", "archiver-maintenance.lock",
-		"archiver-maintenance-stop-requested", "archiver-main.lock.tmp", "archiver-maintenance.lock.tmp"} {
+		"archiver-maintenance-stop-requested", "archiver-main.lock.tmp", "archiver-maintenance.lock.tmp",
+		"archiver-drill.lock", "archiver-drill-stop-requested", "archiver-drill.lock.tmp"} {
 		os.Remove(filepath.Join(e.Layout.Lock, name))
 	}
 }
@@ -215,9 +216,9 @@ func offset(f *os.File) int64 {
 	return o
 }
 
-// LocksClear reports whether neither pipeline holds its lock.
+// LocksClear reports whether no backup, maintenance or drill holds its lock.
 func (e *Env) LocksClear() bool {
-	for _, name := range []string{"archiver-main.lock", "archiver-maintenance.lock"} {
+	for _, name := range []string{"archiver-main.lock", "archiver-maintenance.lock", "archiver-drill.lock"} {
 		if _, err := os.Stat(filepath.Join(e.Layout.Lock, name)); err == nil {
 			return false
 		}

@@ -39,6 +39,14 @@ func Write(w io.Writer, l layout.Layout, now time.Time) error {
 		fmt.Fprintln(w, "Maintenance: not running.")
 	}
 
+	if d, held, err := lockstate.ReadLock(l.DrillLock()); err == nil && held && d.Alive() {
+		state := "running"
+		if d.Paused() {
+			state = "paused"
+		}
+		fmt.Fprintf(w, "Restore drill: %s (PID: %d, %s).\n", state, d.PID, d.Stage)
+	}
+
 	if states := (&copier.Store{Path: l.CopyWorkersState()}).Load(); len(states) > 0 {
 		fmt.Fprintln(w, "Copies (as of the daemon's last update):")
 		names := make([]string, 0, len(states))
@@ -53,6 +61,33 @@ func Write(w io.Writer, l layout.Layout, now time.Time) error {
 
 	if line, _ := envelope.Status(l, now, Age); line != "" {
 		fmt.Fprintln(w, line)
+	}
+
+	if ds, err := lockstate.ReadDrillState(l.DrillState()); err == nil && len(ds.Results) > 0 {
+		fmt.Fprintln(w, "Restore drills (last per service):")
+		storagesDrilled := make([]string, 0, len(ds.Results))
+		for s := range ds.Results {
+			storagesDrilled = append(storagesDrilled, s)
+		}
+		sort.Strings(storagesDrilled)
+		for _, s := range storagesDrilled {
+			services := make([]string, 0, len(ds.Results[s]))
+			for n := range ds.Results[s] {
+				services = append(services, n)
+			}
+			sort.Strings(services)
+			for _, n := range services {
+				r := ds.Results[s][n]
+				what := "passed"
+				switch {
+				case r.Skipped:
+					what = "skipped (" + r.Message + ")"
+				case !r.OK:
+					what = "FAILED (" + r.Message + ")"
+				}
+				fmt.Fprintf(w, "  %s on %s: revision %d %s %s\n", n, s, r.Revision, what, Age(r.At, now))
+			}
+		}
 	}
 
 	storages, err := lockstate.ReadMaintenance(l.MaintenanceState())

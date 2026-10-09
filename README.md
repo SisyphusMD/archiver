@@ -426,7 +426,7 @@ The settings below define what to backup and where. Supply them as environment v
 
 Environment variables carry the non-secret settings and files under `/run/secrets` carry the secrets and keys, so the configuration stays under version control (compose file / ConfigMap) and the secrets stay in a secret store. Nothing is read from a configuration file, and nothing configured is ever executed.
 
-**Non-secret settings (plain env vars).** `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, and each type's settings in [Storage types](#storage-types)), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, `BACKUP_PARALLELISM`, `HOOKS_DIR`, `NOTIFICATION_SERVICE`, and `RECOVERY_KIT_EXTRA_PATHS`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine).
+**Non-secret settings (plain env vars).** `SERVICE_DIRECTORIES`, the non-secret `STORAGE_TARGET_N_*` fields (`NAME`, `TYPE`, and each type's settings in [Storage types](#storage-types)), `CHECK_BACKUPS`, `CHECK_INTERVAL`, `STORAGE_TARGET_N_CHECK_INTERVAL`, `PRUNE_BACKUPS`, `PRUNE_KEEP`, `PRUNE_EXHAUSTIVE_FREQUENCY`, `DUPLICACY_THREADS`, `BACKUP_PARALLELISM`, `HOOKS_DIR`, `RESTORE_DRILL_SERVICES`, `RESTORE_DRILL_STORAGES`, `RESTORE_DRILL_DIR`, `RESTORE_DRILL_EXCLUDE`, `NOTIFICATION_SERVICE`, and `RECOVERY_KIT_EXTRA_PATHS`. As an env var, `SERVICE_DIRECTORIES` is a colon-delimited list rather than a bash array, for example `SERVICE_DIRECTORIES=/srv/*/:/home/user/data/` (newlines also work, so a YAML block scalar is fine).
 
 **Secrets (files only).** Secrets are never read from a plain env var (one would leak through `/proc` and `docker inspect`, and Archiver purges any it finds). Each secret is read from a file: `<NAME>_FILE` if set, otherwise `/run/secrets/<lowercased name>`. The secrets are `STORAGE_PASSWORD`, `RSA_PASSPHRASE`, `PUSHOVER_USER_KEY`, `PUSHOVER_API_TOKEN`, and each target's type's secrets (see [Storage types](#storage-types)) and optional [break-glass credentials](#break-glass-envelope). For example, `STORAGE_PASSWORD` reads `/run/secrets/storage_password` and `STORAGE_TARGET_1_B2_KEY` reads `/run/secrets/storage_target_1_b2_key`. `STORAGE_PASSWORD` must be at least 8 characters (a Duplicacy requirement). Because `/run/secrets` is the native mount path for Docker and Kubernetes secrets, a Compose or Swarm `secrets:` entry named to match (for example `storage_password`) is picked up with no extra configuration.
 
@@ -658,6 +658,22 @@ When copy workers run (a schedule and at least one secondary), maintenance keeps
 
 Each worker keeps a small repository in `logs/.copy-repos/` whose cache holds Duplicacy's pending fossil collections; mount the logs directory so they survive container restarts (otherwise their chunks wait for the next exhaustive prune).
 
+### Restore drills
+
+A backup nobody has restored is a hope. With `RESTORE_DRILL_SCHEDULE` set (a cron schedule, like the others; unset means no drills), Archiver regularly restores real revisions and proves they come back:
+
+```bash
+RESTORE_DRILL_SCHEDULE="0 5 * * 0"   # weekly, Sunday 5am
+RESTORE_DRILL_SERVICES="1"           # services per storage per drill (default 1, in rotation), or "all"
+RESTORE_DRILL_STORAGES="all"         # "all" (default), "primary", or storage names
+RESTORE_DRILL_DIR="/tmp/archiver-drill"  # scratch space for the restored copy (default)
+RESTORE_DRILL_EXCLUDE="media"        # service names never drilled (too big for the scratch space, say)
+```
+
+Each drill takes, on every chosen storage, the next service in rotation (so one service per week covers every service over time) and restores its newest revision into the drill directory. Duplicacy verifies every chunk as it downloads it, the restored file count is checked against the revision's listing, and the copy is deleted. Restore hooks never run, and the live service and its directory are never touched. A service whose revision would not fit the drill directory's free space is skipped with a warning; one with no revision on a storage yet (a secondary still catching up) is skipped too.
+
+A failed drill always notifies ("Restore Drill Failed"); a passing one is routine news (`NOTIFY_ON=everything`). `archiver status` shows each service's last drill per storage, and the healthcheck warns when the last drill failed or none has passed within twice the schedule's interval. Drills run alongside backups (the revision being restored is held in use so no prune removes it meanwhile); `archiver stop`, `pause` and `resume` act on them. `archiver drill [SERVICE] [STORAGE]` runs one now. The restored copy needs as much space as the revision, so point `RESTORE_DRILL_DIR` at a volume with room, or exclude large services. Drills write to `logs/drill.log`.
+
 ### Performance
 
 ```bash
@@ -740,7 +756,8 @@ archiver backup            # Run the backup pipeline now (synchronous, exit code
 archiver backup --detach   # Run it in the background (follow with 'archiver logs')
 archiver maintenance       # Run per-storage check + prune now (synchronous)
 archiver maintenance exhaustive  # Same, forcing the full-listing exhaustive prune
-archiver stop [backup|maintenance|all]  # Stop a pipeline gracefully (default all: both pipelines)
+archiver drill [SERVICE] [STORAGE]  # Run a restore drill now (README "Restore drills")
+archiver stop [backup|maintenance|drill|all]  # Stop gracefully (default all: backup, maintenance and a drill)
 archiver stop --immediate  # Stop immediately (skip cleanup); combine with a target
 archiver pause             # Pause backup (experimental)
 archiver resume            # Resume paused backup (experimental)
