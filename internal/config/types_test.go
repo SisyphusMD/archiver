@@ -185,3 +185,22 @@ func TestDropboxRemotePathRelative(t *testing.T) {
 		t.Errorf("dir %q", dir)
 	}
 }
+
+// The recovery kit carries the notification secrets, so a recovered host keeps notifying.
+func TestSnapshotCarriesNotificationSecrets(t *testing.T) {
+	secrets := t.TempDir()
+	os.WriteFile(filepath.Join(secrets, "apprise_url"), []byte("http://u:p@apprise:8000/notify/a\n"), 0o600)
+	os.WriteFile(filepath.Join(secrets, "ntfy_token"), []byte("tk_1"), 0o600)
+	src := Source{Getenv: func(string) string { return "" }, SecretsDir: secrets}
+	s, err := Snapshot(src, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, kv := range s.Secrets {
+		got[kv.Name] = kv.Value
+	}
+	if got["APPRISE_URL"] != "http://u:p@apprise:8000/notify/a" || got["NTFY_TOKEN"] != "tk_1" {
+		t.Fatalf("snapshot secrets %v", got)
+	}
+}
