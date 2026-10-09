@@ -293,6 +293,14 @@ jobs:
         run: |
           docker run -i --rm --hostname dr-host --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/doctor.sh
+      - name: Restore preview (DRY_RUN) changes nothing; RESTORE_PATHS restores only what it names (ADR 29)
+        run: |
+          docker run -i --rm --hostname rp-host --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+            --entrypoint bash roundtrip:local -s < tests/integration/restore-preview.sh
+      - name: archiver recover rebuilds a lost host from the kit alone (ADR 29)
+        run: |
+          docker run -i --rm --hostname rc-host --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+            --entrypoint bash roundtrip:local -s < tests/integration/recover.sh
       - name: "Fault injection: corrupted chunks are named by check, fail drills and restores; intact revisions restore (ADR 31)"
         run: |
           docker run -i --rm --hostname fc-host --cap-drop ALL --cap-add DAC_OVERRIDE \

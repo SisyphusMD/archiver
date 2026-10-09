@@ -878,7 +878,23 @@ docker exec -it archiver archiver restore
 
 The restore destination can be any path accessible within the container. If you need to restore to a new location not currently mounted, add a volume mount and restart the container first.
 
+**Before it restores**, the interactive restore shows a preview: how many files it would add, replace (or leave, without overwrite) and delete, and their sizes, judged by size and modification time against what the destination holds. It reads only the revision's file list, so it costs seconds to a minute, and cancelling leaves the destination exactly as it was. At a terminal it then asks "Restore now?"; `NO_PREVIEW=1` skips it. When the snapshot belongs to a configured service, the suggested destination is another directory: restoring over a service that is still running can leave it reading half-restored files, and a copy beside it can be checked first. The advanced options also restore only some paths of the snapshot (see `RESTORE_PATHS` below).
+
 A restore refuses to start while a backup runs. A restore into a configured service directory (or a directory inside or above one) also keeps backups out until it ends, its restore hook included: a backup that starts meanwhile is skipped with a notification, since it would save the directory half-restored. Restores elsewhere do not affect backups.
+
+### Recovering a Lost Host (`archiver recover`)
+
+When the host is gone, all you need is the recovery kit (on every storage, and fetched with the envelope's command) and its password. On the new host, start a one-off container with the service directories mounted where the old deployment had them, the kit, and an empty directory for the recovered configuration:
+
+```bash
+docker run -it --rm --hostname <old hostname> \
+  -v ./archiver-recovered:/opt/archiver/recovered \
+  -v ./archiver-recovery-kit-<old hostname>.tar.enc:/kit.tar.enc:ro \
+  -v /srv:/srv \
+  forgejo.bryantserver.com/sisyphusmd/archiver:1 recover /kit.tar.enc
+```
+
+It asks for the kit password (or reads a mounted `recovery_password` secret), then, checking each step before the next: decrypts the kit, writes its `archiver.env`, `secrets/` (owner-only) and `RECREATE.txt` to `/opt/archiver/recovered`, puts the keys in place, checks every storage, and, after you confirm (`--yes` skips the question), restores every service of the old host into its directory from `SERVICE_DIRECTORIES` (a pattern like `/srv/*/` places each service beside its siblings, even though the directories do not exist yet). `--hook` also runs each service's restore hook. It ends by saying how to recreate the deployment: `archiver.env` as its environment, `secrets/` as `/run/secrets`, and the old hostname, so new backups continue the same snapshots. Move the plaintext secrets into your secret store and delete the directory afterwards.
 
 ### One-Off Restore with Temporary Container
 
@@ -933,6 +949,8 @@ Iterates storage targets in configured order and restores from the first target 
 | `DELETE_EXTRA` | No | Non-empty enables `-delete` |
 | `HASH_COMPARE` | No | Non-empty enables `-hash` |
 | `IGNORE_OWNERSHIP` | No | Non-empty enables `-ignore-owner` |
+| `RESTORE_PATHS` | No | Restore only these paths in the snapshot (comma-separated; a directory brings everything under it), for example `config/,data/app.db` |
+| `DRY_RUN` | No | Non-empty shows what the restore would add, replace and delete, and restores nothing (the destination is not created or changed) |
 | `RUN_RESTORE_SERVICE` | No | Non-empty runs the restored directory's restore hook (`post-restore`, or `restore-service.sh`) after a successful file restore (DB reload, stack restart); its failure fails the restore |
 | `RESTORE_THREADS` | No | Override download thread count (default matches `DUPLICACY_THREADS`) |
 

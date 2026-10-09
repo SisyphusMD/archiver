@@ -323,6 +323,7 @@ func parseRevisions(listing, id string) []int {
 type Options struct {
 	Hash, Overwrite, Delete, IgnoreOwner, Persist bool
 	Threads                                       string
+	Paths                                         []string // RESTORE_PATHS: only these, and what is under them
 }
 
 func (o Options) args() []string {
@@ -383,6 +384,9 @@ func (e *Env) restore(dir string, t config.Target, id string, rev int, o Options
 	}
 	defer h.Release()
 	args := append([]string{"restore", "-r", strconv.Itoa(rev), "-key", e.Layout.RSAPrivateKey(), "-stats", "-threads", o.Threads}, o.args()...)
+	if len(o.Paths) > 0 {
+		args = append(append(args, "--"), patterns(o.Paths)...)
+	}
 	cmd := e.duplicacy(dir, out, args...)
 	// duplicacy shares the registration's lock, so a restore that outlives this process
 	// (killed mid-restore) still keeps its revision from being pruned.

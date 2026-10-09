@@ -25,7 +25,7 @@ func entrypointCommand(args []string) int {
 	// LOG_FORMAT=json covers the long-running container: everything it and its children
 	// print goes through JSONLines. init and migrate are interactive, and run replaces this
 	// process with the command, so those stay text.
-	interactive := len(args) > 0 && (args[0] == "init" || args[0] == "migrate" || args[0] == "run")
+	interactive := len(args) > 0 && (args[0] == "init" || args[0] == "migrate" || args[0] == "run" || args[0] == "recover")
 	stdout := os.Stdout
 	if os.Getenv("LOG_FORMAT") == "json" && !interactive {
 		flush := jsonStdio()
@@ -47,6 +47,18 @@ func entrypointCommand(args []string) int {
 		os.MkdirAll(setup, 0o755)
 		os.Chdir(l.Root)
 		return initCommand()
+	}
+
+	// A fresh host has no keys or configuration yet: recovery brings them, so it runs before
+	// anything that needs them.
+	if len(args) > 0 && args[0] == "recover" {
+		fmt.Println("Running in RECOVER mode")
+		code, ok := recoverCommand(args[1:])
+		if !ok {
+			fmt.Fprintln(os.Stderr, "usage: recover KIT [--yes] [--hook] [--out DIR]")
+			return 2
+		}
+		return code
 	}
 
 	// Converts legacy settings files, which keep the container from starting.
