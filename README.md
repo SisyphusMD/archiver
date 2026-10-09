@@ -882,6 +882,20 @@ The restore destination can be any path accessible within the container. If you 
 
 A restore refuses to start while a backup runs. A restore into a configured service directory (or a directory inside or above one) also keeps backups out until it ends, its restore hook included: a backup that starts meanwhile is skipped with a notification, since it would save the directory half-restored. Restores elsewhere do not affect backups.
 
+### Recovering a Lost Host (`archiver recover`)
+
+When the host is gone, all you need is the recovery kit (on every storage, and fetched with the envelope's command) and its password. On the new host, start a one-off container with the service directories mounted where the old deployment had them, the kit, and an empty directory for the recovered configuration:
+
+```bash
+docker run -it --rm --hostname <old hostname> \
+  -v ./archiver-recovered:/opt/archiver/recovered \
+  -v ./archiver-recovery-kit-<old hostname>.tar.enc:/kit.tar.enc:ro \
+  -v /srv:/srv \
+  forgejo.bryantserver.com/sisyphusmd/archiver:1 recover /kit.tar.enc
+```
+
+It asks for the kit password (or reads a mounted `recovery_password` secret), then, checking each step before the next: decrypts the kit, writes its `archiver.env`, `secrets/` (owner-only) and `RECREATE.txt` to `/opt/archiver/recovered`, puts the keys in place, checks every storage, and, after you confirm (`--yes` skips the question), restores every service of the old host into its directory from `SERVICE_DIRECTORIES` (a pattern like `/srv/*/` places each service beside its siblings, even though the directories do not exist yet). `--hook` also runs each service's restore hook. It ends by saying how to recreate the deployment: `archiver.env` as its environment, `secrets/` as `/run/secrets`, and the old hostname, so new backups continue the same snapshots. Move the plaintext secrets into your secret store and delete the directory afterwards.
+
 ### One-Off Restore with Temporary Container
 
 For a one-time restore without modifying your running container, start a temporary container and exec the interactive restore into it:

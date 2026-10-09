@@ -54,10 +54,20 @@ func capEff() int64 {
 // drill's scratch directory must stay exactly what was backed up). A failure only warns:
 // the files are restored either way.
 func migrateRestored(dir string) {
+	migrateRestoredWith(config.FromEnvironment(), pipeline.Hostname(os.Getenv))(dir)
+}
+
+// migrateRestoredWith is migrateRestored for the configuration src and the host's name: a
+// recovery's, read from the kit, before any environment holds it.
+func migrateRestoredWith(src config.Source, host string) func(dir string) {
+	return func(dir string) { migrateRestoredIn(src, host, dir) }
+}
+
+func migrateRestoredIn(src config.Source, host, dir string) {
 	if _, err := os.Lstat(filepath.Join(dir, hooks.Legacy)); err != nil {
 		return
 	}
-	cfg, _, err := config.Load(config.FromEnvironment(), nil)
+	cfg, _, err := config.Load(src, nil)
 	if err != nil {
 		return
 	}
@@ -79,7 +89,7 @@ func migrateRestored(dir string) {
 		return
 	}
 	defer lock.Release()
-	m, err := hooks.Migrate(dir, pipeline.Hostname(os.Getenv))
+	m, err := hooks.Migrate(dir, host)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "WARNING: the restored %s could not be migrated: %v. Backups refuse this service until 'archiver migrate hooks %s' succeeds.\n", hooks.Legacy, err, dir)
 		return

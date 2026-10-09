@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -22,6 +24,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logview"
 	"github.com/SisyphusMD/archiver/internal/restore"
+	"github.com/SisyphusMD/archiver/internal/setup"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
 
@@ -69,6 +72,11 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "maintenance" {
 		if code, ok := maintenanceCommand(os.Args[2:]); ok {
+			os.Exit(code)
+		}
+	}
+	if len(os.Args) >= 3 && os.Args[1] == "recover" {
+		if code, ok := recoverCommand(os.Args[2:]); ok {
 			os.Exit(code)
 		}
 	}
@@ -275,4 +283,49 @@ func doctorCommand(notify bool) int {
 		Notify:    notify,
 		Probe:     re.Snapshots,
 	})
+}
+
+// recoverCommand runs `archiver recover KIT [--yes] [--hook] [--out DIR]` (ADR 29). The kit
+// password comes from the recovery_password secret when one is mounted, else a hidden prompt.
+func recoverCommand(args []string) (int, bool) {
+	o := restore.RecoverOptions{Out: "/opt/archiver/recovered", Migrate: migrateRestoredWith}
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; {
+		case a == "--yes":
+			o.Yes = true
+		case a == "--hook":
+			o.Hook = true
+		case a == "--out" && i+1 < len(args):
+			i++
+			o.Out = args[i]
+		case !strings.HasPrefix(a, "-") && o.Kit == "":
+			o.Kit = a
+		default:
+			return 0, false
+		}
+	}
+	if o.Kit == "" {
+		return 0, false
+	}
+	src := config.FromEnvironment()
+	path := os.Getenv("RECOVERY_PASSWORD_FILE")
+	if path == "" {
+		path = filepath.Join(src.SecretsDir, "recovery_password")
+	}
+	if b, err := os.ReadFile(path); err == nil {
+		o.Password = strings.TrimRight(string(b), "\r\n")
+	} else {
+		fmt.Print("Recovery kit password: ")
+		var restore func()
+		if hide := setup.HideTerminal(os.Stdin); hide != nil {
+			restore = hide()
+		}
+		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		if restore != nil {
+			restore()
+		}
+		fmt.Println()
+		o.Password = strings.TrimRight(line, "\r\n")
+	}
+	return restoreEnv().Recover(o), true
 }
