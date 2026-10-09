@@ -112,7 +112,7 @@ func (d *Duplicacy) locked(ctx context.Context, storage string, f func() (string
 }
 
 func (d *Duplicacy) outputContext(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, d.Bin, args...)
+	cmd := exec.CommandContext(ctx, d.Bin, proc.NoScript(args...)...)
 	cmd.Dir, cmd.Env = d.Repo, d.Env
 	out, err := cmd.CombinedOutput()
 	return string(bytes.TrimSpace(out)), err
@@ -147,7 +147,7 @@ func (d *Duplicacy) StartCopy(string) (Copy, error) {
 	t := d.Target.StorageName()
 	p, err := proc.Start(proc.Spec{
 		Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: t,
-		Args: []string{"copy", "-from", d.Primary.StorageName(), "-to", t, "-key", d.PrivKey, "-threads", d.Threads, "-download-threads", d.Threads},
+		Args: proc.NoScript("copy", "-from", d.Primary.StorageName(), "-to", t, "-key", d.PrivKey, "-threads", d.Threads, "-download-threads", d.Threads),
 	})
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ func (d *Duplicacy) StartCopy(string) (Copy, error) {
 
 // Start runs another duplicacy command (prune, check) in the repository.
 func (d *Duplicacy) Start(args ...string) (Copy, error) {
-	p, err := proc.Start(proc.Spec{Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: d.Target.StorageName(), Args: args})
+	p, err := proc.Start(proc.Spec{Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: d.Target.StorageName(), Args: proc.NoScript(args...)})
 	if err != nil {
 		return nil, err
 	}

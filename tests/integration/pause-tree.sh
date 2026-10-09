@@ -35,7 +35,7 @@ REAL="$(command -v duplicacy)"
 mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<WRAP
 #!/usr/bin/env bash
-if [ "\${1:-}" = "backup" ]; then
+if [ "\${2:-}" = "backup" ]; then
   touch "${MARKER}"
 fi
 exec "\$0.real" "\$@"

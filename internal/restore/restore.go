@@ -25,6 +25,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
+	"github.com/SisyphusMD/archiver/internal/proc"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -227,7 +228,7 @@ func (e *Env) pinnedTarget(v string) (config.Target, bool) {
 }
 
 func (e *Env) duplicacy(dir string, out io.Writer, args ...string) *exec.Cmd {
-	cmd := exec.Command(e.Duplicacy, args...)
+	cmd := exec.Command(e.Duplicacy, proc.NoScript(args...)...)
 	cmd.Dir = dir
 	cmd.Env = e.cfg.DuplicacyEnviron(e.Environ, e.Layout.SSHPrivateKey())
 	cmd.Stdout, cmd.Stderr = out, out
@@ -366,22 +367,33 @@ func (e *Env) postRestore(dir, id string, rev int, t config.Target, stdin io.Rea
 	s := hooks.Service{Name: filepath.Base(dir), Dir: dir, SnapshotID: id}
 	env := hooks.RestoreEnviron(e.Environ, s, rev, t.Name)
 	var cmd *exec.Cmd
-	ok, err := hooks.Exists(dir, hooks.PostRestore)
+	hookDir := e.hookDir(dir)
+	ok, err := hooks.Exists(hookDir, hooks.PostRestore)
 	if err != nil {
 		return 0, err
+	}
+	legacy := !ok && isFile(filepath.Join(hookDir, hooks.LegacyRestore))
+	if legacy {
+		if err := hooks.Safe(filepath.Join(hookDir, hooks.LegacyRestore)); err != nil {
+			return 0, err
+		}
 	}
 	switch {
 	case ok:
 		fmt.Fprintf(out, "Running %s...\n", hooks.PostRestore)
-		cmd = exec.Command(filepath.Join(dir, hooks.PostRestore))
-	case isFile(filepath.Join(dir, hooks.LegacyRestore)):
+		cmd = exec.Command(filepath.Join(hookDir, hooks.PostRestore))
+	case legacy:
 		fmt.Fprintf(out, "Running %s...\n", hooks.LegacyRestore)
-		cmd = exec.Command("bash", hooks.LegacyRestore)
+		script := hooks.LegacyRestore // what it always ran as, its $0, when in the directory
+		if hookDir != dir {
+			script = filepath.Join(hookDir, hooks.LegacyRestore)
+		}
+		cmd = exec.Command("bash", script)
 		// What it always saw: the restore's variables, for this service (auto-restore-all
 		// runs one restore per service), last so they override any the caller set.
 		env = append(env, "SNAPSHOT_ID="+id, "LOCAL_DIR="+dir)
 	default:
-		fmt.Fprintf(out, "No %s or %s in '%s'; nothing to run.\n", hooks.PostRestore, hooks.LegacyRestore, dir)
+		fmt.Fprintf(out, "No %s or %s in '%s'; nothing to run.\n", hooks.PostRestore, hooks.LegacyRestore, hookDir)
 		return 0, nil
 	}
 	cmd.Dir = dir
@@ -400,8 +412,17 @@ func (e *Env) postRestore(dir, id string, rev int, t config.Target, stdin io.Rea
 	return 0, err
 }
 
-func hasRestoreHook(dir string) bool {
-	return isFile(filepath.Join(dir, hooks.PostRestore)) || isFile(filepath.Join(dir, hooks.LegacyRestore))
+func (e *Env) hasRestoreHook(dir string) bool {
+	hd := e.hookDir(dir)
+	return isFile(filepath.Join(hd, hooks.PostRestore)) || isFile(filepath.Join(hd, hooks.LegacyRestore))
+}
+
+// hookDir is where dir's restore hook lives: HOOKS_DIR/<name> when set (ADR 45).
+func (e *Env) hookDir(dir string) string {
+	if e.cfg == nil {
+		return dir
+	}
+	return hooks.Hooks(e.cfg.HooksDir, dir)
 }
 
 func isFile(p string) bool {

@@ -41,7 +41,7 @@ REAL="$(command -v duplicacy)" || die "duplicacy not on PATH"
 mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<'WRAP'
 #!/usr/bin/env bash
-if [ "${1:-}" = "backup" ]; then
+if [ "${2:-}" = "backup" ]; then
   echo "SIMULATED: chunk upload failed" >&2
   exit 1
 fi

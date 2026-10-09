@@ -129,7 +129,7 @@ REAL="$(command -v duplicacy)"
 mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<WRAP
 #!/usr/bin/env bash
-if [ "\${1:-}" = "check" ]; then
+if [ "\${2:-}" = "check" ]; then
   touch /tmp/check-started
   sleep 60
   exit 0

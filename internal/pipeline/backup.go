@@ -339,7 +339,7 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 		return false, false
 	}
 	log(logging.Info, fmt.Sprintf("Processing %s service.", name))
-	svc := hooks.Service{Name: name, Dir: dir, SnapshotID: b.Hostname + "-" + name}
+	svc := hooks.Service{Name: name, Dir: dir, SnapshotID: b.Hostname + "-" + name, HookDir: hooks.Hooks(b.cfg.HooksDir, dir)}
 	// Checked before any hook runs: duplicacy rejects the ID at init, and by then the pre
 	// hook has already stopped whatever it stops.
 	if !snapshotIDPattern.MatchString(svc.SnapshotID) {
@@ -356,10 +356,17 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 		log(logging.Error, fmt.Sprintf("Cannot read the filters file, so this service's backup is skipped: %v", err))
 		return false, false
 	}
-	hasPre, err := hooks.Exists(dir, hooks.PreBackup)
+	if svc.HookDir != dir {
+		for _, h := range []string{hooks.PreBackup, hooks.PostBackup} {
+			if _, err := os.Lstat(filepath.Join(dir, h)); err == nil {
+				log(logging.Warning, fmt.Sprintf("%s in the service directory is not run: with HOOKS_DIR set, hooks come from %s.", h, svc.HookDir))
+			}
+		}
+	}
+	hasPre, err := hooks.Exists(svc.HookDir, hooks.PreBackup)
 	if err == nil {
 		var hasPost bool
-		hasPost, err = hooks.Exists(dir, hooks.PostBackup)
+		hasPost, err = hooks.Exists(svc.HookDir, hooks.PostBackup)
 		if err == nil {
 			return b.backupService(svc, filters, hasPre, hasPost, log)
 		}
@@ -440,7 +447,7 @@ func exitText(code int, err error) string {
 }
 
 func (b *Backup) duplicacy(dir, service string, args ...string) proc.Spec {
-	return proc.Spec{Path: b.Duplicacy, Args: args, Dir: dir, Env: b.env, Log: b.log, Service: service}
+	return proc.Spec{Path: b.Duplicacy, Args: proc.NoScript(args...), Dir: dir, Env: b.env, Log: b.log, Service: service}
 }
 
 // run runs a duplicacy command to completion, unless a signal ends the run first.

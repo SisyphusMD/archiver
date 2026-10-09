@@ -34,11 +34,13 @@ func TestMissingCaps(t *testing.T) {
 	}
 }
 
-// fakeDuplicacy stands in for duplicacy: a storage URL holding "down" fails init; list
+// fakeDuplicacy stands in for duplicacy, failing any command run without -no-script: a storage URL holding "down" fails init; list
 // prints the revisions in <storage URL>/revs; restore writes what it restored, its flags,
 // what its fd 3 is, and, when the storage has one, a restore hook. With FAKE_LOCK, restore
 // then starts a "backup" (a lock held by the test process).
 const fakeDuplicacy = `#!/bin/sh
+[ "$1" = -no-script ] || { echo "run without -no-script: $*"; exit 99; }
+shift
 case "$1" in
 init)
   url=""; for a in "$@"; do url="$a"; done

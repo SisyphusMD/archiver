@@ -63,6 +63,7 @@ services:
       # - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket    # systemctl start/stop/status
       # - /etc/systemd/system:/etc/systemd/system                    # systemctl mask/unmask/enable/disable
       # - /path/to/host/restore-dir:/mnt/restore-dir                 # Restore location (will be prompted)
+      # - ./archiver-hooks:/opt/archiver/hooks:ro                    # HOOKS_DIR: hooks outside the data (README "Who can change a hook")
 
 # Secrets for the env-native service above. Files can come straight from 'archiver init'
 # (env-native/secrets/); move them somewhere safe and reference them here.

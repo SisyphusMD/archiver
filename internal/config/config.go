@@ -64,6 +64,7 @@ type Config struct {
 	Threads                  string
 	CheckInterval            string // CHECK_INTERVAL: the default for every target
 	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
+	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
 }
 
 var globalSecret = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN)$`)
@@ -129,6 +130,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		Threads:                  src.Getenv("DUPLICACY_THREADS"),
 		CheckInterval:            src.Getenv("CHECK_INTERVAL"),
 		Parallelism:              src.Getenv("BACKUP_PARALLELISM"),
+		HooksDir:                 src.Getenv("HOOKS_DIR"),
 	}
 
 	prune := src.Getenv("PRUNE_BACKUPS")
@@ -263,6 +265,16 @@ func (c *Config) Validate(secretsDir string) error {
 // ValidateStorage checks only what reaching the storages needs: the targets' settings and
 // credentials, the storage password and the RSA passphrase. A restore needs no more.
 func (c *Config) ValidateStorage(secretsDir string) error {
+	// Here rather than in Validate alone: a restore validates only this, and a missing
+	// hooks mount would otherwise skip its restore hook as though there were none.
+	if c.HooksDir != "" {
+		if !filepath.IsAbs(c.HooksDir) {
+			return fmt.Errorf("HOOKS_DIR must be an absolute path (got '%s').", c.HooksDir)
+		}
+		if fi, err := os.Stat(c.HooksDir); err != nil || !fi.IsDir() {
+			return fmt.Errorf("HOOKS_DIR '%s' is not a directory; mount it or unset HOOKS_DIR.", c.HooksDir)
+		}
+	}
 	if len(c.Targets) == 0 {
 		return fmt.Errorf("No storage targets specified. Provide at least one via the STORAGE_TARGET_N_* environment variables.")
 	}

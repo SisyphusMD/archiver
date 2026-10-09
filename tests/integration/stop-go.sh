@@ -43,7 +43,7 @@ REAL="$(command -v duplicacy)"
 mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<WRAP
 #!/usr/bin/env bash
-if [ "\${1:-}" = "copy" ]; then
+if [ "\${2:-}" = "copy" ]; then
   touch "${COPYING}"
   sleep 300
   exit 0
@@ -62,7 +62,7 @@ wait_for '[ -e /tmp/backup.rc ]' 60 || die "the backup did not end within 15s of
 grep -q 'Retrying failed copies' "$LOG" && die "a stopped backup retried its copy"
 grep -q 'Recovery kit' "$LOG" && die "a recovery-kit step ran after the stop"
 [ ! -e "$LOCKFILE" ] || die "the lock was not released"
-pgrep -f 'duplicacy copy' >/dev/null && die "the copy is still running"
+pgrep -f 'duplicacy -no-script copy' >/dev/null && die "the copy is still running"
 grep -qi 'stopped' "$LOG" || die "the stop was not recorded"
 
 log "a stop while paused, before the pre-backup hook, skips both hooks"

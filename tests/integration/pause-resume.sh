@@ -43,7 +43,7 @@ REAL="$(command -v duplicacy)" || die "duplicacy not on PATH"
 mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<WRAP
 #!/usr/bin/env bash
-if [ "\${1:-}" = "backup" ]; then
+if [ "\${2:-}" = "backup" ]; then
   touch "${MARKER}"
   sleep 6
   exit 0
@@ -56,7 +56,7 @@ log "round 1: pause freezes duplicacy, resume unfreezes, backup then completes"
 archiver backup --detach >/dev/null || die "archiver start failed"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
 [ -f "$MARKER" ] || die "backup never started"
-DPID=$(pgrep -f "duplicacy backup" | head -1)
+DPID=$(pgrep -f "duplicacy -no-script backup" | head -1)
 [ -n "$DPID" ] || die "no duplicacy backup process found"
 
 archiver pause >/dev/null || die "archiver pause failed"
@@ -83,7 +83,7 @@ rm -f "$MARKER"
 archiver backup --detach >/dev/null || die "second archiver start failed"
 for _ in $(seq 1 100); do [ -f "$MARKER" ] && break; sleep 0.2; done
 [ -f "$MARKER" ] || die "second backup never started"
-DPID=$(pgrep -f "duplicacy backup" | head -1)
+DPID=$(pgrep -f "duplicacy -no-script backup" | head -1)
 
 archiver pause >/dev/null || die "second pause failed"
 sleep 1

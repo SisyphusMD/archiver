@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver migrate hooks` converts each service's `service-backup-settings.sh` into executable `pre-backup` and `post-backup` hooks and a `filters` file. The generated hooks call your existing functions, so they keep working unchanged.
 
 ### Security
+- **Hooks someone other than their owner could change are refused, and Duplicacy's own scripts never run** (ADR 45). Hooks run as root: a `pre-backup`, `post-backup`, `post-restore` or `restore-service.sh` that is writable by group or others, or sits below a directory that is (sticky ones like `/tmp` excepted), now fails its service with an error naming the fix (`chmod go-w`); every duplicacy command runs with `-no-script`, so a `.duplicacy/scripts/pre-backup` planted in a service's repository no longer runs with every storage credential. New `HOOKS_DIR` keeps hooks outside the backed-up data. **Upgrade:** a deployment whose service directories or hooks are group-writable (a `UMASK=002` setup) must `chmod go-w` them, or move the hooks to `HOOKS_DIR`.
 - The Pushover API token and user key no longer appear on `curl`'s command line, where any process in the container could read them from `/proc`. They now reach `curl` on stdin, like every other secret.
 
 ### Changed
