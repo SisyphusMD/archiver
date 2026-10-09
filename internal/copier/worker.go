@@ -47,6 +47,7 @@ type State struct {
 	Paused         bool   `json:"paused,omitempty"`
 	Since          int64  `json:"since"`
 	Behind         int    `json:"behind"`
+	BehindSince    int64  `json:"behind_since,omitempty"` // when it last fell behind, kept until it catches up
 	LastSuccess    int64  `json:"last_success,omitempty"`
 	FailingSince   int64  `json:"failing_since,omitempty"`
 	DownSince      int64  `json:"down_since,omitempty"` // kept through retries, so down is reported once
@@ -491,6 +492,9 @@ func (w *Worker) run(ctx context.Context, stops int, status string, behind int, 
 		}
 		w.current, w.checking, wakes = c, check, w.passWakes
 		w.state.Status, w.state.Since, w.state.Behind = status, w.Clock.Now().Unix(), behind
+		if behind > 0 && w.state.BehindSince == 0 {
+			w.state.BehindSince = w.state.Since
+		}
 		w.save()
 		w.mu.Unlock()
 		break
@@ -513,7 +517,7 @@ func (w *Worker) caughtUp(stops int) {
 		return
 	}
 	now := w.Clock.Now()
-	w.state.Status, w.state.Since, w.state.Behind = Idle, now.Unix(), 0
+	w.state.Status, w.state.Since, w.state.Behind, w.state.BehindSince = Idle, now.Unix(), 0, 0
 	w.state.LastSuccess, w.state.FailingSince, w.state.NextRetry, w.state.LastError = now.Unix(), 0, 0, ""
 	w.state.DownSince = 0
 	w.attempt = 0

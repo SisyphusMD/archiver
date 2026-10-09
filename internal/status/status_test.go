@@ -29,7 +29,7 @@ func put(t *testing.T, path, content string) {
 func report(t *testing.T, l layout.Layout, now time.Time) string {
 	t.Helper()
 	var b strings.Builder
-	if err := Write(&b, l, now); err != nil {
+	if err := Write(&b, l, func(string) string { return "" }, now); err != nil {
 		t.Fatal(err)
 	}
 	return b.String()
@@ -37,7 +37,7 @@ func report(t *testing.T, l layout.Layout, now time.Time) string {
 
 func TestIdle(t *testing.T) {
 	got := report(t, testLayout(t), time.Unix(0, 0))
-	want := "Backup: not running.\nMaintenance: not running.\n"
+	want := "Backup health: FAILING\n  SERVICE_DIRECTORIES is not set, so nothing is backed up\nBackup: not running.\nMaintenance: not running.\n"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

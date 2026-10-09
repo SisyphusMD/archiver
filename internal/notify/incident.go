@@ -220,21 +220,31 @@ func (n *Notifier) deliver(key string, in incident) {
 
 // OpenIncidents lists the open incidents' titles by key, for status and health.
 func OpenIncidents(path string) map[string]string {
+	out, _ := ReadIncidents(path)
+	return out
+}
+
+// ReadIncidents is OpenIncidents with the reason it could not read them; no file is no
+// incidents.
+func ReadIncidents(path string) (map[string]string, error) {
 	out := map[string]string{}
 	b, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return out, nil
+	}
 	if err != nil {
-		return out
+		return out, err
 	}
 	var open map[string]incident
-	if json.Unmarshal(b, &open) != nil {
-		return out
+	if err := json.Unmarshal(b, &open); err != nil {
+		return out, err
 	}
 	for k, in := range open {
 		if !in.Recovered {
 			out[k] = in.Title
 		}
 	}
-	return out
+	return out, nil
 }
 
 // IsOpen reports whether incident key is open.

@@ -23,6 +23,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/proc"
@@ -64,9 +65,14 @@ type Backup struct {
 // Run runs the pipeline and returns its exit code.
 func (b *Backup) Run() int {
 	code := b.pipeline()
-	// A run that ended early with errors, before its summary, is still one notification.
+	// A run that ended early with errors, before its summary, is still one notification,
+	// and its own incident: no service was backed up, which backup health counts as failing.
 	if !b.reported && b.log.Reportable() > 0 {
-		b.notify.Raise("backup", notify.Failure, "Backup Failed", b.log.Summary())
+		if b.notify == nil {
+			// No configuration, so nowhere to send: the incident is still kept, for health.
+			b.notify = &notify.Notifier{Incidents: b.Layout.Incidents()}
+		}
+		b.notify.Raise("backup-aborted", notify.Failure, "Backup Failed", b.log.Summary())
 	}
 	return code
 }
@@ -340,6 +346,7 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 	log := func(level, msg string) { b.log.Message(level, name, msg) }
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		log(logging.Error, fmt.Sprintf("Failed to change to %s. Continuing.", dir))
+		b.record(dir, hooks.Failed, time.Now())
 		return false, false
 	}
 	log(logging.Info, fmt.Sprintf("Processing %s service.", name))
@@ -348,16 +355,19 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 	// hook has already stopped whatever it stops.
 	if !config.ValidSnapshotID(svc.SnapshotID) {
 		log(logging.Error, fmt.Sprintf("Cannot back up %s: its snapshot ID '%s' may contain only letters, digits, '_' and '-' (a Duplicacy rule). Rename the directory or the host.", dir, svc.SnapshotID))
+		b.record(dir, hooks.Failed, time.Now())
 		return false, false
 	}
 	// Lstat: a broken symlink still means the service has not been migrated.
 	if _, err := os.Lstat(filepath.Join(dir, hooks.Legacy)); err == nil {
 		log(logging.Error, fmt.Sprintf("%s is not run by this pipeline, so this service's backup is skipped. Convert it with 'archiver migrate hooks'.", hooks.Legacy))
+		b.record(dir, hooks.Failed, time.Now())
 		return false, false
 	}
 	filters, err := hooks.ReadFilters(dir)
 	if err != nil {
 		log(logging.Error, fmt.Sprintf("Cannot read the filters file, so this service's backup is skipped: %v", err))
+		b.record(dir, hooks.Failed, time.Now())
 		return false, false
 	}
 	if svc.HookDir != dir {
@@ -376,6 +386,7 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 		}
 	}
 	log(logging.Error, fmt.Sprintf("Cannot run this service's hooks, so its backup is skipped: %v", err))
+	b.record(dir, hooks.Failed, time.Now())
 	return false, false
 }
 
@@ -383,6 +394,7 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 	state, err := os.MkdirTemp("", "archiver-hooks-")
 	if err != nil {
 		log(logging.Error, "Cannot create the hooks' state directory, so this service's backup is skipped: "+err.Error())
+		b.record(svc.Dir, hooks.Failed, time.Now())
 		return false, false
 	}
 	defer os.RemoveAll(state)
@@ -409,6 +421,7 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 			result = hooks.Skipped
 		}
 	}
+	began := time.Now()
 	if result == hooks.Success {
 		if b.stopped() {
 			result = hooks.Stopped
@@ -429,6 +442,9 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 			log(logging.Error, fmt.Sprintf("Post-backup hook failed for %s service (%s); check that whatever its pre hook stopped is running again.", svc.Name, exitText(code, err)))
 		}
 	}
+	// After the post hook: recording can notify, which may take a minute, and whatever the
+	// pre hook stopped must not wait on it.
+	b.record(svc.Dir, result, began)
 	if result != hooks.Success {
 		return false, result == hooks.Stopped || b.stopped()
 	}
@@ -813,6 +829,38 @@ func (b *Backup) recoveryKit() {
 	}
 }
 
+// record keeps the outcome for the service in dir for backup health (ADR 32), by
+// directory: two directories of one name are one snapshot ID but separate outcomes.
+// Services back up in parallel, so the state file is edited under mu.
+func (b *Backup) record(dir, result string, began time.Time) {
+	path := b.Layout.BackupState()
+	b.mu.Lock()
+	s, err := lockstate.ReadBackupState(path)
+	if err != nil {
+		s = lockstate.BackupState{}
+	}
+	if s.Services == nil {
+		s.Services = map[string]lockstate.ServiceResult{}
+	}
+	r := s.Services[dir]
+	now := time.Now()
+	r.LastAttempt, r.Result, r.Seconds = now.Unix(), result, int64(now.Sub(began).Seconds())
+	if result == hooks.Success {
+		r.LastSuccess = now.Unix()
+	}
+	s.Services[dir] = r
+	err = lockstate.WriteBackupState(path, s)
+	// Notifying can take a minute; a stop or another service must not wait on it.
+	b.mu.Unlock()
+	// Unrecorded, an old success would stand in for this outcome: its own incident, failing.
+	if err != nil {
+		b.log.Message(logging.Warning, filepath.Base(dir), "Could not record the backup for backup health: "+err.Error())
+		b.notify.Raise("backup-state:"+dir, notify.Failure, "Backup Health Unknown", fmt.Sprintf("Could not record backup results in %s (%v), so backup health cannot be trusted.", path, err))
+		return
+	}
+	b.notify.Clear("backup-state:"+dir, "Backup Health Recorded", "Backup results for "+dir+" are recorded again.")
+}
+
 // startPlain runs a program with its output passed through, not logged: the recovery-kit
 // step logs for itself.
 func (b *Backup) startPlain(path string, args ...string) (*proc.Proc, error) {
@@ -850,6 +898,8 @@ func (b *Backup) complete() {
 	// backup incident with them, a clean one closes it. The kit's errors are the kit's own
 	// incident, raised by its step, and a notification that failed is not the backup's.
 	b.reported = true
+	// The run got as far as the services: whatever stopped an earlier one before them is over.
+	b.notify.Clear("backup-aborted", "Backup Recovered", "Backups run again.")
 	if b.log.Reportable() > 0 {
 		b.notify.Raise("backup", notify.Failure, "Backup Failed", msg+"\n"+b.log.Summary())
 		return

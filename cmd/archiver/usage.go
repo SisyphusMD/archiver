@@ -8,12 +8,14 @@ import (
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
 )
 
-const usageText = `Usage: archiver {backup|maintenance|drill|doctor|notify test|recover|stop|pause|resume|logs|status|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|help}
+const usageText = `Usage: archiver {backup|maintenance|drill|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|help}
 Note:
   backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background.
   maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune.
   recover KIT [--yes] [--hook] [--out DIR] rebuilds keys, secrets and configuration from a downloaded recovery kit on a fresh host and restores every service.
   doctor [--notify] checks configuration, secrets, storages (read-only), the container and how current backups, copies, the kit and drills are; --notify also sends a test notification.
+  status --json prints everything status shows, and backup health, as JSON.
+  health --backups prints backup health (OK, DEGRADED or FAILING) and why, exiting 0, 1 or 2 for monitors; healthcheck stays the container's liveness check.
   notify test sends one message to every notification destination, saying which events it receives.
   drill [SERVICE] [STORAGE] restores newest revisions into RESTORE_DRILL_DIR, checks them and deletes them (normally scheduled via RESTORE_DRILL_SCHEDULE).
   stop takes an optional target (backup|maintenance|drill|all, default all) and --immediate.
@@ -87,6 +89,8 @@ func usage(args []string) int {
 		fmt.Println("'recovery-kit' takes at most one argument: force.")
 	case "maintenance":
 		fmt.Println("'maintenance' takes at most one argument: exhaustive.")
+	case "health":
+		fmt.Println("'health' takes one argument: --backups.")
 	case "notify":
 		fmt.Println("'notify' takes one argument: test.")
 	case "pause", "logs", "status", "restore", "auto-restore", "auto-restore-all", "snapshot-exists", "healthcheck":
