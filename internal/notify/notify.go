@@ -230,7 +230,7 @@ func (p *Pushover) Delivered(status int, _ []byte) bool { return status == http.
 // credentials in the URL if it needs them, with the tag APPRISE_TAGS gives the kind.
 type Apprise struct {
 	URL  string
-	Tags map[string]string // kind -> tag; a kind without one goes untagged
+	Tags map[string]string // kind -> tag; a kind without one goes to "all"
 }
 
 func (a *Apprise) Name() string { return "apprise" }
@@ -245,6 +245,9 @@ func (a *Apprise) Request(k Kind, title, message string) (*http.Request, error) 
 		"title": title, "body": message,
 		"type": map[Kind]string{Routine: "info", Problem: "warning", Failure: "failure"}[k],
 	}
+	// A stateful Apprise API key given no tag notifies only its untagged URLs: "all" is
+	// what reaches every one.
+	payload["tag"] = "all"
 	if tag := a.Tags[k.String()]; tag != "" {
 		payload["tag"] = tag
 	}

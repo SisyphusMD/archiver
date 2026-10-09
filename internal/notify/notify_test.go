@@ -202,12 +202,13 @@ func TestApprise(t *testing.T) {
 	if msg != "Apprise notification sent successfully." {
 		t.Fatalf("log %q", msg)
 	}
-	// Without a tag for the kind, none is sent (Apprise then notifies every URL).
+	// Without a tag for the kind, "all": an Apprise API key given no tag notifies only its
+	// untagged URLs.
 	body = nil
 	n.Destinations[0].On = "everything"
 	n.Send("Backup Complete", "done")
-	if _, ok := body["tag"]; ok || body["type"] != "info" {
-		t.Fatalf("untagged body %v", body)
+	if body["tag"] != "all" || body["type"] != "info" {
+		t.Fatalf("body without a mapped tag %v", body)
 	}
 }
 
