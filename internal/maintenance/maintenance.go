@@ -19,6 +19,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/daemon"
+	"github.com/SisyphusMD/archiver/internal/damage"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/localprune"
 	"github.com/SisyphusMD/archiver/internal/logging"
@@ -257,12 +258,18 @@ func (r *Run) storage(i int) bool {
 	if r.cfg.CheckBackups {
 		r.lock.SetStage("storage:"+name, "check")
 		began := r.Now()
-		code, stopped := r.duplicacy(name, "check", "-all", "-storage", name, "-fossils", "-resurrect", "-stats", "-threads", r.cfg.Threads)
+		// -persist carries on past damage, so every damaged revision is named, not the first.
+		var out strings.Builder
+		code, stopped := r.duplicacyTo(name, &out, "check", "-all", "-storage", name, "-fossils", "-resurrect", "-stats", "-persist", "-threads", r.cfg.Threads)
 		switch {
 		case stopped:
 			return false
 		case code != 0:
-			r.log.Message(logging.Error, name, "Storage check failed for "+name+".")
+			msg := "Storage check failed for " + name + "."
+			if d := damage.Describe(out.String()); d != "" {
+				msg = "Storage check failed for " + name + "; " + d + "."
+			}
+			r.log.Message(logging.Error, name, msg)
 		default:
 			state.set(name, fieldCheck, r.Now().Unix())
 			state.write(r.Layout.MaintenanceState())
@@ -384,7 +391,18 @@ func (r *Run) exhaustiveDue(s state, name string) bool {
 // duplicacy runs one duplicacy command in the repository, ending it when a stop comes;
 // stopped reports that.
 func (r *Run) duplicacy(service string, args ...string) (code int, stopped bool) {
-	p, err := proc.Start(proc.Spec{Path: r.Duplicacy, Args: proc.NoScript(args...), Dir: r.repo, Env: r.env, Log: r.log, Service: service})
+	return r.duplicacyTo(service, nil, args...)
+}
+
+// duplicacyTo is duplicacy with its output also copied to also.
+func (r *Run) duplicacyTo(service string, also io.Writer, args ...string) (code int, stopped bool) {
+	spec := proc.Spec{Path: r.Duplicacy, Args: proc.NoScript(args...), Dir: r.repo, Env: r.env, Log: r.log, Service: service}
+	if also != nil {
+		lw := r.log.Writer(logging.Info, service)
+		defer lw.Close()
+		spec.Output = io.MultiWriter(lw, also)
+	}
+	p, err := proc.Start(spec)
 	if err != nil {
 		r.log.Message(logging.Error, service, fmt.Sprintf("Cannot run %s: %v", r.Duplicacy, err))
 		return -1, false
@@ -430,7 +448,15 @@ func (r *Run) finish() {
 	var status string
 	switch s.EndState {
 	case "completed":
-		status = "Maintenance completed successfully"
+		// "completed" means the run reached its end, not that every step succeeded.
+		switch n := r.log.Errors(); n {
+		case 0:
+			status = "Maintenance completed successfully"
+		case 1:
+			status = "Maintenance completed with 1 error"
+		default:
+			status = fmt.Sprintf("Maintenance completed with %d errors", n)
+		}
 	case "stopped":
 		status = "Maintenance stopped before completion"
 	default:

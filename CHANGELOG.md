@@ -58,6 +58,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver` is now a small Go program, the first step of the v1 rewrite. For now it runs the same bash commands as before, so every command, flag, exit code, and output is unchanged; scheduled runs, `docker stop`, and `init` go through it too. `archiver init` also works inside a running container.
 
 ### Fixed
+
+- **Maintenance no longer ends with "Maintenance completed successfully" after a failed check or prune;** its summary counts the errors, as the backup's does.
+- **A failed storage check names every damaged revision** ("damaged revisions: nas-app revision 12, ...") in the log and the notification, for maintenance and for the copy workers' checks (`check -persist`).
+- **An unwritable log (a full logs volume) now notifies,** once a run; before, every line failed silently apart from stdout.
 - A restore that initializes a storage (connecting to one a backup or copy is creating at the same moment) now takes the same storage-creation lock they do, so the two can no longer write different storage configurations.
 - A backup no longer starts while a restore into a service directory is running (the restore hook included); it is skipped with a notification, since it would have saved the directory half-restored. A restore already refused to start during a backup.
 - A notification that fails on a network error, a rate limit or a Pushover server error is retried twice (after 5 and 10 seconds) instead of being lost, and only a refusal such as bad credentials still says to check the Pushover secrets.

@@ -301,6 +301,14 @@ jobs:
         run: |
           docker run -i --rm --hostname rc-host --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/recover.sh
+      - name: "Fault injection: corrupted chunks are named by check, fail drills and restores; intact revisions restore (ADR 31)"
+        run: |
+          docker run -i --rm --hostname fc-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/fault-corruption.sh
+      - name: "Fault injection: duplicacy, a hook, archiver and a copy killed; locks freed, the next run proceeds (ADR 31)"
+        run: |
+          docker run -i --rm --hostname fk-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/fault-kill.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \
@@ -415,6 +423,10 @@ jobs:
         run: IMAGE=hosttests:local bash tests/integration/s3-garage.sh
       - name: sftp runtime against sshd (backup + restore over ssh)
         run: IMAGE=hosttests:local bash tests/integration/sftp-runtime.sh
+      - name: "Fault injection: full storage, logs and restore target fail loudly and recover (ADR 31)"
+        run: IMAGE=hosttests:local bash tests/integration/fault-disk.sh
+      - name: "Fault injection: a slowed and cut storage link mid-backup and mid-copy (ADR 31)"
+        run: IMAGE=hosttests:local bash tests/integration/fault-network.sh
       - name: Every emulated storage type round-trips (backup, kit, restore; ADRs 23, 25)
         run: IMAGE=hosttests:local bash tests/integration/backends.sh
       - name: Bundle-era inputs refuse with the 0.11 conversion (ADRs 4, 22)

@@ -31,8 +31,9 @@ type Log struct {
 	Notify     func(title, message string)
 	Now        func() time.Time
 
-	mu     sync.Mutex
-	errors int
+	mu          sync.Mutex
+	errors      int
+	writeFailed bool
 }
 
 func (l *Log) now() time.Time {
@@ -78,8 +79,14 @@ func (l *Log) message(level, service, msg string, notify bool) {
 	if level == Error {
 		l.errors++
 	}
+	// Only a line that may notify claims the one notification, so a failure first met while
+	// recording a notification's outcome still gets said by the next line.
+	firstFailure := err != nil && notify && !l.writeFailed
 	if err != nil {
 		l.errors++
+	}
+	if firstFailure {
+		l.writeFailed = true
 	}
 	l.mu.Unlock()
 	if err != nil && l.Stdout != nil {
@@ -88,6 +95,11 @@ func (l *Log) message(level, service, msg string, notify bool) {
 	}
 	if (level == Warning || level == Error) && l.Stdout != nil {
 		fmt.Fprintln(l.Stdout, line)
+	}
+	// An unwritable log (a full logs volume) is a failure in itself, said once a run: every
+	// later line would fail the same way.
+	if firstFailure && l.Notify != nil {
+		l.Notify(l.ErrorTitle, fmt.Sprintf("Cannot write %s (%v); check its volume's free space. The run's messages go to stdout only.", l.Path(), err))
 	}
 	if notify && level == Error && l.Notify != nil {
 		l.Notify(l.ErrorTitle, fmt.Sprintf("[%s] %s", service, msg))
