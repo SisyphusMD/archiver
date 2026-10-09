@@ -56,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - A restore that initializes a storage (connecting to one a backup or copy is creating at the same moment) now takes the same storage-creation lock they do, so the two can no longer write different storage configurations.
+- **Maintenance no longer ends with "Maintenance completed successfully" after a failed check or prune;** its summary counts the errors, as the backup's does.
 - **An unwritable log (a full logs volume) now notifies,** once a run; before, every line failed silently apart from stdout.
 - A backup no longer starts while a restore into a service directory is running (the restore hook included); it is skipped with a notification, since it would have saved the directory half-restored. A restore already refused to start during a backup.
 - A notification that fails on a network error, a rate limit or a Pushover server error is retried twice (after 5 and 10 seconds) instead of being lost, and only a refusal such as bad credentials still says to check the Pushover secrets.

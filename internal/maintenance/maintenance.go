@@ -430,7 +430,15 @@ func (r *Run) finish() {
 	var status string
 	switch s.EndState {
 	case "completed":
-		status = "Maintenance completed successfully"
+		// "completed" means the run reached its end, not that every step succeeded.
+		switch n := r.log.Errors(); n {
+		case 0:
+			status = "Maintenance completed successfully"
+		case 1:
+			status = "Maintenance completed with 1 error"
+		default:
+			status = fmt.Sprintf("Maintenance completed with %d errors", n)
+		}
 	case "stopped":
 		status = "Maintenance stopped before completion"
 	default:
