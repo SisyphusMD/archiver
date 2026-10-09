@@ -136,31 +136,26 @@ func (r *Run) upload(t config.Target, kit, readme string) int {
 // one file it needs in a disaster; a more permissive one passes.
 func modeGrants(have, want os.FileMode) bool { return want&0o044&^have == 0 }
 
-// chmod is os.Chmod; tests stand in a share that ignores it.
-var chmod = os.Chmod
+// chmod is (*os.File).Chmod; tests stand in a share that ignores it.
+var chmod = (*os.File).Chmod
 
 // localAccess gives the placed files the owner and mode of the storage's 'config' (the
 // storage's own access model; the kit is encrypted already) and reports Unverified when one
 // ends up less readable. rclone's rename leaves a fresh inode, which inherits the directory's
 // ACLs; a chmod is made only when it changes the mode, because on an ACL-backed share
 // (Synology's) any chmod discards the inherited ACL, even one to the mode already shown.
+//
+// Whoever owns the storage directory can swap entries in it, so nothing here follows a
+// link: a symlink put where the kit was would otherwise hand them ownership of whatever it
+// points at (the secrets, the keys).
 func (r *Run) localAccess(t config.Target, names []string) int {
-	ref, err := os.Stat(filepath.Join(t.Get("LOCAL_PATH"), "config"))
-	if err != nil {
+	ref, err := os.Lstat(filepath.Join(t.Get("LOCAL_PATH"), "config"))
+	if err != nil || !ref.Mode().IsRegular() {
 		return OK
 	}
 	status := OK
 	for _, n := range names {
-		p := filepath.Join(t.Get("LOCAL_PATH"), n)
-		if st, ok := ref.Sys().(*syscall.Stat_t); ok {
-			os.Chown(p, int(st.Uid), int(st.Gid))
-		}
-		fi, err := os.Stat(p)
-		if err == nil && fi.Mode().Perm() != ref.Mode().Perm() {
-			chmod(p, ref.Mode().Perm())
-			fi, err = os.Stat(p)
-		}
-		if err != nil || !modeGrants(fi.Mode().Perm(), ref.Mode().Perm()) {
+		if !r.adjust(filepath.Join(t.Get("LOCAL_PATH"), n), ref) {
 			status = Unverified
 		}
 	}
@@ -168,6 +163,30 @@ func (r *Run) localAccess(t config.Target, names []string) int {
 		r.warning(fmt.Sprintf("Recovery kit in '%s' is less readable than its config; retrying on the next run.", t.Get("LOCAL_PATH")))
 	}
 	return status
+}
+
+// adjust sets one placed file's owner and mode through a descriptor opened without
+// following links, and reports whether it is as readable as ref.
+func (r *Run) adjust(p string, ref os.FileInfo) bool {
+	f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		return false
+	}
+	if st, ok := ref.Sys().(*syscall.Stat_t); ok {
+		f.Chown(int(st.Uid), int(st.Gid))
+	}
+	if fi.Mode().Perm() != ref.Mode().Perm() {
+		chmod(f, ref.Mode().Perm())
+		if fi, err = f.Stat(); err != nil {
+			return false
+		}
+	}
+	return modeGrants(fi.Mode().Perm(), ref.Mode().Perm())
 }
 
 var lsPerms = regexp.MustCompile(`(?m)^[-dbclps]([-rwxsStT]{9})`)

@@ -48,8 +48,8 @@ func inode(t *testing.T, p string) uint64 {
 func TestUnverifiedIsNotRecorded(t *testing.T) {
 	f := newFixture(t, 1)
 	os.Chmod(filepath.Join(f.store[0], "config"), 0o644)
-	chmod = func(string, os.FileMode) error { return nil }
-	defer func() { chmod = os.Chmod }()
+	chmod = func(*os.File, os.FileMode) error { return nil }
+	defer func() { chmod = (*os.File).Chmod }()
 	old := syscall.Umask(0o077)
 	defer syscall.Umask(old)
 	if code := f.execute(); code != Unverified {
@@ -62,7 +62,7 @@ func TestUnverifiedIsNotRecorded(t *testing.T) {
 	if strings.Contains(string(state), "store1") {
 		t.Fatalf("an unverified placement was recorded: %q", state)
 	}
-	chmod = os.Chmod
+	chmod = (*os.File).Chmod
 	if code := f.execute(); code != OK {
 		t.Fatalf("the retry: exit %d", code)
 	}
@@ -386,5 +386,23 @@ func TestTrustedAlgorithms(t *testing.T) {
 	}
 	if got := trusted(known, "unknown"); got != "" {
 		t.Errorf("unknown: %q", got)
+	}
+}
+
+// A symlink where the kit belongs is never followed: its target keeps its owner and mode,
+// and the placement is Unverified (retried next run).
+func TestLocalAccessFollowsNoLink(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "config"), []byte("c"), 0o666)
+	secret := filepath.Join(t.TempDir(), "secret")
+	os.WriteFile(secret, []byte("s"), 0o600)
+	os.Symlink(secret, filepath.Join(dir, "kit.tar.enc"))
+	r := &Run{Log: &logging.Log{Dir: t.TempDir(), Basename: "archiver"}}
+	tgt := config.Target{N: 1, Values: config.Values{"LOCAL_PATH": dir}}
+	if code := r.localAccess(tgt, []string{"kit.tar.enc"}); code != Unverified {
+		t.Fatalf("exit %d, want Unverified", code)
+	}
+	if fi, _ := os.Stat(secret); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("the link's target became %o", fi.Mode().Perm())
 	}
 }
