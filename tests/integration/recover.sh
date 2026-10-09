@@ -29,8 +29,10 @@ printf 'testpassword' >"${SECRETS_DIR}/storage_password"
 printf '%s' "${RSA_PASSPHRASE}" >"${SECRETS_DIR}/rsa_passphrase"
 printf 'a-long-recovery-pw' >"${SECRETS_DIR}/recovery_password"
 export STORAGE_TARGET_1_NAME="local" STORAGE_TARGET_1_TYPE="local" STORAGE_TARGET_1_LOCAL_PATH="${STORE}"
-export SERVICE_DIRECTORIES="${SERVICES}/*/"
-for s in app db; do
+# Two globs, either of which would take either name: each service must come back to the
+# directory it was backed up from.
+export SERVICE_DIRECTORIES="${SERVICES}/apps/*/:${SERVICES}/dbs/*/"
+for s in apps/app dbs/db; do
   mkdir -p "$SERVICES/$s/sub"
   head -c 30000 /dev/urandom >"$SERVICES/$s/blob.bin"; echo "$s" >"$SERVICES/$s/sub/name.txt"
 done
@@ -50,6 +52,9 @@ RECOVERY_PASSWORD_FILE=/tmp/wrongpw archiver recover /tmp/kit.tar.enc --yes >/tm
 grep -q "does not open with that password" /tmp/wrong.out || { cat /tmp/wrong.out; die "no clear message for a wrong password"; }
 [ -e /opt/archiver/recovered/archiver.env ] && die "a failed recovery wrote the configuration"
 
+log "an existing empty output directory others could write to is made owner-only first"
+mkdir -p /opt/archiver/recovered && chmod 777 /opt/archiver/recovered
+
 log "recover from the kit alone"
 # Through the entrypoint, as `docker run <image> recover ...` runs it: no keys exist yet.
 archiver entrypoint recover /tmp/kit.tar.enc --yes >/tmp/recover.out 2>&1 || { cat /tmp/recover.out; die "recover failed"; }
@@ -58,6 +63,7 @@ grep -qF "hostname 'rc-host'" /tmp/recover.out || { cat /tmp/recover.out; die "r
 [ -f /opt/archiver/recovered/archiver.env ] || die "no recovered archiver.env"
 [ "$(stat -c %a /opt/archiver/recovered/secrets/storage_password)" = 600 ] || die "a recovered secret is not owner-only"
 [ -f /opt/archiver/keys/private.pem ] || die "the RSA key was not placed"
+[ "$(stat -c %a /opt/archiver/recovered)" = 700 ] || die "the output directory was left writable by others"
 (cd "$SERVICES" && find . -path '*/.duplicacy' -prune -o -type f -print | sort | xargs sha256sum) >/tmp/after.sums
 diff /tmp/before.sums /tmp/after.sums || die "the recovered services differ from the originals"
 
