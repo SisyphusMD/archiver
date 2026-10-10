@@ -51,7 +51,7 @@ sudo chown -R 1000:1000 /path/to/local-backups
 
 ### Step 2: Mount the Directory in Docker Compose
 
-Edit your [compose.yaml](compose.yaml) to add the local storage volume:
+Edit your [compose.yaml](../../../compose.yaml) to add the local storage volume:
 
 ```yaml
 services:

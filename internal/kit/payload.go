@@ -359,7 +359,7 @@ password, which was displayed at setup and belongs in your password manager):
 
   openssl enc -d -aes-256-cbc -pbkdf2 -in %[2]s | tar -xvf -
 
-Then start with RECREATE.txt, or see the 'Configuration Sources' section of the README:
+Then start with RECREATE.txt, or see docs/configuring.md and docs/recovery.md in
 https://github.com/SisyphusMD/archiver
 `, r.Hostname, r.KitName())
 }

@@ -9,7 +9,7 @@ This guide covers removing a legacy (non-Docker) Archiver installation from your
 1. **Migrated to Docker** and verified backups work correctly
 2. **Tested restores** from the Docker installation
 3. **Run several successful backup cycles** from Docker
-4. **Saved your bundle file** (`bundle.tar.enc` or `export-*.tar.enc`) in a safe location, or converted it to env-native configuration (the README's "Upgrading from a bundle" section)
+4. **Saved your bundle file** (`bundle.tar.enc` or `export-*.tar.enc`) in a safe location, or converted it to env-native configuration ([Upgrading from a bundle](../../upgrading.md#upgrading-from-a-bundle))
 
 **Do not proceed with uninstall until you're confident the Docker-based installation is working correctly.**
 
