@@ -25,13 +25,14 @@ const PushoverURL = "https://api.pushover.net/1/messages.json"
 type Kind int
 
 const (
-	Routine Kind = iota // backup done, paused, resumed, stopped by a person
-	Problem             // needs attention, nothing lost yet
-	Failure             // something did not happen that should have
+	Routine  Kind = iota // backup done, paused, resumed, stopped by a person
+	Problem              // needs attention, nothing lost yet
+	Failure              // something did not happen that should have
+	Critical             // a failure that stops every backup (PRIMARY DOWN), sent at a higher priority
 )
 
 func (k Kind) String() string {
-	return [...]string{"routine", "problem", "failure"}[k]
+	return [...]string{"routine", "problem", "failure", "critical"}[k]
 }
 
 // KindOf classifies a notification by its title. A title not listed is a failure, so an
@@ -55,7 +56,7 @@ func admits(on string, k Kind) bool {
 	case "problems":
 		return k >= Problem
 	}
-	return k == Failure
+	return k >= Failure
 }
 
 // Sink is one destination.
@@ -237,6 +238,9 @@ func (p *Pushover) Request(k Kind, title, message string) (*http.Request, error)
 	// Pushover refuses a title over 250 characters or a message over 1024, the whole
 	// notification with it.
 	body := url.Values{"token": {p.Token}, "user": {p.User}, "title": {clip(title, 250)}, "message": {clip(message, 1024)}}
+	if k == Critical {
+		body.Set("priority", "1") // high: shown in red, through the recipient's quiet hours
+	}
 	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(body.Encode()))
 	if err == nil {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -263,12 +267,16 @@ func (a *Apprise) Request(k Kind, title, message string) (*http.Request, error) 
 	}
 	payload := map[string]string{
 		"title": title, "body": message,
-		"type": map[Kind]string{Routine: "info", Problem: "warning", Failure: "failure"}[k],
+		"type": map[Kind]string{Routine: "info", Problem: "warning", Failure: "failure", Critical: "failure"}[k],
 	}
 	// A stateful Apprise API key given no tag notifies only its untagged URLs: "all" is
 	// what reaches every one.
 	payload["tag"] = "all"
-	if tag := a.Tags[k.String()]; tag != "" {
+	kind := k
+	if kind == Critical {
+		kind = Failure // APPRISE_TAGS names failure, problem and routine
+	}
+	if tag := a.Tags[kind.String()]; tag != "" {
 		payload["tag"] = tag
 	}
 	b, _ := json.Marshal(payload)
@@ -308,7 +316,7 @@ func (n *Ntfy) Request(k Kind, title, message string) (*http.Request, error) {
 		return nil, err
 	}
 	req.Header.Set("Title", title)
-	req.Header.Set("Priority", map[Kind]string{Routine: "2", Problem: "3", Failure: "4"}[k])
+	req.Header.Set("Priority", map[Kind]string{Routine: "2", Problem: "3", Failure: "4", Critical: "5"}[k])
 	req.Header.Set("Tags", k.String())
 	if n.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+n.Token)

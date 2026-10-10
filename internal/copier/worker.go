@@ -150,6 +150,8 @@ type Worker struct {
 	held               *inuse.Holding // local revisions this pass's copy still reads; only the Run goroutine touches it
 	listedNewest       map[string]int // the newest revision of each ID at the last local listing, likewise
 	allowLarge         bool           // the next mirror pass may delete more than half of an ID (ADR 12's override)
+	// Probe checks the target can be reached before each pass, ended by ctx; nil skips it.
+	Probe func(ctx context.Context) error
 }
 
 // New makes a worker that starts from a saved state, so a restart neither re-alerts nor
@@ -392,6 +394,10 @@ func (w *Worker) pass(stops int, done <-chan struct{}) {
 	// A listing or preparation already running when a pause comes finishes (both are
 	// short reads); none starts while paused, and a copy, the long part, is frozen.
 	if !w.ready(stops) {
+		return
+	}
+	// Probed first (ADR 34): a target still down costs seconds, not duplicacy's retries.
+	if !w.reachable(ctx, stops) {
 		return
 	}
 	if err := w.Runner.Prepare(ctx); err != nil {

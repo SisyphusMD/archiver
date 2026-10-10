@@ -430,3 +430,22 @@ func TestPendingForUnconfiguredDestination(t *testing.T) {
 		t.Fatalf("sent %d, open %v", sent, OpenIncidents(state))
 	}
 }
+
+// A critical notification reaches every failures destination at a higher priority.
+func TestCriticalPriority(t *testing.T) {
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		got = append(got, r.Form.Get("priority"))
+	}))
+	defer srv.Close()
+	n := &Notifier{Destinations: pushoverTo(srv.URL)}
+	n.SendKind(Critical, "PRIMARY DOWN", "x")
+	n.SendKind(Failure, "Backup Failed", "x")
+	if strings.Join(got, "|") != "1|" {
+		t.Fatalf("priorities %q", got)
+	}
+	if req, _ := (&Ntfy{URL: "http://x/t"}).Request(Critical, "t", "m"); req.Header.Get("Priority") != "5" {
+		t.Fatal("ntfy priority for critical")
+	}
+}

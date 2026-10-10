@@ -1,6 +1,7 @@
 package kit
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -42,7 +43,7 @@ func TestOneDriveRefreshAndDrive(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "token")
 	old, _ := json.Marshal(oauthToken{AccessToken: "stale", RefreshToken: "old-refresh", Expiry: time.Now().Add(-time.Hour)})
 	os.WriteFile(file, old, 0o600)
-	token, id, typ, err := oneDrive(file, "app-id", "app-secret", "")
+	token, id, typ, err := oneDrive(context.Background(), file, "app-id", "app-secret", "")
 	if err != nil {
 		t.Fatal(err)
 	}

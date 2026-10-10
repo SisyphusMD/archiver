@@ -84,6 +84,10 @@ func (w *Worker) upkeep(ctx context.Context, stops int) (ok bool) {
 		}
 		w.mu.Unlock()
 	}()
+	// Probed again (ADR 34): the copy before may have taken hours.
+	if !w.reachable(ctx, stops) {
+		return false
+	}
 	if w.Upkeep.Mirror && !w.mirror(ctx, stops) {
 		return false
 	}
@@ -94,6 +98,9 @@ func (w *Worker) upkeep(ctx context.Context, stops int) (ok bool) {
 	// A failed check is tried again an interval later, like a successful one, not at once.
 	check := w.due(max(w.state.LastCheck, w.state.CheckTried), w.Upkeep.Check)
 	w.mu.Unlock()
+	if exhaustive && !w.reachable(ctx, stops) {
+		return false
+	}
 	if exhaustive {
 		w.log("INFO", fmt.Sprintf("Exhaustive prune of %s storage (unreferenced chunks).", w.Target))
 		err, stopped := w.run(ctx, stops, Pruning, 0, false, func() (Copy, error) {
@@ -119,6 +126,9 @@ func (w *Worker) upkeep(ctx context.Context, stops int) (ok bool) {
 	w.mu.Unlock()
 	// A backup since this pass began needs copying first; the check waits for the next
 	// idle moment.
+	if check && !changed && !w.reachable(ctx, stops) {
+		return false
+	}
 	if check && !changed {
 		w.log("INFO", fmt.Sprintf("Checking %s storage.", w.Target))
 		err, stopped := w.run(ctx, stops, Checking, 0, true, func() (Copy, error) {
@@ -357,4 +367,19 @@ func joinInts(revs []int) string {
 		s[i] = strconv.Itoa(r)
 	}
 	return strings.Join(s, ",")
+}
+
+// reachable probes the target before an operation on it; one that cannot be reached fails
+// the pass at once, as a copy to it would after its retries.
+func (w *Worker) reachable(ctx context.Context, stops int) bool {
+	if w.Probe == nil {
+		return true
+	}
+	if err := w.Probe(ctx); err != nil {
+		if !w.stoppedSince(stops) {
+			w.failed(stops, fmt.Errorf("cannot be reached: %w", err))
+		}
+		return false
+	}
+	return true
 }

@@ -709,6 +709,14 @@ BACKUP_PARALLELISM="2"
 
 It lists why, and `archiver status` shows it first. For a monitor such as Uptime Kuma, run `docker exec archiver archiver health --backups` and alert on a non-zero exit, or read `backup_health` from `archiver status --json`, which also carries each service's last backup, the copy workers, drills, storage maintenance and the open incidents. Each service's last backup is kept in `logs/.backup-state.json`.
 
+### Storage Outages
+
+Before a backup, a copy, a check or a prune, archiver makes a quick read-only check that the storage can be reached with its credentials, so a storage that is down costs seconds rather than Duplicacy's long retries:
+
+- **Primary down:** the backup fails at once. No service is started (no pre-backup hook stops anything for a backup that cannot happen), each is reported skipped, and one **PRIMARY DOWN** notification is sent at a higher priority (Pushover priority 1, ntfy 5); backup health shows FAILING. If the primary is lost mid-run, a failed service backup checks it again, and when it is gone no further service starts (post-backup hooks still run for services whose pre hook ran). The next backup that reaches it sends one recovery notice.
+- **Secondary down:** its copy is skipped with one line. The copy workers retry on their schedule, each retry checking first; a storage still down after 30 minutes is one alert.
+- **During maintenance:** a secondary that cannot be reached fails its own check and prune, and the others are still maintained. The secondaries are registered through the primary, so a primary that cannot be reached fails the maintenance run.
+
 ### Notifications
 
 Archiver sends to any combination of Pushover, an [Apprise API](https://github.com/caronc/apprise-api) server and [ntfy](https://ntfy.sh). Each destination receives the kinds of notification its setting asks for:

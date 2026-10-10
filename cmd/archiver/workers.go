@@ -151,6 +151,15 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 			Save:  func(s copier.State) { store.Save(s) },
 		}, saved[name])
 		w.CopyLock = l.CopyLock
+		// The primary too: every copy reads it.
+		primary := cfg.Targets[0]
+		w.Probe = func(ctx context.Context) error {
+			if _, err := kit.Probe(ctx, l, primary, false); err != nil {
+				return fmt.Errorf("the primary %s: %w", primary.Name, err)
+			}
+			_, err := kit.Probe(ctx, l, t, false)
+			return err
+		}
 		w.InUseDir = l.InUseDir()
 		w.Upkeep = copier.Upkeep{
 			Own:        ownIDs(cfg, host),

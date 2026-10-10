@@ -401,14 +401,15 @@ if wanted webdav-http; then
     -e STORAGE_TARGET_1_WEBDAV_USER=davuser -e STORAGE_TARGET_1_WEBDAV_PATH=missing/dir
   secret diagnose storage_target_1_webdav_password davpass
   docker exec "$P-diagnose" archiver backup >/dev/null 2>&1 && die "a backup to a missing directory succeeded"
-  docker exec "$P-diagnose" grep -q "\[ERROR\].*Storage 'offsite' (webdav-http): /missing/dir does not exist there. Create it first" /opt/archiver/logs/archiver.log \
+  # Found by the preflight probe (ADR 34): PRIMARY DOWN, saying why.
+  docker exec "$P-diagnose" grep -q "\[ERROR\].*PRIMARY DOWN: storage 'offsite' cannot be reached (the storage's directory does not exist: /missing/dir; create it first" /opt/archiver/logs/archiver.log \
     || fail diagnose "a missing directory is not explained"
   docker rm -f "$P-diagnose" >/dev/null
   start_archiver diagnose -e STORAGE_TARGET_1_NAME=offsite -e STORAGE_TARGET_1_TYPE=webdav-http -e STORAGE_TARGET_1_WEBDAV_HOST=no-such-host:8080 \
     -e STORAGE_TARGET_1_WEBDAV_USER=davuser -e STORAGE_TARGET_1_WEBDAV_PATH=x
   secret diagnose storage_target_1_webdav_password davpass
   docker exec "$P-diagnose" archiver backup >/dev/null 2>&1 && die "a backup to an unreachable host succeeded"
-  docker exec "$P-diagnose" grep -q "\[ERROR\].*Storage 'offsite' (webdav-http) cannot be reached: .*no-such-host" /opt/archiver/logs/archiver.log \
+  docker exec "$P-diagnose" grep -q "\[ERROR\].*PRIMARY DOWN: storage 'offsite' cannot be reached (.*no-such-host" /opt/archiver/logs/archiver.log \
     || fail diagnose "an unreachable host is not explained"
   docker rm -f "$P-diagnose" >/dev/null
   echo "=== failures to open a storage are explained ==="
