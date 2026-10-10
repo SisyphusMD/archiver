@@ -110,6 +110,19 @@ func schedule(ctx context.Context, clock Clock, log io.Writer, j Job, run func(J
 // Interval is the time between a schedule's next two runs after now, the period the
 // healthcheck allows for a scheduled job; ok is false for a schedule that does not parse or
 // has fewer than two runs left.
+// Missed counts the runs spec scheduled after since and by now, up to limit; ok is false
+// for a spec that does not parse.
+func Missed(spec string, since, now time.Time, limit int) (n int, ok bool) {
+	expr, err := cronexpr.ParseStrict(spec)
+	if err != nil {
+		return 0, false
+	}
+	for t := expr.Next(since); !t.IsZero() && !t.After(now) && n < limit; t = expr.Next(t) {
+		n++
+	}
+	return n, true
+}
+
 func Interval(spec string, now time.Time) (time.Duration, bool) {
 	expr, err := cronexpr.ParseStrict(spec)
 	if err != nil {

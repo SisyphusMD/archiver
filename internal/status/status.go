@@ -3,19 +3,27 @@
 package status
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/backuphealth"
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/envelope"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
+	"github.com/SisyphusMD/archiver/internal/notify"
 )
 
 // Write prints the status report. It fails only when a state file exists but cannot be read.
-func Write(w io.Writer, l layout.Layout, now time.Time) error {
+func Write(w io.Writer, l layout.Layout, getenv func(string) string, now time.Time) error {
+	h := backuphealth.Compute(l, getenv, now)
+	fmt.Fprintf(w, "Backup health: %s\n", h.State)
+	for _, r := range h.Reasons {
+		fmt.Fprintf(w, "  %s\n", r)
+	}
 	backup, held, err := lockstate.ReadLock(l.BackupLock())
 	if err != nil {
 		return err
@@ -179,4 +187,58 @@ func Age(epoch int64, now time.Time) string {
 	default:
 		return fmt.Sprintf("%dd ago", d/86400)
 	}
+}
+
+// Run is one run's lock, for JSON.
+type Run struct {
+	Running bool   `json:"running"`
+	Paused  bool   `json:"paused,omitempty"`
+	PID     int    `json:"pid,omitempty"`
+	Stage   string `json:"stage,omitempty"`
+	Context string `json:"context,omitempty"`
+}
+
+// Snapshot is everything status shows, for monitors and the web page (ADRs 32, 38).
+type Snapshot struct {
+	At           int64                                       `json:"at"`
+	BackupHealth backuphealth.Health                         `json:"backup_health"`
+	Backup       Run                                         `json:"backup"`
+	Maintenance  Run                                         `json:"maintenance"`
+	Drill        Run                                         `json:"drill"`
+	Services     map[string]lockstate.ServiceResult          `json:"services"`
+	Copies       map[string]copier.State                     `json:"copies"`
+	Drills       map[string]map[string]lockstate.DrillResult `json:"drills"`
+	Storages     []lockstate.Storage                         `json:"storages"`
+	Incidents    map[string]string                           `json:"incidents"`
+	Envelope     string                                      `json:"envelope,omitempty"`
+}
+
+// Take reads the snapshot.
+func Take(l layout.Layout, getenv func(string) string, now time.Time) Snapshot {
+	s := Snapshot{At: now.Unix(), BackupHealth: backuphealth.Compute(l, getenv, now)}
+	run := func(path string) Run {
+		lk, held, err := lockstate.ReadLock(path)
+		if err != nil || !held || !lk.Alive() {
+			return Run{}
+		}
+		return Run{Running: true, Paused: lk.Paused(), PID: lk.PID, Stage: lk.Stage, Context: lk.Context}
+	}
+	s.Backup, s.Maintenance, s.Drill = run(l.BackupLock()), run(l.MaintenanceLock()), run(l.DrillLock())
+	bs, _ := lockstate.ReadBackupState(l.BackupState())
+	s.Services = bs.Services
+	s.Copies = (&copier.Store{Path: l.CopyWorkersState()}).Load()
+	if ds, err := lockstate.ReadDrillState(l.DrillState()); err == nil {
+		s.Drills = ds.Results
+	}
+	s.Storages, _ = lockstate.ReadMaintenance(l.MaintenanceState())
+	s.Incidents = notify.OpenIncidents(l.Incidents())
+	s.Envelope, _ = envelope.Status(l, now, Age)
+	return s
+}
+
+// WriteJSON writes the snapshot as JSON.
+func WriteJSON(w io.Writer, l layout.Layout, getenv func(string) string, now time.Time) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(Take(l, getenv, now))
 }

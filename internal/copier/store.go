@@ -16,18 +16,28 @@ type Store struct {
 
 // Load reads the saved states by target; a missing or unreadable file is an empty one.
 func (s *Store) Load() map[string]State {
+	out, _ := s.Read()
+	return out
+}
+
+// Read is Load with the reason the file could not be read; a missing file is no error.
+func (s *Store) Read() (map[string]State, error) {
 	out := map[string]State{}
 	b, err := os.ReadFile(s.Path)
+	if os.IsNotExist(err) {
+		return out, nil
+	}
 	if err != nil {
-		return out
+		return out, err
 	}
 	var list []State
-	if json.Unmarshal(b, &list) == nil {
-		for _, st := range list {
-			out[st.Target] = st
-		}
+	if err := json.Unmarshal(b, &list); err != nil {
+		return out, err
 	}
-	return out
+	for _, st := range list {
+		out[st.Target] = st
+	}
+	return out, nil
 }
 
 // Save records one worker's state, keeping the others'.

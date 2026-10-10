@@ -313,6 +313,10 @@ jobs:
         run: |
           docker run -i --rm --hostname ic-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/incidents.sh
+      - name: Backup health is OK, DEGRADED or FAILING from what each part records; liveness unaffected (ADR 32)
+        run: |
+          docker run -i --rm --hostname bh-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/backup-health.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \

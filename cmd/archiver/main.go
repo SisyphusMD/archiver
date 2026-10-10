@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/backuphealth"
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/doctor"
@@ -36,7 +37,7 @@ const (
 // exit status; a command line with any gets the usage.
 var ported = map[string]func() int{
 	"status": func() int {
-		if err := status.Write(os.Stdout, layout.Default(), time.Now()); err != nil {
+		if err := status.Write(os.Stdout, layout.Default(), os.Getenv, time.Now()); err != nil {
 			fmt.Fprintln(os.Stderr, "archiver:", err)
 			return 1
 		}
@@ -79,6 +80,16 @@ func main() {
 		if code, ok := recoverCommand(os.Args[2:]); ok {
 			os.Exit(code)
 		}
+	}
+	if len(os.Args) == 3 && os.Args[1] == "status" && os.Args[2] == "--json" {
+		if err := status.WriteJSON(os.Stdout, layout.Default(), os.Getenv, time.Now()); err != nil {
+			fmt.Fprintln(os.Stderr, "archiver:", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	if len(os.Args) == 3 && os.Args[1] == "health" && os.Args[2] == "--backups" {
+		os.Exit(backupHealth())
 	}
 	if len(os.Args) == 3 && os.Args[1] == "notify" && os.Args[2] == "test" {
 		os.Exit(notifyTest())
@@ -331,4 +342,15 @@ func recoverCommand(args []string) (int, bool) {
 		o.Password = strings.TrimRight(line, "\r\n")
 	}
 	return restoreEnv().Recover(o), true
+}
+
+// backupHealth runs `archiver health --backups`: backup health and why, exiting 0 OK, 1
+// DEGRADED or 2 FAILING for monitors (ADR 32).
+func backupHealth() int {
+	h := backuphealth.Compute(layout.Default(), os.Getenv, time.Now())
+	fmt.Printf("Backup health: %s\n", h.State)
+	for _, r := range h.Reasons {
+		fmt.Printf("  %s\n", r)
+	}
+	return h.ExitCode()
 }

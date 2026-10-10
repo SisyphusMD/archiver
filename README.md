@@ -697,6 +697,18 @@ BACKUP_PARALLELISM="2"
 `BACKUP_PARALLELISM` is how many services a backup processes at once, each with its pre-backup hook, backup and post-backup hook. (Default: 2.) Set `1` to back them up one after another, in order, as before v1, for example when one service's hook depends on another's having finished. Each running service uses `DUPLICACY_THREADS` threads, so peak load grows with both.
 
 
+### Backup Health
+
+`archiver healthcheck` is the container's liveness check: it fails only for what a restart or a person must fix (a dead scheduler, a crashed run, no space for logs), so a failed backup never makes the container restart. Whether the backups are good is a separate answer, `archiver health --backups`:
+
+| State | Meaning | Exit |
+|---|---|---|
+| `OK` | Every service has a good primary backup, nothing is wrong | 0 |
+| `DEGRADED` | Backups are good, but a secondary is behind or down or a copy to it failed, a check or mirror failed, maintenance failed, or a service has not been backed up yet | 1 |
+| `FAILING` | Two scheduled backups (`BACKUP_SCHEDULE`) have come since a service's last good primary backup, or its last backup failed, a backup was refused, the recovery kit or a restore drill is failing, or a log cannot be written | 2 |
+
+It lists why, and `archiver status` shows it first. For a monitor such as Uptime Kuma, run `docker exec archiver archiver health --backups` and alert on a non-zero exit, or read `backup_health` from `archiver status --json`, which also carries each service's last backup, the copy workers, drills, storage maintenance and the open incidents. Each service's last backup is kept in `logs/.backup-state.json`.
+
 ### Notifications
 
 Archiver sends to any combination of Pushover, an [Apprise API](https://github.com/caronc/apprise-api) server and [ntfy](https://ntfy.sh). Each destination receives the kinds of notification its setting asks for:
@@ -785,7 +797,9 @@ archiver migrate hooks [DIR...]  # Convert service-backup-settings.sh into execu
 archiver recovery-kit [force]  # Upload the encrypted recovery kit to every storage target now
 archiver envelope [DIR]    # Write the printable break-glass envelope (PDF + HTML; default /opt/archiver/envelope)
 archiver envelope confirm  # Record the envelope as printed, so status can say when it goes out of date
-archiver healthcheck       # Check system health (Docker HEALTHCHECK uses this; on Kubernetes wire it as an exec probe)
+archiver healthcheck       # Liveness check (Docker HEALTHCHECK uses this; on Kubernetes wire it as an exec probe)
+archiver health --backups  # Backup health: OK, DEGRADED or FAILING and why; exits 0, 1 or 2 for monitors
+archiver status --json     # Everything status shows, and backup health, as JSON
 archiver help              # Show help
 ```
 

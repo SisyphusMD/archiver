@@ -290,6 +290,9 @@ func readSecret(src Source, name string) (string, error) {
 }
 
 // splitServiceDirectories splits on colons and newlines, dropping empty entries.
+// SplitServiceDirectories reads SERVICE_DIRECTORIES as a backup does.
+func SplitServiceDirectories(raw string) []string { return splitServiceDirectories(raw) }
+
 func splitServiceDirectories(raw string) []string {
 	var out []string
 	for p := range strings.SplitSeq(strings.ReplaceAll(raw, "\n", ":"), ":") {
