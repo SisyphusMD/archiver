@@ -16,9 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Scan
         env:
           REGISTRY_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          TRIVY_USERNAME: cody
+          TRIVY_PASSWORD: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
@@ -26,7 +29,10 @@ jobs:
           # renovate: datasource=docker depName=aquasec/trivy
           TRIVY_IMAGE=aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
           repo=forgejo.bryantserver.com/sisyphusmd/archiver
-          newest=$(docker run --rm -e REGISTRY_PAT --entrypoint sh "$SKOPEO_IMAGE" -c 'skopeo list-tags --creds "cody:$REGISTRY_PAT" "docker://$0"' "$repo" \
+          AUTH=skopeo-auth-scan-${{ github.run_id }}
+          trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
+          bash .forgejo/scripts/registry-auth.sh "$AUTH" "$SKOPEO_IMAGE" forgejo.bryantserver.com=cody:REGISTRY_PAT
+          newest=$(docker run --rm -v "$AUTH":/auth:ro "$SKOPEO_IMAGE" list-tags --authfile /auth/auth.json "docker://$repo" \
             | python3 -c '
           import json, re, sys
           # SemVer order: a release sorts after its own prereleases (1.0.0 > 1.0.0-rc.1).
@@ -38,5 +44,5 @@ jobs:
           print(max(tags, key=key))
           ')
           echo "Scanning $repo:$newest"
-          docker run --rm -e TRIVY_USERNAME=cody -e TRIVY_PASSWORD="$REGISTRY_PAT" "$TRIVY_IMAGE" \
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY_IMAGE" \
             image --scanners vuln --severity HIGH,CRITICAL --no-progress --exit-code 0 "$repo:$newest"

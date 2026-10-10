@@ -34,6 +34,7 @@ jobs:
             --shell=bash
             .forgejo/scripts/next-version.sh
             lib/host/archiver
+            .forgejo/scripts/registry-auth.sh
 
   validate-changelog:
     name: Validate CHANGELOG structure
@@ -735,7 +736,7 @@ jobs:
       - name: Push the candidate to cluster Forgejo via skopeo
         id: push
         env:
-          DST_CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          REGISTRY_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
           META_TAGS: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:release-candidate${{ matrix.variant == 'slim' && '-slim' || '' }}
           IMAGE_TAR: ${{ github.workspace }}/image.tar
         run: |
@@ -747,8 +748,10 @@ jobs:
           SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
 
           VOL=skopeo-stage-${{ github.run_id }}-${{ matrix.variant }}
+          AUTH=skopeo-auth-push-${{ github.run_id }}-${{ matrix.variant }}
           docker volume create "$VOL" >/dev/null
-          trap 'docker volume rm -f "$VOL" >/dev/null 2>&1' EXIT
+          trap 'docker volume rm -f "$VOL" "$AUTH" >/dev/null 2>&1' EXIT
+          bash .forgejo/scripts/registry-auth.sh "$AUTH" "$SKOPEO_IMAGE" forgejo.bryantserver.com=cody:REGISTRY_PAT
 
           STAGE=$(docker create -v "$VOL":/data "$SKOPEO_IMAGE")
           docker cp "${IMAGE_TAR}" "${STAGE}:/data/image.tar"
@@ -757,11 +760,10 @@ jobs:
           while IFS= read -r dst; do
             [ -z "$dst" ] && continue
             docker run --rm \
-              -v "$VOL":/data \
-              -e DST_CREDS \
+              -v "$VOL":/data -v "$AUTH":/auth:ro \
               "$SKOPEO_IMAGE" \
               copy --all --digestfile /data/digest \
-                --dest-creds "$DST_CREDS" \
+                --dest-authfile /auth/auth.json \
                 oci-archive:/data/image.tar \
                 "docker://${dst}"
           done <<< "$META_TAGS"
@@ -808,7 +810,7 @@ jobs:
 
       - name: Tag the signed release
         env:
-          CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          REGISTRY_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
           META_TAGS: ${{ steps.meta.outputs.tags }}
           # By digest, not the candidate tag: another release run may have moved that tag
           # since this one signed.
@@ -817,10 +819,13 @@ jobs:
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
           SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          AUTH=skopeo-auth-tag-${{ github.run_id }}-${{ matrix.variant }}
+          trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
+          bash .forgejo/scripts/registry-auth.sh "$AUTH" "$SKOPEO_IMAGE" forgejo.bryantserver.com=cody:REGISTRY_PAT
           while IFS= read -r dst; do
             [ -z "$dst" ] && continue
-            docker run --rm -e CREDS "$SKOPEO_IMAGE" \
-              copy --all --src-creds "$CREDS" --dest-creds "$CREDS" "docker://${SIGNED}" "docker://${dst}"
+            docker run --rm -v "$AUTH":/auth:ro "$SKOPEO_IMAGE" \
+              copy --all --src-authfile /auth/auth.json --dest-authfile /auth/auth.json "docker://${SIGNED}" "docker://${dst}"
           done <<< "$META_TAGS"
 
       # ADR 40: known vulnerabilities reported for each release, never blocking it (most
@@ -828,14 +833,15 @@ jobs:
       - name: Scan the release (trivy, advisory)
         continue-on-error: true
         env:
-          REGISTRY_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          TRIVY_USERNAME: cody
+          TRIVY_PASSWORD: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
           META_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=aquasec/trivy
           TRIVY_IMAGE=aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
           first=$(printf '%s\n' "$META_TAGS" | head -1)
-          docker run --rm -e TRIVY_USERNAME=cody -e TRIVY_PASSWORD="$REGISTRY_PAT" "$TRIVY_IMAGE" \
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD "$TRIVY_IMAGE" \
             image --scanners vuln --severity HIGH,CRITICAL --no-progress "$first"
 
       # Full repo sync, not per-tag copy. NAS is the canonical mirror of the
@@ -850,19 +856,22 @@ jobs:
         env:
           SRC: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}
           DST_NAMESPACE: forgejo.lan.bryantserver.com/sisyphusmd
-          SRC_CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
-          DST_CREDS: cody:${{ secrets.NAS_FORGEJO_REGISTRY_PUSH_PAT }}
+          SRC_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          DST_PAT: ${{ secrets.NAS_FORGEJO_REGISTRY_PUSH_PAT }}
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
           SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          AUTH=skopeo-auth-nas-${{ github.run_id }}-${{ matrix.variant }}
+          trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
+          bash .forgejo/scripts/registry-auth.sh "$AUTH" "$SKOPEO_IMAGE" forgejo.bryantserver.com=cody:SRC_PAT "${DST_NAMESPACE%%/*}=cody:DST_PAT"
           docker run --rm \
-            -e SRC_CREDS -e DST_CREDS \
+            -v "$AUTH":/auth:ro \
             "$SKOPEO_IMAGE" \
             sync --all --keep-going \
               --src docker --dest docker \
-              --src-creds "$SRC_CREDS" \
-              --dest-creds "$DST_CREDS" \
+              --src-authfile /auth/auth.json \
+              --dest-authfile /auth/auth.json \
               "$SRC" "$DST_NAMESPACE"
 
       # GHCR mirror via per-tag `skopeo copy`. `skopeo sync` would also work
@@ -875,32 +884,35 @@ jobs:
         id: mirror-ghcr
         continue-on-error: true
         env:
-          SRC_CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
-          DST_CREDS: ${{ github.repository_owner }}:${{ secrets.GH_REGISTRY_PUSH_PAT }}
+          SRC_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          DST_PAT: ${{ secrets.GH_REGISTRY_PUSH_PAT }}
           META_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
           SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          AUTH=skopeo-auth-ghcr-${{ github.run_id }}-${{ matrix.variant }}
+          trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
+          bash .forgejo/scripts/registry-auth.sh "$AUTH" "$SKOPEO_IMAGE" forgejo.bryantserver.com=cody:SRC_PAT "ghcr.io=${{ github.repository_owner }}:DST_PAT"
           while IFS= read -r src; do
             [ -z "$src" ] && continue
             dst="${src/forgejo.bryantserver.com/ghcr.io}"
             docker run --rm \
-              -e SRC_CREDS -e DST_CREDS \
+              -v "$AUTH":/auth:ro \
               "$SKOPEO_IMAGE" \
               copy --all \
-                --src-creds "$SRC_CREDS" \
-                --dest-creds "$DST_CREDS" \
+                --src-authfile /auth/auth.json \
+                --dest-authfile /auth/auth.json \
                 "docker://${src}" "docker://${dst}"
           done <<< "$META_TAGS"
           # The signature (ADR 40) travels with the image.
           sig="forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:${{ steps.sign.outputs.sig_tag }}"
           docker run --rm \
-            -e SRC_CREDS -e DST_CREDS \
+            -v "$AUTH":/auth:ro \
             "$SKOPEO_IMAGE" \
             copy --all \
-              --src-creds "$SRC_CREDS" \
-              --dest-creds "$DST_CREDS" \
+              --src-authfile /auth/auth.json \
+              --dest-authfile /auth/auth.json \
               "docker://${sig}" "docker://${sig/forgejo.bryantserver.com/ghcr.io}"
 
       # Surface mirror failures as warnings only; do NOT exit 1 here. Failing
@@ -959,6 +971,8 @@ jobs:
           GH_API: https://api.github.com/repos/${{ github.repository }}/releases
         run: |
           set -uo pipefail
+          AUTH_HEADER_FILE=$(mktemp)
+          trap 'rm -f "$AUTH_HEADER_FILE"' EXIT
 
           # Write a release payload, retrying the transient rejections. On failure
           # API_WRITE_ERROR carries the status and a slice of the response body:
@@ -1028,11 +1042,14 @@ jobs:
             local label=$1 api=$2 token=$3 auth_scheme=$4 tag=$5 payload_file=$6
             local http id auth_header
 
+            # The header reaches curl in a private file (-H @file), never on its command
+            # line, where another process on the runner could read the token.
             if [ "$auth_scheme" = "bearer" ]; then
-              auth_header="Authorization: Bearer ${token}"
+              printf 'Authorization: Bearer %s\n' "${token}" > "${AUTH_HEADER_FILE}"
             else
-              auth_header="Authorization: token ${token}"
+              printf 'Authorization: token %s\n' "${token}" > "${AUTH_HEADER_FILE}"
             fi
+            auth_header="@${AUTH_HEADER_FILE}"
 
             http=$(curl -sSL -o /tmp/existing.json -w "%{http_code}" \
               -H "${auth_header}" \
