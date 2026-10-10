@@ -18,7 +18,7 @@ services:
       # by root (or run the restore with IGNORE_OWNERSHIP=1).
       - CHOWN                     # Restore: recreate files under their original owner
       - FOWNER                    # Restore: set mode/timestamps on files owned by other UIDs
-      # - SYS_ADMIN               # Only for a hook that takes btrfs snapshots (see README)
+      # - SYS_ADMIN               # Only for a hook that takes btrfs snapshots (docs/installation.md)
     security_opt:
       - no-new-privileges:true
     # ports:
@@ -28,9 +28,9 @@ services:
     environment:
       BACKUP_SCHEDULE: "0 3 * * *"        # backup pipeline: daily at 3am (omit for manual mode)
       MAINTENANCE_SCHEDULE: "0 13 * * *"  # check + prune: daily at 1pm, opposite the backup window
-      # RESTORE_DRILL_SCHEDULE: "0 5 * * 0"  # weekly restore drill (README "Restore drills")
-      # METRICS_PORT: "9469"      # serve Prometheus /metrics (README "Metrics"); publish it under ports: below
-      # WEB_PORT: "8470"          # read-only status page (README "Status Page"); no login: behind an authenticating proxy
+      # RESTORE_DRILL_SCHEDULE: "0 5 * * 0"  # weekly restore drill (docs/maintenance.md)
+      # METRICS_PORT: "9469"      # serve Prometheus /metrics (docs/monitoring.md); publish it under ports: below
+      # WEB_PORT: "8470"          # read-only status page (docs/monitoring.md); no login: behind an authenticating proxy
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
       # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
 
@@ -55,7 +55,7 @@ services:
       # - storage_target_1_s3_id  # only for s3 targets
       # - storage_target_1_s3_secret
       # - storage_target_1_breakglass_b2_id   # optional read-only key for the break-glass
-      # - storage_target_1_breakglass_b2_key  # envelope (README "Break-glass envelope")
+      # - storage_target_1_breakglass_b2_key  # envelope (docs/recovery.md)
 
     volumes:
       - ./archiver-logs:/opt/archiver/logs           # Persistent logs (optional)
@@ -69,7 +69,7 @@ services:
       # - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket    # systemctl start/stop/status
       # - /etc/systemd/system:/etc/systemd/system                    # systemctl mask/unmask/enable/disable
       # - /path/to/host/restore-dir:/mnt/restore-dir                 # Restore location (will be prompted)
-      # - ./archiver-hooks:/opt/archiver/hooks:ro                    # HOOKS_DIR: hooks outside the data (README "Who can change a hook")
+      # - ./archiver-hooks:/opt/archiver/hooks:ro                    # HOOKS_DIR: hooks outside the data (docs/hooks.md)
 
 # Secrets for the env-native service above. Files can come straight from 'archiver init'
 # (env-native/secrets/); move them somewhere safe and reference them here.

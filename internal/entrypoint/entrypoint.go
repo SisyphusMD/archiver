@@ -71,7 +71,7 @@ const BundleHelp = `This release no longer reads bundles (bundle.tar.enc, config
 Then load archiver-migrate/archiver.env as environment variables and the files in
 archiver-migrate/secrets/ under /run/secrets, remove the bundle mount and the bundle_password
 secret, and start this release again. The files hold your secrets in plaintext: move them
-into your secret store and delete them. README: "Upgrading from a bundle".
+into your secret store and delete them. See docs/upgrading.md, "Upgrading from a bundle".
 `
 
 // PlaceKeys copies the mounted key files into the keys directory with their modes; a missing
@@ -269,7 +269,7 @@ Convert it once, with this container's mounts and environment:
   docker compose run --rm archiver migrate hooks
 
 (or the same 'docker run' as this container with 'migrate hooks' as its command), then start
-again. The hooks keep calling your existing functions. README: "Upgrading from
+again. The hooks keep calling your existing functions. See docs/hooks.md, "Upgrading from
 service-backup-settings.sh".
 `, strings.Join(dirs, ", "))
 }

@@ -155,8 +155,9 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
+          # Every guide but the ADRs, which record decisions as they were made.
           sed -i -E "s|(forgejo\.bryantserver\.com/sisyphusmd/archiver:)[0-9]+\.[0-9]+\.[0-9]+|\1${VERSION}|g" \
-            compose.yaml README.md docs/guides/migration/legacy-to-docker.md docs/guides/configuration/local-storage-setup.md
+            compose.yaml README.md $(git ls-files 'docs/*.md' ':!docs/adr/*')
 
       - name: Show diff
         run: git --no-pager diff
@@ -275,7 +276,7 @@ jobs:
           TOKEN: ${{ secrets.CLUSTER_FORGEJO_REPO_WRITE_PAT }}
         run: |
           set -euo pipefail
-          git add CHANGELOG.md compose.yaml README.md docs/guides/migration/legacy-to-docker.md docs/guides/configuration/local-storage-setup.md
+          git add CHANGELOG.md compose.yaml README.md $(git ls-files 'docs/*.md' ':!docs/adr/*')
           git commit -m "release: ${VERSION}"
           git tag "${TAG}"
           # Pass the token via http.extraheader (HTTP Authorization header) instead
