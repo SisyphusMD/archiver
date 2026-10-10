@@ -491,7 +491,7 @@ func (r *Run) duplicacy(service string, args ...string) (code int, stopped bool)
 
 // duplicacyTo is duplicacy with its output also copied to also.
 func (r *Run) duplicacyTo(service string, also io.Writer, args ...string) (code int, stopped bool) {
-	spec := proc.Spec{Path: r.Duplicacy, Args: proc.NoScript(args...), Dir: r.repo, Env: r.env, Log: r.log, Service: service}
+	spec := proc.Spec{Path: r.Duplicacy, Args: proc.NoScript(args...), Dir: r.repo, Env: r.env, Log: r.log, Service: service, Interrupt: true}
 	if also != nil {
 		lw := r.log.Writer(logging.Info, service)
 		defer lw.Close()

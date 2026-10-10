@@ -565,7 +565,7 @@ func exitText(code int, err error) string {
 }
 
 func (b *Backup) duplicacy(dir, service string, args ...string) proc.Spec {
-	return proc.Spec{Path: b.Duplicacy, Args: proc.NoScript(args...), Dir: dir, Env: b.env, Log: b.log, Service: service}
+	return proc.Spec{Path: b.Duplicacy, Args: proc.NoScript(args...), Dir: dir, Env: b.env, Log: b.log, Service: service, Interrupt: true}
 }
 
 // run runs a duplicacy command to completion, unless a signal ends the run first.

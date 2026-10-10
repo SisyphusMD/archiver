@@ -191,7 +191,7 @@ func (w *Worker) Wake() {
 	}
 	w.mu.Unlock()
 	if check != nil {
-		check.Terminate()
+		go check.Terminate() // in the background: duplicacy may take a while to save its state
 	}
 	select {
 	case w.wake <- struct{}{}:
@@ -636,8 +636,10 @@ func (w *Worker) Stop() {
 	if cancel != nil {
 		cancel()
 	}
+	// In the background, so stopping every worker never waits on one duplicacy saving its
+	// state: the worker's own loop waits for it to end.
 	if c != nil {
-		c.Terminate()
+		go c.Terminate()
 	}
 }
 
