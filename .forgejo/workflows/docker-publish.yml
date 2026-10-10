@@ -321,6 +321,10 @@ jobs:
         run: |
           docker run -i --rm --hostname pd-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/primary-down.sh
+      - name: Metrics textfile after each backup, kept by the daemon, /metrics on METRICS_PORT (ADR 35)
+        run: |
+          docker run -i --rm --hostname mx-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/metrics.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \

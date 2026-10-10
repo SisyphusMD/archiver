@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -186,6 +187,14 @@ func entrypointCommand(args []string) int {
 			return 0
 		}
 	}
+	if err := config.CheckMetricsPort(os.Getenv("METRICS_PORT")); err != nil {
+		fmt.Println("ERROR:", err)
+		return 1
+	}
+	// No daemon in manual mode: the metrics run here (ADR 35).
+	metricsCtx, endMetrics := context.WithCancel(context.Background())
+	defer endMetrics()
+	startMetrics(metricsCtx, l)
 	fmt.Println("No BACKUP_SCHEDULE set. Container will wait for manual commands.")
 	fmt.Println("Use 'docker exec <container> archiver backup' to run backups manually ('archiver backup --detach' to background)")
 	fmt.Println()

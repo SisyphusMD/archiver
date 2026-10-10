@@ -24,6 +24,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logview"
+	"github.com/SisyphusMD/archiver/internal/metrics"
 	"github.com/SisyphusMD/archiver/internal/restore"
 	"github.com/SisyphusMD/archiver/internal/setup"
 	"github.com/SisyphusMD/archiver/internal/status"
@@ -176,6 +177,9 @@ func runDaemon(args []string) int {
 		return 2
 	}
 	jobs, err := daemon.Jobs(os.Getenv, time.Now())
+	if err == nil {
+		err = config.CheckMetricsPort(os.Getenv("METRICS_PORT"))
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "archiver:", err)
 		return 1
@@ -199,6 +203,7 @@ func runDaemon(args []string) int {
 		workers.start(ctx.Done())
 		defer workers.shutdown()
 	}
+	startMetrics(ctx, l)
 	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, func(j daemon.Job) int {
 		// A fresh process per run, as under cron: each run starts clean.
 		cmd := exec.Command(selfPath, j.Name)
@@ -353,4 +358,20 @@ func backupHealth() int {
 		fmt.Printf("  %s\n", r)
 	}
 	return h.ExitCode()
+}
+
+// startMetrics keeps the metrics textfile current and serves /metrics when METRICS_PORT asks
+// (ADR 35), until ctx ends: under the daemon, or in manual mode under the entrypoint.
+func startMetrics(ctx context.Context, l layout.Layout) {
+	go metrics.Keep(ctx, l, os.Getenv, time.Minute, func(err error) {
+		fmt.Fprintln(os.Stderr, "archiver: metrics textfile:", err)
+	})
+	if port := os.Getenv("METRICS_PORT"); port != "" {
+		go func() {
+			if err := metrics.Serve(ctx, port, l, os.Getenv); err != nil {
+				fmt.Fprintf(os.Stderr, "archiver: cannot serve metrics on port %s: %v\n", port, err)
+			}
+		}()
+		fmt.Printf("Serving Prometheus metrics on port %s at /metrics.\n", port)
+	}
 }

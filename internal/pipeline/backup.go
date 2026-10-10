@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -26,6 +27,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logging"
+	"github.com/SisyphusMD/archiver/internal/metrics"
 	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/proc"
 	"github.com/SisyphusMD/archiver/internal/runlock"
@@ -75,6 +77,7 @@ type Backup struct {
 	unreachable map[string]bool
 	// primaryExisted: the first probe found the primary's config, so it must stay there.
 	primaryExisted bool
+	stats          map[string]backupStats // each service's backup, by directory, under mu
 }
 
 // Run runs the pipeline and returns its exit code.
@@ -88,6 +91,11 @@ func (b *Backup) Run() int {
 			b.notify = &notify.Notifier{Incidents: b.Layout.Incidents()}
 		}
 		b.notify.Raise("backup-aborted", notify.Failure, "Backup Failed", b.log.Summary())
+	}
+	// The run's outcome in the metrics textfile at once (ADR 35), for deployments run by an
+	// external scheduler with no daemon to refresh it.
+	if err := metrics.WriteFile(b.Layout, os.Getenv, time.Now()); err != nil {
+		b.log.Message(logging.Warning, "", "Could not write the metrics textfile: "+err.Error())
 	}
 	return code
 }
@@ -669,7 +677,16 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 
 	log(logging.Info, fmt.Sprintf("Starting backup to %s for %s service.", primary.Name, svc.Name))
 	began := time.Now()
-	p, err := b.start(b.duplicacy(svc.Dir, svc.Name, "backup", "-storage", storage, "-stats", "-threads", b.cfg.Threads))
+	// The output is logged and also read for metrics: the revision made, the bytes uploaded.
+	spec := b.duplicacy(svc.Dir, svc.Name, "backup", "-storage", storage, "-stats", "-threads", b.cfg.Threads)
+	lw := b.log.Writer(logging.Info, svc.Name)
+	var out strings.Builder
+	spec.Output = io.MultiWriter(lw, &out)
+	defer func() {
+		lw.Close()
+		b.noteStats(svc.Dir, out.String())
+	}()
+	p, err := b.start(spec)
 	if err != nil {
 		log(logging.Error, fmt.Sprintf("Backup to %s failed for %s service.", primary.Name, svc.Name))
 		return hooks.Failed
@@ -1010,6 +1027,51 @@ func (b *Backup) skipForPrimary(dir string) {
 	b.record(dir, hooks.Skipped, time.Now())
 }
 
+var (
+	revisionLine = regexp.MustCompile(`(?m)^Backup for .* at revision (\d+) completed`)
+	uploadedLine = regexp.MustCompile(`(?m)^All chunks: .* ([\d,.]+)([KMGT]?) bytes uploaded`)
+)
+
+// noteStats keeps what duplicacy's -stats said of a backup for metrics (ADR 35).
+func (b *Backup) noteStats(dir, out string) {
+	var st backupStats
+	if m := revisionLine.FindStringSubmatch(out); m != nil {
+		st.revision, _ = strconv.Atoi(m[1])
+	}
+	if m := uploadedLine.FindStringSubmatch(out); m != nil {
+		st.uploaded = parseSize(m[1], m[2])
+	}
+	b.mu.Lock()
+	if b.stats == nil {
+		b.stats = map[string]backupStats{}
+	}
+	b.stats[dir] = st
+	b.mu.Unlock()
+}
+
+type backupStats struct {
+	revision int
+	uploaded int64
+}
+
+// parseSize reads duplicacy's sizes: "3,923" with a K, M, G or T after it (powers of 1024).
+func parseSize(num, unit string) int64 {
+	f, err := strconv.ParseFloat(strings.ReplaceAll(num, ",", ""), 64)
+	if err != nil {
+		return 0
+	}
+	for _, u := range "KMGT" {
+		if unit == "" {
+			break
+		}
+		f *= 1024
+		if string(u) == unit {
+			break
+		}
+	}
+	return int64(f)
+}
+
 // record keeps the outcome for the service in dir for backup health (ADR 32), by
 // directory: two directories of one name are one snapshot ID but separate outcomes.
 // Services back up in parallel, so the state file is edited under mu.
@@ -1028,6 +1090,8 @@ func (b *Backup) record(dir, result string, began time.Time) {
 	r.LastAttempt, r.Result, r.Seconds = now.Unix(), result, int64(now.Sub(began).Seconds())
 	if result == hooks.Success {
 		r.LastSuccess = now.Unix()
+		st := b.stats[dir]
+		r.Revision, r.Uploaded = st.revision, st.uploaded
 		if url, err := b.cfg.Targets[0].URL(); err == nil {
 			s.Primary = url
 		}
