@@ -125,7 +125,9 @@ func (s *Init) run() error {
 	if err := config.NewSettings(s.dirs, s.values).WriteEnvAndSecrets(filepath.Join(out, "archiver.env"), filepath.Join(out, "secrets"), keys); err != nil {
 		return err
 	}
-	os.Chmod(filepath.Join(out, "archiver.env"), 0o600)
+	if err := os.Chmod(filepath.Join(out, "archiver.env"), 0o600); err != nil {
+		return err
+	}
 	s.success("Env-native materials written to env-native/ in the mounted setup directory")
 	s.credentials(recoveryPassword)
 	return nil
@@ -237,9 +239,15 @@ func (s *Init) rsaKeys() (string, error) {
 	if err := opensslWithPass(pass, "rsa", "-in", priv, "-passin", "fd:3", "-outform", "PEM", "-pubout", "-out", pub); err != nil {
 		return "", fmt.Errorf("RSA public key extraction failed: %v", err)
 	}
-	os.Chmod(s.KeysDir, 0o700)
-	os.Chmod(priv, 0o600)
-	os.Chmod(pub, 0o644)
+	// The private key and its directory owner-only, or setup fails: never left readable.
+	for _, m := range []struct {
+		path string
+		mode os.FileMode
+	}{{s.KeysDir, 0o700}, {priv, 0o600}, {pub, 0o644}} {
+		if err := os.Chmod(m.path, m.mode); err != nil {
+			return "", fmt.Errorf("cannot restrict %s: %v", m.path, err)
+		}
+	}
 	s.success("RSA key pair generated")
 	return pass, nil
 }
@@ -256,7 +264,7 @@ func opensslWithPass(pass string, args ...string) error {
 		w.Close()
 		return err
 	}
-	io.WriteString(w, pass+"\n")
+	_, _ = io.WriteString(w, pass+"\n")
 	w.Close()
 	if err := cmd.Wait(); err != nil {
 		return err
@@ -275,8 +283,12 @@ func (s *Init) sshKeys() error {
 	if out, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-f", priv, "-N", "", "-C", "archiver").CombinedOutput(); err != nil {
 		return fmt.Errorf("SSH key pair generation failed: %v: %s", err, strings.TrimSpace(string(out)))
 	}
-	os.Chmod(priv, 0o600)
-	os.Chmod(priv+".pub", 0o644)
+	if err := os.Chmod(priv, 0o600); err != nil {
+		return fmt.Errorf("cannot restrict %s: %v", priv, err)
+	}
+	if err := os.Chmod(priv+".pub", 0o644); err != nil { //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
+		return err
+	}
 	s.success("SSH key pair generated")
 	return nil
 }

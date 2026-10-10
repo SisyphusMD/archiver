@@ -51,7 +51,7 @@ func WriteDrillState(path string, s DrillState) error {
 		return err
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		return err
 	}
 	return os.Rename(tmp, path)

@@ -178,7 +178,7 @@ func moveFile(src, dst string) error {
 		return err
 	}
 	tmp := dst + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	if err := os.WriteFile(tmp, b, 0o600); err != nil { //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
 		return err
 	}
 	if err := os.Rename(tmp, dst); err != nil {

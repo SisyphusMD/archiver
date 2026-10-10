@@ -26,7 +26,7 @@ func TestOneDriveRefreshAndDrive(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]any{"access_token": "new-access", "token_type": "Bearer", "refresh_token": "new-refresh", "expires_in": 3600})
 		case "/me/drive":
 			if r.Header.Get("Authorization") != "Bearer new-access" {
-				http.Error(w, "no", 401)
+				http.Error(w, "no", http.StatusUnauthorized)
 				return
 			}
 			w.Write([]byte(`{"id":"abc123","driveType":"personal"}`))

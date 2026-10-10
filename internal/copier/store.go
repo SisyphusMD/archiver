@@ -77,7 +77,7 @@ func (s *Store) write(all map[string]State) error {
 		return err
 	}
 	tmp := s.Path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		return err
 	}
 	return os.Rename(tmp, s.Path)

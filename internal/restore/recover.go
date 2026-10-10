@@ -57,7 +57,7 @@ func (e *Env) Recover(o RecoverOptions) int {
 		return fail("%v", err)
 	}
 	defer os.RemoveAll(stage)
-	os.Chmod(stage, 0o700)
+	_ = os.Chmod(stage, 0o700) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	if err := decryptKit(o.Kit, o.Password, stage); err != nil {
 		return fail("the kit does not open with that password (or is not a recovery kit): %v", err)
 	}
@@ -90,7 +90,7 @@ func (e *Env) Recover(o RecoverOptions) int {
 	if fi, err := os.Lstat(o.Out); err != nil || !fi.IsDir() {
 		return fail("%s must be a directory, not a link to one", o.Out)
 	}
-	if err := os.Chmod(o.Out, 0o700); err != nil {
+	if err := os.Chmod(o.Out, 0o700); err != nil { //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 		return fail("%v", err)
 	}
 	if err := writePrivate(mark, 0o600, strings.NewReader(id+"\n")); err != nil {
@@ -261,11 +261,11 @@ func decryptKit(kit, password, dir string) error {
 		return err
 	}
 	rd.Close()
-	io.WriteString(wr, password+"\n")
+	_, _ = io.WriteString(wr, password+"\n")
 	wr.Close()
 	if err := untar.Start(); err != nil {
-		dec.Process.Kill()
-		dec.Wait()
+		_ = dec.Process.Kill()
+		_ = dec.Wait()
 		return err
 	}
 	decErr2 := dec.Wait()
@@ -302,7 +302,7 @@ func copyPrivate(src, dst string) error {
 		if fi.Mode()&0o100 != 0 {
 			mode = 0o700
 		}
-		in, err := os.Open(p)
+		in, err := os.Open(p) //nolint:gosec // G122: walks a private directory of its own
 		if err != nil {
 			return err
 		}
@@ -319,7 +319,7 @@ func privateDir(dir string) error {
 	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() {
 		return fmt.Errorf("%s is a link, not a directory", dir)
 	}
-	return os.Chmod(dir, 0o700)
+	return os.Chmod(dir, 0o700) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 }
 
 // writePrivate writes a new file at target, never through whatever was there: an entry
@@ -351,7 +351,7 @@ func payloadHash(dir string) (string, error) {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, p)
-		f, err := os.Open(p)
+		f, err := os.Open(p) //nolint:gosec // G122: walks a private directory of its own
 		if err != nil {
 			return err
 		}

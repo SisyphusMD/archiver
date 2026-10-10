@@ -246,7 +246,7 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 	// The hook reads on from any answers already buffered (piped input), not past them. With
 	// nothing buffered it gets stdin itself: a reader would make the hook's end wait on a
 	// copy blocked reading the terminal.
-	var stdin io.Reader = e.Stdin
+	stdin := e.Stdin
 	if n := in.Buffered(); n > 0 {
 		ahead, _ := in.Peek(n)
 		stdin = io.MultiReader(bytes.NewReader(ahead), e.Stdin)

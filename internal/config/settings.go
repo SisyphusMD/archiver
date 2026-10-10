@@ -182,13 +182,13 @@ func (s *Settings) WriteEnvAndSecrets(envFile, secretsDir string, keys map[strin
 			fmt.Fprintf(&b, "%s=%s\n", kv.Name, kv.Value)
 		}
 	}
-	if err := os.WriteFile(envFile, []byte(b.String()), 0o644); err != nil {
+	if err := os.WriteFile(envFile, []byte(b.String()), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		return err
 	}
 	if err := os.MkdirAll(secretsDir, 0o700); err != nil {
 		return err
 	}
-	if err := os.Chmod(secretsDir, 0o700); err != nil {
+	if err := os.Chmod(secretsDir, 0o700); err != nil { //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 		return err
 	}
 	for _, kv := range s.Secrets {
@@ -221,7 +221,7 @@ func (s *Settings) WriteEnvAndSecrets(envFile, secretsDir string, keys map[strin
 }
 
 func writeMode(path string, data []byte, mode os.FileMode) error {
-	if err := os.WriteFile(path, data, mode); err != nil {
+	if err := os.WriteFile(path, data, mode); err != nil { //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
 		return err
 	}
 	return os.Chmod(path, mode)

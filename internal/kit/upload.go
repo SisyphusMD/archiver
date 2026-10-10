@@ -186,10 +186,10 @@ func (r *Run) adjust(p string, ref os.FileInfo) bool {
 		return false
 	}
 	if st, ok := ref.Sys().(*syscall.Stat_t); ok {
-		f.Chown(int(st.Uid), int(st.Gid))
+		_ = f.Chown(int(st.Uid), int(st.Gid))
 	}
 	if fi.Mode().Perm() != ref.Mode().Perm() {
-		chmod(f, ref.Mode().Perm())
+		_ = chmod(f, ref.Mode().Perm())
 		if fi, err = f.Stat(); err != nil {
 			return false
 		}
@@ -243,10 +243,10 @@ func (r *Run) knownHosts(ctx context.Context, t config.Target) (path, algorithms
 	if err != nil || len(bytes.TrimSpace(keys)) == 0 {
 		return "", "", fmt.Errorf("no host key from %s:%s", t.Get("SFTP_URL"), port)
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil { //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
 		return "", "", err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600) //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
 	if err != nil {
 		return "", "", err
 	}
@@ -266,7 +266,7 @@ func (r *Run) knownHosts(ctx context.Context, t config.Target) (path, algorithms
 // trusted lists, space-separated, the host-key algorithms the known-hosts file trusts for
 // host; an RSA key allows its SHA-2 signatures too.
 func trusted(path, host string) string {
-	out, err := exec.Command("ssh-keygen", "-F", host, "-f", path).Output()
+	out, err := exec.Command("ssh-keygen", "-F", host, "-f", path).Output() //nolint:gosec // G702: argv, never a shell
 	if err != nil {
 		return ""
 	}
@@ -331,7 +331,7 @@ func (r *Run) sftpAccess(t config.Target, names []string) int {
 		// Best effort ('-'): a server may forbid SETSTAT.
 		fmt.Fprintf(&batch, "-chmod %o %s/%s\n", mode, dir, n)
 	}
-	r.sftp(t, batch.String())
+	_, _ = r.sftp(t, batch.String())
 	target := t.Get("SFTP_USER") + "@" + t.Get("SFTP_URL")
 	placed, ok := r.sftpMode(t, dir+"/"+names[0])
 	if !ok {

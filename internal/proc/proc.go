@@ -140,7 +140,7 @@ func (p *Proc) Terminate(kill bool) {
 
 func (p *Proc) signal(sig syscall.Signal) {
 	if p.group {
-		syscall.Kill(-p.PID(), sig)
+		_ = syscall.Kill(-p.PID(), sig)
 		return
 	}
 	signalTree(p.PID(), sig)
@@ -151,9 +151,9 @@ func (p *Proc) Signal(sig syscall.Signal) { p.signal(sig) }
 
 func signalTree(pid int, sig syscall.Signal) {
 	for _, c := range Children(pid) {
-		syscall.Kill(c, sig)
+		_ = syscall.Kill(c, sig)
 	}
-	syscall.Kill(pid, sig)
+	_ = syscall.Kill(pid, sig)
 }
 
 // Children lists the direct children of pid, as pkill -P does.

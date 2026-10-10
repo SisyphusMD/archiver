@@ -30,7 +30,7 @@ func (r *Run) payload(dir string, s *config.Settings) (string, error) {
 	if err := s.WriteEnvAndSecrets(filepath.Join(dir, "archiver.env"), filepath.Join(dir, "secrets"), keys); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "RECREATE.txt"), []byte(r.recreateNotes(s)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "RECREATE.txt"), []byte(r.recreateNotes(s)), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		return "", err
 	}
 	if err := copyVisible(r.deploymentDir(), filepath.Join(dir, "deployment")); err != nil {
@@ -149,7 +149,7 @@ func lockDown(root string) error {
 		if d.IsDir() || fi.Mode().Perm()&0o111 != 0 {
 			mode = 0o700
 		}
-		return os.Chmod(p, mode)
+		return os.Chmod(p, mode) //nolint:gosec // G122: walks a private directory of its own
 	})
 }
 
@@ -233,7 +233,7 @@ func fingerprint(dir string) (string, error) {
 	}
 	sort.Strings(modes)
 	for _, m := range modes {
-		io.WriteString(h, m)
+		_, _ = io.WriteString(h, m)
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }

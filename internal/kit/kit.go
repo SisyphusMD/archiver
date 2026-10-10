@@ -112,7 +112,7 @@ func (r *Run) Execute() int {
 		return Failed
 	}
 	defer os.RemoveAll(work)
-	os.Chmod(work, 0o700)
+	_ = os.Chmod(work, 0o700) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	fp, err := r.payload(work, settings)
 	if err != nil {
 		r.error("Recovery kit: payload serialization failed: " + err.Error())
@@ -155,7 +155,7 @@ func (r *Run) Execute() int {
 		r.error("Recovery kit: encryption failed: " + err.Error())
 		return Failed
 	}
-	if err := os.WriteFile(readme, []byte(r.readme()), 0o644); err != nil {
+	if err := os.WriteFile(readme, []byte(r.readme()), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		r.error("Recovery kit: " + err.Error())
 		return Failed
 	}
@@ -193,7 +193,7 @@ func (r *Run) Execute() int {
 
 func (r *Run) primaryHasKit() {
 	if r.PrimaryMarker != "" {
-		os.WriteFile(r.PrimaryMarker, nil, 0o600)
+		_ = os.WriteFile(r.PrimaryMarker, nil, 0o600)
 	}
 }
 
@@ -218,7 +218,7 @@ func (r *Run) CurrentOn() (names []string, configured bool, err error) {
 		return nil, true, err
 	}
 	defer os.RemoveAll(work)
-	os.Chmod(work, 0o700)
+	_ = os.Chmod(work, 0o700) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	fp, err := r.payload(work, settings)
 	if err != nil {
 		return nil, true, err
@@ -252,7 +252,7 @@ func (r *Run) writeState(fp string, names []string) {
 		r.warning("Recovery kit: could not record where the kit is placed: " + err.Error())
 		return
 	}
-	os.Chmod(r.statePath(), 0o600)
+	_ = os.Chmod(r.statePath(), 0o600)
 }
 
 // encrypt writes the payload as one tar, encrypted the way stock `openssl enc -d -aes-256-cbc
@@ -286,11 +286,11 @@ func (r *Run) encrypt(work, out string) error {
 	}
 	if err := enc.Start(); err != nil {
 		pw.Close()
-		tar.Process.Kill()
-		tar.Wait()
+		_ = tar.Process.Kill()
+		_ = tar.Wait()
 		return err
 	}
-	io.WriteString(pw, r.cfg.RecoveryPassword+"\n")
+	_, _ = io.WriteString(pw, r.cfg.RecoveryPassword+"\n")
 	pw.Close()
 	errEnc := enc.Wait()
 	errTar := tar.Wait()

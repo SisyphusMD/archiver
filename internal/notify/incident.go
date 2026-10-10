@@ -64,10 +64,10 @@ func (n *Notifier) Raise(key string, k Kind, title, message string) {
 			return
 		case !ok || in.Recovered:
 			to := n.receiving(k)
-			in = incident{Kind: k, Title: title, Opened: now.Unix(), Gen: rand.Int64(),
+			in = incident{Kind: k, Title: title, Opened: now.Unix(), Gen: rand.Int64(), //nolint:gosec // G404: an identifier, not a secret
 				Message: message, To: to, Pending: to, LastSent: now.Unix()}
 		case n.Repeat > 0 && now.Sub(time.Unix(in.LastSent, 0)) >= n.Repeat:
-			in.Kind, in.Title, in.Gen = max(in.Kind, k), title, rand.Int64()
+			in.Kind, in.Title, in.Gen = max(in.Kind, k), title, rand.Int64() //nolint:gosec // G404: an identifier, not a secret
 			in.Message = fmt.Sprintf("Still happening, since %s: %s", time.Unix(in.Opened, 0).Format("2006-01-02 15:04"), message)
 			// The repeat goes to whoever receives it now; the recovery, to everyone told.
 			in.Pending, in.LastSent = n.receiving(in.Kind), now.Unix()
@@ -128,7 +128,7 @@ func (n *Notifier) Clear(key, title, message string) {
 // recovery is incident in's recovery notice, owed to whoever its alert reached: one it
 // never reached never heard of the incident, so is not told it is over.
 func (n *Notifier) recovery(in incident, title, message string) incident {
-	return incident{Kind: in.Kind, Title: title, Opened: in.Opened, Gen: rand.Int64(), Recovered: true,
+	return incident{Kind: in.Kind, Title: title, Opened: in.Opened, Gen: rand.Int64(), Recovered: true, //nolint:gosec // G404: an identifier, not a secret
 		Message: fmt.Sprintf("%s (after %s)", message, n.now().Sub(time.Unix(in.Opened, 0)).Round(time.Minute)),
 		To:      in.Told, Pending: in.Told, Sending: n.now().Unix()}
 }
@@ -279,7 +279,7 @@ func (n *Notifier) withIncidents(edit func(map[string]incident)) {
 		return
 	}
 	if b, err := os.ReadFile(n.Incidents); err == nil {
-		json.Unmarshal(b, &open)
+		_ = json.Unmarshal(b, &open)
 		if open == nil {
 			open = map[string]incident{}
 		}

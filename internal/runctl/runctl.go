@@ -114,7 +114,7 @@ func Resume(e Env) int {
 
 func (e Env) resume(l lockstate.Lock) {
 	signalTree(l.PID, syscall.SIGCONT)
-	runlock.Append(e.Layout.BackupLock(), "running", e.Now())
+	_ = runlock.Append(e.Layout.BackupLock(), "running", e.Now())
 }
 
 func (e Env) reread(l lockstate.Lock) lockstate.Lock {
@@ -176,7 +176,7 @@ func Stop(e Env, target string, immediate bool) int {
 	if immediate {
 		// Its SIGTERM handling is the graceful-stop contract: post-backup hooks still run.
 		signalTree(l.PID, syscall.SIGTERM)
-		syscall.Kill(l.PID, syscall.SIGTERM)
+		_ = syscall.Kill(l.PID, syscall.SIGTERM)
 	}
 	fmt.Fprintln(e.Out, "Stop requested. The backup ends its current step, runs its post-backup hooks, and reports the stop.")
 	// The final stop of the copy workers (deferred) must come after the backup can no
@@ -202,9 +202,9 @@ func (e Env) stopMaintenance(target string, immediate bool) {
 	fmt.Fprintf(e.Out, "Stopping maintenance (PID: %d, stage: %s, %s)...\n", m.PID, m.Stage, m.Context)
 	touch(e.maintenanceStopFlag())
 	if immediate {
-		runlock.Append(e.Layout.MaintenanceLock(), "stopped", e.Now())
+		_ = runlock.Append(e.Layout.MaintenanceLock(), "stopped", e.Now())
 		signalTree(m.PID, syscall.SIGTERM)
-		syscall.Kill(m.PID, syscall.SIGTERM)
+		_ = syscall.Kill(m.PID, syscall.SIGTERM)
 	}
 }
 
@@ -231,7 +231,7 @@ func (e Env) stopDrill(target string, _ bool) {
 	touch(e.Layout.DrillStopFlag())
 	if d.Paused() {
 		signalTree(d.PID, syscall.SIGCONT)
-		runlock.Append(e.Layout.DrillLock(), "running", e.Now())
+		_ = runlock.Append(e.Layout.DrillLock(), "running", e.Now())
 	}
 	signalTree(d.PID, syscall.SIGTERM)
 }
@@ -257,7 +257,7 @@ func (e Env) resumeDrill() {
 		return
 	}
 	signalTree(d.PID, syscall.SIGCONT)
-	runlock.Append(e.Layout.DrillLock(), "running", e.Now())
+	_ = runlock.Append(e.Layout.DrillLock(), "running", e.Now())
 	fmt.Fprintln(e.Out, "Restore drill resumed.")
 }
 
@@ -267,10 +267,10 @@ func (e Env) resumeDrill() {
 func signalTree(pid int, sig syscall.Signal) {
 	for _, c := range children(pid) {
 		if pgid, err := syscall.Getpgid(c); err == nil && pgid == c {
-			syscall.Kill(-c, sig)
+			_ = syscall.Kill(-c, sig)
 			continue
 		}
-		syscall.Kill(c, sig)
+		_ = syscall.Kill(c, sig)
 		signalTree(c, sig)
 	}
 }
@@ -305,7 +305,7 @@ func children(pid int) []int {
 func exists(path string) bool { _, err := os.Stat(path); return err == nil }
 
 func touch(path string) {
-	if f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+	if f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644); err == nil { //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 		f.Close()
 	}
 }

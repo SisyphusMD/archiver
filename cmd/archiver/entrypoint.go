@@ -45,8 +45,8 @@ func entrypointCommand(args []string) int {
 		if _, err := os.Lstat(filepath.Join(setup, "env-native")); err == nil {
 			fmt.Printf("WARNING: %s/env-native already exists\nContinuing will overwrite it.\n\n", setup)
 		}
-		os.MkdirAll(setup, 0o755)
-		os.Chdir(l.Root)
+		_ = os.MkdirAll(setup, 0o755) //nolint:gosec // G301: a directory holding nothing secret
+		_ = os.Chdir(l.Root)
 		return initCommand()
 	}
 
@@ -64,7 +64,7 @@ func entrypointCommand(args []string) int {
 
 	// Converts legacy settings files, which keep the container from starting.
 	if len(args) >= 2 && args[0] == "migrate" && args[1] == "hooks" {
-		os.Chdir(l.Root)
+		_ = os.Chdir(l.Root)
 		return migrateHooks(args[2:])
 	}
 
@@ -102,7 +102,7 @@ func entrypointCommand(args []string) int {
 		if !ready() || (args[1] == "backup" && refuseLegacy()) {
 			return 1
 		}
-		os.Chdir(l.Root)
+		_ = os.Chdir(l.Root)
 		err := e.Exec(args[1:]...)
 		fmt.Fprintln(os.Stderr, "archiver: cannot run", args[1]+":", err)
 		return 127
@@ -160,7 +160,7 @@ func entrypointCommand(args []string) int {
 			return 1
 		}
 		fmt.Println("Starting scheduler...")
-		os.Chdir(l.Root)
+		_ = os.Chdir(l.Root)
 		daemon = exec.Command(selfPath, "daemon")
 		daemon.Stdout, daemon.Stderr = os.Stdout, os.Stderr
 		if err := daemon.Start(); err != nil {
@@ -178,11 +178,11 @@ func entrypointCommand(args []string) int {
 			return 0
 		case <-sigs:
 			shutdown(e, stopTailers)
-			daemon.Process.Signal(syscall.SIGTERM)
+			_ = daemon.Process.Signal(syscall.SIGTERM)
 			select {
 			case <-exited:
 			case <-time.After(20 * time.Second):
-				daemon.Process.Kill()
+				_ = daemon.Process.Kill()
 			}
 			return 0
 		}
@@ -211,7 +211,7 @@ func shutdown(e *entrypoint.Env, stopTailers chan struct{}) {
 	fmt.Println("Received shutdown signal, attempting graceful stop...")
 	stop := exec.Command(selfPath, "stop")
 	stop.Stdout, stop.Stderr = os.Stdout, os.Stdout
-	stop.Run()
+	_ = stop.Run()
 	for range 100 {
 		if e.LocksClear() {
 			break
@@ -240,7 +240,7 @@ func jsonStdio() (flush func()) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			io.Copy(entrypoint.JSONLinesAt("entrypoint", p.level, out), p.r)
+			_, _ = io.Copy(entrypoint.JSONLinesAt("entrypoint", p.level, out), p.r)
 		}()
 	}
 	return func() {

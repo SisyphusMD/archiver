@@ -69,12 +69,12 @@ func Serve(path string, handle func(cmd string) string) (net.Listener, error) {
 			}
 			go func() {
 				defer c.Close()
-				c.SetReadDeadline(time.Now().Add(10 * time.Second))
+				_ = c.SetReadDeadline(time.Now().Add(10 * time.Second))
 				line, err := bufio.NewReader(c).ReadString('\n')
 				if err != nil {
 					return
 				}
-				c.SetWriteDeadline(time.Now().Add(15 * time.Minute))
+				_ = c.SetWriteDeadline(time.Now().Add(15 * time.Minute))
 				fmt.Fprintln(c, handle(strings.TrimSpace(line)))
 			}()
 		}
@@ -93,7 +93,7 @@ func SendWithin(path, cmd string, within time.Duration) (string, error) {
 		return "", err
 	}
 	defer c.Close()
-	c.SetDeadline(time.Now().Add(within))
+	_ = c.SetDeadline(time.Now().Add(within))
 	if _, err := fmt.Fprintln(c, cmd); err != nil {
 		return "", err
 	}

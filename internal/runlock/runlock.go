@@ -37,7 +37,7 @@ func (b *Busy) Error() string { return fmt.Sprintf("held by PID %d", b.Holder.PI
 // Acquire takes the lock for a run starting in context and stage. stale reports a lock
 // file left by a run that died, which Acquire replaced.
 func Acquire(path, stopFlag, context, stage string) (l *Lock, stale bool, err error) {
-	f, err := os.OpenFile(path+".flock", os.O_RDWR|os.O_CREATE, 0o644)
+	f, err := os.OpenFile(path+".flock", os.O_RDWR|os.O_CREATE, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	if err != nil {
 		return nil, false, err
 	}
@@ -81,7 +81,7 @@ func Acquire(path, stopFlag, context, stage string) (l *Lock, stale bool, err er
 
 func writeAtomic(path, content string) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		return err
 	}
 	return os.Rename(tmp, path)
@@ -91,7 +91,7 @@ func writeAtomic(path, content string) error {
 // owner rewrites the file to record its stage while `archiver pause` and `resume` append
 // to it, and an append between the owner's read and rename would otherwise be lost.
 func edit(path string, fn func() error) error {
-	f, err := os.OpenFile(path+".edit", os.O_RDWR|os.O_CREATE, 0o644)
+	f, err := os.OpenFile(path+".edit", os.O_RDWR|os.O_CREATE, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func (l *Lock) Record(state string) error { return Append(l.Path, state, l.now()
 // process (`archiver pause` records "paused" for the run).
 func Append(path, state string, at time.Time) error {
 	return edit(path, func() error {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 		if err != nil {
 			return err
 		}
@@ -196,7 +196,7 @@ func (l *Lock) PID() string { return strconv.Itoa(l.pid) }
 // release. It serializes work that must never overlap within the container, such as
 // creating a storage, without a lock file anyone reads.
 func Exclusive(ctx context.Context, path string) (func(), error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func Exclusive(ctx context.Context, path string) (func(), error) {
 // Hold takes the kernel lock at path without waiting and keeps it until the returned
 // file is closed or the process ends; ok is false when another process holds it.
 func Hold(path string) (f *os.File, ok bool, err error) {
-	f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644)
+	f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	if err != nil {
 		return nil, false, err
 	}

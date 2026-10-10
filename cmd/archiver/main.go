@@ -170,7 +170,7 @@ func followLogs() int {
 // them, so the entrypoint can refuse to start before anything else comes up.
 func runDaemon(args []string) int {
 	if len(args) == 2 && args[0] == "ctl" {
-		return daemonCtl(args[1])
+		return daemonCtl(args[1]) //nolint:gosec // G602: the length is checked just above
 	}
 	check := len(args) == 1 && args[0] == "--check"
 	if len(args) > 0 && !check {
@@ -283,7 +283,7 @@ func noteDrillSchedule(jobs []daemon.Job) {
 		s, err := lockstate.ReadDrillState(l.DrillState())
 		if err == nil && s.Scheduled == 0 {
 			s.Scheduled = time.Now().Unix()
-			lockstate.WriteDrillState(l.DrillState(), s)
+			_ = lockstate.WriteDrillState(l.DrillState(), s)
 		}
 	}
 }
@@ -332,7 +332,7 @@ func recoverCommand(args []string) (int, bool) {
 	if path == "" {
 		path = filepath.Join(src.SecretsDir, "recovery_password")
 	}
-	if b, err := os.ReadFile(path); err == nil {
+	if b, err := os.ReadFile(path); err == nil { //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
 		o.Password = strings.TrimRight(string(b), "\r\n")
 	} else {
 		fmt.Print("Recovery kit password: ")

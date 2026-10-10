@@ -90,7 +90,7 @@ fi
 	}
 	probe.ExtraFiles = []*os.File{w}
 	done := make(chan struct{})
-	go func() { filters.ReadFrom(r); close(done) }()
+	go func() { _, _ = filters.ReadFrom(r); close(done) }()
 	err = probe.Run()
 	w.Close()
 	<-done

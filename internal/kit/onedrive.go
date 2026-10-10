@@ -16,7 +16,7 @@ import (
 // Microsoft's endpoints; tests point them at a fake.
 var (
 	graphURL      = "https://graph.microsoft.com/v1.0"
-	msTokenURL    = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+	msTokenURL    = "https://login.microsoftonline.com/common/oauth2/v2.0/token" //nolint:gosec // G101: a path or public endpoint, not a credential
 	oneDriveHTTP  = &http.Client{Timeout: 30 * time.Second}
 	tokenLifetime = func(expiry time.Time) bool { return expiry.IsZero() || time.Until(expiry) > time.Minute }
 )
@@ -46,7 +46,7 @@ func oneDrive(ctx context.Context, tokenFile, clientID, clientSecret, driveID st
 		if t, err = refreshMS(ctx, t, clientID, clientSecret); err != nil {
 			return "", "", "", err
 		}
-		out, _ := json.Marshal(t)
+		out, _ := json.Marshal(t) //nolint:gosec // G117: the token file is written on purpose, owner-only
 		if err := config.WritePrivate(tokenFile, out); err != nil {
 			return "", "", "", err
 		}
@@ -75,7 +75,7 @@ func oneDrive(ctx context.Context, tokenFile, clientID, clientSecret, driveID st
 	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil || d.ID == "" || d.DriveType == "" {
 		return "", "", "", fmt.Errorf("finding the OneDrive drive: no drive ID and type in the reply")
 	}
-	out, _ := json.Marshal(t)
+	out, _ := json.Marshal(t) //nolint:gosec // G117: the token file is written on purpose, owner-only
 	return string(out), d.ID, d.DriveType, nil
 }
 
