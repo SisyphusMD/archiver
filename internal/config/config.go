@@ -359,11 +359,12 @@ func (c *Config) Validate(secretsDir string) error {
 		return err
 	}
 	if err := checkin.Valid(c.CheckinURL); err != nil {
-		return fmt.Errorf("CHECKIN_URL: %v (got '%s').", err, c.CheckinURL)
+		// Not repeated: a check-in URL carries the monitor's token, and this goes to the log.
+		return fmt.Errorf("CHECKIN_URL: %v.", err)
 	}
 	for _, t := range c.Targets {
 		if err := checkin.Valid(t.CheckinURL); err != nil {
-			return fmt.Errorf("STORAGE_TARGET_%d_CHECKIN_URL: %v (got '%s').", t.N, err, t.CheckinURL)
+			return fmt.Errorf("STORAGE_TARGET_%d_CHECKIN_URL: %v.", t.N, err)
 		}
 	}
 	if c.AlertRepeatInterval != "0" {

@@ -212,6 +212,11 @@ func (n *Notifier) send(d Destination, k Kind, title, text string) (transient bo
 func post(client *http.Client, req *http.Request, delivered func(int, []byte) bool) (transient bool, err error) {
 	resp, err := client.Do(req)
 	if err != nil {
+		// An Apprise URL carries its key, and the error would carry the URL into the log
+		// (and the status page): it is reported without it.
+		if ue, ok := err.(*url.Error); ok {
+			err = ue.Err
+		}
 		return true, err
 	}
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
