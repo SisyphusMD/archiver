@@ -1,0 +1,342 @@
+--- a/src/duplicacy_backupmanager.go
++++ b/src/duplicacy_backupmanager.go
+@@ -706,6 +706,10 @@
+ 
+ 	// local files that don't exist in the remote snapshot
+ 	var extraFiles []string
++	// Links replaced by the directory the snapshot has: a link the listing does not follow
++	// (relative, or below the top) is listed as "d", and the directory as "d/", so the link
++	// counts as extra, but the directory that took its place is not to be deleted.
++	replacedLinks := make(map[string]bool)
+ 
+ 	// These will store files/directories to be downloaded.
+ 	fileEntries := make([]*Entry, 0)
+@@ -773,7 +777,10 @@
+ 		}
+ 
+ 		if compareResult == 0 {
+-			if quickMode && localEntry.IsFile() && localEntry.IsSameAs(remoteEntry) {
++			// Skipped only when a regular file is really there: the listing follows a
++			// top-level link, so a link to a file, or a file below a link to a directory
++			// (replaced by the time it is restored), can look unchanged.
++			if quickMode && localEntry.IsFile() && localEntry.IsSameAs(remoteEntry) && isRegularFile(joinPath(top, localEntry.Path)) {
+ 				LOG_TRACE("RESTORE_SKIP", "File %s unchanged (by size and timestamp)", localEntry.Path)
+ 				skippedFileSize += localEntry.Size
+ 				skippedFileCount++
+@@ -784,6 +791,20 @@
+ 		}
+ 
+ 		fullPath := joinPath(top, remoteEntry.Path)
++		// Nothing is created, replaced or removed below a symbolic link to a directory (one
++		// outside the restored paths, as an entry the snapshot has a directory for is
++		// replaced before what is below it): it would happen wherever the link points.
++		if !remoteEntry.IsFile() {
++			if link := linkedAncestor(top, remoteEntry.Path); link != "" {
++				if !allowFailures {
++					LOG_ERROR("RESTORE_LINKDIR", "Failed to restore %s: the directory %s above it is a symbolic link", remoteEntry.Path, link)
++					return 0
++				}
++				failedFileCount++
++				LOG_WARN("DOWNLOAD_FAIL", "Failed to restore %s: the directory %s above it is a symbolic link", remoteEntry.Path, link)
++				continue
++			}
++		}
+ 		if remoteEntry.IsLink() {
+ 			stat, err := os.Lstat(fullPath)
+ 			if stat != nil {
+@@ -807,6 +828,22 @@
+ 			LOG_TRACE("DOWNLOAD_DONE", "Symlink %s updated", remoteEntry.Path)
+ 		} else if remoteEntry.IsDir() {
+ 
++			// A symbolic link where the snapshot has a directory is never followed: files
++			// restored through it would land wherever it points.  It is replaced by the
++			// directory when overwriting, and refused otherwise.
++			if stat, err := os.Lstat(fullPath); err == nil && stat.Mode()&os.ModeSymlink != 0 {
++				if !overwrite {
++					LOG_ERROR("RESTORE_LINKDIR", "The path %s is a symbolic link where the snapshot has a directory; remove it, or restore with -overwrite to replace it", fullPath)
++					return 0
++				}
++				if err := os.Remove(fullPath); err != nil {
++					LOG_ERROR("RESTORE_LINKDIR", "Failed to replace the symbolic link %s with a directory: %v", fullPath, err)
++					return 0
++				}
++				replacedLinks[strings.TrimSuffix(remoteEntry.Path, "/")] = true
++				LOG_WARN("RESTORE_LINKDIR", "Replaced the symbolic link %s with the directory the snapshot has", fullPath)
++			}
++
+ 			stat, err := os.Stat(fullPath)
+ 
+ 			if err == nil && !stat.IsDir() {
+@@ -877,6 +914,28 @@
+ 	for _, file := range fileEntries {
+ 
+ 		fullPath := joinPath(top, file.Path)
++		// Never written through a symbolic link: not a directory above it (one outside the
++		// restored paths, which the pass above did not replace), nor the file itself.
++		if link := linkedAncestor(top, file.Path); link != "" {
++			message := fmt.Sprintf("the directory %s above it is a symbolic link", link)
++			if !allowFailures {
++				LOG_ERROR("RESTORE_LINKDIR", "Failed to restore %s: %s", file.Path, message)
++				return 0
++			}
++			failedFileCount++
++			LOG_WARN("DOWNLOAD_FAIL", "Failed to restore %s: %s", file.Path, message)
++			continue
++		}
++		if lstat, err := os.Lstat(fullPath); err == nil && lstat.Mode()&os.ModeSymlink != 0 {
++			if !overwrite {
++				LOG_ERROR("RESTORE_LINKFILE", "The path %s is a symbolic link where the snapshot has a file; remove it, or restore with -overwrite to replace it", fullPath)
++				return 0
++			}
++			if err := os.Remove(fullPath); err != nil {
++				LOG_ERROR("RESTORE_LINKFILE", "Failed to replace the symbolic link %s: %v", fullPath, err)
++				return 0
++			}
++		}
+ 		stat, _ := os.Stat(fullPath)
+ 		if stat != nil {
+ 			if quickMode {
+@@ -948,6 +1007,9 @@
+ 		// Reverse the order to make sure directories are empty before being deleted
+ 		for i := range extraFiles {
+ 			file := extraFiles[len(extraFiles)-1-i]
++			if replacedLinks[file] {
++				continue
++			}
+ 			fullPath := joinPath(top, file)
+ 			os.Remove(fullPath)
+ 			LOG_INFO("RESTORE_DELETE", "Deleted %s", file)
+@@ -1824,3 +1886,36 @@
+ 
+ 	return true
+ }
++
++// linkedAncestor returns the first directory between top and the entry at relative path p
++// that is a symbolic link, or "" when there is none.  top itself may be a link: it is where
++// the restore was asked to go.
++func linkedAncestor(top string, p string) string {
++	dir := top
++	// A directory entry's path ends in a slash; the entry itself is not its own ancestor.
++	parts := strings.Split(strings.TrimSuffix(p, "/"), "/")
++	for _, part := range parts[:len(parts)-1] {
++		if part == "" {
++			continue
++		}
++		dir = joinPath(dir, part)
++		stat, err := os.Lstat(dir)
++		if err != nil {
++			return ""
++		}
++		if stat.Mode()&os.ModeSymlink != 0 {
++			return dir
++		}
++	}
++	return ""
++}
++
++// isRegularFile reports whether path is a regular file, not a link to one, below no link.
++func isRegularFile(path string) bool {
++	stat, err := os.Lstat(path)
++	if err != nil || !stat.Mode().IsRegular() {
++		return false
++	}
++	real, err := filepath.EvalSymlinks(path)
++	return err == nil && real == filepath.Clean(path)
++}
+--- /dev/null
++++ b/src/duplicacy_restorelinks_test.go
+@@ -0,0 +1,194 @@
++// Copyright (c) Acrosync LLC. All rights reserved.
++// Free for personal use and commercial trial
++// Commercial use requires per-user licenses available from https://duplicacy.com
++
++package duplicacy
++
++import (
++	"os"
++	"path"
++	"sync"
++	"testing"
++)
++
++// A restore never writes through a symbolic link in its destination: one where the snapshot
++// has a directory or a file is refused without -overwrite and replaced with it, and a file
++// below a linked directory outside the restored paths is not restored.  What the links point
++// to is never touched.
++func TestRestoreNeverFollowsLinks(t *testing.T) {
++	var mu sync.Mutex
++	logged := map[string]bool{}
++	LogFunction = func(level int, logID string, message string) {
++		mu.Lock()
++		logged[logID] = true
++		mu.Unlock()
++		if level > WARN {
++			panic(Exception{Level: level, LogID: logID, Message: message})
++		}
++	}
++	defer func() { LogFunction = nil }()
++	setTestingT(t)
++	SetLoggingLevel(INFO)
++
++	testDir := path.Join(os.TempDir(), "duplicacy_restorelinks_test")
++	os.RemoveAll(testDir)
++	defer os.RemoveAll(testDir)
++	top := testDir + "/repository1"
++	os.MkdirAll(top+"/.duplicacy", 0700)
++	os.MkdirAll(top+"/d", 0700)
++	os.WriteFile(top+"/d/f", []byte("restored f"), 0600)
++	os.MkdirAll(top+"/d/sub", 0700)
++	os.WriteFile(top+"/d/sub/h", []byte("restored h"), 0600)
++	os.Symlink("f", top+"/d/ln")
++	os.MkdirAll(top+"/e", 0700)
++	os.MkdirAll(top+"/d/empty", 0700)
++	os.WriteFile(top+"/g", []byte("restored g"), 0600)
++	storage, err := loadStorage(testDir+"/storage", 1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	cleanStorage(storage)
++	if !ConfigStorage(storage, 16384, 100, 64*1024, 256*1024, 16*1024, "duplicacy", nil, false, "", 0, 0) {
++		t.Fatal("Failed to initialize the storage")
++	}
++	SetDuplicacyPreferencePath(top + "/.duplicacy")
++	manager := CreateBackupManager("host1", storage, testDir, "duplicacy", "", "", false)
++	manager.SetupSnapshotCache("default")
++	manager.Backup(top, true, 1, "first", false, false, 0, false, 1024, 1024)
++
++	// What the links point to: a directory and a file outside any destination.
++	outside := testDir + "/outside"
++	os.MkdirAll(outside+"/dir", 0700)
++	os.WriteFile(outside+"/file", []byte("untouched"), 0600)
++	untouched := func() {
++		t.Helper()
++		if b, _ := os.ReadFile(outside + "/file"); string(b) != "untouched" {
++			t.Errorf("the file a link pointed to was written: %q", b)
++		}
++		if entries, _ := os.ReadDir(outside + "/dir"); len(entries) != 0 {
++			t.Errorf("a file was restored into the directory a link pointed to")
++		}
++	}
++	destination := func(name string) string {
++		dir := testDir + "/" + name
++		os.MkdirAll(dir+"/.duplicacy", 0700)
++		os.Symlink(outside+"/dir", dir+"/d")
++		os.Symlink(outside+"/file", dir+"/g")
++		SetDuplicacyPreferencePath(dir + "/.duplicacy")
++		return dir
++	}
++	quick := false
++	restore := func(dir string, overwrite bool, patterns []string, deleteMode ...bool) (failed int, refused bool) {
++		defer func() {
++			if r := recover(); r != nil {
++				if _, ok := r.(Exception); !ok {
++					panic(r)
++				}
++				refused = true
++			}
++		}()
++		return manager.Restore(dir, 1, true, quick, 1, overwrite, len(deleteMode) > 0, false, false, patterns, true), false
++	}
++
++	if _, refused := restore(destination("refused"), false, nil); !refused || !logged["RESTORE_LINKDIR"] {
++		t.Error("a linked directory was not refused without -overwrite")
++	}
++	untouched()
++
++	dir := destination("replaced")
++	if failed, refused := restore(dir, true, nil); refused || failed != 0 {
++		t.Fatalf("restore with -overwrite: refused %v, %d failed", refused, failed)
++	}
++	for name, want := range map[string]string{"d/f": "restored f", "d/sub/h": "restored h", "g": "restored g"} {
++		stat, err := os.Lstat(dir + "/" + name)
++		if err != nil || stat.Mode()&os.ModeSymlink != 0 {
++			t.Errorf("%s is still a link or missing: %v", name, err)
++		}
++		if b, _ := os.ReadFile(dir + "/" + name); string(b) != want {
++			t.Errorf("%s restored %q", name, b)
++		}
++	}
++	if stat, _ := os.Lstat(dir + "/d"); stat == nil || !stat.IsDir() {
++		t.Error("the linked directory was not replaced by a directory")
++	}
++	untouched()
++
++	// With -delete too: links replaced by an empty directory the snapshot has are not then
++	// deleted as extra local entries. A link below the top, and a relative one, are listed
++	// as links (one at the top to an absolute path is followed by the listing).
++	dir = testDir + "/deleting"
++	os.MkdirAll(dir+"/.duplicacy", 0700)
++	os.MkdirAll(dir+"/d", 0700)
++	os.MkdirAll(outside+"/dir2", 0700)
++	os.Symlink(outside+"/dir2", dir+"/d/empty")
++	os.Symlink("../outside/dir2", dir+"/e")
++	SetDuplicacyPreferencePath(dir + "/.duplicacy")
++	if failed, refused := restore(dir, true, nil, true); refused || failed != 0 {
++		t.Fatalf("restore with -overwrite -delete: refused %v, %d failed", refused, failed)
++	}
++	for _, name := range []string{"d/empty", "e"} {
++		if stat, err := os.Lstat(dir + "/" + name); err != nil || !stat.IsDir() {
++			t.Errorf("the empty directory %s that replaced a link was deleted or is not one: %v", name, err)
++		}
++	}
++	if entries, _ := os.ReadDir(outside + "/dir2"); len(entries) != 0 {
++		t.Error("something was restored into a directory a link pointed to")
++	}
++	untouched()
++
++	// In quick mode a top-level link to a file the size and time of the snapshot's is still
++	// refused, and replaced when overwriting.
++	quick = true
++	if err := os.WriteFile(outside+"/same", []byte("restored g"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	stat, _ := os.Stat(top + "/g")
++	os.Chtimes(outside+"/same", stat.ModTime(), stat.ModTime())
++	sameDestination := func(name string) string {
++		dir := testDir + "/" + name
++		os.MkdirAll(dir+"/.duplicacy", 0700)
++		os.Symlink(outside+"/same", dir+"/g")
++		SetDuplicacyPreferencePath(dir + "/.duplicacy")
++		return dir
++	}
++	if _, refused := restore(sameDestination("quick-refused"), false, []string{"+g"}); !refused {
++		t.Error("quick mode skipped a linked file as unchanged instead of refusing it")
++	}
++	dir = sameDestination("quick-replaced")
++	if failed, refused := restore(dir, true, []string{"+g"}); refused || failed != 0 {
++		t.Fatalf("quick restore with -overwrite: refused %v, %d failed", refused, failed)
++	}
++	if stat, _ := os.Lstat(dir + "/g"); stat == nil || !stat.Mode().IsRegular() {
++		t.Error("quick mode left the link in place")
++	}
++	// ... and a top-level link to a directory holding what looks like the snapshot's files
++	// is replaced, and those files are restored into the new directory, not skipped.
++	os.MkdirAll(outside+"/look", 0700)
++	os.WriteFile(outside+"/look/f", []byte("restored f"), 0600)
++	fstat, _ := os.Stat(top + "/d/f")
++	os.Chtimes(outside+"/look/f", fstat.ModTime(), fstat.ModTime())
++	dir = testDir + "/quick-dir"
++	os.MkdirAll(dir+"/.duplicacy", 0700)
++	os.Symlink(outside+"/look", dir+"/d")
++	SetDuplicacyPreferencePath(dir + "/.duplicacy")
++	if failed, refused := restore(dir, true, nil); refused || failed != 0 {
++		t.Fatalf("quick restore over a linked directory: refused %v, %d failed", refused, failed)
++	}
++	if b, err := os.ReadFile(dir + "/d/f"); err != nil || string(b) != "restored f" {
++		t.Errorf("d/f was skipped instead of restored into the directory that replaced the link: %v", err)
++	}
++	quick = false
++	untouched()
++
++	// Only paths below d are restored: the directory entry d is not, so its link stays, and
++	// nothing below it (a file, a directory, a link, a file in that directory) is created
++	// through it.
++	dir = destination("partial")
++	if failed, refused := restore(dir, true, []string{"+d/f", "+d/ln", "+d/sub/", "+d/sub/h"}); refused || failed != 4 {
++		t.Errorf("entries below a linked directory: refused %v, %d failed (want 4)", refused, failed)
++	}
++	untouched()
++	if _, err := os.Lstat(outside + "/dir/ln"); err == nil {
++		t.Error("a link was created through the linked directory")
++	}
++}

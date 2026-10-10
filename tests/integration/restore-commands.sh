@@ -131,4 +131,13 @@ log "restored over a directory whose own hooks survive, the conflict is reported
 mkdir -p /data/services/old3 && echo '+*' >/data/services/old3/filters
 expect 0 'filters already exists' "restore over surviving hooks" -- SNAPSHOT_ID="$HOST-old-src" LOCAL_DIR=/data/services/old3 archiver auto-restore
 
+log "a link in the destination is never written through: refused without OVERWRITE, replaced with it"
+mkdir -p /restore/links /tmp/outside && echo untouched >/tmp/outside/f && ln -s /tmp/outside/f /restore/links/file.txt
+SNAPSHOT_ID="$HOST-app" LOCAL_DIR=/restore/links archiver auto-restore >/tmp/l1 2>&1 && { cat /tmp/l1; die "a restore over a linked file succeeded without OVERWRITE"; }
+grep -q 'is a symbolic link where the snapshot has a file' /tmp/l1 /opt/archiver/logs/archiver.log || { cat /tmp/l1; die "no word of the refused link"; }
+[ "$(cat /tmp/outside/f)" = untouched ] || die "the restore wrote through the link"
+OVERWRITE=1 SNAPSHOT_ID="$HOST-app" LOCAL_DIR=/restore/links archiver auto-restore >/tmp/l2 2>&1 || { cat /tmp/l2; die "the restore with OVERWRITE failed"; }
+[ ! -L /restore/links/file.txt ] && [ "$(cat /restore/links/file.txt)" = "app two (changed)" ] || die "the link was not replaced by the restored file"
+[ "$(cat /tmp/outside/f)" = untouched ] || die "the restore with OVERWRITE wrote through the link"
+
 echo "=== RESTORE-COMMANDS OK: snapshot-exists answers and codes; auto-restore fallback, pinning, errors, hook; auto-restore-all; busy refusal; post-restore and migration of restored settings ==="
