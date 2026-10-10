@@ -208,6 +208,17 @@ You'll enter the **User Key** and **API Token** during init.
 
 ---
 
+## Image Tags
+
+Each release is published under two tags, signed alike:
+
+| Tag | Size | Holds |
+|---|---|---|
+| `:<version>` (and `:<major>.<minor>`, `:<major>`) | about 1.1 GB | Everything below, plus the tools hooks may use: the docker CLI, `systemctl`, `zfs`, `btrfs`, Python 3 with `lmdb`, `sqlite3`, `vim` and `nano`, `ping`, `ps` |
+| `:<version>-slim` (and `:<major>.<minor>-slim`, `:<major>-slim`) | about 340 MB | Everything Archiver itself runs: Duplicacy, rclone, OpenSSH, OpenSSL, curl, qrencode, tini, CA certificates and time zones |
+
+Use the slim tag when no hook needs the extra tools (your hooks run plain shell, or none). A hook that calls `docker`, `systemctl` or another of those tools needs the full tag.
+
 ## Verifying Images
 
 Release images are signed with cosign, and each carries an SBOM and a build provenance attestation. To check that an image is one this project released, with [cosign](https://github.com/sigstore/cosign) and the public key in this repository ([cosign.pub](cosign.pub)):

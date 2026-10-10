@@ -258,6 +258,8 @@ jobs:
           docker run -i --rm --hostname rt-host \
             --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/roundtrip.sh
+      - name: The full image holds the tools hooks use (ADR 41)
+        run: docker run -i --rm -e SLIM=0 --entrypoint bash roundtrip:local -s < tests/integration/slim-tools.sh
       - name: Env-native round-trip (config from env, secrets+keys from files, no bundle)
         run: |
           docker run -i --rm --hostname en-host \
@@ -425,6 +427,47 @@ jobs:
             --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
             --entrypoint bash roundtrip:local -s < tests/integration/scheduler.sh
 
+  slim:
+    name: Slim image (ADR 41)
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        with:
+          # BuildKit has its own registry client and does not inherit dockerd's mirror.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+            [registry."ghcr.io"]
+              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+            [registry."quay.io"]
+              mirrors = ["image-mirror.nas.bryantserver.com/quay.io"]
+      - name: Build the slim target, amd64 (load locally)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64
+          target: slim
+          load: true
+          tags: slim:local
+          build-args: |
+            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+      - name: Everything Archiver runs, none of the hook tools
+        run: docker run -i --rm -e SLIM=1 --entrypoint bash slim:local -s < tests/integration/slim-tools.sh
+      - name: Backup, restore, recovery kit, envelope, maintenance and recovery on the slim image
+        # The integration scripts that need nothing only hooks use (no python3, no pgrep).
+        run: |
+          set -euo pipefail
+          for t in roundtrip:rt-host recovery-kit:rk-host envelope:ev-host restore-commands:rc-host maintenance:mt-host recover:rc-host; do
+            echo "=== ${t%%:*}"
+            docker run -i --rm --hostname "${t##*:}" --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER \
+              --entrypoint bash slim:local -s < "tests/integration/${t%%:*}.sh"
+          done
+
   integration-host:
     name: Host-driven integration (entrypoint + storage sidecars)
     needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
@@ -520,14 +563,24 @@ jobs:
         run: ARCHIVER_IMAGE=e2e:local bash tests/e2e/run.sh -v
 
   build-and-push:
-    name: Build multi-arch and push
+    name: Build multi-arch and push (${{ matrix.variant }})
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats, go, fuzz, integration, integration-host, e2e]
+    # ADR 41: the full image (every tool hooks may use) and the slim one, built, signed and
+    # released alike; slim's tags carry -slim.
+    # One at a time: both upload the same layers to one repository, which races Forgejo's
+    # blob uniqueness check (see the skopeo notes below), and both run the NAS sync.
+    strategy:
+      max-parallel: 1
+      matrix:
+        variant: [full, slim]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats, go, fuzz, integration, slim, integration-host, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Matrix legs share these outputs and the last one to set an output wins, so each is set
+    # only on failure: a leg whose mirror worked cannot overwrite the other's failure.
     outputs:
-      mirror-nas: ${{ steps.mirror-nas.outcome }}
-      mirror-ghcr: ${{ steps.mirror-ghcr.outcome }}
+      mirror-nas: ${{ steps.mirror-report.outputs.nas }}
+      mirror-ghcr: ${{ steps.mirror-report.outputs.ghcr }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -581,6 +634,7 @@ jobs:
           images: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}
           flavor: |
             latest=false
+            suffix=${{ matrix.variant == 'slim' && '-slim' || '' }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -606,6 +660,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
+          target: ${{ matrix.variant }}
           push: false
           outputs: type=oci,dest=${{ github.workspace }}/image.tar
           labels: ${{ steps.meta.outputs.labels }}
@@ -615,7 +670,9 @@ jobs:
           provenance: mode=max
           # Moving major tag (metadata-action's {{major}} pattern) so the cache ref stays
           # current across minor releases without a manual bump. Cache miss is non-fatal.
-          cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0
+          cache-from: |
+            type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0
+            type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0-slim
           cache-to: type=inline
           build-args: |
             GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
@@ -631,6 +688,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
+          target: ${{ matrix.variant }}
           push: false
           outputs: type=oci,dest=${{ github.workspace }}/image.tar
           labels: ${{ steps.meta.outputs.labels }}
@@ -638,7 +696,9 @@ jobs:
           provenance: false
           # Moving major tag (metadata-action's {{major}} pattern) so the cache ref stays
           # current across minor releases without a manual bump. Cache miss is non-fatal.
-          cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0
+          cache-from: |
+            type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0
+            type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0-slim
           cache-to: type=inline
           build-args: |
             GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
@@ -665,7 +725,7 @@ jobs:
         id: push
         env:
           DST_CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
-          META_TAGS: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:release-candidate
+          META_TAGS: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:release-candidate${{ matrix.variant == 'slim' && '-slim' || '' }}
           IMAGE_TAR: ${{ github.workspace }}/image.tar
         run: |
           set -euo pipefail
@@ -675,7 +735,7 @@ jobs:
           # renovate: datasource=docker depName=quay.io/skopeo/stable
           SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
 
-          VOL=skopeo-stage-${{ github.run_id }}
+          VOL=skopeo-stage-${{ github.run_id }}-${{ matrix.variant }}
           docker volume create "$VOL" >/dev/null
           trap 'docker volume rm -f "$VOL" >/dev/null 2>&1' EXIT
 
@@ -710,7 +770,7 @@ jobs:
           REGISTRY_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-          CANDIDATE: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:release-candidate
+          CANDIDATE: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:release-candidate${{ matrix.variant == 'slim' && '-slim' || '' }}
           DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           set -euo pipefail
@@ -722,7 +782,7 @@ jobs:
           repo="${CANDIDATE%:*}"
           digest="$DIGEST"
           # The registry login goes in through a volume's config.json, never cosign's argv.
-          AUTH=cosign-auth-${{ github.run_id }}
+          AUTH=cosign-auth-${{ github.run_id }}-${{ matrix.variant }}
           docker volume create "$AUTH" >/dev/null
           trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
           docker run --rm -e REGISTRY_PAT -v "$AUTH":/cfg --entrypoint sh "$SKOPEO_IMAGE" -c \
@@ -838,6 +898,7 @@ jobs:
       # job at the end of the workflow rolls outcomes up and turns the run
       # red so failures still surface in the runs list.
       - name: Report mirror results
+        id: mirror-report
         if: always()
         env:
           NAS_OUTCOME: ${{ steps.mirror-nas.outcome }}
@@ -845,9 +906,11 @@ jobs:
         run: |
           if [ "$NAS_OUTCOME" = "failure" ]; then
             echo "::warning title=NAS Forgejo mirror failed::Push to forgejo.nas.bryantserver.com failed"
+            echo "nas=failure" >> "$GITHUB_OUTPUT"
           fi
           if [ "$GHCR_OUTCOME" = "failure" ]; then
             echo "::warning title=GHCR mirror failed::Push to ghcr.io failed"
+            echo "ghcr=failure" >> "$GITHUB_OUTPUT"
           fi
 
   create-release:
