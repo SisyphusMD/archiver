@@ -866,7 +866,16 @@ archiver envelope confirm  # Record the envelope as printed, so status can say w
 archiver healthcheck       # Liveness check (Docker HEALTHCHECK uses this; on Kubernetes wire it as an exec probe)
 archiver health --backups  # Backup health: OK, DEGRADED or FAILING and why; exits 0, 1 or 2 for monitors
 archiver status --json     # Everything status shows, and backup health, as JSON
+archiver completion bash|zsh|fish  # Print shell completions for these commands
 archiver help              # Show help
+```
+
+Shell completions, for typing `archiver` commands where the binary runs (inside the container, or a shell with it on the PATH):
+
+```bash
+eval "$(archiver completion bash)"                 # bash, e.g. in ~/.bashrc
+archiver completion zsh > "${fpath[1]}/_archiver"  # zsh
+archiver completion fish | source                  # fish
 ```
 
 </details>
