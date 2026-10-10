@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/layout"
@@ -60,7 +61,7 @@ func Handler(l layout.Layout, getenv func(string) string) http.Handler {
 		}
 		s := status.Take(l, getenv, time.Now())
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_ = page.Execute(w, view{S: s, Now: time.Now(), Log: name, Logs: Logs, Lines: tail(filepath.Join(l.LogDir(), name+".log"), logLines)})
+		_ = page.Execute(w, view{S: s, Now: time.Now(), Log: name, Logs: Logs, Lines: tail(l.LogDir(), name+".log", logLines)})
 	})
 	mux.HandleFunc("/status.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -94,18 +95,30 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// tail is the last n lines of path, read from its end.
-func tail(path string, n int) []string {
-	f, err := os.Open(path) //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
+// tail is the last n lines of the log name in dir, read from its end. The log is a link into
+// dir/prior_logs; it is opened through dir as a root, so no link leads outside it (a link
+// planted on the logs volume to a secret is never read), and only a regular file is read,
+// at most a window of it (a FIFO or a device would block or never end).
+func tail(dir, name string, n int) []string {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil
+	}
+	defer root.Close()
+	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil
 	}
 	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		return nil
+	}
 	const window = 512 << 10
-	if fi, err := f.Stat(); err == nil && fi.Size() > window {
+	if fi.Size() > window {
 		_, _ = f.Seek(-window, io.SeekEnd)
 	}
-	b, _ := io.ReadAll(f)
+	b, _ := io.ReadAll(io.LimitReader(f, window))
 	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]

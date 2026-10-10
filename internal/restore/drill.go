@@ -143,7 +143,9 @@ func (e *Env) Drill(o DrillOptions) int {
 	if prior, ok := resume.Read(e.Layout.RunRecord("drill")); ok {
 		log.Message(logging.Warning, "", fmt.Sprintf("The restore drill started %s was interrupted; deleting its copies, and this drill takes its place.", logging.Timestamp(prior.Started)))
 		for work := range prior.Services {
-			if !e.leftover(work, prior.Dir) {
+			// Judged against the configured drill directory, never the one the record (on
+			// the logs volume) names.
+			if !e.leftover(work, d.root) {
 				log.Message(logging.Warning, "", fmt.Sprintf("Not deleting %s, recorded as an interrupted drill's copy: it is no longer a drill directory of its own (it lies in a service directory, or is not one directly in the drill directory).", work))
 				continue
 			}
@@ -152,7 +154,7 @@ func (e *Env) Drill(o DrillOptions) int {
 			}
 		}
 	}
-	d.run, _ = resume.Begin(e.Layout.RunRecord("drill"), resume.Record{Dir: d.root})
+	d.run, _ = resume.Begin(e.Layout.RunRecord("drill"), resume.Record{})
 	defer func() {
 		if lock.StopRequested() && resume.ShuttingDown(e.Layout.ShutdownFlag()) {
 			log.Message(logging.Info, "", "The restore drill stopped for a container shutdown; it runs again when the container starts.")

@@ -460,3 +460,22 @@ func TestSendFailureHidesURL(t *testing.T) {
 		t.Fatalf("logged %q", logged)
 	}
 }
+
+// A claim holds for its lease and no longer, and one stamped in the future holds nothing.
+func TestClaimedIgnoresFutureClaims(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	for _, c := range []struct {
+		sending int64
+		want    bool
+	}{
+		{0, false},
+		{now.Unix() - 60, true},
+		{now.Unix() - int64(claimLease/time.Second) - 1, false},
+		{now.Unix() + 3600, false},
+		{now.Unix() + 100*365*86400, false},
+	} {
+		if got := claimed(incident{Sending: c.sending}, now); got != c.want {
+			t.Errorf("sending %d: claimed %v", c.sending, got)
+		}
+	}
+}

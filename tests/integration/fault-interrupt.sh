@@ -141,4 +141,19 @@ archiver drill >/tmp/dr.out 2>&1 || { cat /tmp/dr.out; tail -20 $LOGS/drill.log;
 grep -q "Not deleting $SERVICES/app" $LOGS/drill.log || die "no word of the refused deletion"
 [ ! -e $LOGS/.run-drill.json ] || die "the drill left its record"
 
+log "a forged backup record acts only on configured services: it deletes nothing elsewhere and runs no hook from elsewhere"
+mkdir -p /srv/victim /srv/rogue && echo keep >/srv/victim/f
+printf '#!/bin/sh\ntouch /tmp/rogue-ran\n' >/srv/rogue/post-backup && chmod 755 /srv/rogue/post-backup
+printf '{"started":1,"services":{"/srv/rogue":"hooked","%s/db":"hooked"},"snapshots":{"/srv/rogue":"../../../../srv/victim","%s/db":"../../../../srv/victim"}}' "$SERVICES" "$SERVICES" >$LOGS/.run-backup.json
+archiver backup >/tmp/b9.out 2>&1 || { cat /tmp/b9.out; die "the backup after a forged record failed"; }
+[ -e /srv/victim/f ] || die "a forged record made archiver delete a directory outside its own"
+[ ! -e /tmp/rogue-ran ] || die "a forged record made archiver run a hook outside the configured services"
+grep -q "not a configured service directory now" $LOGS/archiver.log || die "no word of the record's unconfigured directory"
+
+log "a forged drill record cannot point cleanup outside the configured drill directory"
+mkdir -p /srv/drill-elsewhere && echo keep >/srv/drill-elsewhere/f
+printf '{"started":1,"services":{"/srv/drill-elsewhere":"pending"},"dir":"/srv"}' >$LOGS/.run-drill.json
+archiver drill >/tmp/dr2.out 2>&1 || { cat /tmp/dr2.out; die "the drill after a forged record failed"; }
+[ -e /srv/drill-elsewhere/f ] || die "a forged drill record made archiver delete outside the drill directory"
+
 echo "PASS: interrupted runs resume"

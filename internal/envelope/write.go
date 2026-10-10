@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/atomicfile"
 	"github.com/SisyphusMD/archiver/internal/layout"
 )
 
@@ -85,11 +86,7 @@ func writtenFile(l layout.Layout) string  { return filepath.Join(l.LogDir(), ".e
 func notifiedFile(l layout.Layout) string { return filepath.Join(l.LogDir(), ".envelope-notified") }
 
 func writeRecord(path, fp string, at time.Time) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(fmt.Sprintf("%s %d\n", fp, at.Unix())), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
-		return err
-	}
-	return os.Rename(tmp, path)
+	return atomicfile.Write(path, []byte(fmt.Sprintf("%s %d\n", fp, at.Unix())), 0o644)
 }
 
 // Written is what Write produced: the fingerprint, and the files (no PDF when the page has

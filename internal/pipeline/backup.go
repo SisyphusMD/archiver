@@ -230,12 +230,28 @@ func (b *Backup) finishInterrupted() resume.Record {
 		dirs = append(dirs, dir)
 	}
 	sort.Strings(dirs)
+	// The record is on the logs volume, which someone less trusted might be able to write:
+	// it only says which configured services were left between their hooks. A directory not
+	// configured now is never acted on, and the snapshot ID (which names the hook state
+	// directory removed below) is derived as a backup derives it, never read from the record.
+	configured := map[string]bool{}
+	expanded, _ := config.ExpandServiceDirectories(b.cfg.ServiceDirectories)
+	for _, d := range expanded {
+		if abs, err := filepath.Abs(d); err == nil {
+			configured[abs] = true
+		}
+	}
 	for _, dir := range dirs {
 		if prior.Services[dir] != resume.Hooked {
 			continue
 		}
 		name := filepath.Base(dir)
-		svc := hooks.Service{Name: name, Dir: dir, SnapshotID: prior.Snapshots[dir], HookDir: hooks.Hooks(b.cfg.HooksDir, dir)}
+		if !configured[dir] || !config.ValidSnapshotID(name) {
+			b.log.Message(logging.Warning, "", fmt.Sprintf("The interrupted backup's record names %s, which is not a configured service directory now; nothing is done there.", dir))
+			_ = b.inProgress.Set(dir, resume.Pending)
+			continue
+		}
+		svc := hooks.Service{Name: name, Dir: dir, SnapshotID: b.Hostname + "-" + name, HookDir: hooks.Hooks(b.cfg.HooksDir, dir)}
 		svc.StateDir = b.Layout.HookState(svc.SnapshotID)
 		if has, err := hooks.Exists(svc.HookDir, hooks.PostBackup); err != nil {
 			b.log.Message(logging.Error, name, fmt.Sprintf("The interrupted backup left this service after its pre-backup hook, and its post-backup hook cannot run: %v. Check that whatever the pre hook stopped is running.", err))
@@ -246,9 +262,7 @@ func (b *Backup) finishInterrupted() resume.Record {
 				b.log.Message(logging.Error, name, fmt.Sprintf("Post-backup hook failed for %s service (%s); check that whatever its pre hook stopped is running again.", name, exitText(code, err)))
 			}
 		}
-		if svc.SnapshotID != "" {
-			_ = os.RemoveAll(svc.StateDir)
-		}
+		_ = os.RemoveAll(svc.StateDir)
 		// Recorded at once, so a crash now does not run the hook a second time.
 		_ = b.inProgress.Set(dir, resume.Pending)
 	}
@@ -279,13 +293,12 @@ func unfinishedFirst(dirs []string, prior resume.Record) []string {
 // recordRun records this run on the logs volume, each service pending, so an interruption
 // can be finished on the next start.
 func (b *Backup) recordRun(dirs []string) {
-	rec := resume.Record{Services: map[string]string{}, Snapshots: map[string]string{}}
+	rec := resume.Record{Services: map[string]string{}}
 	for _, d := range dirs {
 		if abs, err := filepath.Abs(d); err == nil {
 			d = abs
 		}
 		rec.Services[d] = resume.Pending
-		rec.Snapshots[d] = b.Hostname + "-" + filepath.Base(d)
 	}
 	if b.inProgress != nil {
 		b.inProgress.Replace(rec)
