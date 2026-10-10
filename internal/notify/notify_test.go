@@ -449,3 +449,14 @@ func TestCriticalPriority(t *testing.T) {
 		t.Fatal("ntfy priority for critical")
 	}
 }
+
+// A failed send never names the URL it went to: an Apprise URL carries its key.
+func TestSendFailureHidesURL(t *testing.T) {
+	var logged []string
+	n := &Notifier{Destinations: []Destination{{&Apprise{URL: "http://127.0.0.1:1/notify/secret-key-123"}, "failures"}},
+		Waits: []time.Duration{}, Logf: func(failed bool, msg string) { logged = append(logged, msg) }}
+	n.Send("Backup Failed", "x")
+	if len(logged) != 1 || strings.Contains(logged[0], "secret-key-123") || strings.Contains(logged[0], "/notify/") {
+		t.Fatalf("logged %q", logged)
+	}
+}

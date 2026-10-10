@@ -28,6 +28,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/restore"
 	"github.com/SisyphusMD/archiver/internal/setup"
 	"github.com/SisyphusMD/archiver/internal/status"
+	"github.com/SisyphusMD/archiver/internal/web"
 )
 
 const (
@@ -178,7 +179,7 @@ func runDaemon(args []string) int {
 	}
 	jobs, err := daemon.Jobs(os.Getenv, time.Now())
 	if err == nil {
-		err = config.CheckMetricsPort(os.Getenv("METRICS_PORT"))
+		err = config.CheckPorts(os.Getenv("METRICS_PORT"), os.Getenv("WEB_PORT"))
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "archiver:", err)
@@ -361,7 +362,8 @@ func backupHealth() int {
 }
 
 // startMetrics keeps the metrics textfile current and serves /metrics when METRICS_PORT asks
-// (ADR 35), until ctx ends: under the daemon, or in manual mode under the entrypoint.
+// (ADR 35), and the status page when WEB_PORT does (ADR 38), until ctx ends: under the
+// daemon, or in manual mode under the entrypoint.
 func startMetrics(ctx context.Context, l layout.Layout) {
 	go metrics.Keep(ctx, l, os.Getenv, time.Minute, func(err error) {
 		fmt.Fprintln(os.Stderr, "archiver: metrics textfile:", err)
@@ -373,5 +375,15 @@ func startMetrics(ctx context.Context, l layout.Layout) {
 			}
 		}()
 		fmt.Printf("Serving Prometheus metrics on port %s at /metrics.\n", port)
+	}
+	// The status page (ADR 38): read-only, but without a login of its own.
+	if port := os.Getenv("WEB_PORT"); port != "" {
+		go func() {
+			if err := web.Serve(ctx, port, l, os.Getenv); err != nil {
+				fmt.Fprintf(os.Stderr, "archiver: cannot serve the status page on port %s: %v\n", port, err)
+			}
+		}()
+		fmt.Printf("Serving the read-only status page on port %s.\n", port)
+		fmt.Println("WARNING: the status page has no login of its own. Put it behind a reverse proxy with authentication, or publish the port only on a trusted network.")
 	}
 }
