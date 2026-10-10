@@ -33,6 +33,19 @@ func (l Layout) Incidents() string         { return filepath.Join(l.LogDir(), ".
 func (l Layout) InUseDir() string          { return filepath.Join(l.Lock, "archiver-in-use") }
 func (l Layout) EnvelopeConfirmed() string { return filepath.Join(l.LogDir(), ".envelope-confirmed") }
 func (l Layout) EnvelopeCurrent() string   { return filepath.Join(l.LogDir(), ".envelope-current") }
+func (l Layout) ShutdownFlag() string      { return filepath.Join(l.Lock, "archiver-shutting-down") }
+
+// RunRecord is where a run of kind (backup, maintenance, drill) in progress is recorded, on
+// the logs volume so it outlives the container (ADR 46).
+func (l Layout) RunRecord(kind string) string {
+	return filepath.Join(l.LogDir(), ".run-"+kind+".json")
+}
+
+// HookState is a service's ARCHIVER_STATE_DIR, on the logs volume so an interrupted run's
+// post-backup hook still finds what its pre-backup hook left.
+func (l Layout) HookState(snapshotID string) string {
+	return filepath.Join(l.LogDir(), ".hook-state", snapshotID)
+}
 
 // StorageInit is the lock held around duplicacy init or add of one storage: created by
 // two at once, a storage can get two configurations (duplicacy 3.2.5 has no

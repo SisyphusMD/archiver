@@ -409,6 +409,16 @@ The `stop_grace_period: 2m` setting allows the container time to complete cleanu
 
 If your post-backup hooks take longer than 2 minutes, increase this value accordingly.
 
+#### Interrupted runs
+
+A backup, maintenance or restore drill that a shutdown, a crash, a kill or a power cut ends is not left to its next scheduled time. Archiver records each run in progress on the logs volume (`logs/.run-*.json`), and when the container starts again:
+
+- A service the run left between its hooks (`pre-backup` ran, `post-backup` did not, as after a crash) gets its `post-backup` hook first, with `ARCHIVER_BACKUP_RESULT=interrupted`, so whatever `pre-backup` stopped runs again. The hook's `ARCHIVER_STATE_DIR` is kept on the logs volume, so it still finds what `pre-backup` left there.
+- The backup then runs again at once, the services it had not finished first. Duplicacy picks up where it was: a stop sends it SIGINT, on which it saves its resume point (for a service's first backup), and chunks already uploaded are never sent again.
+- An interrupted maintenance or drill runs again at once, and the drill's leftover copies are deleted.
+
+A stop you ask for (`archiver stop`) is not an interruption: that run is over and is not resumed. Without a schedule, the container's start runs the interrupted runs the same way.
+
 ### Environment Variables
 
 | Variable | Required | Description |
@@ -1137,7 +1147,7 @@ docker exec postgres-container pg_dump -U user dbname > backup.sql
 rm -f backup.sql
 ```
 
-A hook can be any program the container can run (most are shell scripts). It runs in the service directory, and its output goes to the Archiver log; a line starting `[ERROR] ` or `[WARNING] ` is logged at that level, and an `[ERROR]` line counts as an error of the run (with a notification) without skipping the service. A background process a hook starts must redirect its own output: Archiver stops reading a hook's output two seconds after the hook exits. It receives `ARCHIVER_SERVICE`, `ARCHIVER_SERVICE_DIR`, `ARCHIVER_SNAPSHOT_ID`, and `ARCHIVER_STATE_DIR`, a scratch directory shared by that run's `pre-backup` and `post-backup` (to pass a value from one to the other). `post-backup` also receives `ARCHIVER_BACKUP_RESULT`: `success`, `failed`, `skipped`, or `stopped`. Hooks never receive storage credentials or the RSA passphrase.
+A hook can be any program the container can run (most are shell scripts). It runs in the service directory, and its output goes to the Archiver log; a line starting `[ERROR] ` or `[WARNING] ` is logged at that level, and an `[ERROR]` line counts as an error of the run (with a notification) without skipping the service. A background process a hook starts must redirect its own output: Archiver stops reading a hook's output two seconds after the hook exits. It receives `ARCHIVER_SERVICE`, `ARCHIVER_SERVICE_DIR`, `ARCHIVER_SNAPSHOT_ID`, and `ARCHIVER_STATE_DIR`, a scratch directory shared by that run's `pre-backup` and `post-backup` (to pass a value from one to the other; it lives on the logs volume, so it is for small values, not dumps). `post-backup` also receives `ARCHIVER_BACKUP_RESULT`: `success`, `failed`, `skipped`, `stopped`, or `interrupted` (run when the container next starts, after a crash or a kill left the service between its hooks; see [Interrupted runs](#interrupted-runs)). Hooks never receive storage credentials or the RSA passphrase.
 
 Exit codes count. If `pre-backup` exits non-zero (the dump above failing, say), that service is **not** backed up that run: its newest revision stays the last good one instead of one holding a broken dump, and the run reports an error while every other service still backs up. `post-backup` always runs once `pre-backup` has, even after a failed `pre-backup`, a failed backup, or a stop, so it can restart whatever `pre-backup` stopped; a non-zero exit from it is reported as an error. A hook file that exists but is not executable is an error, and that service is skipped.
 

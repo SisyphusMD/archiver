@@ -49,6 +49,33 @@ func TestTerminate(t *testing.T) {
 	}
 }
 
+// An Interrupt program is sent INT first and given time to save its state.
+func TestTerminateInterrupts(t *testing.T) {
+	log := &logging.Log{Dir: t.TempDir(), Basename: "archiver"}
+	saved := t.TempDir() + "/saved"
+	p, err := Start(Spec{Path: "/bin/sh", Args: []string{"-c", "trap 'sleep 1; echo ok > " + saved + "; exit 1' INT; trap '' TERM; while :; do sleep 0.1; done"}, Env: os.Environ(), Log: log, Interrupt: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	p.Terminate(false)
+	if code, _ := p.Wait(); code != 1 {
+		t.Fatalf("code %d: the INT handler did not end it", code)
+	}
+	if b, _ := os.ReadFile(saved); string(b) != "ok\n" {
+		t.Fatal("the INT handler did not run to completion")
+	}
+	// One that ignores INT still ends.
+	defer func(g time.Duration) { interruptGrace = g }(interruptGrace)
+	interruptGrace = 300 * time.Millisecond
+	p, _ = Start(Spec{Path: "/bin/sh", Args: []string{"-c", "trap '' INT; sleep 30"}, Env: os.Environ(), Log: log, Interrupt: true})
+	time.Sleep(200 * time.Millisecond)
+	p.Terminate(false)
+	if code, _ := p.Wait(); code != 128+15 {
+		t.Fatalf("code %d", code)
+	}
+}
+
 // Terminating a group ends grandchildren too.
 func TestTerminateGroup(t *testing.T) {
 	log := &logging.Log{Dir: t.TempDir(), Basename: "archiver"}

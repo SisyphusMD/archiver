@@ -80,7 +80,7 @@ func runs(t *testing.T, spec string, took time.Duration, n int) []time.Time {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var got []time.Time
-	Run(ctx, clock, io.Discard, mustJobs(t, map[string]string{"BACKUP_SCHEDULE": spec}), func(Job) int {
+	Run(ctx, clock, io.Discard, mustJobs(t, map[string]string{"BACKUP_SCHEDULE": spec}), nil, func(Job) int {
 		got = append(got, clock.Now())
 		clock.advance(took)
 		if len(got) == n {
@@ -116,7 +116,7 @@ func TestRunWaitsForRunningJob(t *testing.T) {
 	finished := false
 	done := make(chan struct{})
 	go func() {
-		Run(ctx, RealClock, io.Discard, mustJobs(t, map[string]string{"BACKUP_SCHEDULE": "* * * * * * *"}), func(Job) int {
+		Run(ctx, RealClock, io.Discard, mustJobs(t, map[string]string{"BACKUP_SCHEDULE": "* * * * * * *"}), nil, func(Job) int {
 			cancel()
 			<-release
 			finished = true
@@ -155,5 +155,33 @@ func TestSocket(t *testing.T) {
 	}
 	if _, err := Send(t.TempDir()+"/none.sock", CmdStop); err == nil {
 		t.Fatal("no daemon must be an error")
+	}
+}
+
+// Interrupted jobs run once at the start: a scheduled one before its schedule, an
+// unscheduled one alone.
+func TestCatchUp(t *testing.T) {
+	clock := &instantClock{now: start}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var mu sync.Mutex
+	var backups []time.Duration
+	drills := 0
+	Run(ctx, clock, io.Discard, mustJobs(t, map[string]string{"BACKUP_SCHEDULE": "0 3 * * *"}), []string{"backup", "drill"}, func(j Job) int {
+		mu.Lock()
+		defer mu.Unlock()
+		if j.Name == "drill" {
+			drills++
+		} else {
+			backups = append(backups, clock.Now().Sub(start))
+		}
+		// The drill's goroutine races the backup's schedule, which the clock lets run ahead.
+		if len(backups) >= 2 && drills > 0 {
+			cancel()
+		}
+		return 0
+	})
+	if drills != 1 || len(backups) < 2 || backups[0] != 0 || backups[1] != 15*time.Hour {
+		t.Fatalf("backups at %v, %d drills", backups, drills)
 	}
 }

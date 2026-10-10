@@ -18,6 +18,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/notify"
+	"github.com/SisyphusMD/archiver/internal/resume"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -36,9 +37,51 @@ type drillRun struct {
 	state lockstate.DrillState
 	now   func() time.Time
 	root  string
+	run   *resume.Run // this drill's record and the directories it restores into (ADR 46)
 	// restored: the drill got as far as restoring, so its errors are its restores' own
 	// incidents.
 	restored bool
+}
+
+// leftover reports whether work, recorded by an interrupted drill, is still safe to delete
+// as its copy: a real directory named as a drill makes them, directly in the drill directory
+// it recorded, and nowhere in a service's data, which a remount or a changed symlink since
+// could have put there.
+func (e *Env) leftover(work, root string) bool {
+	if root == "" || filepath.Dir(work) != filepath.Clean(root) || !strings.HasPrefix(filepath.Base(work), "drill-") {
+		return false
+	}
+	fi, err := os.Lstat(work)
+	if err != nil || !fi.IsDir() {
+		return false
+	}
+	// The mount table lists mounts by their resolved paths.
+	real, err := filepath.EvalSymlinks(work)
+	if err != nil || mountedUnder(real, "/proc/self/mountinfo") {
+		return false
+	}
+	return !e.inServiceDir(work) && !e.inServiceDir(root)
+}
+
+// mountedUnder reports whether anything is mounted at dir or below it: a bind mount there is
+// someone's data whatever its path says. A mount table that cannot be read counts as yes.
+func mountedUnder(dir, mountinfo string) bool {
+	b, err := os.ReadFile(mountinfo)
+	if err != nil {
+		return true
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 5 {
+			continue
+		}
+		// Field 5 is the mount point, with space, tab, newline and backslash octal-escaped.
+		mp := strings.NewReplacer(`\040`, " ", `\011`, "\t", `\012`, "\n", `\134`, `\`).Replace(f[4])
+		if mp == dir || strings.HasPrefix(mp, dir+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // Drill restores services' newest revisions into the drill directory, checks them, and
@@ -95,6 +138,28 @@ func (e *Env) Drill(o DrillOptions) int {
 	}
 
 	d.e, d.log, d.lock, d.now, d.root = e, log, lock, now, cfg.DrillDirectory()
+	// An interrupted drill left its copies behind: deleted, exactly the directories it
+	// recorded creating, before this drill takes its place.
+	if prior, ok := resume.Read(e.Layout.RunRecord("drill")); ok {
+		log.Message(logging.Warning, "", fmt.Sprintf("The restore drill started %s was interrupted; deleting its copies, and this drill takes its place.", logging.Timestamp(prior.Started)))
+		for work := range prior.Services {
+			if !e.leftover(work, prior.Dir) {
+				log.Message(logging.Warning, "", fmt.Sprintf("Not deleting %s, recorded as an interrupted drill's copy: it is no longer a drill directory of its own (it lies in a service directory, or is not one directly in the drill directory).", work))
+				continue
+			}
+			if err := os.RemoveAll(work); err != nil {
+				log.Message(logging.Warning, "", fmt.Sprintf("Could not delete %s, an interrupted drill's copy: %v", work, err))
+			}
+		}
+	}
+	d.run, _ = resume.Begin(e.Layout.RunRecord("drill"), resume.Record{Dir: d.root})
+	defer func() {
+		if lock.StopRequested() && resume.ShuttingDown(e.Layout.ShutdownFlag()) {
+			log.Message(logging.Info, "", "The restore drill stopped for a container shutdown; it runs again when the container starts.")
+			return
+		}
+		d.run.End()
+	}()
 	// A stop ends whatever the drill waits on (a lock a backup or prune holds) or runs, and a
 	// pause holds back every program it would start: with nothing running yet, there would
 	// be no process for the stop or pause to reach.
@@ -331,7 +396,12 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	if err != nil {
 		return fail(err.Error())
 	}
-	defer os.RemoveAll(work)
+	_ = d.run.Set(work, resume.Pending)
+	defer func() {
+		if os.RemoveAll(work) == nil {
+			d.run.Forget(work)
+		}
+	}()
 	_ = d.lock.SetStage("drill", t.StorageName()+"/"+name)
 
 	if err := d.e.connect(work, t, id, out); err != nil {

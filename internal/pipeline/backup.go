@@ -31,6 +31,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/metrics"
 	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/proc"
+	"github.com/SisyphusMD/archiver/internal/resume"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -73,6 +74,8 @@ type Backup struct {
 	primaryDown atomic.Bool
 	downOnce    sync.Once
 	downErr     error
+	// inProgress records this run on the logs volume while it lasts (ADR 46); nil without one.
+	inProgress *resume.Run
 	// unreachable are the secondaries found down at the start, skipped for the run: not
 	// registered, not copied (ADR 34).
 	unreachable map[string]bool
@@ -192,11 +195,14 @@ func (b *Backup) pipeline() int {
 		b.log.Message(logging.Warning, "", "Stale lock file found. Cleaned up and proceeding.")
 	}
 	b.log.Message(logging.Info, "", "Main backup script started.")
+	prior := b.finishInterrupted()
 	b.log.Message(logging.Info, "", "Proceeding with backup script.")
 	dirs, ok := b.verifyConfig()
 	if !ok {
 		return 1
 	}
+	dirs = unfinishedFirst(dirs, prior)
+	b.recordRun(dirs)
 	b.env = b.cfg.DuplicacyEnviron(b.Environ, b.Layout.SSHPrivateKey())
 	b.workers = b.copyWorkersRun()
 	b.refreshFailing()
@@ -205,6 +211,91 @@ func (b *Backup) pipeline() int {
 		return b.handleStop()
 	}
 	return b.main(dirs)
+}
+
+// finishInterrupted runs, before anything else, the post-backup hook of each service an
+// interrupted run left between its hooks (ADR 46), with ARCHIVER_BACKUP_RESULT=interrupted,
+// so whatever its pre hook stopped runs again. It returns that run's record: this run backs
+// up its unfinished services first.
+func (b *Backup) finishInterrupted() resume.Record {
+	path := b.Layout.RunRecord("backup")
+	prior, ok := resume.Read(path)
+	if !ok {
+		return resume.Record{}
+	}
+	b.inProgress, _ = resume.Begin(path, prior)
+	b.log.Message(logging.Warning, "", fmt.Sprintf("The backup started %s was interrupted; it is run again now, its unfinished services first.", logging.Timestamp(prior.Started)))
+	dirs := make([]string, 0, len(prior.Services))
+	for dir := range prior.Services {
+		dirs = append(dirs, dir)
+	}
+	sort.Strings(dirs)
+	for _, dir := range dirs {
+		if prior.Services[dir] != resume.Hooked {
+			continue
+		}
+		name := filepath.Base(dir)
+		svc := hooks.Service{Name: name, Dir: dir, SnapshotID: prior.Snapshots[dir], HookDir: hooks.Hooks(b.cfg.HooksDir, dir)}
+		svc.StateDir = b.Layout.HookState(svc.SnapshotID)
+		if has, err := hooks.Exists(svc.HookDir, hooks.PostBackup); err != nil {
+			b.log.Message(logging.Error, name, fmt.Sprintf("The interrupted backup left this service after its pre-backup hook, and its post-backup hook cannot run: %v. Check that whatever the pre hook stopped is running.", err))
+		} else if has {
+			_ = os.MkdirAll(svc.StateDir, 0o700)
+			b.log.Message(logging.Info, name, "Running the post-backup hook the interrupted backup did not reach.")
+			if code, err := hooks.Run(b.log, b.Environ, svc, hooks.PostBackup, hooks.Interrupted); err != nil || code != 0 {
+				b.log.Message(logging.Error, name, fmt.Sprintf("Post-backup hook failed for %s service (%s); check that whatever its pre hook stopped is running again.", name, exitText(code, err)))
+			}
+		}
+		if svc.SnapshotID != "" {
+			_ = os.RemoveAll(svc.StateDir)
+		}
+		// Recorded at once, so a crash now does not run the hook a second time.
+		_ = b.inProgress.Set(dir, resume.Pending)
+	}
+	return prior
+}
+
+// unfinishedFirst puts the services the interrupted run did not finish first, otherwise
+// keeping the configured order.
+func unfinishedFirst(dirs []string, prior resume.Record) []string {
+	if len(prior.Services) == 0 {
+		return dirs
+	}
+	var first, rest []string
+	for _, d := range dirs {
+		abs, err := filepath.Abs(d)
+		if err != nil {
+			abs = d
+		}
+		if prior.Unfinished(abs) {
+			first = append(first, d)
+		} else {
+			rest = append(rest, d)
+		}
+	}
+	return append(first, rest...)
+}
+
+// recordRun records this run on the logs volume, each service pending, so an interruption
+// can be finished on the next start.
+func (b *Backup) recordRun(dirs []string) {
+	rec := resume.Record{Services: map[string]string{}, Snapshots: map[string]string{}}
+	for _, d := range dirs {
+		if abs, err := filepath.Abs(d); err == nil {
+			d = abs
+		}
+		rec.Services[d] = resume.Pending
+		rec.Snapshots[d] = b.Hostname + "-" + filepath.Base(d)
+	}
+	if b.inProgress != nil {
+		b.inProgress.Replace(rec)
+		return
+	}
+	r, err := resume.Begin(b.Layout.RunRecord("backup"), rec)
+	if err != nil {
+		b.log.Message(logging.Warning, "", "Cannot record the run on the logs volume, so an interruption would not be resumed: "+err.Error())
+	}
+	b.inProgress = r
 }
 
 // verifyConfig validates the configuration as verify_config does, logging each step.
@@ -486,8 +577,11 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 }
 
 func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasPost bool, log func(string, string)) (ok, stop bool) {
-	state, err := os.MkdirTemp("", "archiver-hooks-")
-	if err != nil {
+	// On the logs volume: an interrupted run's post hook, run on the next start, still finds
+	// what the pre hook left.
+	state := b.Layout.HookState(svc.SnapshotID)
+	_ = os.RemoveAll(state)
+	if err := os.MkdirAll(state, 0o700); err != nil {
 		log(logging.Error, "Cannot create the hooks' state directory, so this service's backup is skipped: "+err.Error())
 		b.record(svc.Dir, hooks.Failed, time.Now())
 		return false, false
@@ -514,6 +608,11 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 		result = hooks.Stopped
 	} else if hasPre {
 		preRan = true
+		// Not refused when it cannot be written (a full logs volume): a missed backup is
+		// worse than a crash in this hook going unfinished, but it is said.
+		if err := b.inProgress.Set(svc.Dir, resume.Hooked); err != nil {
+			log(logging.Warning, "Cannot record that the pre-backup hook runs, so a crash before the post-backup hook would not run it on the next start: "+err.Error())
+		}
 		code, err := hooks.Run(b.log, b.Environ, svc, hooks.PreBackup, "")
 		if err != nil || code != 0 {
 			// The service's files are in an unknown state (a half-written or stale dump).
@@ -542,6 +641,14 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 		if err != nil || code != 0 {
 			log(logging.Error, fmt.Sprintf("Post-backup hook failed for %s service (%s); check that whatever its pre hook stopped is running again.", svc.Name, exitText(code, err)))
 		}
+	}
+	// Recorded as soon as the hooks are through, so a crash after this never runs the post
+	// hook again: finished, however it went, unless a stop cut it short (then it is first
+	// next time).
+	if result == hooks.Stopped {
+		_ = b.inProgress.Set(svc.Dir, resume.Pending)
+	} else {
+		_ = b.inProgress.Set(svc.Dir, resume.Done)
 	}
 	// A failed backup may be the primary gone mid-run: probed again, so the rest are not
 	// each tried against it. After the post hook, which must not wait on the probe.
@@ -575,7 +682,7 @@ func exitText(code int, err error) string {
 }
 
 func (b *Backup) duplicacy(dir, service string, args ...string) proc.Spec {
-	return proc.Spec{Path: b.Duplicacy, Args: proc.NoScript(args...), Dir: dir, Env: b.env, Log: b.log, Service: service}
+	return proc.Spec{Path: b.Duplicacy, Args: proc.NoScript(args...), Dir: dir, Env: b.env, Log: b.log, Service: service, Interrupt: true}
 }
 
 // run runs a duplicacy command to completion, unless a signal ends the run first.
@@ -1391,6 +1498,13 @@ func (b *Backup) finish() {
 	b.log.Message(logging.Info, "", "  Total time: "+logging.Duration(s.End-s.Start))
 	b.log.Message(logging.Info, "", "  Pause time: "+logging.Duration(s.Paused))
 	b.log.Message(logging.Info, "", "  Active time: "+logging.Duration(s.Active))
+	// A stop for a container shutdown keeps the record: the run starts again with the
+	// container (ADR 46). Any other end, a stop asked for included, leaves nothing to resume.
+	if s.EndState == "stopped" && resume.ShuttingDown(b.Layout.ShutdownFlag()) {
+		b.log.Message(logging.Info, "", "The backup stopped for a container shutdown; it runs again when the container starts.")
+	} else {
+		b.inProgress.End()
+	}
 	b.lock.Release()
 	b.log.Message(logging.Info, "", "Main backup script exited.")
 }

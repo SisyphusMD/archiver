@@ -32,18 +32,27 @@ type Spec struct {
 	// Group runs the program in its own process group, so Terminate ends everything it
 	// started, however deep (a shell's command substitutions included).
 	Group bool
+	// Interrupt has Terminate send SIGINT first and wait up to interruptGrace: duplicacy
+	// saves its resume point (a backup's incomplete snapshot, a check's verified chunks) on
+	// SIGINT, and nothing on SIGTERM (ADR 46).
+	Interrupt bool
 }
 
 // outputGrace is how long output is still read after the program itself exits.
 var outputGrace = 2 * time.Second
 
+// interruptGrace is how long an Interrupt program has to save its state and exit, well
+// inside the two-minute stop_grace_period.
+var interruptGrace = 30 * time.Second
+
 // Proc is a started program.
 type Proc struct {
-	cmd   *exec.Cmd
-	done  chan struct{}
-	code  int
-	err   error
-	group bool
+	cmd       *exec.Cmd
+	done      chan struct{}
+	code      int
+	err       error
+	group     bool
+	interrupt bool
 }
 
 // Start starts the program with stdout and stderr logged as INFO lines, in order.
@@ -71,7 +80,7 @@ func Start(s Spec) (*Proc, error) {
 		w.Close()
 		return nil, err
 	}
-	p := &Proc{cmd: cmd, done: make(chan struct{}), group: s.Group}
+	p := &Proc{cmd: cmd, done: make(chan struct{}), group: s.Group, interrupt: s.Interrupt}
 	go func() {
 		err := cmd.Wait()
 		w.Close()
@@ -120,9 +129,18 @@ func code(err error) (int, error) {
 func (p *Proc) PID() int { return p.cmd.Process.Pid }
 
 // Terminate ends the program: TERM to its children and itself, then
-// KILL after a two-second grace. A paused (stopped) program cannot handle TERM, so a caller
-// that knows the run is paused passes kill to go straight to KILL.
+// KILL after a two-second grace; an Interrupt program gets INT first. A paused (stopped)
+// program cannot handle a signal, so a caller that knows the run is paused passes kill to
+// go straight to KILL.
 func (p *Proc) Terminate(kill bool) {
+	if p.interrupt && !kill {
+		p.signal(syscall.SIGINT)
+		select {
+		case <-p.done:
+			return
+		case <-time.After(interruptGrace):
+		}
+	}
 	sig := syscall.SIGTERM
 	if kill {
 		sig = syscall.SIGKILL

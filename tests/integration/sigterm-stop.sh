@@ -60,7 +60,7 @@ docker exec "$NAME" bash -c '
   echo "some content" > /data/fixtures/file.txt
   REAL="$(command -v duplicacy)"
   mv "$REAL" "${REAL}.real"
-  printf "#!/usr/bin/env bash\nif [ \"\${2:-}\" = backup ]; then touch /tmp/backup-started; sleep 60; exit 0; fi\nexec \"\$0.real\" \"\$@\"\n" > "$REAL"
+  printf "#!/usr/bin/env bash\nif [ \"\${2:-}\" = backup ] && [ ! -e /tmp/release ]; then touch /tmp/backup-started; sleep 60; exit 0; fi\nexec \"\$0.real\" \"\$@\"\n" > "$REAL"
   chmod +x "$REAL"
 ' || die "in-container setup failed"
 
@@ -93,7 +93,23 @@ grep -rq "Storage check completed" "$LOGDIR" && die "storage check ran after doc
 grep -rq "Prune completed" "$LOGDIR" && die "prune ran after docker stop"
 [ "$EXIT_CODE" = "0" ] || die "container exited ${EXIT_CODE}, expected 0 (graceful)"
 [ "$ELAPSED" -lt 110 ] || die "stop took ${ELAPSED}s; the grace period nearly ran out"
+# A stop for a shutdown keeps the run, so it starts again with the container (ADR 46).
+[ -e "$LOGDIR/.run-backup.json" ] || die "the shutdown did not keep the run to resume"
 rm -rf "$LOGDIR"
+
+log "docker start: the interrupted backup runs again at once and finishes"
+RELEASE=$(mktemp)
+docker cp "$RELEASE" "$NAME":/tmp/release >/dev/null || die "could not release the duplicacy shadow"
+rm -f "$RELEASE"
+docker start "$NAME" >/dev/null || die "docker start failed"
+for _ in $(seq 1 150); do
+  docker exec "$NAME" test ! -e /opt/archiver/logs/.run-backup.json 2>/dev/null && break
+  sleep 0.4
+done
+grep -q "The last backup was interrupted; running it again now." <<<"$(docker logs "$NAME" 2>&1)" || die "the restarted container did not run the interrupted backup"
+docker exec "$NAME" test ! -e /opt/archiver/logs/.run-backup.json || die "the resumed backup did not finish"
+docker exec "$NAME" sh -c 'ls /backup-store/snapshots/*/1' >/dev/null 2>&1 || die "the resumed backup made no revision"
+docker stop -t 120 "$NAME" >/dev/null
 
 # ── Second phase: docker stop must ALSO drain a live MAINTENANCE run ────────────
 # handle_shutdown runs 'archiver stop' (target all) and waits on BOTH pipeline locks, so a

@@ -335,6 +335,10 @@ jobs:
         run: |
           docker run -i --rm --hostname fk-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/fault-kill.sh
+      - name: Interrupted runs resume, with the post hook run and duplicacy's resume point used (ADR 46)
+        run: |
+          docker run -i --rm --hostname fi-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/fault-interrupt.sh
       - name: Notifications are one per incident, repeat on ALERT_REPEAT_INTERVAL and announce recovery (ADRs 33, 36)
         run: |
           docker run -i --rm --hostname ic-host --cap-drop ALL --cap-add DAC_OVERRIDE \

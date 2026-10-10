@@ -23,6 +23,10 @@ func runControl(cmd string, args []string) (code int, ok bool) {
 			switch a {
 			case "--immediate":
 				immediate = true
+			// The entrypoint's stop as the container shuts down: the runs it ends keep their
+			// records and start again with the container (ADR 46).
+			case "--shutdown":
+				_ = os.WriteFile(layout.Default().ShutdownFlag(), nil, 0o600)
 			case "backup", "maintenance", "drill", "all":
 				target = a
 				targets++

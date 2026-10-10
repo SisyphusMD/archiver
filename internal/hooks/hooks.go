@@ -36,6 +36,9 @@ const (
 	Failed  = "failed"
 	Skipped = "skipped" // the pre-backup hook failed, so nothing was backed up
 	Stopped = "stopped"
+	// Interrupted: a crash, a kill or a container restart ended the run between the hooks;
+	// the post-backup hook runs when Archiver next starts (ADR 46).
+	Interrupted = "interrupted"
 )
 
 // Service is what a hook is told about the service it runs for.

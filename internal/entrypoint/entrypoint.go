@@ -17,6 +17,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
 // Env is what the entrypoint runs with; tests point it elsewhere.
@@ -221,6 +222,18 @@ func (e *Env) LocksClear() bool {
 	for _, name := range []string{"archiver-main.lock", "archiver-maintenance.lock", "archiver-drill.lock"} {
 		if _, err := os.Stat(filepath.Join(e.Layout.Lock, name)); err == nil {
 			return false
+		}
+	}
+	// A copy worker holds its storage's copy lock while its duplicacy runs, saving its state
+	// after a stop included; the daemon is signalled only once they are free.
+	copies, _ := filepath.Glob(filepath.Join(e.Layout.Lock, "archiver-copy-*.flock"))
+	for _, p := range copies {
+		f, free, err := runlock.Hold(p)
+		if err == nil && !free {
+			return false
+		}
+		if f != nil {
+			f.Close()
 		}
 	}
 	return true

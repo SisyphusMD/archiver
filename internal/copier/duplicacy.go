@@ -153,7 +153,7 @@ func (d *Duplicacy) StartCopy(string) (Copy, error) {
 		args = append(args, "-upload-limit-rate", d.Target.UploadLimit)
 	}
 	p, err := proc.Start(proc.Spec{
-		Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: t,
+		Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: t, Interrupt: true,
 		Args: proc.NoScript(args...),
 	})
 	if err != nil {
@@ -165,7 +165,7 @@ func (d *Duplicacy) StartCopy(string) (Copy, error) {
 // Start runs another duplicacy command (prune, check) in the repository. A failed check
 // names the revisions it found damaged.
 func (d *Duplicacy) Start(args ...string) (Copy, error) {
-	spec := proc.Spec{Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: d.Target.StorageName(), Args: proc.NoScript(args...)}
+	spec := proc.Spec{Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: d.Target.StorageName(), Args: proc.NoScript(args...), Interrupt: true}
 	var out *strings.Builder
 	var lw io.WriteCloser
 	if len(args) > 0 && args[0] == "check" {

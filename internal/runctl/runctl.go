@@ -266,6 +266,12 @@ func (e Env) resumeDrill() {
 // itself and its descendants likewise. pid itself is left alone.
 func signalTree(pid int, sig syscall.Signal) {
 	for _, c := range children(pid) {
+		// Ended with INT instead: duplicacy saves its resume point on INT, nothing on TERM
+		// (ADR 46).
+		if sig == syscall.SIGTERM && isDuplicacy(c) {
+			_ = syscall.Kill(c, syscall.SIGINT)
+			continue
+		}
 		if pgid, err := syscall.Getpgid(c); err == nil && pgid == c {
 			_ = syscall.Kill(-c, sig)
 			continue
@@ -273,6 +279,11 @@ func signalTree(pid int, sig syscall.Signal) {
 		_ = syscall.Kill(c, sig)
 		signalTree(c, sig)
 	}
+}
+
+func isDuplicacy(pid int) bool {
+	b, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "comm"))
+	return err == nil && strings.TrimSpace(string(b)) == "duplicacy"
 }
 
 // children lists pid's child processes from /proc.
