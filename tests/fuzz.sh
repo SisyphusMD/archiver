@@ -12,7 +12,8 @@ for pkg in $pkgs; do
   for target in $(printf '%s\n' "$list" | grep '^Fuzz' || true); do
     found=$((found + 1))
     echo "=== $target ($pkg), $FUZZTIME"
-    if ! go test -run='^$' -fuzz="^${target}\$" -fuzztime="$FUZZTIME" "$pkg"; then
+    # Four workers: one per core (24 on the CI node) exhausted the runner's Docker daemon.
+    if ! go test -run='^$' -fuzz="^${target}\$" -fuzztime="$FUZZTIME" -parallel 4 "$pkg"; then
       # The container is thrown away: print the failing input so it can become a seed.
       dir=$(go list -f '{{.Dir}}' "$pkg")/testdata/fuzz/$target
       for f in "$dir"/*; do
