@@ -13,8 +13,8 @@ import (
 var globalSetting = regexp.MustCompile(`^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRUNE_BACKUPS|CHECK_BACKUPS|PRUNE_KEEP|PRUNE_EXHAUSTIVE_FREQUENCY|CHECK_INTERVAL|ALERT_REPEAT_INTERVAL|METRICS_PORT|WEB_PORT|CHECKIN_URL|DUPLICACY_THREADS|BACKUP_PARALLELISM|HOOKS_DIR|RESTORE_DRILL_SERVICES|RESTORE_DRILL_STORAGES|RESTORE_DRILL_DIR|RESTORE_DRILL_EXCLUDE|LOG_FORMAT|NOTIFICATION_SERVICE|NOTIFY_ON|APPRISE_NOTIFY_ON|NTFY_NOTIFY_ON|PUSHOVER_NOTIFY_ON|APPRISE_TAGS|NTFY_URL|RECOVERY_KIT_EXTRA_PATHS)$`)
 
 // IsSetting reports whether a variable name is a non-secret setting: a global one, or a
-// storage target's name, type, check interval, break-glass SFTP user, or any storage type's
-// non-secret field.
+// storage target's name, type, check interval, check-in URL, upload limit, copy window,
+// break-glass SFTP user, or any storage type's non-secret field.
 func IsSetting(name string) bool {
 	if globalSetting.MatchString(name) {
 		return true
@@ -24,7 +24,7 @@ func IsSetting(name string) bool {
 		return false
 	}
 	switch m[1] {
-	case "NAME", "TYPE", "CHECK_INTERVAL", "CHECKIN_URL", "BREAKGLASS_SFTP_USER":
+	case "NAME", "TYPE", "CHECK_INTERVAL", "CHECKIN_URL", "UPLOAD_LIMIT", "COPY_WINDOW", "BREAKGLASS_SFTP_USER":
 		return true
 	}
 	for _, t := range Types {

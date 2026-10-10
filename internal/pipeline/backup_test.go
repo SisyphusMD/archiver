@@ -25,3 +25,16 @@ func TestGroupServices(t *testing.T) {
 		t.Fatalf("serial: got %v, want %v", got, want)
 	}
 }
+
+// An upload limit is shared by the services backing up at once.
+func TestRateShared(t *testing.T) {
+	for _, c := range []struct {
+		share int
+		limit string
+		want  string
+	}{{0, "1000", "1000"}, {1, "1000", "1000"}, {2, "1000", "500"}, {3, "1000", "333"}, {4, "2", "1"}} {
+		if got := (&Backup{share: c.share}).rate(c.limit); got != c.want {
+			t.Errorf("share %d of %s: %s, want %s", c.share, c.limit, got, c.want)
+		}
+	}
+}

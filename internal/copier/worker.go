@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/inuse"
 	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/runlock"
@@ -34,6 +35,7 @@ const (
 	Retrying = "retrying" // the last copy failed; another is scheduled
 	Down     = "down"     // failing for DownAfter or longer; still retrying
 	Stopped  = "stopped"  // `archiver stop`: no retry until local next changes
+	Held     = "held"     // outside its copy window; carries on when it opens (ADR 44)
 	// Upkeep after a catch-up (ADRs 12, 17, 18).
 	Mirroring = "mirroring" // deleting on the target what local has pruned
 	Pruning   = "pruning"   // exhaustive prune of unreferenced chunks
@@ -60,6 +62,8 @@ type State struct {
 	CheckTried     int64  `json:"check_tried,omitempty"` // the last check attempt; the schedule counts from it
 	CheckFailed    string `json:"check_failed,omitempty"`
 	MirrorRefused  string `json:"mirror_refused,omitempty"` // last refusal reported, so it is reported once
+	Window         string `json:"window,omitempty"`         // STORAGE_TARGET_<N>_COPY_WINDOW, for status and health
+	HeldUntil      int64  `json:"held_until,omitempty"`     // when the window next opens, while it is closed
 }
 
 // Copy is a running copy.
@@ -154,6 +158,10 @@ type Worker struct {
 	allowLarge         bool           // the next mirror pass may delete more than half of an ID (ADR 12's override)
 	// Probe checks the target can be reached before each pass, ended by ctx; nil skips it.
 	Probe func(ctx context.Context) error
+	// Window holds the worker outside the target's copy window (ADR 44); nil never holds.
+	Window *config.Window
+	// holdAt is the stop count a window's close left, so a copy it ended says so.
+	holdAt int
 }
 
 // New makes a worker that starts from a saved state, so a restart neither re-alerts nor
@@ -165,9 +173,10 @@ func New(target, primary string, r Runner, c Clock, ev Events, saved State) *Wor
 	w.state.Paused = false
 	// A copy or a stop does not outlive the process; after a restart the worker compares
 	// revisions and carries on. A target that was down stays down, so it is not re-alerted.
-	if w.state.Status == "" || w.state.Status == Copying || w.state.Status == Stopped {
+	if w.state.Status == "" || w.state.Status == Copying || w.state.Status == Stopped || w.state.Status == Held {
 		w.state.Status = Idle
 	}
+	w.state.HeldUntil = 0
 	return w
 }
 
@@ -209,14 +218,25 @@ func (w *Worker) State() State {
 // Run keeps the target caught up until done is closed. It makes a first pass at once,
 // unless it starts stopped.
 func (w *Worker) Run(done <-chan struct{}) {
+	w.mu.Lock()
+	if w.Window != nil {
+		w.state.Window = w.Window.String()
+		go w.watchWindow(done)
+	} else {
+		w.state.Window = ""
+	}
+	w.mu.Unlock()
 	first := true
 	for {
 		var timer <-chan time.Time
 		w.mu.Lock()
-		switch w.state.Status {
-		case Retrying, Down:
+		switch {
+		case w.state.Status == Stopped:
+		// Nothing is due while the window is closed: watchWindow wakes the worker when it
+		// opens. A retry falling due meanwhile waits for it.
+		case w.Window != nil && !w.Window.Open(w.Clock.Now()):
+		case w.state.Status == Retrying || w.state.Status == Down:
 			timer = w.Clock.After(time.Unix(w.state.NextRetry, 0).Sub(w.Clock.Now()))
-		case Stopped:
 		default:
 			timer = w.Clock.After(w.nextWake())
 		}
@@ -266,6 +286,93 @@ func (w *Worker) ready(stops int) bool {
 		w.mu.Unlock()
 		<-ch
 	}
+}
+
+// watchWindow ends the worker's work when the copy window closes and wakes it when the
+// window opens.
+func (w *Worker) watchWindow(done <-chan struct{}) {
+	for {
+		now := w.Clock.Now()
+		open := w.Window.Open(now)
+		select {
+		case <-done:
+			return
+		case <-w.Clock.After(w.Window.Next(now).Sub(now)):
+		}
+		if open {
+			w.hold()
+		} else {
+			w.nudge()
+		}
+	}
+}
+
+// hold ends whatever the worker is doing as its copy window closes. It works like a stop,
+// except that the worker carries on by itself when the window opens and a failure's retry
+// state is kept. Duplicacy skips the chunks an ended copy already sent, so it resumes
+// rather than starting over.
+func (w *Worker) hold() {
+	w.mu.Lock()
+	if w.state.Status == Stopped {
+		w.mu.Unlock()
+		return
+	}
+	w.stops++
+	w.holdAt = w.stops
+	c, paused, cancel := w.current, w.paused, w.cancel
+	entered := w.markHeld(w.Clock.Now())
+	if c != nil && paused {
+		c.Resume()
+	}
+	w.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if c != nil {
+		go c.Terminate() // in the background, as Stop does: duplicacy may take a while to save
+	}
+	if entered && c == nil {
+		w.logHeld()
+	}
+}
+
+// outsideWindow reports whether the copy window is closed, marking the worker held if so.
+func (w *Worker) outsideWindow() bool {
+	if w.Window == nil {
+		return false
+	}
+	w.mu.Lock()
+	now := w.Clock.Now()
+	if w.Window.Open(now) {
+		w.state.HeldUntil = 0
+		w.mu.Unlock()
+		return false
+	}
+	entered := w.markHeld(now)
+	w.mu.Unlock()
+	if entered {
+		w.logHeld()
+	}
+	return true
+}
+
+// markHeld records that the worker waits for its window, keeping a failure's status so
+// health still sees it; true when it was not already waiting. Called under w.mu.
+func (w *Worker) markHeld(now time.Time) bool {
+	entered := w.state.HeldUntil == 0
+	w.state.HeldUntil = w.Window.Next(now).Unix()
+	if w.state.Status != Retrying && w.state.Status != Down {
+		w.state.Status, w.state.Since = Held, now.Unix()
+	}
+	w.save()
+	return entered
+}
+
+func (w *Worker) logHeld() {
+	w.mu.Lock()
+	at := time.Unix(w.state.HeldUntil, 0).In(w.Clock.Now().Location()).Format("15:04")
+	w.mu.Unlock()
+	w.log("INFO", fmt.Sprintf("Copies to %s storage wait for its copy window (%s), which opens at %s.", w.Target, w.Window, at))
 }
 
 func (w *Worker) stoppedSince(stops int) bool {
@@ -385,6 +492,13 @@ func (w *Worker) pass(stops int, done <-chan struct{}) {
 	}
 	w.cancel = cancel
 	w.mu.Unlock()
+	if w.outsideWindow() {
+		w.mu.Lock()
+		w.cancel = nil
+		w.mu.Unlock()
+		cancel()
+		return
+	}
 	defer func() {
 		w.mu.Lock()
 		w.cancel = nil
@@ -451,7 +565,14 @@ func (w *Worker) copyOnce(ctx context.Context, stops, behind int) bool {
 	w.log("INFO", fmt.Sprintf("Copying %d revisions to %s storage.", behind, w.Target))
 	err, stopped := w.run(ctx, stops, Copying, behind, false, func() (Copy, error) { return w.Runner.StartCopy(w.Target) })
 	if stopped {
-		w.log("INFO", fmt.Sprintf("Copy to %s storage stopped; it copies again after the next backup.", w.Target))
+		w.mu.Lock()
+		windowClosed := w.stops == w.holdAt && w.holdAt != 0
+		w.mu.Unlock()
+		if windowClosed {
+			w.log("INFO", fmt.Sprintf("Copy to %s storage ended as its copy window (%s) closed; it carries on when the window opens.", w.Target, w.Window))
+		} else {
+			w.log("INFO", fmt.Sprintf("Copy to %s storage stopped; it copies again after the next backup.", w.Target))
+		}
 		return false
 	}
 	if err != nil {
@@ -625,7 +746,7 @@ func (w *Worker) Stop() {
 		close(w.resumed)
 		w.resumed = nil
 	}
-	w.state.Status, w.state.Since, w.state.NextRetry = Stopped, w.Clock.Now().Unix(), 0
+	w.state.Status, w.state.Since, w.state.NextRetry, w.state.HeldUntil = Stopped, w.Clock.Now().Unix(), 0, 0
 	w.attempt = 0
 	w.save()
 	// Signals go out under the lock, so a pause or resume racing this cannot reorder them.

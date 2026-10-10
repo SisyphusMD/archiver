@@ -79,6 +79,11 @@ type Backup struct {
 	// unreachable are the secondaries found down at the start, skipped for the run: not
 	// registered, not copied (ADR 34).
 	unreachable map[string]bool
+	// held are the secondaries whose inline copy was skipped for their copy window.
+	held map[string]bool
+	// share is how many services back up at once, each with its own duplicacy backup: the
+	// primary's upload limit is divided among them. Copies run once, after every service.
+	share int
 	// primaryExisted: the first probe found the primary's config, so it must stay there.
 	primaryExisted bool
 	stats          map[string]backupStats // each service's backup, by directory, under mu
@@ -342,7 +347,11 @@ func (b *Backup) main(dirs []string) int {
 	// each now, so one that is down is skipped throughout rather than retried per service.
 	if !b.workers {
 		b.unreachable = map[string]bool{}
+		b.held = map[string]bool{}
 		for _, t := range b.cfg.Targets[1:] {
+			if b.outsideWindow(t) {
+				continue
+			}
 			if _, err := b.probe(t, false); err != nil && !b.stopped() {
 				b.unreachable[t.StorageName()] = true
 				b.log.Message(logging.Error, t.StorageName(), fmt.Sprintf("Copy to %s storage skipped: it cannot be reached (%v). It is copied at the next run.", t.StorageName(), err))
@@ -352,6 +361,7 @@ func (b *Backup) main(dirs []string) int {
 	b.notify.Clear("primary-down", "Primary Storage Back", fmt.Sprintf("Primary storage '%s' can be reached again.", b.cfg.Targets[0].Name))
 	n, _ := b.cfg.BackupParallelism() // validated with the rest of the configuration
 	groups := groupServices(dirs, n)
+	b.share = min(n, len(groups))
 	ok := make([]bool, len(dirs))
 	var stop atomic.Bool
 	var wg sync.WaitGroup
@@ -793,7 +803,11 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 	log(logging.Info, fmt.Sprintf("Starting backup to %s for %s service.", primary.Name, svc.Name))
 	began := time.Now()
 	// The output is logged and also read for metrics: the revision made, the bytes uploaded.
-	spec := b.duplicacy(svc.Dir, svc.Name, "backup", "-storage", storage, "-stats", "-threads", b.cfg.Threads)
+	args := []string{"backup", "-storage", storage, "-stats", "-threads", b.cfg.Threads}
+	if primary.UploadLimit != "" {
+		args = append(args, "-limit-rate", b.rate(primary.UploadLimit))
+	}
+	spec := b.duplicacy(svc.Dir, svc.Name, args...)
 	lw := b.log.Writer(logging.Info, svc.Name)
 	var out strings.Builder
 	spec.Output = io.MultiWriter(lw, &out)
@@ -848,7 +862,7 @@ func (b *Backup) addStorages(svc hooks.Service, log func(string, string)) {
 		b.mu.Lock()
 		down := b.unreachable[t.StorageName()]
 		b.mu.Unlock()
-		if down {
+		if down || b.outsideWindow(t) {
 			continue
 		}
 		url, err := t.URL()
@@ -931,13 +945,14 @@ func (b *Backup) copies(dir string) {
 	var final []string
 	defer func() { b.targetCheckins(final) }()
 	var names []string
-	b.mu.Lock()
 	for _, t := range b.cfg.Targets[1:] {
-		if !b.unreachable[t.StorageName()] { // found down earlier and reported then
+		b.mu.Lock()
+		down := b.unreachable[t.StorageName()] // found down earlier and reported then
+		b.mu.Unlock()
+		if !down && !b.outsideWindow(t) {
 			names = append(names, t.StorageName())
 		}
 	}
-	b.mu.Unlock()
 	if len(names) == 0 {
 		return
 	}
@@ -971,7 +986,10 @@ func (b *Backup) targetCheckins(failed []string) {
 		return
 	}
 	for _, t := range b.cfg.Targets[1:] {
-		if t.CheckinURL == "" {
+		b.mu.Lock()
+		held := b.held[t.StorageName()]
+		b.mu.Unlock()
+		if t.CheckinURL == "" || held { // held for its copy window: nothing was done to report
 			continue
 		}
 		b.mu.Lock()
@@ -988,6 +1006,32 @@ func (b *Backup) targetCheckins(failed []string) {
 		}
 		cancel()
 	}
+}
+
+// outsideWindow reports whether t's copy window is closed now. Such a target is skipped
+// for the rest of the run, without being probed or copied to, and the skip is said once.
+func (b *Backup) outsideWindow(t config.Target) bool {
+	w, err := config.ParseWindow(t.CopyWindow)
+	b.mu.Lock()
+	already := b.held[t.StorageName()]
+	closed := already || (err == nil && !w.Open(time.Now()))
+	if closed {
+		b.held[t.StorageName()] = true
+	}
+	b.mu.Unlock()
+	if !closed || already {
+		return closed
+	}
+	b.log.Message(logging.Info, t.StorageName(), fmt.Sprintf("Copy to %s storage skipped: outside its copy window (%s). The first backup inside it copies everything since.", t.StorageName(), w))
+	return true
+}
+
+// rate is the primary's UPLOAD_LIMIT for one of the services backing up at once, so that
+// together they keep to it. Validate refuses a limit below BACKUP_PARALLELISM, so each
+// share is at least 1.
+func (b *Backup) rate(limit string) string {
+	n, _ := strconv.Atoi(limit)
+	return strconv.Itoa(max(1, n/max(1, b.share)))
 }
 
 func (b *Backup) copyLegs(dir string, names []string) (failed []string) {
@@ -1013,9 +1057,23 @@ func (b *Backup) copyLegs(dir string, names []string) (failed []string) {
 			continue
 		}
 		locks = append(locks, release)
+		args := []string{"copy", "-from", primary, "-to", n, "-key", b.Layout.RSAPrivateKey(), "-threads", b.cfg.Threads, "-download-threads", b.cfg.Threads}
+		var target config.Target
+		for _, t := range b.cfg.Targets[1:] {
+			if t.StorageName() == n {
+				target = t
+			}
+		}
+		// Checked again as each copy starts, a retry included: a lock wait can outlast the
+		// window.
+		if b.outsideWindow(target) {
+			continue
+		}
+		if target.UploadLimit != "" {
+			args = append(args, "-upload-limit-rate", target.UploadLimit)
+		}
 		b.log.Message(logging.Info, n, fmt.Sprintf("Copying backup to %s storage.", n))
-		p, err := b.start(b.duplicacy(dir, n, "copy", "-from", primary, "-to", n,
-			"-key", b.Layout.RSAPrivateKey(), "-threads", b.cfg.Threads, "-download-threads", b.cfg.Threads))
+		p, err := b.start(b.duplicacy(dir, n, args...))
 		if err != nil {
 			b.log.Message(logging.Warning, n, fmt.Sprintf("Copy to %s storage failed.", n))
 			failed = append(failed, n)

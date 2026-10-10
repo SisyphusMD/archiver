@@ -47,6 +47,10 @@ type Target struct {
 	CheckInterval string
 	// CheckinURL is STORAGE_TARGET_<N>_CHECKIN_URL, pinged when the target is caught up.
 	CheckinURL string
+	// UploadLimit is STORAGE_TARGET_<N>_UPLOAD_LIMIT in kB/s, empty for none (ADR 44).
+	UploadLimit string
+	// CopyWindow is STORAGE_TARGET_<N>_COPY_WINDOW, such as 01:00-06:00; empty is always.
+	CopyWindow string
 }
 
 // Get returns one of the target's values.
@@ -242,6 +246,8 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		t.Type = src.Getenv(p + "TYPE")
 		t.CheckInterval = src.Getenv(p + "CHECK_INTERVAL")
 		t.CheckinURL = src.Getenv(p + "CHECKIN_URL")
+		t.UploadLimit = strings.TrimSpace(src.Getenv(p + "UPLOAD_LIMIT"))
+		t.CopyWindow = strings.TrimSpace(src.Getenv(p + "COPY_WINDOW"))
 		t.Values = Values{}
 		for _, f := range Types[t.Type].Fields {
 			if f.Secret {
@@ -394,8 +400,87 @@ func (c *Config) Validate(secretsDir string) error {
 		if _, err := ParseInterval(t.CheckInterval); err != nil {
 			return fmt.Errorf("STORAGE_TARGET_%d_CHECK_INTERVAL: %v", t.N, err)
 		}
+		if t.UploadLimit != "" {
+			n, err := strconv.Atoi(t.UploadLimit)
+			if err != nil || n < 1 {
+				return fmt.Errorf("STORAGE_TARGET_%d_UPLOAD_LIMIT must be a whole number of kilobytes per second, at least 1 (got '%s').", t.N, t.UploadLimit)
+			}
+			// Services backing up at once share the primary's limit, at least 1 kB/s each.
+			if p, _ := c.BackupParallelism(); t.N == 1 && n < p {
+				return fmt.Errorf("STORAGE_TARGET_1_UPLOAD_LIMIT (%d kB/s) is below BACKUP_PARALLELISM (%d): the services backing up at once share it, each needing at least 1 kB/s.", n, p)
+			}
+		}
+		if t.CopyWindow != "" {
+			if t.N == 1 {
+				return fmt.Errorf("STORAGE_TARGET_1_COPY_WINDOW is set, but target 1 is the primary: backups go to it at BACKUP_SCHEDULE, and a copy window holds only copies to a secondary.")
+			}
+			if _, err := ParseWindow(t.CopyWindow); err != nil {
+				return fmt.Errorf("STORAGE_TARGET_%d_COPY_WINDOW: %v", t.N, err)
+			}
+		}
 	}
 	return nil
+}
+
+// Window is a daily span of local time (TZ), such as 01:00-06:00; one whose end is earlier
+// than its start runs past midnight (22:00-06:00).
+type Window struct{ Start, End int } // minutes after midnight
+
+// ParseWindow reads HH:MM-HH:MM.
+func ParseWindow(s string) (Window, error) {
+	var w Window
+	a, b, ok := strings.Cut(strings.TrimSpace(s), "-")
+	if ok {
+		var e1, e2 error
+		w.Start, e1 = clockMinutes(a)
+		w.End, e2 = clockMinutes(b)
+		ok = e1 == nil && e2 == nil
+	}
+	if !ok {
+		return w, fmt.Errorf("'%s' is not a window of local times such as 01:00-06:00", s)
+	}
+	if w.Start == w.End {
+		return w, fmt.Errorf("'%s' starts and ends at the same time; leave it unset to copy at any hour", s)
+	}
+	return w, nil
+}
+
+func clockMinutes(s string) (int, error) {
+	h, m, ok := strings.Cut(strings.TrimSpace(s), ":")
+	hh, e1 := strconv.Atoi(h)
+	mm, e2 := strconv.Atoi(m)
+	if !ok || e1 != nil || e2 != nil || len(m) != 2 || hh < 0 || hh > 23 || mm < 0 || mm > 59 {
+		return 0, fmt.Errorf("bad time '%s'", s)
+	}
+	return hh*60 + mm, nil
+}
+
+func (w Window) String() string {
+	return fmt.Sprintf("%02d:%02d-%02d:%02d", w.Start/60, w.Start%60, w.End/60, w.End%60)
+}
+
+// Open reports whether t falls inside the window.
+func (w Window) Open(t time.Time) bool {
+	m := t.Hour()*60 + t.Minute()
+	if w.Start < w.End {
+		return m >= w.Start && m < w.End
+	}
+	return m >= w.Start || m < w.End
+}
+
+// Next is the window's next change after t: when it closes if t is inside it, else when it
+// opens. It steps minute by minute rather than building the boundary's date, which a
+// daylight saving change can skip (spring) or repeat (autumn).
+func (w Window) Next(t time.Time) time.Time {
+	open := w.Open(t)
+	c := t.Truncate(time.Minute)
+	for range 50 * 60 {
+		c = c.Add(time.Minute)
+		if w.Open(c) != open {
+			return c
+		}
+	}
+	return c
 }
 
 // ValidateStorage checks only what reaching the storages needs: the targets' settings and

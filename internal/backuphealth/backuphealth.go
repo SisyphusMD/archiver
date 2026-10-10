@@ -130,7 +130,7 @@ func Compute(l layout.Layout, getenv func(string) string, now time.Time) Health 
 		// FailingSince outlives a retry in progress: until a copy succeeds it is not over.
 		case s.Status == copier.Retrying || s.Status == copier.Down || s.FailingSince != 0:
 			degraded = append(degraded, fmt.Sprintf("copies to %s retrying since %s", name, ago(s.FailingSince, now)))
-		case s.Behind > 0 && now.Sub(time.Unix(caughtUp(s), 0)) > behindFor:
+		case s.Behind > 0 && now.Sub(time.Unix(caughtUp(s), 0)) > lagAllowed(s, behindFor):
 			degraded = append(degraded, fmt.Sprintf("%s behind by %d revision(s), last caught up %s", name, s.Behind, ago(caughtUp(s), now)))
 		}
 	}
@@ -157,6 +157,15 @@ func isFailing(key string) bool {
 		}
 	}
 	return false
+}
+
+// lagAllowed is how long a secondary may stay behind: a copy window can leave it behind
+// for most of a day by design, so one with a window has a day more.
+func lagAllowed(s copier.State, behindFor time.Duration) time.Duration {
+	if s.Window != "" {
+		return behindFor + 24*time.Hour
+	}
+	return behindFor
 }
 
 // caughtUp is when the worker was last caught up: copies that each finish quickly while it
