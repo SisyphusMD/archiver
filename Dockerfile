@@ -18,8 +18,10 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 # dropbox-app.patch lets Dropbox refresh tokens with your own app instead of duplicacy.com, and
 # highwayhash-arm64.patch renames an arm64 assembly table in a vendored fork whose name clash
 # with a Go function current Go's linker rejects, keeping the exact bytes the released 3.2.5
-# arm64 binary read there (so its hashes match the release's). Modules are vendored against
-# the source's go.sum; the CLI still runs as a child process.
+# arm64 binary read there (so its hashes match the release's). resume-point.patch saves a
+# backup's resume point every five minutes, so one killed or cut off by a power loss resumes
+# where it was, and lets incremental backups resume too (ADR 46). Modules are vendored
+# against the source's go.sum; the CLI still runs as a child process.
 FROM --platform=$BUILDPLATFORM golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d AS duplicacy
 ARG TARGETOS
 ARG TARGETARCH
@@ -36,9 +38,9 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
         "${GITHUB_MIRROR}/gilbertchen/duplicacy/archive/refs/tags/v${DUPLICACY_VERSION}.tar.gz" -o /tmp/duplicacy.tar.gz && \
     echo "$DUPLICACY_SOURCE_SHA256  /tmp/duplicacy.tar.gz" | sha256sum -c - && \
     mkdir /src && tar -xzf /tmp/duplicacy.tar.gz -C /src --strip-components=1 && \
-    cd /src && patch -p1 < /patches/dropbox-app.patch && \
+    cd /src && patch -p1 < /patches/dropbox-app.patch && patch -p1 < /patches/resume-point.patch && \
     go mod vendor && patch -p1 < /patches/highwayhash-arm64.patch && \
-    go test -count=1 -run TestDropboxAppTokens ./src/ && \
+    go test -count=1 -run 'TestDropboxAppTokens|TestResumePoint' ./src/ && \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/duplicacy ./duplicacy
 
 # rclone places the recovery kit on every storage type (ADR 24). Its release is a zip, so a

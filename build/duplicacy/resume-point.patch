@@ -1,0 +1,543 @@
+--- a/src/duplicacy_backupmanager.go
++++ b/src/duplicacy_backupmanager.go
+@@ -180,10 +180,9 @@
+ 		}
+ 	}
+ 
+-	var incompleteSnapshot *EntryList
+-	if hashMode {
+-		incompleteSnapshot = loadIncompleteSnapshot(manager.snapshotID, manager.cachePath)
+-	}
++	// An incomplete snapshot is used by an incremental (quick mode) backup too: its entries
++	// stand in for the previous snapshot's, the files it finished with their chunks.
++	incompleteSnapshot := loadIncompleteSnapshot(manager.snapshotID, manager.cachePath)
+ 
+ 	// If the listing operation is fast and this is an initial backup, list all chunks and
+ 	// put them in the cache.
+@@ -211,6 +210,29 @@
+ 		}
+ 	}
+ 
++	// The chunks interrupted backups uploaded belong to no revision, so a prune since may
++	// have removed them: an exhaustive prune fossilizes unreferenced chunks and deletes them
++	// once every snapshot id has a newer revision, ids without a backup for 7 days not
++	// counted.  That includes preserved chunks, which after a second interruption hold those
++	// the first one uploaded.  Every chunk the incomplete snapshot names is looked up on the
++	// storage unless the cache already has it (the previous revision's, which prune keeps as
++	// the latest, or all the storage's, listed above), and the incomplete snapshot is used
++	// only if all are there.
++	if incompleteSnapshot != nil {
++		for _, chunkHash := range append(append([]string{}, incompleteSnapshot.PreservedChunkHashes...), incompleteSnapshot.UploadedChunkHashes...) {
++			chunkID := manager.config.GetChunkIDFromHash(chunkHash)
++			if chunkCache[chunkID] {
++				continue
++			}
++			_, exist, _, err := manager.storage.FindChunk(0, chunkID, false)
++			if err != nil || !exist {
++				LOG_WARN("INCOMPLETE_DISCARD", "The incomplete snapshot can't be used as it contains chunks not in the storage")
++				incompleteSnapshot = nil
++				break
++			}
++		}
++	}
++
+ 	// Copy over chunks from the incomplete snapshot
+ 	if incompleteSnapshot != nil {
+ 		remoteSnapshot.ChunkHashes = append(incompleteSnapshot.PreservedChunkHashes, incompleteSnapshot.UploadedChunkHashes...)
+@@ -381,8 +403,8 @@
+ 	}
+ 
+ 	var once sync.Once
+-	if hashMode && !manager.config.dryRun {
+-		// In case an error occurs during a hash mode backup, save the incomplete snapshot
++	if !manager.config.dryRun {
++		// In case an error occurs during the backup, save the incomplete snapshot
+ 		RunAtError = func() {
+ 			once.Do(func() {
+ 				localEntryList.SaveIncompleteSnapshot()
+@@ -390,6 +412,17 @@
+ 		}
+ 	}
+ 
++	// The resume point is also saved every few minutes, for a backup that is killed or loses
++	// power and so never reaches RunAtError.  DUPLICACY_RESUME_INTERVAL sets the seconds
++	// between saves (0 saves at every chunk, a negative value never).
++	resumeInterval := int64(300)
++	if value, found := os.LookupEnv("DUPLICACY_RESUME_INTERVAL"); found {
++		if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
++			resumeInterval = seconds
++		}
++	}
++	lastResumeSave := time.Now().Unix()
++
+ 	startUploadingTime := time.Now().Unix()
+ 	lastUploadingTime := time.Now().Unix()
+ 
+@@ -441,6 +474,11 @@
+ 	chunkIndex := -1
+ 	// This function is called when the chunk maker generates a new chunk
+ 	uploadChunkFunc := func(chunk *Chunk) {
++		if !manager.config.dryRun && resumeInterval >= 0 && time.Now().Unix()-lastResumeSave >= resumeInterval {
++			localEntryList.SaveResumePoint()
++			lastResumeSave = time.Now().Unix()
++		}
++
+ 		chunkID := chunk.GetID()
+ 		chunkSize := chunk.GetLength()
+ 
+@@ -479,7 +517,12 @@
+ 			skippedFiles = append(skippedFiles, entry.Path)
+ 			continue
+ 		}
+-		entry.Size, entry.Hash = fileChunkMaker.AddData(file, uploadChunkFunc)
++		size, hash := fileChunkMaker.AddData(file, uploadChunkFunc)
++		// Under the lock a save holds, so one made from the signal handler (RunAtError) never
++		// sees a file's size without its hash.
++		localEntryList.uploadedChunkLock.Lock()
++		entry.Size, entry.Hash = size, hash
++		localEntryList.uploadedChunkLock.Unlock()
+ 		if !showStatistics || IsTracing() || RunInBackground {
+ 			LOG_INFO("PACK_END", "Packed %s (%d)", entry.Path, entry.Size)
+ 		}
+--- a/src/duplicacy_entrylist.go
++++ b/src/duplicacy_entrylist.go
+@@ -62,8 +62,12 @@
+ 	uploadedChunkIndex int                  // counter for upload chunks
+ 	uploadedChunkOffset int                 // the start offset for the current modified entry
+ 
++	resumeEntriesSaved bool                 // 'incomplete_snapshot' holds this backup's entries
+ }
+ 
++// Called after each resume point is saved; tests use it to stop a backup there.
++var afterResumePointSaved = func() {}
++
+ // Create a new entry list
+ func CreateEntryList(snapshotID string, cachePath string, maximumInMemoryEntries int) (*EntryList, error) {
+ 
+@@ -432,6 +436,94 @@
+ 	LOG_INFO("INCOMPLETE_SAVE", "Incomplete snapshot saved to %s", filePath)	
+ }
+ 
++// SaveResumePoint saves where the backup is, as SaveIncompleteSnapshot does when the backup
++// fails, but without ending it, so a backup that is killed or loses power can resume from
++// here.  The entries never change during the upload (only the uploaded chunks and the sizes
++// of packed files do), so 'incomplete_snapshot' is written once per backup, and
++// 'incomplete_chunks' is replaced atomically each time.  A crash at any moment leaves the
++// previous resume point or this one: a pair from two different backups fails the token
++// check and is discarded.  It must be called from the goroutine that packs files, the one
++// that writes ModifiedEntries.
++func (entryList *EntryList) SaveResumePoint() {
++	entryList.uploadedChunkLock.Lock()
++	defer entryList.uploadedChunkLock.Unlock()
++
++	if !entryList.resumeEntriesSaved {
++		err := writeFileAtomically(path.Join(entryList.cachePath, "incomplete_snapshot"), entryList.writeEntries)
++		if err != nil {
++			LOG_WARN("RESUME_SAVE", "Failed to save the entries to resume from: %v", err)
++			return
++		}
++		entryList.resumeEntriesSaved = true
++	}
++
++	entryList.Checksum = entryList.CalculateChecksum()
++	err := writeFileAtomically(path.Join(entryList.cachePath, "incomplete_chunks"), func(w io.Writer) error {
++		return msgpack.NewEncoder(w).Encode(entryList)
++	})
++	if err != nil {
++		LOG_WARN("RESUME_SAVE", "Failed to save the resume point: %v", err)
++		return
++	}
++	LOG_DEBUG("RESUME_SAVE", "Resume point saved with %d chunks uploaded", len(entryList.UploadedChunkHashes))
++	afterResumePointSaved()
++}
++
++// writeEntries writes the token and the entries, as the on-disk entry list holds them.
++func (entryList *EntryList) writeEntries(w io.Writer) error {
++	if entryList.onDiskFile != nil {
++		// The on-disk list is complete by now (entries are all added before the upload
++		// starts) and its encoder does not buffer, so its file is copied as it is.
++		file, err := os.Open(path.Join(entryList.cachePath, "incomplete_files"))
++		if err != nil {
++			return err
++		}
++		defer file.Close()
++		_, err = io.Copy(w, file)
++		return err
++	}
++	encoder := msgpack.NewEncoder(w)
++	if err := encoder.EncodeString(entryList.Token); err != nil {
++		return err
++	}
++	for _, entry := range entryList.entries {
++		if err := entry.EncodeWithHash(encoder); err != nil {
++			return err
++		}
++	}
++	return nil
++}
++
++// writeFileAtomically writes a file aside, syncs it, renames it into place and syncs the
++// directory.
++func writeFileAtomically(filePath string, write func(io.Writer) error) error {
++	temporary := filePath + ".tmp"
++	file, err := os.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
++	if err != nil {
++		return err
++	}
++	err = write(file)
++	if err == nil {
++		err = file.Sync()
++	}
++	if closeErr := file.Close(); err == nil {
++		err = closeErr
++	}
++	if err != nil {
++		os.Remove(temporary)
++		return err
++	}
++	if err = os.Rename(temporary, filePath); err != nil {
++		return err
++	}
++	// The rename itself survives a power loss only once the directory is synced too.
++	if directory, err := os.Open(path.Dir(filePath)); err == nil {
++		directory.Sync()
++		directory.Close()
++	}
++	return nil
++}
++
+ // Calculate a checksum for this entry list
+ func (entryList *EntryList) CalculateChecksum() string{
+ 
+--- /dev/null
++++ b/src/duplicacy_resume_test.go
+@@ -0,0 +1,329 @@
++// Copyright (c) Acrosync LLC. All rights reserved.
++// Free for personal use and commercial trial
++// Commercial use requires per-user licenses available from https://duplicacy.com
++
++package duplicacy
++
++import (
++	"fmt"
++	"os"
++	"path"
++	"path/filepath"
++	"strings"
++	"sync"
++	"testing"
++	"time"
++)
++
++// A backup that stops just after a resume point, as one killed there would, resumes from
++// it: the files it had finished are not read again, and the revision it makes restores
++// every file byte for byte.  For a first backup (hash mode) and an incremental one (quick
++// mode), with the entries in memory and on disk.
++func TestResumePoint(t *testing.T) {
++	// One LogFunction for the whole test: goroutines a stopped backup leaves behind may still
++	// log, so it is never reassigned while they run.  Errors still panic, as without it.
++	LogFunction = func(level int, logID string, message string) {
++		resumeLog.Lock()
++		if resumeLog.handle != nil {
++			resumeLog.handle(level, logID, message)
++		}
++		resumeLog.Unlock()
++		if level > WARN {
++			panic(Exception{Level: level, LogID: logID, Message: message})
++		}
++	}
++	defer func() { LogFunction = nil }()
++	for _, c := range []struct {
++		name        string
++		incremental bool
++		inMemory    int
++		pruned      bool
++	}{
++		{"first", false, 1024, false},
++		{"incremental", true, 1024, false},
++		{"first-on-disk", false, 0, false},
++		{"incremental-on-disk", true, 0, false},
++		{"incremental-pruned", true, 1024, true},
++	} {
++		t.Run(c.name, func(t *testing.T) { testResumePoint(t, c.incremental, c.inMemory, c.pruned) })
++	}
++	t.Run("interrupted-twice-pruned", testResumeTwicePruned)
++}
++
++type stopBackup struct{}
++
++var resumeLog struct {
++	sync.Mutex
++	handle func(level int, logID string, message string)
++}
++
++// pruned: one of the chunks the stopped backup uploaded is deleted before it resumes, as a
++// prune can do, so the resume point must not be used.
++func testResumePoint(t *testing.T, incremental bool, inMemory int, pruned bool) {
++	setTestingT(t)
++	SetLoggingLevel(INFO)
++	testDir := path.Join(os.TempDir(), "duplicacy_resume_test")
++	os.RemoveAll(testDir)
++	defer os.RemoveAll(testDir)
++	top := testDir + "/repository1"
++	os.MkdirAll(top+"/.duplicacy", 0700)
++	os.MkdirAll(testDir+"/repository2/.duplicacy", 0700)
++
++	storage, err := loadStorage(testDir+"/storage", 1)
++	if err != nil {
++		t.Fatalf("Failed to create storage: %v", err)
++	}
++	cleanStorage(storage)
++	if !ConfigStorage(storage, 16384, 100, 64*1024, 256*1024, 16*1024, "duplicacy", nil, false, "", 0, 0) {
++		t.Fatal("Failed to initialize the storage")
++	}
++	SetDuplicacyPreferencePath(top + "/.duplicacy")
++	manager := CreateBackupManager("host1", storage, testDir, "duplicacy", "", "", false)
++	manager.SetupSnapshotCache("default")
++
++	var files []string
++	if incremental {
++		for i := 0; i < 2; i++ {
++			files = append(files, fmt.Sprintf("old%d", i))
++			createRandomFile(top+"/"+files[i], 1000000)
++		}
++		manager.Backup(top, true, 1, "first", false, false, 0, false, 1024, inMemory)
++		modifyFile(top+"/old0", 0.3)
++	}
++	for i := 0; i < 8; i++ {
++		files = append(files, fmt.Sprintf("new%d", i))
++		createRandomFile(top+"/"+files[len(files)-1], 1000000)
++	}
++
++	// Saved at every chunk; the backup is stopped just after the 40th save.
++	os.Setenv("DUPLICACY_RESUME_INTERVAL", "0")
++	defer os.Unsetenv("DUPLICACY_RESUME_INTERVAL")
++	saves := 0
++	afterResumePointSaved = func() {
++		saves++
++		if saves == 40 {
++			panic(stopBackup{})
++		}
++	}
++	defer func() { afterResumePointSaved = func() {} }()
++	func() {
++		defer func() {
++			r := recover()
++			if _, ok := r.(stopBackup); !ok {
++				panic(fmt.Sprintf("the backup was not stopped at its resume point: %v", r))
++			}
++		}()
++		manager.Backup(top, true, 1, "second", false, false, 0, false, 1024, inMemory)
++	}()
++	afterResumePointSaved = func() {}
++	time.Sleep(2 * time.Second) // uploads already started finish
++
++	cachePath := ""
++	filepath.Walk(top+"/.duplicacy", func(p string, info os.FileInfo, err error) error {
++		if err == nil && info.Name() == "incomplete_chunks" {
++			cachePath = filepath.Dir(p)
++		}
++		return nil
++	})
++	saved := loadIncompleteSnapshot("host1", cachePath)
++	if saved == nil {
++		t.Fatalf("no resume point was saved in %q", cachePath)
++	}
++	// Finished: packed, and every chunk uploaded, which is what the resume point hands on (a
++	// file whose last chunk was still uploading is read again, as it must be).
++	packedThen := map[string]bool{}
++	for _, entry := range saved.ModifiedEntries {
++		if entry.Size > 0 {
++			packedThen[entry.Path] = true
++		}
++	}
++	var finished []string
++	saved.ReadEntries(func(entry *Entry) error {
++		if packedThen[entry.Path] {
++			finished = append(finished, entry.Path)
++		}
++		return nil
++	})
++	saved.CloseOnDiskFile()
++	if len(finished) == 0 || len(finished) == len(saved.ModifiedEntries) {
++		t.Fatalf("the resume point should fall mid-backup: %d of %d files finished", len(finished), len(saved.ModifiedEntries))
++	}
++	if pruned {
++		chunkID := manager.config.GetChunkIDFromHash(saved.UploadedChunkHashes[0])
++		chunkPath, exist, _, err := storage.FindChunk(0, chunkID, false)
++		if err != nil || !exist {
++			t.Fatalf("the first uploaded chunk is not on the storage: %v", err)
++		}
++		if err := os.Remove(path.Join(testDir, "storage", chunkPath)); err != nil {
++			t.Fatal(err)
++		}
++		finished = nil // nothing is resumed, so everything is read again
++	}
++
++	resumed := false
++	packed := map[string]bool{}
++	resumeLog.Lock()
++	resumeLog.handle = func(level int, logID string, message string) {
++		if level > WARN {
++			t.Errorf("%s %s", logID, message)
++		}
++		if logID == "INCOMPLETE_LOAD" && strings.HasPrefix(message, "Previous incomplete backup") {
++			resumed = true
++		}
++		if logID == "INCOMPLETE_DISCARD" {
++			resumed = false
++		}
++		if logID == "PACK_START" {
++			packed[strings.TrimPrefix(message, "Packing ")] = true
++		}
++	}
++	resumeLog.Unlock()
++	manager.Backup(top, true, 1, "third", false, false, 0, false, 1024, inMemory)
++	resumeLog.Lock()
++	resumeLog.handle = nil
++	resumeLog.Unlock()
++
++	if resumed != !pruned {
++		t.Errorf("resumed %v, with a chunk pruned %v", resumed, pruned)
++	}
++	for _, f := range finished {
++		if packed[f] {
++			t.Errorf("%s, finished before the stop, was read again", f)
++		}
++	}
++	for _, f := range []string{"incomplete_snapshot", "incomplete_chunks", "incomplete_files"} {
++		if _, err := os.Stat(path.Join(cachePath, f)); err == nil {
++			t.Errorf("%s was left after the backup completed", f)
++		}
++	}
++
++	SetDuplicacyPreferencePath(testDir + "/repository2/.duplicacy")
++	revision := 1
++	if incremental {
++		revision = 2
++	}
++	failed := manager.Restore(testDir+"/repository2", revision, true, false, 1, true, false, false, false, nil, false)
++	assertRestoreFailures(t, failed, 0)
++	for _, f := range files {
++		if getFileHash(top+"/"+f) != getFileHash(testDir+"/repository2/"+f) {
++			t.Errorf("%s did not restore byte for byte", f)
++		}
++	}
++}
++
++// Interrupted twice: the second resume point preserves the files the first attempt finished,
++// with the chunks it uploaded, which belong to no revision.  One of those is deleted, as a
++// prune can do, so the second resume point must not be used either.
++func testResumeTwicePruned(t *testing.T) {
++	setTestingT(t)
++	SetLoggingLevel(INFO)
++	testDir := path.Join(os.TempDir(), "duplicacy_resume_test")
++	os.RemoveAll(testDir)
++	defer os.RemoveAll(testDir)
++	top := testDir + "/repository1"
++	os.MkdirAll(top+"/.duplicacy", 0700)
++	os.MkdirAll(testDir+"/repository2/.duplicacy", 0700)
++	storage, err := loadStorage(testDir+"/storage", 1)
++	if err != nil {
++		t.Fatalf("Failed to create storage: %v", err)
++	}
++	cleanStorage(storage)
++	if !ConfigStorage(storage, 16384, 100, 64*1024, 256*1024, 16*1024, "duplicacy", nil, false, "", 0, 0) {
++		t.Fatal("Failed to initialize the storage")
++	}
++	SetDuplicacyPreferencePath(top + "/.duplicacy")
++	manager := CreateBackupManager("host1", storage, testDir, "duplicacy", "", "", false)
++	manager.SetupSnapshotCache("default")
++	createRandomFile(top+"/old", 500000)
++	manager.Backup(top, true, 1, "first", false, false, 0, false, 1024, 1024)
++	var files []string
++	for i := 0; i < 8; i++ {
++		files = append(files, fmt.Sprintf("new%d", i))
++		createRandomFile(top+"/"+files[i], 1000000)
++	}
++
++	os.Setenv("DUPLICACY_RESUME_INTERVAL", "0")
++	defer os.Unsetenv("DUPLICACY_RESUME_INTERVAL")
++	stopAfter := func(n int, tag string) {
++		saves := 0
++		afterResumePointSaved = func() {
++			saves++
++			if saves == n {
++				panic(stopBackup{})
++			}
++		}
++		defer func() {
++			afterResumePointSaved = func() {}
++			if _, ok := recover().(stopBackup); !ok {
++				t.Fatalf("the %s backup was not stopped at its resume point", tag)
++			}
++		}()
++		manager.Backup(top, true, 1, tag, false, false, 0, false, 1024, 1024)
++	}
++	cachePath := func() string {
++		found := ""
++		filepath.Walk(top+"/.duplicacy", func(p string, info os.FileInfo, err error) error {
++			if err == nil && info.Name() == "incomplete_chunks" {
++				found = filepath.Dir(p)
++			}
++			return nil
++		})
++		return found
++	}
++
++	stopAfter(30, "second")
++	time.Sleep(2 * time.Second)
++	first := loadIncompleteSnapshot("host1", cachePath())
++	if first == nil || len(first.UploadedChunkHashes) == 0 {
++		t.Fatal("the first attempt saved no resume point")
++	}
++	first.CloseOnDiskFile()
++	firstChunk := first.UploadedChunkHashes[0]
++
++	stopAfter(5, "third")
++	time.Sleep(2 * time.Second)
++	second := loadIncompleteSnapshot("host1", cachePath())
++	if second == nil {
++		t.Fatal("the second attempt saved no resume point")
++	}
++	second.CloseOnDiskFile()
++	preserved := false
++	for _, hash := range second.PreservedChunkHashes {
++		preserved = preserved || hash == firstChunk
++	}
++	if !preserved {
++		t.Fatal("the second resume point does not preserve the first attempt's chunk")
++	}
++	chunkPath, exist, _, err := storage.FindChunk(0, manager.config.GetChunkIDFromHash(firstChunk), false)
++	if err != nil || !exist {
++		t.Fatalf("the first attempt's chunk is not on the storage: %v", err)
++	}
++	if err := os.Remove(path.Join(testDir, "storage", chunkPath)); err != nil {
++		t.Fatal(err)
++	}
++
++	discarded := false
++	resumeLog.Lock()
++	resumeLog.handle = func(level int, logID string, message string) {
++		if level > WARN {
++			t.Errorf("%s %s", logID, message)
++		}
++		discarded = discarded || logID == "INCOMPLETE_DISCARD"
++	}
++	resumeLog.Unlock()
++	manager.Backup(top, true, 1, "fourth", false, false, 0, false, 1024, 1024)
++	resumeLog.Lock()
++	resumeLog.handle = nil
++	resumeLog.Unlock()
++	if !discarded {
++		t.Error("a resume point naming a pruned chunk was used")
++	}
++	SetDuplicacyPreferencePath(testDir + "/repository2/.duplicacy")
++	failed := manager.Restore(testDir+"/repository2", 2, true, false, 1, true, false, false, false, nil, false)
++	assertRestoreFailures(t, failed, 0)
++	for _, f := range append(files, "old") {
++		if getFileHash(top+"/"+f) != getFileHash(testDir+"/repository2/"+f) {
++			t.Errorf("%s did not restore byte for byte", f)
++		}
++	}
++}
