@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Print the version a release dispatch cuts from HEAD, or fail with the reason.
 #
-#   next-version.sh <branch> <patch|minor|major|alpha>
+#   next-version.sh <branch> <patch|minor|major|alpha|rc>
 #
 # main is the v1 line (ADR 9): it cuts 0.x releases only until its first 1.0.0 alpha, then
-# alphas and 1.0.0 itself. release/<major>.<minor> branches cut that line's patches. Only
+# alphas, release candidates and 1.0.0 itself. release/<major>.<minor> branches cut that line's patches. Only
 # tags reachable from HEAD count, so a release branch never sees main's newer tags.
 set -euo pipefail
 
 die() { echo "$*" >&2; exit 1; }
 
-[ $# -eq 2 ] || die "usage: next-version.sh <branch> <patch|minor|major|alpha>"
+[ $# -eq 2 ] || die "usage: next-version.sh <branch> <patch|minor|major|alpha|rc>"
 branch=$1 bump=$2
 
 stable=$(git tag --merged HEAD -l 'v*.*.*' | grep -vE -- '-' | sed 's/^v//' | sort -V | tail -n1 || true)
@@ -47,11 +47,16 @@ case "${bump}" in
   patch) echo "${major}.${minor}.$((patch + 1))" ;;
   minor) echo "${major}.$((minor + 1)).0" ;;
   major) echo "$((major + 1)).0.0" ;;
-  alpha)
+  alpha|rc)
     target="$((major + 1)).0.0"
-    # All tags, not just reachable ones: an alpha number is never reused.
-    n=$(git tag -l "v${target}-alpha.*" | sed "s/^v${target}-alpha\.//" | grep -E '^[0-9]+$' | sort -n | tail -n1 || true)
-    echo "${target}-alpha.$((${n:-0} + 1))"
+    # An alpha sorts below every release candidate, so one cut after them would read as older.
+    if [ "${bump}" = alpha ]; then
+      rc=$(git tag -l "v${target}-rc.*" | sort -V | tail -n1 || true)
+      [ -z "${rc}" ] || die "${target} already has ${rc#v}; cut another rc instead of an alpha"
+    fi
+    # All tags, not just reachable ones: a prerelease number is never reused.
+    n=$(git tag -l "v${target}-${bump}.*" | sed "s/^v${target}-${bump}\.//" | grep -E '^[0-9]+$' | sort -n | tail -n1 || true)
+    echo "${target}-${bump}.$((${n:-0} + 1))"
     ;;
   *) die "unknown bump ${bump}" ;;
 esac

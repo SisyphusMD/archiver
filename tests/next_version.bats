@@ -45,6 +45,26 @@ next() { run bash "${SCRIPT}" "$@"; }
   next main alpha; [ "$status" -eq 0 ]; [ "$output" = "2.0.0-alpha.1" ]
 }
 
+@test "main: release candidates target the next major after the alphas and count up" {
+  git commit -q --allow-empty -m a1; git tag v1.0.0-alpha.1
+  next main rc; [ "$status" -eq 0 ]; [ "$output" = "1.0.0-rc.1" ]
+  git commit -q --allow-empty -m rc1; git tag v1.0.0-rc.1
+  next main rc; [ "$status" -eq 0 ]; [ "$output" = "1.0.0-rc.2" ]
+  next main major; [ "$status" -eq 0 ]; [ "$output" = "1.0.0" ]
+}
+
+@test "main refuses an alpha once that version has a release candidate" {
+  git commit -q --allow-empty -m rc1; git tag v1.0.0-rc.1
+  next main alpha; [ "$status" -ne 0 ]; [[ "$output" == *"1.0.0-rc.1"* ]]
+}
+
+@test "after 1.0.0 ships, release candidates target 2.0.0" {
+  git commit -q --allow-empty -m rc1; git tag v1.0.0-rc.1
+  git commit -q --allow-empty -m r; git tag v1.0.0
+  next main rc; [ "$status" -eq 0 ]; [ "$output" = "2.0.0-rc.1" ]
+  next main alpha; [ "$status" -eq 0 ]; [ "$output" = "2.0.0-alpha.1" ]
+}
+
 @test "release/0.11 cuts 0.11 patches and never sees main's newer tags" {
   git commit -q --allow-empty -m a1; git tag v1.0.0-alpha.1
   git checkout -q release/0.11
@@ -57,6 +77,7 @@ next() { run bash "${SCRIPT}" "$@"; }
   git checkout -q release/0.11
   next release/0.11 minor; [ "$status" -ne 0 ]
   next release/0.11 alpha; [ "$status" -ne 0 ]
+  next release/0.11 rc; [ "$status" -ne 0 ]
   next release/0.12 patch; [ "$status" -ne 0 ]; [[ "$output" == *"0.11.1"* ]]
 }
 
