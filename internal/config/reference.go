@@ -105,6 +105,8 @@ var targetSettings = []Var{
 	{Name: "TYPE", Kind: "string", Desc: "The storage type."},
 	{Name: "CHECK_INTERVAL", Kind: "interval", Desc: "How often this secondary is checked; overrides CHECK_INTERVAL."},
 	{Name: "CHECKIN_URL", Kind: "url", Desc: "Pinged when this storage is caught up or checked, its fail variant when copies or its check fail (ADR 37)."},
+	{Name: "UPLOAD_LIMIT", Kind: "integer", Desc: "The most this storage is sent, in kilobytes per second: by a backup to it (the primary; services backing up at once share it, so it must be at least BACKUP_PARALLELISM) and by copies to it (ADR 44)."},
+	{Name: "COPY_WINDOW", Kind: "string", Pattern: `^$|^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$`, Desc: "Secondaries: the local hours (TZ) copies and upkeep run, such as `01:00-06:00` or `22:00-06:00`; outside them the copy worker waits, and a copy still running when the window closes ends and resumes when it next opens (ADR 44). Backups to the primary are not held."},
 	{Name: "BREAKGLASS_SFTP_USER", Kind: "string", Desc: "SFTP storages: the user the printed envelope names, for read-only access (ADR 23)."},
 	{Name: "BREAKGLASS_SSH_KEY", Secret: true, Kind: "string", Desc: "SFTP storages: the private key of BREAKGLASS_SFTP_USER, printed on the envelope (ADR 23)."},
 }

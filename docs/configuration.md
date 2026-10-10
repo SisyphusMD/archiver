@@ -127,6 +127,8 @@ Each storage is `STORAGE_TARGET_<N>_*`, numbered from 1 without gaps; target 1 i
 | `STORAGE_TARGET_<N>_TYPE` | all |  | The storage type. One of `azure`, `b2`, `b2-custom`, `dropbox`, `fabric`, `gcd`, `gcs`, `local`, `minio`, `minios`, `odb`, `one`, `s3`, `s3c`, `sftp`, `sftpc`, `smb`, `storj`, `swift`, `wasabi`, `webdav`, `webdav-http`. |
 | `STORAGE_TARGET_<N>_CHECK_INTERVAL` | all |  | How often this secondary is checked; overrides CHECK_INTERVAL. |
 | `STORAGE_TARGET_<N>_CHECKIN_URL` | all |  | Pinged when this storage is caught up or checked, its fail variant when copies or its check fail (ADR 37). |
+| `STORAGE_TARGET_<N>_UPLOAD_LIMIT` | all |  | The most this storage is sent, in kilobytes per second: by a backup to it (the primary; services backing up at once share it, so it must be at least BACKUP_PARALLELISM) and by copies to it (ADR 44). |
+| `STORAGE_TARGET_<N>_COPY_WINDOW` | all |  | Secondaries: the local hours (TZ) copies and upkeep run, such as `01:00-06:00` or `22:00-06:00`; outside them the copy worker waits, and a copy still running when the window closes ends and resumes when it next opens (ADR 44). Backups to the primary are not held. |
 | `STORAGE_TARGET_<N>_BREAKGLASS_SFTP_USER` | all |  | SFTP storages: the user the printed envelope names, for read-only access (ADR 23). |
 | `STORAGE_TARGET_<N>_BREAKGLASS_SSH_KEY` (secret) | all |  | SFTP storages: the private key of BREAKGLASS_SFTP_USER, printed on the envelope (ADR 23). |
 | `STORAGE_TARGET_<N>_AZURE_ACCOUNT` | azure |  | Azure storage account. |

@@ -176,6 +176,10 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 			return err
 		}
 		w.InUseDir = l.InUseDir()
+		if t.CopyWindow != "" {
+			win, _ := config.ParseWindow(t.CopyWindow) // Validate refused a bad one
+			w.Window = &win
+		}
 		w.Upkeep = copier.Upkeep{
 			Own:        ownIDs(cfg, host),
 			Mirror:     cfg.PruneBackups,

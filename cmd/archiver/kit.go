@@ -48,6 +48,11 @@ func kitExecute(r *kit.Run, n *notify.Notifier) int {
 		if n.IsOpen("kit") {
 			n.Raise("kit", notify.Failure, "Recovery Kit Failed", "The recovery kit is not current on "+strings.Join(r.Skip, ", ")+": the storage is down, and the kit is placed when it is back.")
 		}
+	// Likewise one held for its copy window: an open incident stays open until it has the kit.
+	case len(r.Held) > 0:
+		if n.IsOpen("kit") {
+			n.Raise("kit", notify.Failure, "Recovery Kit Failed", "The recovery kit is not current on "+strings.Join(r.Held, ", ")+": it is placed there inside the storage's copy window.")
+		}
 	case code == kit.Unverified:
 		if n.IsOpen("kit") {
 			n.Raise("kit", notify.Failure, "Recovery Kit Failed", "The recovery kit was placed but could not be verified readable on every storage; it is placed again next run. See archiver.log.")
@@ -86,6 +91,10 @@ func recoveryKitCommand(args []string) (code int, ok bool) {
 	r.Force = force
 	switch kitExecute(r, n) {
 	case kit.OK:
+		if len(r.Held) > 0 {
+			fmt.Printf("Recovery kit placed: %s is current everywhere but %s, outside its copy window; it is placed there at a later run inside the window.\n", r.KitName(), strings.Join(r.Held, ", "))
+			return 0, true
+		}
 		fmt.Printf("Recovery kit complete: %s is current on all storage targets.\n", r.KitName())
 		return 0, true
 	case kit.Unverified:

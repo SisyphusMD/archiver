@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/layout"
@@ -47,6 +48,9 @@ type Run struct {
 	// Skip names (sanitized) the secondaries a copy worker reports failing: the backup must not
 	// wait on them. Unrecorded, they get the kit on a later run.
 	Skip []string
+	// Held is set by Execute: the secondaries left alone because their copy window was
+	// closed (ADR 44). They too get the kit on a later run.
+	Held []string
 	// PrimaryMarker, when set, is created once the primary holds the current kit, so the
 	// backup can tell a later failure or timeout is a secondary's.
 	PrimaryMarker string
@@ -136,11 +140,16 @@ func (r *Run) Execute() int {
 			r.warning(fmt.Sprintf("Recovery kit: skipping %s, which its copy worker reports failing; it is placed after the storage recovers.", name))
 			continue
 		}
-		if !r.Force && slices.Contains(recorded, name) {
+		// A storage holding the current kit keeps it, window or not; a forced refresh leaves
+		// one outside its window as it is.
+		if slices.Contains(recorded, name) && (!r.Force || windowClosed(t)) {
 			placed = append(placed, name)
-		} else {
-			pending = append(pending, t)
+			continue
 		}
+		if r.outsideWindow(t) {
+			continue
+		}
+		pending = append(pending, t)
 	}
 	if len(pending) == 0 || pending[0].N != 1 {
 		r.primaryHasKit()
@@ -163,6 +172,11 @@ func (r *Run) Execute() int {
 	failures, unverified, primaryFailed := 0, 0, false
 	for _, t := range pending {
 		name := t.StorageName()
+		// Again as each upload starts: building the kit or a slow upload before it can
+		// outlast the window.
+		if r.outsideWindow(t) {
+			continue
+		}
 		switch r.upload(t, kit, readme) {
 		case OK:
 			if t.N == 1 {
@@ -189,6 +203,26 @@ func (r *Run) Execute() int {
 		return Unverified
 	}
 	return OK
+}
+
+// outsideWindow reports whether t is a secondary whose copy window is closed now, noting it
+// in Held. Nothing is sent to it outside its hours, the kit included.
+func (r *Run) outsideWindow(t config.Target) bool {
+	if slices.Contains(r.Held, t.StorageName()) {
+		return true
+	}
+	if !windowClosed(t) {
+		return false
+	}
+	r.Held = append(r.Held, t.StorageName())
+	r.info(fmt.Sprintf("Recovery kit: %s is outside its copy window (%s); it gets the kit at a later run.", t.StorageName(), t.CopyWindow))
+	return true
+}
+
+// windowClosed reports whether t is a secondary whose copy window is closed now.
+func windowClosed(t config.Target) bool {
+	w, err := config.ParseWindow(t.CopyWindow)
+	return t.N > 1 && err == nil && !w.Open(time.Now())
 }
 
 func (r *Run) primaryHasKit() {
