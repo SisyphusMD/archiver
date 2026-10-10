@@ -21,11 +21,14 @@ services:
       # - SYS_ADMIN               # Only for a hook that takes btrfs snapshots (see README)
     security_opt:
       - no-new-privileges:true
+    # ports:
+    #   - "9469:9469"             # only with METRICS_PORT; logs/archiver.prom needs no port
 
     environment:
       BACKUP_SCHEDULE: "0 3 * * *"        # backup pipeline: daily at 3am (omit for manual mode)
       MAINTENANCE_SCHEDULE: "0 13 * * *"  # check + prune: daily at 1pm, opposite the backup window
       # RESTORE_DRILL_SCHEDULE: "0 5 * * 0"  # weekly restore drill (README "Restore drills")
+      # METRICS_PORT: "9469"      # serve Prometheus /metrics (README "Metrics"); publish it under ports: below
       TZ: "America/New_York"      # Timezone for scheduled backups and timestamps (default: UTC)
       # SYSTEMCTL_FORCE_BUS: "1"  # Enable systemctl access to host (requires socket mounts)
 

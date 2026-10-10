@@ -78,6 +78,7 @@ type Config struct {
 	Threads                  string
 	CheckInterval            string // CHECK_INTERVAL: the default for every target
 	AlertRepeatInterval      string // ALERT_REPEAT_INTERVAL: how often an ongoing failure re-notifies
+	MetricsPort              string // METRICS_PORT: serve /metrics there (ADR 35); empty serves nothing
 	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
 	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
 	// Restore drills (ADR 28); their schedule, RESTORE_DRILL_SCHEDULE, is the daemon's.
@@ -197,6 +198,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		Threads:                  src.Getenv("DUPLICACY_THREADS"),
 		CheckInterval:            src.Getenv("CHECK_INTERVAL"),
 		AlertRepeatInterval:      src.Getenv("ALERT_REPEAT_INTERVAL"),
+		MetricsPort:              src.Getenv("METRICS_PORT"),
 		Parallelism:              src.Getenv("BACKUP_PARALLELISM"),
 		HooksDir:                 src.Getenv("HOOKS_DIR"),
 		DrillServices:            src.Getenv("RESTORE_DRILL_SERVICES"),
@@ -346,6 +348,9 @@ func (c *Config) Validate(secretsDir string) error {
 	default:
 		return fmt.Errorf("PRUNE_EXHAUSTIVE_FREQUENCY must be one of: off, daily, weekly, monthly (got '%s').", c.PruneExhaustiveFrequency)
 	}
+	if err := CheckMetricsPort(c.MetricsPort); err != nil {
+		return err
+	}
 	if c.AlertRepeatInterval != "0" {
 		if _, err := ParseInterval(c.AlertRepeatInterval); err != nil {
 			return fmt.Errorf("ALERT_REPEAT_INTERVAL: %v, or 0 for never", err)
@@ -473,6 +478,17 @@ func (c *Config) TargetCheckInterval(t Target) time.Duration {
 		return d
 	}
 	return 24 * time.Hour
+}
+
+// CheckMetricsPort validates METRICS_PORT; empty is off.
+func CheckMetricsPort(port string) error {
+	if port == "" {
+		return nil
+	}
+	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+		return fmt.Errorf("METRICS_PORT must be a port number, 1 to 65535 (got '%s').", port)
+	}
+	return nil
 }
 
 // AlertRepeat is how often an ongoing failure is notified again (ADR 33): a day unless
