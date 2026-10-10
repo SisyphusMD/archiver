@@ -82,6 +82,11 @@ func migrateRestoredIn(src config.Source, host, dir string) {
 	if !configured {
 		return
 	}
+	// Migration runs the file, and with HOOKS_DIR set nothing in a service directory runs.
+	if cfg.HooksDir != "" {
+		fmt.Fprintf(os.Stderr, "WARNING: %s holds a restored %s, which backups refuse. It was not migrated, since with HOOKS_DIR set nothing in a service directory runs: remove it (your hooks are in HOOKS_DIR), or run 'archiver migrate hooks %s' if you mean to run it.\n", dir, hooks.Legacy, dir)
+		return
+	}
 	l := layout.Default()
 	lock, _, err := runlock.Acquire(l.BackupLock(), filepath.Join(l.Lock, "archiver-stop-requested"), "migrate", "hooks")
 	if err != nil {

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/SisyphusMD/archiver/internal/atomicfile"
 )
 
 // A service's stage in a backup.
@@ -22,12 +24,9 @@ const (
 // Record is one run in progress.
 type Record struct {
 	Started int64 `json:"started"`
-	// Services are a backup's service directories and their stages.
+	// Services are a backup's service directories and their stages, or the directories a
+	// drill restored into.
 	Services map[string]string `json:"services,omitempty"`
-	// Snapshots are the services' snapshot IDs, which name their hook state directories.
-	Snapshots map[string]string `json:"snapshots,omitempty"`
-	// Dir is where a drill restores.
-	Dir string `json:"dir,omitempty"`
 }
 
 // Unfinished reports whether the service at dir did not finish in the run recorded.
@@ -132,36 +131,16 @@ func syncDir(dir string) {
 	}
 }
 
-// write saves the record whole (written aside and renamed), so a crash mid-write leaves
-// the previous one, and synced, so a power cut after a pre-backup hook stopped something
-// still finds the hook recorded. Called under r.mu, or before r is shared.
+// write saves the record whole and synced (atomicfile), so a crash mid-write leaves the
+// previous one and a power cut after a pre-backup hook stopped something still finds the
+// hook recorded. Called under r.mu, or before r is shared.
 func (r *Run) write() error {
 	b, err := json.Marshal(r.rec)
 	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(r.path)
-	if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G301: the logs directory, readable as it always was
+	if err := os.MkdirAll(filepath.Dir(r.path), 0o755); err != nil { //nolint:gosec // G301: the logs directory, readable as it always was
 		return err
 	}
-	tmp := r.path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(b)
-	if err == nil {
-		err = f.Sync()
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, r.path); err != nil {
-		return err
-	}
-	syncDir(dir)
-	return nil
+	return atomicfile.Write(r.path, b, 0o600)
 }

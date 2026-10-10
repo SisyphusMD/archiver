@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/atomicfile"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 )
 
@@ -80,11 +81,7 @@ func Acquire(path, stopFlag, context, stage string) (l *Lock, stale bool, err er
 }
 
 func writeAtomic(path, content string) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
-		return err
-	}
-	return os.Rename(tmp, path)
+	return atomicfile.Write(path, []byte(content), 0o644)
 }
 
 // edit runs fn holding the kernel lock that serializes edits of the lock file at path: the

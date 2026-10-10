@@ -17,9 +17,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
@@ -436,7 +438,14 @@ func (e *Env) postRestore(dir, id string, rev int, t config.Target, stdin io.Rea
 	// A reader stdin is copied by a goroutine that may sit blocked on a terminal after the
 	// hook exits; don't wait for it long.
 	cmd.WaitDelay = time.Second
+	// If Archiver dies mid-hook, the kernel kills the hook (SIGKILL: it cannot be ignored),
+	// rather than leave it running without the restore lock while backups are free to start
+	// over what it changes. What it started in the background runs on, as it would anyway.
+	// The signal follows the thread that started the hook, so the goroutine keeps to it.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	runtime.LockOSThread()
 	err = cmd.Run()
+	runtime.UnlockOSThread()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		return exit.ExitCode(), nil

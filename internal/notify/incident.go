@@ -149,8 +149,11 @@ func newcomers(now, before []string) []string {
 // held is a send in flight, and one past it was a process that died mid-send.
 const claimLease = 5 * time.Minute
 
+// claimed reports whether another sender's claim on in still holds. One in the future is
+// no claim (a forged or corrupt timestamp must not hold every alert back until then).
 func claimed(in incident, now time.Time) bool {
-	return in.Sending != 0 && now.Sub(time.Unix(in.Sending, 0)) < claimLease
+	elapsed := now.Sub(time.Unix(in.Sending, 0))
+	return in.Sending != 0 && elapsed >= 0 && elapsed < claimLease
 }
 
 func (n *Notifier) configured(name string) bool {

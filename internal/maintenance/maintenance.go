@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/atomicfile"
 	"github.com/SisyphusMD/archiver/internal/checkin"
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/daemon"
@@ -631,9 +632,5 @@ func (s state) write(path string) error {
 		v := s[n]
 		fmt.Fprintf(&b, "%s %d %d %d\n", n, v[0], v[1], v[2])
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(b.String()), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return atomicfile.Write(path, []byte(b.String()), 0o600)
 }

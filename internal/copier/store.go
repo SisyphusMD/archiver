@@ -5,6 +5,8 @@ import (
 	"os"
 	"sort"
 	"sync"
+
+	"github.com/SisyphusMD/archiver/internal/atomicfile"
 )
 
 // Store keeps every worker's state in one file in the logs volume: status reads it, and a
@@ -76,9 +78,5 @@ func (s *Store) write(all map[string]State) error {
 	if err != nil {
 		return err
 	}
-	tmp := s.Path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
-		return err
-	}
-	return os.Rename(tmp, s.Path)
+	return atomicfile.Write(s.Path, append(b, '\n'), 0o644)
 }

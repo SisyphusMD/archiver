@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SisyphusMD/archiver/internal/atomicfile"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/proc"
 	"github.com/SisyphusMD/archiver/internal/runlock"
@@ -177,12 +178,7 @@ func moveFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	tmp := dst + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil { //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
-		return err
-	}
-	if err := os.Rename(tmp, dst); err != nil {
-		os.Remove(tmp)
+	if err := atomicfile.Write(dst, b, 0o600); err != nil {
 		return err
 	}
 	return os.Remove(src)
@@ -237,10 +233,5 @@ func writeIdentities(path string, urls map[string]string) error {
 	for _, n := range names {
 		fmt.Fprintf(&b, "%s %s\n", n, urls[n])
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(b.String()), 0o600); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return os.Rename(tmp, path)
+	return atomicfile.Write(path, []byte(b.String()), 0o600)
 }

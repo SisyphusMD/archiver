@@ -101,7 +101,15 @@
  		}
 --- a/src/duplicacy_entrylist.go
 +++ b/src/duplicacy_entrylist.go
-@@ -62,8 +62,12 @@
+@@ -10,6 +10,7 @@
+ 	"fmt"
+ 	"os"
+ 	"io"
++	"io/ioutil"
+ 	"path"
+ 	"crypto/sha256"
+ 	"crypto/rand"	
+@@ -62,8 +63,12 @@
  	uploadedChunkIndex int                  // counter for upload chunks
  	uploadedChunkOffset int                 // the start offset for the current modified entry
  
@@ -114,7 +122,7 @@
  // Create a new entry list
  func CreateEntryList(snapshotID string, cachePath string, maximumInMemoryEntries int) (*EntryList, error) {
  
-@@ -432,6 +436,94 @@
+@@ -432,6 +437,96 @@
  	LOG_INFO("INCOMPLETE_SAVE", "Incomplete snapshot saved to %s", filePath)	
  }
  
@@ -177,13 +185,15 @@
 +}
 +
 +// writeFileAtomically writes a file aside, syncs it, renames it into place and syncs the
-+// directory.
++// directory.  The file aside has a random name of its own, never one that could already
++// exist: the cache is inside the repository, and a link planted at a fixed name would be
++// written through.
 +func writeFileAtomically(filePath string, write func(io.Writer) error) error {
-+	temporary := filePath + ".tmp"
-+	file, err := os.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
++	file, err := ioutil.TempFile(path.Dir(filePath), "."+path.Base(filePath)+".*.tmp")
 +	if err != nil {
 +		return err
 +	}
++	temporary := file.Name()
 +	err = write(file)
 +	if err == nil {
 +		err = file.Sync()

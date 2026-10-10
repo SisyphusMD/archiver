@@ -284,8 +284,9 @@ jobs:
           # output, which prints the URL on auth failures. Works around the
           # actions/checkout@v6 + forgejo-runner extraheader quirk (#2321) by
           # setting the header explicitly per-command.
+          # Through git's environment configuration, not `git -c`, whose value would sit on the
+          # command line where another process on the runner could read it.
           AUTH_B64=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
-          git -c "http.extraheader=Authorization: Basic ${AUTH_B64}" \
-            push origin "HEAD:${{ github.ref_name }}"
-          git -c "http.extraheader=Authorization: Basic ${AUTH_B64}" \
-            push origin "${TAG}"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="Authorization: Basic ${AUTH_B64}"
+          git push origin "HEAD:${{ github.ref_name }}"
+          git push origin "${TAG}"
