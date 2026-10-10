@@ -24,6 +24,8 @@ The restore destination can be any path accessible within the container. If you 
 
 A restore refuses to start while a backup runs. A restore into a configured service directory (or a directory inside or above one) also keeps backups out until it ends, its restore hook included: a backup that starts meanwhile is skipped with a notification, since it would save the directory half-restored. Restores elsewhere do not affect backups.
 
+**Links in the destination.** A restore never writes through a symbolic link already in its destination: a link where the snapshot has a directory or a file is replaced with it when overwriting, and the restore stops otherwise, and nothing is restored below a linked directory it does not replace. What it cannot guard against is someone changing the destination *while* it restores (swapping a directory for a link between Duplicacy's check and its write), so restore into a directory only you and Archiver can write, or one nothing else is changing meanwhile: a fresh directory, or a service that is stopped.
+
 ## One-Off Restore with Temporary Container
 
 For a one-time restore without modifying your running container, start a temporary container and exec the interactive restore into it:
