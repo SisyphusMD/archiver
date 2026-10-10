@@ -1,6 +1,7 @@
 package kit
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -32,7 +33,7 @@ type oauthToken struct {
 // Duplicacy finds for itself: the named drive, else the user's own. An expired token is
 // refreshed through the user's app and written back to tokenFile (Duplicacy's writable
 // copy), as Duplicacy would.
-func oneDrive(tokenFile, clientID, clientSecret, driveID string) (token, id, driveType string, err error) {
+func oneDrive(ctx context.Context, tokenFile, clientID, clientSecret, driveID string) (token, id, driveType string, err error) {
 	b, err := os.ReadFile(tokenFile)
 	if err != nil {
 		return "", "", "", err
@@ -42,7 +43,7 @@ func oneDrive(tokenFile, clientID, clientSecret, driveID string) (token, id, dri
 		return "", "", "", fmt.Errorf("the OneDrive token file is not JSON: %v", err)
 	}
 	if !tokenLifetime(t.Expiry) || t.AccessToken == "" {
-		if t, err = refreshMS(t, clientID, clientSecret); err != nil {
+		if t, err = refreshMS(ctx, t, clientID, clientSecret); err != nil {
 			return "", "", "", err
 		}
 		out, _ := json.Marshal(t)
@@ -54,7 +55,7 @@ func oneDrive(tokenFile, clientID, clientSecret, driveID string) (token, id, dri
 	if driveID != "" {
 		drive = graphURL + "/drives/" + url.PathEscape(driveID)
 	}
-	req, err := http.NewRequest("GET", drive+"?$select=id,driveType", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", drive+"?$select=id,driveType", nil)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -80,12 +81,17 @@ func oneDrive(tokenFile, clientID, clientSecret, driveID string) (token, id, dri
 
 // refreshMS trades a refresh token for a new access token at Microsoft's token endpoint. The
 // credentials travel in the request body, never a URL or argv.
-func refreshMS(t oauthToken, clientID, clientSecret string) (oauthToken, error) {
+func refreshMS(ctx context.Context, t oauthToken, clientID, clientSecret string) (oauthToken, error) {
 	if t.RefreshToken == "" {
 		return t, fmt.Errorf("the OneDrive token has expired and holds no refresh token")
 	}
 	form := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {t.RefreshToken}, "client_id": {clientID}, "client_secret": {clientSecret}}
-	resp, err := oneDriveHTTP.Post(msTokenURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", msTokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return t, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := oneDriveHTTP.Do(req)
 	if err != nil {
 		return t, fmt.Errorf("refreshing the OneDrive token: %v", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -508,5 +509,17 @@ func TestDownDeclaredAtThirtyMinutes(t *testing.T) {
 	}
 	if got := time.Unix(w.State().DownSince, 0).Sub(t0); got != 30*time.Minute {
 		t.Fatalf("declared down after %v, want 30m", got)
+	}
+}
+
+// A target the probe cannot reach fails the pass at once, without preparing or copying.
+func TestProbeFailsFast(t *testing.T) {
+	r := &fakeRunner{local: revs("a:1"), target: revs()}
+	rec := &recorder{}
+	w, _ := newWorker(r, rec, State{})
+	w.Probe = func(context.Context) error { return errors.New("dial tcp: connection refused") }
+	w.pass(w.stops, nil)
+	if s := w.State(); s.Status != Retrying || !strings.Contains(s.LastError, "cannot be reached") || r.copies != 0 {
+		t.Fatalf("state %+v, copies %d", s, r.copies)
 	}
 }

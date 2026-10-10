@@ -2,6 +2,7 @@ package kit
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,7 +19,7 @@ import (
 // (config.Types), plus what needs local state: the SSH key and host keys for SFTP, rclone's
 // obscured form of a password, a Google Drive token file's contents, OneDrive's writable
 // token. Credentials only ever travel in this environment, never argv or disk.
-func (r *Run) remote(t config.Target) (map[string]string, string, error) {
+func (r *Run) remote(ctx context.Context, t config.Target) (map[string]string, string, error) {
 	typ, ok := config.Types[t.Type]
 	if !ok || typ.Remote == nil {
 		return nil, "", fmt.Errorf("no recovery-kit remote for storage type %s", t.Type)
@@ -26,7 +27,7 @@ func (r *Run) remote(t config.Target) (map[string]string, string, error) {
 	settings, dir := typ.Remote(t.Values)
 	switch t.Type {
 	case "sftp", "sftpc":
-		known, algorithms, err := r.knownHosts(t)
+		known, algorithms, err := r.knownHosts(ctx, t)
 		if err != nil {
 			return nil, "", err
 		}
@@ -38,6 +39,12 @@ func (r *Run) remote(t config.Target) (map[string]string, string, error) {
 		for k, v := range map[string]string{"KEY_FILE": r.Layout.SSHPrivateKey(), "KNOWN_HOSTS_FILE": known,
 			"SHELL_TYPE": "none", "SET_MODTIME": "false", "HOST_KEY_ALGORITHMS": algorithms} {
 			settings[k] = v
+		}
+		// sftpc is Duplicacy's compatibility mode: the same older ciphers and key exchanges
+		// it offers, so whatever server it reaches, rclone reaches too.
+		if t.Type == "sftpc" {
+			settings["CIPHERS"] = "aes128-ctr aes192-ctr aes256-ctr aes128-gcm@openssh.com chacha20-poly1305@openssh.com arcfour256 arcfour128 arcfour aes128-cbc 3des-cbc"
+			settings["KEY_EXCHANGE"] = "curve25519-sha256@libssh.org ecdh-sha2-nistp256 ecdh-sha2-nistp384 ecdh-sha2-nistp521 diffie-hellman-group1-sha1 diffie-hellman-group14-sha1 diffie-hellman-group-exchange-sha1 diffie-hellman-group-exchange-sha256"
 		}
 	case "webdav", "webdav-http", "smb":
 		obscured, err := r.obscure(settings["PASS"])
@@ -51,7 +58,7 @@ func (r *Run) remote(t config.Target) (map[string]string, string, error) {
 			if !f.Rotates {
 				continue
 			}
-			token, id, driveType, err := oneDrive(config.WritableToken(t, f), t.Get(pre+"CLIENT_ID"), t.Get(pre+"CLIENT_SECRET"), t.Get(pre+"DRIVE_ID"))
+			token, id, driveType, err := oneDrive(ctx, config.WritableToken(t, f), t.Get(pre+"CLIENT_ID"), t.Get(pre+"CLIENT_SECRET"), t.Get(pre+"DRIVE_ID"))
 			if err != nil {
 				return nil, "", err
 			}
@@ -90,7 +97,7 @@ func (r *Run) rclone() string {
 
 // upload places the kit and its README on t, returning OK, Failed or Unverified.
 func (r *Run) upload(t config.Target, kit, readme string) int {
-	settings, dir, err := r.remote(t)
+	settings, dir, err := r.remote(context.Background(), t)
 	if err != nil {
 		r.warning(fmt.Sprintf("Recovery kit: cannot reach storage '%s': %v", t.Name, err))
 		return Failed
@@ -215,7 +222,7 @@ func symbolicMode(perms string) os.FileMode {
 // knownHosts is the host-key file for t's server and the key algorithms trusted for it,
 // adding the server's keys the first time (trust on first use, as ssh's accept-new: a later
 // change of key fails the connection).
-func (r *Run) knownHosts(t config.Target) (path, algorithms string, err error) {
+func (r *Run) knownHosts(ctx context.Context, t config.Target) (path, algorithms string, err error) {
 	dir := filepath.Join(os.Getenv("HOME"), ".ssh")
 	if dir == ".ssh" {
 		dir = "/root/.ssh"
@@ -232,7 +239,7 @@ func (r *Run) knownHosts(t config.Target) (path, algorithms string, err error) {
 	if port == "" {
 		port = "22"
 	}
-	keys, err := exec.Command("ssh-keyscan", "-T", "15", "-p", port, t.Get("SFTP_URL")).Output()
+	keys, err := exec.CommandContext(ctx, "ssh-keyscan", "-T", "15", "-p", port, t.Get("SFTP_URL")).Output()
 	if err != nil || len(bytes.TrimSpace(keys)) == 0 {
 		return "", "", fmt.Errorf("no host key from %s:%s", t.Get("SFTP_URL"), port)
 	}
@@ -286,7 +293,7 @@ func trusted(path, host string) string {
 }
 
 func (r *Run) sftp(t config.Target, batch string) ([]byte, error) {
-	known, _, err := r.knownHosts(t)
+	known, _, err := r.knownHosts(context.Background(), t)
 	if err != nil {
 		return nil, err
 	}

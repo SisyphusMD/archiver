@@ -17,6 +17,10 @@ type ServiceResult struct {
 // directory, which backup health reads (ADR 32).
 type BackupState struct {
 	Services map[string]ServiceResult `json:"services,omitempty"`
+	// Primary is the URL of the primary storage a backup last succeeded on: once it holds
+	// backups, its config missing means the storage is gone (an unmounted volume), never
+	// a storage to create anew (ADR 34).
+	Primary string `json:"primary,omitempty"`
 }
 
 // ReadBackupState reads the backup state; a missing file is an empty state.

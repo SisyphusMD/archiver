@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +41,9 @@ type Backup struct {
 	Duplicacy       string   // the duplicacy binary
 	RecoveryKitStep []string // the kit step's command line: `archiver recovery-kit-step`
 	Signals         <-chan os.Signal
+	// Probe checks a storage can be reached (ADR 34) and whether its config is there; nil
+	// means kit.Probe. inUse: the storage is known to exist, so a missing one is gone.
+	Probe func(t config.Target, inUse bool) (exists bool, err error)
 
 	cfg    *config.Config
 	log    *logging.Log
@@ -60,6 +64,17 @@ type Backup struct {
 	failing  map[string]bool // secondaries the workers report retrying or down
 
 	reported bool // the run's outcome was notified
+
+	// primaryDown: the primary was found unreachable, so no further service starts and
+	// the one PRIMARY DOWN notification stands for the run's failure (ADR 34).
+	primaryDown atomic.Bool
+	downOnce    sync.Once
+	downErr     error
+	// unreachable are the secondaries found down at the start, skipped for the run: not
+	// registered, not copied (ADR 34).
+	unreachable map[string]bool
+	// primaryExisted: the first probe found the primary's config, so it must stay there.
+	primaryExisted bool
 }
 
 // Run runs the pipeline and returns its exit code.
@@ -199,6 +214,35 @@ func (b *Backup) verifyConfig() ([]string, bool) {
 }
 
 func (b *Backup) main(dirs []string) int {
+	// The primary first: down, no service is worth starting (its pre hook would stop a
+	// database for a backup that cannot happen).
+	exists, err := b.probe(b.cfg.Targets[0], b.primaryInUse())
+	b.primaryExisted = exists
+	if err != nil {
+		if b.stopped() {
+			return b.handleStop() // the stop ended the probe, not an outage
+		}
+		b.lostPrimary(err)
+		for _, dir := range dirs {
+			b.skipForPrimary(dir)
+		}
+		b.notifyPrimaryDown()
+		b.lock.Record("completed")
+		b.complete()
+		return b.exitCode()
+	}
+	// Without copy workers the secondaries are registered and copied inline: one probe
+	// each now, so one that is down is skipped throughout rather than retried per service.
+	if !b.workers {
+		b.unreachable = map[string]bool{}
+		for _, t := range b.cfg.Targets[1:] {
+			if _, err := b.probe(t, false); err != nil && !b.stopped() {
+				b.unreachable[t.StorageName()] = true
+				b.log.Message(logging.Error, t.StorageName(), fmt.Sprintf("Copy to %s storage skipped: it cannot be reached (%v). It is copied at the next run.", t.StorageName(), err))
+			}
+		}
+	}
+	b.notify.Clear("primary-down", "Primary Storage Back", fmt.Sprintf("Primary storage '%s' can be reached again.", b.cfg.Targets[0].Name))
 	n, _ := b.cfg.BackupParallelism() // validated with the rest of the configuration
 	groups := groupServices(dirs, n)
 	ok := make([]bool, len(dirs))
@@ -220,6 +264,10 @@ func (b *Backup) main(dirs []string) int {
 				if stop.Load() || b.stopped() {
 					return
 				}
+				if b.primaryDown.Load() {
+					b.skipForPrimary(dirs[i])
+					continue
+				}
 				var s bool
 				ok[i], s = b.processService(dirs[i])
 				if s {
@@ -230,8 +278,24 @@ func (b *Backup) main(dirs []string) int {
 		}()
 	}
 	wg.Wait()
+	// Sent once every service's post hook has run: what a pre hook stopped is not kept
+	// down while a notification is delivered.
+	b.notifyPrimaryDown()
 	if stop.Load() {
 		return b.handleStop()
+	}
+	// Copies and the kit read or write the primary: probed again first, since the last
+	// service may have finished long ago. Gone, they could only fail slowly.
+	if !b.primaryDown.Load() && !b.stopped() {
+		if _, err := b.probe(b.cfg.Targets[0], b.primaryExisted || b.primaryInUse()); err != nil && !b.stopped() {
+			b.lostPrimary(err)
+			b.notifyPrimaryDown()
+		}
+	}
+	if b.primaryDown.Load() {
+		b.lock.Record("completed")
+		b.complete()
+		return b.exitCode()
 	}
 	// The copies run from the last service in order that backed up, as they did one by one.
 	lastWorking := ""
@@ -259,6 +323,11 @@ func (b *Backup) main(dirs []string) int {
 		b.copies(lastWorking)
 		if b.stopped() {
 			return b.handleStop()
+		}
+		if b.primaryDown.Load() { // lost during the copies: the kit could not be read either
+			b.lock.Record("completed")
+			b.complete()
+			return b.exitCode()
 		}
 	}
 	b.recoveryKit()
@@ -408,6 +477,12 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 	if hasPre {
 		b.waitWhilePaused()
 	}
+	// The primary may have been found down while this service waited (a pause, a slot):
+	// its pre hook would stop something for a backup that cannot happen.
+	if b.primaryDown.Load() {
+		b.skipForPrimary(svc.Dir)
+		return false, false
+	}
 	if hasPre && b.stopped() {
 		// Stopped before the pre hook ran: there is nothing for a post hook to undo either.
 		result = hooks.Stopped
@@ -440,6 +515,13 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 		code, err := hooks.Run(b.log, b.Environ, svc, hooks.PostBackup, result)
 		if err != nil || code != 0 {
 			log(logging.Error, fmt.Sprintf("Post-backup hook failed for %s service (%s); check that whatever its pre hook stopped is running again.", svc.Name, exitText(code, err)))
+		}
+	}
+	// A failed backup may be the primary gone mid-run: probed again, so the rest are not
+	// each tried against it. After the post hook, which must not wait on the probe.
+	if result == hooks.Failed && !b.isSignaled() {
+		if _, err := b.probe(b.cfg.Targets[0], b.primaryExisted || b.primaryInUse()); err != nil && !b.stopped() {
+			b.lostPrimary(err)
 		}
 	}
 	// After the post hook: recording can notify, which may take a minute, and whatever the
@@ -631,6 +713,12 @@ func (b *Backup) addStorages(svc hooks.Service, log func(string, string)) {
 	}
 	primary := b.cfg.Targets[0].StorageName()
 	for _, t := range b.cfg.Targets[1:] {
+		b.mu.Lock()
+		down := b.unreachable[t.StorageName()]
+		b.mu.Unlock()
+		if down {
+			continue
+		}
 		url, err := t.URL()
 		if err != nil {
 			log(logging.Error, err.Error()+".")
@@ -641,6 +729,14 @@ func (b *Backup) addStorages(svc hooks.Service, log func(string, string)) {
 			filepath.Join(b.Layout.Root, "keys", "public.pem"), t.StorageName(), svc.SnapshotID, url)
 		if b.runInit(t.StorageName(), spec) != 0 {
 			log(logging.Error, fmt.Sprintf("Failed to add %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
+			// Gone since the start: skipped for the rest of the run, not retried per service.
+			if _, err := b.probe(t, false); err != nil && !b.stopped() {
+				b.mu.Lock()
+				b.unreachable[t.StorageName()] = true
+				b.mu.Unlock()
+				log(logging.Error, fmt.Sprintf("Copy to %s storage skipped: it cannot be reached (%v). It is copied at the next run.", t.StorageName(), err))
+				continue
+			}
 			if why := kit.Diagnose(b.Layout, "", t); why != "" {
 				log(logging.Error, why)
 			}
@@ -706,11 +802,29 @@ func (b *Backup) copies(dir string) {
 		return
 	}
 	var names []string
+	b.mu.Lock()
 	for _, t := range b.cfg.Targets[1:] {
-		names = append(names, t.StorageName())
+		if !b.unreachable[t.StorageName()] { // found down earlier and reported then
+			names = append(names, t.StorageName())
+		}
 	}
+	b.mu.Unlock()
+	if len(names) == 0 {
+		return
+	}
+	names = b.reachable(names)
 	failed := b.copyLegs(dir, names)
 	if len(failed) == 0 || b.isSignaled() {
+		return
+	}
+	// One that went down since is skipped, not retried against; so is every one if the
+	// primary they copy from has gone.
+	if _, err := b.probe(b.cfg.Targets[0], b.primaryExisted || b.primaryInUse()); err != nil && !b.stopped() {
+		b.lostPrimary(err)
+		b.notifyPrimaryDown()
+		return
+	}
+	if failed = b.reachable(failed); len(failed) == 0 {
 		return
 	}
 	b.log.Message(logging.Warning, "", "Retrying failed copies once: "+strings.Join(failed, " ")+".")
@@ -829,6 +943,73 @@ func (b *Backup) recoveryKit() {
 	}
 }
 
+func (b *Backup) probe(t config.Target, inUse bool) (bool, error) {
+	if b.Probe != nil {
+		return b.Probe(t, inUse)
+	}
+	ctx := b.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return kit.Probe(ctx, b.Layout, t, inUse)
+}
+
+// reachable keeps the secondaries named that can be reached now, reporting each that
+// cannot as skipped.
+func (b *Backup) reachable(names []string) []string {
+	var out []string
+	for _, t := range b.cfg.Targets[1:] {
+		if !slices.Contains(names, t.StorageName()) {
+			continue
+		}
+		if _, err := b.probe(t, false); err != nil && !b.stopped() {
+			b.mu.Lock()
+			b.unreachable[t.StorageName()] = true
+			b.mu.Unlock()
+			b.log.Message(logging.Error, t.StorageName(), fmt.Sprintf("Copy to %s storage skipped: it cannot be reached (%v). It is copied at the next run.", t.StorageName(), err))
+			continue
+		}
+		out = append(out, t.StorageName())
+	}
+	return out
+}
+
+// primaryInUse reports whether the configured primary already holds backups: then its
+// config must be there, and a missing one is the storage gone (an unmounted volume) rather
+// than one for the first backup to create.
+func (b *Backup) primaryInUse() bool {
+	s, err := lockstate.ReadBackupState(b.Layout.BackupState())
+	url, uerr := b.cfg.Targets[0].URL()
+	return err == nil && uerr == nil && s.Primary != "" && s.Primary == url
+}
+
+// lostPrimary marks the primary unreachable, so no further service starts; the alert
+// goes out once the services are done (notifyPrimaryDown).
+func (b *Backup) lostPrimary(err error) {
+	b.downOnce.Do(func() {
+		b.downErr = err
+		b.primaryDown.Store(true)
+		b.log.Message(logging.Error, "", fmt.Sprintf("PRIMARY DOWN: storage '%s' cannot be reached (%v); no further service is backed up this run.", b.cfg.Targets[0].Name, err))
+	})
+}
+
+// notifyPrimaryDown sends the run's one PRIMARY DOWN notification, if the primary was lost.
+func (b *Backup) notifyPrimaryDown() {
+	if !b.primaryDown.Load() {
+		return
+	}
+	b.notify.Raise("primary-down", notify.Critical, "PRIMARY DOWN", fmt.Sprintf("Primary storage '%s' cannot be reached (%v), so no backups are being made. Archiver tries again at the next scheduled backup.", b.cfg.Targets[0].Name, b.downErr))
+}
+
+// skipForPrimary reports a service not started because the primary is down.
+func (b *Backup) skipForPrimary(dir string) {
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	b.log.Message(logging.Error, filepath.Base(dir), fmt.Sprintf("Skipped: primary storage '%s' is down.", b.cfg.Targets[0].Name))
+	b.record(dir, hooks.Skipped, time.Now())
+}
+
 // record keeps the outcome for the service in dir for backup health (ADR 32), by
 // directory: two directories of one name are one snapshot ID but separate outcomes.
 // Services back up in parallel, so the state file is edited under mu.
@@ -847,6 +1028,9 @@ func (b *Backup) record(dir, result string, began time.Time) {
 	r.LastAttempt, r.Result, r.Seconds = now.Unix(), result, int64(now.Sub(began).Seconds())
 	if result == hooks.Success {
 		r.LastSuccess = now.Unix()
+		if url, err := b.cfg.Targets[0].URL(); err == nil {
+			s.Primary = url
+		}
 	}
 	s.Services[dir] = r
 	err = lockstate.WriteBackupState(path, s)
@@ -873,6 +1057,11 @@ func (b *Backup) startPlain(path string, args ...string) (*proc.Proc, error) {
 	for n := range b.failing {
 		names = append(names, n)
 	}
+	for n := range b.unreachable {
+		if !b.failing[n] {
+			names = append(names, n)
+		}
+	}
 	b.mu.Unlock()
 	if len(names) > 0 {
 		sort.Strings(names)
@@ -898,6 +1087,9 @@ func (b *Backup) complete() {
 	// backup incident with them, a clean one closes it. The kit's errors are the kit's own
 	// incident, raised by its step, and a notification that failed is not the backup's.
 	b.reported = true
+	if b.primaryDown.Load() {
+		return // the PRIMARY DOWN notification is this run's one
+	}
 	// The run got as far as the services: whatever stopped an earlier one before them is over.
 	b.notify.Clear("backup-aborted", "Backup Recovered", "Backups run again.")
 	if b.log.Reportable() > 0 {

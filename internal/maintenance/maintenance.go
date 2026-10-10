@@ -8,6 +8,7 @@ package maintenance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/damage"
+	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/localprune"
 	"github.com/SisyphusMD/archiver/internal/logging"
@@ -30,6 +32,8 @@ import (
 
 // Run is one maintenance run.
 type Run struct {
+	// Probe checks a storage can be reached (ADR 34); nil means kit.Probe.
+	Probe           func(config.Target) error
 	Layout          layout.Layout
 	Source          config.Source
 	Environ         []string
@@ -166,6 +170,18 @@ func (r *Run) main() {
 		}
 	}
 
+	// Probed before anything contacts them (ADR 34). The secondaries are registered through
+	// the primary, so a primary that cannot be reached fails the run; an unreachable
+	// secondary fails alone, in seconds, and the others are still maintained.
+	if err := r.probe(cfg.Targets[0]); errors.Is(err, errStopped) {
+		r.endStopped()
+		return
+	} else if err != nil {
+		name := cfg.Targets[0].StorageName()
+		r.log.Message(logging.Error, name, fmt.Sprintf("Storage %s cannot be reached (%v), and the others are registered through it: nothing is maintained this run.", name, err))
+		r.lock.Record("failed")
+		return
+	}
 	switch stopped, err := r.watched(r.prepare); {
 	case stopped:
 		r.endStopped()
@@ -177,6 +193,14 @@ func (r *Run) main() {
 	}
 	for i := 0; i < last; i++ {
 		if i > 0 {
+			if err := r.probe(cfg.Targets[i]); errors.Is(err, errStopped) {
+				r.endStopped()
+				return
+			} else if err != nil {
+				name := cfg.Targets[i].StorageName()
+				r.log.Message(logging.Error, name, fmt.Sprintf("Storage %s cannot be reached (%v); its check and prune are skipped this run.", name, err))
+				continue
+			}
 			// A secondary that cannot be registered fails on its own, as its check would.
 			stopped, err := r.watched(func(ctx context.Context) error { return r.addSecondary(ctx, i) })
 			if stopped {
@@ -288,6 +312,7 @@ func (r *Run) storage(i int) bool {
 				msg = "Storage check failed for " + name + "; " + d + "."
 			}
 			r.log.Message(logging.Error, name, msg)
+
 		default:
 			state.set(name, fieldCheck, r.Now().Unix())
 			state.write(r.Layout.MaintenanceState())
@@ -301,6 +326,13 @@ func (r *Run) storage(i int) bool {
 		return true
 	}
 
+	// Probed before the prune too: a check can take hours, and the storage go meanwhile.
+	if err := r.probe(t); errors.Is(err, errStopped) {
+		return false
+	} else if err != nil {
+		r.log.Message(logging.Error, name, fmt.Sprintf("Storage %s cannot be reached (%v); its prune is skipped this run.", name, err))
+		return true
+	}
 	exhaustive := r.exhaustiveDue(state, name)
 	if exhaustive {
 		r.log.Message(logging.Info, name, fmt.Sprintf("Exhaustive prune due for %s (frequency: %s).", name, r.cfg.PruneExhaustiveFrequency))
@@ -408,6 +440,25 @@ func (r *Run) exhaustiveDue(s state, name string) bool {
 
 // duplicacy runs one duplicacy command in the repository, ending it when a stop comes;
 // stopped reports that.
+// errStopped is a probe a stop ended: not an outage, the run's end.
+var errStopped = errors.New("stopped")
+
+// probe, as the copy workers do, takes a storage without its directory for one not created
+// yet: maintenance may run before the first backup.
+func (r *Run) probe(t config.Target) error {
+	if r.Probe != nil {
+		return r.Probe(t)
+	}
+	stopped, err := r.watched(func(ctx context.Context) error {
+		_, err := kit.Probe(ctx, r.Layout, t, false)
+		return err
+	})
+	if stopped {
+		return errStopped
+	}
+	return err
+}
+
 func (r *Run) duplicacy(service string, args ...string) (code int, stopped bool) {
 	return r.duplicacyTo(service, nil, args...)
 }
