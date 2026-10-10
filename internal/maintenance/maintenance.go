@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/checkin"
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/damage"
@@ -179,6 +180,7 @@ func (r *Run) main() {
 	} else if err != nil {
 		name := cfg.Targets[0].StorageName()
 		r.log.Message(logging.Error, name, fmt.Sprintf("Storage %s cannot be reached (%v), and the others are registered through it: nothing is maintained this run.", name, err))
+		r.checkin(cfg.Targets[0], false, "cannot be reached")
 		r.lock.Record("failed")
 		return
 	}
@@ -199,6 +201,7 @@ func (r *Run) main() {
 			} else if err != nil {
 				name := cfg.Targets[i].StorageName()
 				r.log.Message(logging.Error, name, fmt.Sprintf("Storage %s cannot be reached (%v); its check and prune are skipped this run.", name, err))
+				r.checkin(cfg.Targets[i], false, "cannot be reached")
 				continue
 			}
 			// A secondary that cannot be registered fails on its own, as its check would.
@@ -210,6 +213,7 @@ func (r *Run) main() {
 			if err != nil {
 				name := cfg.Targets[i].StorageName()
 				r.log.Message(logging.Error, name, fmt.Sprintf("Cannot maintain %s this run: %v", name, err))
+				r.checkin(cfg.Targets[i], false, "cannot be registered")
 				continue
 			}
 		}
@@ -312,11 +316,12 @@ func (r *Run) storage(i int) bool {
 				msg = "Storage check failed for " + name + "; " + d + "."
 			}
 			r.log.Message(logging.Error, name, msg)
-
+			r.checkin(t, false, msg)
 		default:
 			state.set(name, fieldCheck, r.Now().Unix())
 			state.write(r.Layout.MaintenanceState())
 			r.log.Message(logging.Info, name, fmt.Sprintf("Storage check completed for %s in %s.", name, since(began, r.Now())))
+			r.checkin(t, true, "check passed")
 		}
 	}
 	if r.stopRequested() {
@@ -440,6 +445,23 @@ func (r *Run) exhaustiveDue(s state, name string) bool {
 
 // duplicacy runs one duplicacy command in the repository, ending it when a stop comes;
 // stopped reports that.
+// checkin tells the storage's check-in URL how its check went (ADR 37), as its copy worker
+// would when it keeps it.
+func (r *Run) checkin(t config.Target, ok bool, msg string) {
+	if t.CheckinURL == "" {
+		return
+	}
+	// Ended by a stop like the rest of the run.
+	_, err := r.watched(func(ctx context.Context) error {
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		return checkin.Ping(ctx, t.CheckinURL, ok, msg)
+	})
+	if err != nil && !r.stopRequested() {
+		r.log.Message(logging.Warning, t.StorageName(), fmt.Sprintf("The check-in to STORAGE_TARGET_%d_CHECKIN_URL failed: %v", t.N, err))
+	}
+}
+
 // errStopped is a probe a stop ended: not an outage, the run's end.
 var errStopped = errors.New("stopped")
 

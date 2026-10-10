@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/checkin"
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/daemon"
@@ -144,11 +145,25 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 			Diagnose: func(t config.Target) string { return kit.Diagnose(l, "", t) },
 		}
 		n := notifier()
+		pings := &checkin.Latest{}
 		w := copier.New(name, cfg.Targets[0].StorageName(), d, realClock{}, copier.Events{
 			Log:   func(level, msg string) { log.Message(level, name, msg) },
 			Raise: n.Raise,
 			Clear: n.Clear,
-			Save:  func(s copier.State) { store.Save(s) },
+			// In the background: a monitor that stalls must not hold up the worker, or its stop.
+			Checkin: func(ok bool, msg string) {
+				if t.CheckinURL == "" {
+					return
+				}
+				pings.Send(func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+					defer cancel()
+					if err := checkin.Ping(ctx, t.CheckinURL, ok, msg); err != nil {
+						log.Message(logging.Warning, name, fmt.Sprintf("The check-in to STORAGE_TARGET_%d_CHECKIN_URL failed: %v", t.N, err))
+					}
+				})
+			},
+			Save: func(s copier.State) { store.Save(s) },
 		}, saved[name])
 		w.CopyLock = l.CopyLock
 		// The primary too: every copy reads it.

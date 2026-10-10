@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/checkin"
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/daemon"
@@ -78,6 +79,10 @@ type Backup struct {
 	// primaryExisted: the first probe found the primary's config, so it must stay there.
 	primaryExisted bool
 	stats          map[string]backupStats // each service's backup, by directory, under mu
+	kitFailed      bool                   // the recovery kit step failed: not a good run
+	// halt ends only on a stop (runContext); under mu.
+	halt       context.Context
+	haltCancel context.CancelFunc
 }
 
 // Run runs the pipeline and returns its exit code.
@@ -91,6 +96,7 @@ func (b *Backup) Run() int {
 			b.notify = &notify.Notifier{Incidents: b.Layout.Incidents()}
 		}
 		b.notify.Raise("backup-aborted", notify.Failure, "Backup Failed", b.log.Summary())
+		b.checkin(false, "The backup failed before backing up any service.")
 	}
 	// The run's outcome in the metrics textfile at once (ADR 35), for deployments run by an
 	// external scheduler with no daemon to refresh it.
@@ -128,6 +134,7 @@ func (b *Backup) pipeline() int {
 		// A refused scheduled run is a day without a backup, so it must not pass silently.
 		b.notify.Raise("backup-skipped", notify.Failure, "Backup Skipped", fmt.Sprintf("A backup was not started because the previous run is still going (PID %d, stage %s, started %s).",
 			h.PID, h.Stage, logging.Timestamp(h.StartedAt())))
+		b.checkin(false, "A backup was not started: the previous run is still going.")
 		return 1
 	}
 	if err != nil {
@@ -146,6 +153,7 @@ func (b *Backup) pipeline() int {
 		lock.Release()
 		fmt.Fprintln(b.Stderr, "A restore into a service directory is running. Not starting a backup.")
 		b.notify.Raise("backup-skipped", notify.Failure, "Backup Skipped", "A backup was not started because a restore into a service directory is running; it would have saved the directory half-restored.")
+		b.checkin(false, "A backup was not started: a restore into a service directory is running.")
 		return 1
 	default:
 		f.Close()
@@ -818,6 +826,9 @@ func (b *Backup) copies(dir string) {
 	if len(b.cfg.Targets) < 2 {
 		return
 	}
+	// However the copies end, each secondary's check-in hears how its own went.
+	var final []string
+	defer func() { b.targetCheckins(final) }()
 	var names []string
 	b.mu.Lock()
 	for _, t := range b.cfg.Targets[1:] {
@@ -831,6 +842,7 @@ func (b *Backup) copies(dir string) {
 	}
 	names = b.reachable(names)
 	failed := b.copyLegs(dir, names)
+	final = failed
 	if len(failed) == 0 || b.isSignaled() {
 		return
 	}
@@ -845,8 +857,35 @@ func (b *Backup) copies(dir string) {
 		return
 	}
 	b.log.Message(logging.Warning, "", "Retrying failed copies once: "+strings.Join(failed, " ")+".")
-	for _, n := range b.copyLegs(dir, failed) {
+	final = b.copyLegs(dir, failed)
+	for _, n := range final {
 		b.log.Message(logging.Error, n, fmt.Sprintf("Copy to %s storage failed after retry.", n))
+	}
+}
+
+// targetCheckins tells each secondary's check-in URL how its inline copy went (ADR 37), as
+// a copy worker would: failed if its copy failed or it could not be reached.
+func (b *Backup) targetCheckins(failed []string) {
+	if b.isSignaled() || b.primaryDown.Load() {
+		return
+	}
+	for _, t := range b.cfg.Targets[1:] {
+		if t.CheckinURL == "" {
+			continue
+		}
+		b.mu.Lock()
+		down := b.unreachable[t.StorageName()]
+		b.mu.Unlock()
+		ok := !down && !slices.Contains(failed, t.StorageName())
+		msg := "copied"
+		if !ok {
+			msg = "copy failed"
+		}
+		ctx, cancel := context.WithTimeout(b.runContext(), 2*time.Minute)
+		if err := checkin.Ping(ctx, t.CheckinURL, ok, msg); err != nil {
+			b.log.Message(logging.Warning, t.StorageName(), fmt.Sprintf("The check-in to STORAGE_TARGET_%d_CHECKIN_URL failed: %v", t.N, err))
+		}
+		cancel()
 	}
 }
 
@@ -956,6 +995,7 @@ func (b *Backup) recoveryKit() {
 	default:
 		if !b.isSignaled() {
 			b.log.AddErrors(1)
+			b.kitFailed = true
 		}
 	}
 }
@@ -989,6 +1029,34 @@ func (b *Backup) reachable(names []string) []string {
 		out = append(out, t.StorageName())
 	}
 	return out
+}
+
+// checkin tells CHECKIN_URL how the run went (ADR 37). A ping that fails is a warning: the
+// monitor alerts on the silence itself.
+func (b *Backup) checkin(ok bool, msg string) {
+	if b.cfg == nil || b.cfg.CheckinURL == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(b.runContext(), 2*time.Minute)
+	defer cancel()
+	if err := checkin.Ping(ctx, b.cfg.CheckinURL, ok, msg); err != nil {
+		b.log.Message(logging.Warning, "", "The check-in to CHECKIN_URL failed: "+err.Error())
+	}
+}
+
+// runContext ends only when the run is stopped, so nothing it waits on holds up a stop. It
+// outlives the pipeline's own context, which also ends when the pipeline returns: a run that
+// ended on its own still sends what it reports afterwards.
+func (b *Backup) runContext() context.Context {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.halt == nil {
+		b.halt, b.haltCancel = context.WithCancel(context.Background())
+		if b.signaled {
+			b.haltCancel()
+		}
+	}
+	return b.halt
 }
 
 // primaryInUse reports whether the configured primary already holds backups: then its
@@ -1151,6 +1219,7 @@ func (b *Backup) complete() {
 	// backup incident with them, a clean one closes it. The kit's errors are the kit's own
 	// incident, raised by its step, and a notification that failed is not the backup's.
 	b.reported = true
+	b.checkin(!b.primaryDown.Load() && b.log.Reportable() == 0 && !b.kitFailed, msg)
 	if b.primaryDown.Load() {
 		return // the PRIMARY DOWN notification is this run's one
 	}
@@ -1208,6 +1277,9 @@ func (b *Backup) onSignal() {
 	b.signaled = true
 	if b.cancel != nil {
 		b.cancel()
+	}
+	if b.haltCancel != nil {
+		b.haltCancel()
 	}
 	dup := append([]*proc.Proc(nil), b.running...)
 	b.mu.Unlock()
