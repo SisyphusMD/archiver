@@ -16,7 +16,7 @@ import (
 func Sanitize(name string) string {
 	b := []byte(name)
 	for i, c := range b {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_') { //nolint:staticcheck // kept exactly as written: storage names never change
 			b[i] = '_'
 		}
 	}
@@ -65,7 +65,7 @@ func (t Target) withDefaults() Values {
 
 // TokenDir holds writable copies of the token files Duplicacy rewrites as it refreshes them
 // (OneDrive): the secrets themselves are mounted read-only.
-var TokenDir = "/opt/archiver/logs/.tokens"
+var TokenDir = "/opt/archiver/logs/.tokens" //nolint:gosec // G101: a path or public endpoint, not a credential
 
 // DuplicacyEnv is the credentials Duplicacy needs for this target, as NAME=value pairs.
 // Environment variables are the only way they reach Duplicacy: `duplicacy set -value`

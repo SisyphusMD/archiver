@@ -66,19 +66,19 @@ func Snapshot(t testing.TB, root string) Tree {
 }
 
 // Diff reports every difference between want and got, or nothing when they match.
-func (want Tree) Diff(got Tree) []string {
+func (tr Tree) Diff(got Tree) []string {
 	var diffs []string
-	for p, w := range want {
+	for p, w := range tr {
 		g, ok := got[p]
 		switch {
 		case !ok:
 			diffs = append(diffs, "missing "+p)
 		case g != w:
-			diffs = append(diffs, fmt.Sprintf("%s: want %s, got %s", p, w, g))
+			diffs = append(diffs, fmt.Sprintf("%s: tr %s, got %s", p, w, g))
 		}
 	}
 	for p := range got {
-		if _, ok := want[p]; !ok {
+		if _, ok := tr[p]; !ok {
 			diffs = append(diffs, "unexpected "+p)
 		}
 	}

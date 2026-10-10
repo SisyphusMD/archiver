@@ -165,7 +165,7 @@ func (l *Log) message(level, service, msg string, notify bool) {
 }
 
 func appendLine(path, line string) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func (l *Log) writer(consume func(io.Reader)) io.WriteCloser {
 	done := make(chan struct{})
 	go func() {
 		consume(pr)
-		io.Copy(io.Discard, pr)
+		_, _ = io.Copy(io.Discard, pr)
 		close(done)
 	}()
 	return &lineWriter{pw: pw, done: done}
@@ -251,7 +251,7 @@ func (w *lineWriter) Close() error {
 // and deletes files there older than seven days.
 func (l *Log) Rotate() {
 	old := filepath.Join(l.Dir, "prior_logs")
-	if err := os.MkdirAll(old, 0o755); err != nil {
+	if err := os.MkdirAll(old, 0o755); err != nil { //nolint:gosec // G301: a directory holding nothing secret
 		l.Message(Error, "", "Unable to create log directory "+old+".")
 	}
 	// Each run gets a file of its own, even when two start within the same second: a run's
@@ -264,7 +264,7 @@ func (l *Log) Rotate() {
 			name = fmt.Sprintf("%s-%d.log", stamp, i)
 		}
 		file = filepath.Join(old, name)
-		f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 		if err == nil {
 			f.Close()
 			break

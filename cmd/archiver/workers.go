@@ -35,11 +35,11 @@ type copyWorkers struct {
 }
 
 // handle answers the daemon socket.
-func (w *copyWorkers) handle(cmd string) string {
+func (cw *copyWorkers) handle(cmd string) string {
 	// Not held while acting: stopping slow copies must not delay other commands.
-	w.mu.Lock()
-	owns, workers := w.owns, append([]*copier.Worker(nil), w.workers...)
-	w.mu.Unlock()
+	cw.mu.Lock()
+	owns, workers := cw.owns, append([]*copier.Worker(nil), cw.workers...)
+	cw.mu.Unlock()
 	cmd, arg, _ := strings.Cut(cmd, " ")
 	if !owns {
 		switch cmd {
@@ -49,7 +49,7 @@ func (w *copyWorkers) handle(cmd string) string {
 		return daemon.ReplyOK
 	}
 	// A backup run with other storage settings than the daemon's copies for itself.
-	if (cmd == daemon.CmdWorkers || cmd == daemon.CmdLocalChanged || cmd == daemon.CmdExhaustive) && arg != "" && arg != w.fingerprint {
+	if (cmd == daemon.CmdWorkers || cmd == daemon.CmdLocalChanged || cmd == daemon.CmdExhaustive) && arg != "" && arg != cw.fingerprint {
 		return daemon.ReplyNoWorkers
 	}
 	each := func(f func(*copier.Worker)) {
@@ -96,13 +96,13 @@ func (w *copyWorkers) handle(cmd string) string {
 }
 
 // shutdown ends every worker's copy or listing and waits for them.
-func (w *copyWorkers) shutdown() {
-	w.mu.Lock()
-	for _, x := range w.workers {
+func (cw *copyWorkers) shutdown() {
+	cw.mu.Lock()
+	for _, x := range cw.workers {
 		x.Stop()
 	}
-	w.mu.Unlock()
-	w.running.Wait()
+	cw.mu.Unlock()
+	cw.running.Wait()
 }
 
 // decide settles, before the control socket opens, whether this daemon's workers own the
@@ -163,7 +163,7 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 					}
 				})
 			},
-			Save: func(s copier.State) { store.Save(s) },
+			Save: func(s copier.State) { _ = store.Save(s) },
 		}, saved[name])
 		w.CopyLock = l.CopyLock
 		// The primary too: every copy reads it.
@@ -207,7 +207,7 @@ func (cw *copyWorkers) start(done <-chan struct{}) {
 		cw.running.Add(1)
 		go func() { defer cw.running.Done(); w.Run(done) }()
 	}
-	cw.store.Prune(cw.names)
+	_ = cw.store.Prune(cw.names)
 	// Only here, once this daemon owns the socket: a second daemon that is refused must not
 	// remove the running one's repositories.
 	copier.PruneRepos(cw.logDir, cw.repos)

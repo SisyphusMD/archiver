@@ -67,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Fixed
 
 - A `SERVICE_DIRECTORIES` pattern holding `[[:]` crashed Archiver; it is now taken literally. An interval of over about 106,000 days (`CHECK_INTERVAL=110000d`) wrapped negative and was accepted; it is now refused. Both found by fuzzing (ADR 39).
+- `archiver init` fails if it cannot make the generated private keys and `archiver.env` owner-only, instead of carrying on.
 - **Maintenance no longer ends with "Maintenance completed successfully" after a failed check or prune;** its summary counts the errors, as the backup's does.
 - **A failed storage check names every damaged revision** ("damaged revisions: nas-app revision 12, ...") in the log and the notification, for maintenance and for the copy workers' checks (`check -persist`).
 - **An unwritable log (a full logs volume) now notifies,** once a run; before, every line failed silently apart from stdout.

@@ -141,7 +141,7 @@ func WriteFile(l layout.Layout, getenv func(string) string, now time.Time) error
 		os.Remove(tmp.Name())
 		return fmt.Errorf("writing %s: %v %v", path, werr, cerr)
 	}
-	os.Chmod(tmp.Name(), 0o644)
+	_ = os.Chmod(tmp.Name(), 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 	return os.Rename(tmp.Name(), path)
 }
 

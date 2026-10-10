@@ -110,7 +110,7 @@ func (r *Run) execute() int {
 	}
 	if err := cfg.Validate(r.Source.SecretsDir); err != nil {
 		r.log.Message(logging.Error, "", err.Error())
-		r.lock.Record("failed")
+		_ = r.lock.Record("failed")
 		return 1
 	}
 	r.log.Message(logging.Info, "", fmt.Sprintf("Maintenance settings: CHECK_BACKUPS=%t, PRUNE_BACKUPS=%t, PRUNE_KEEP=%s, PRUNE_EXHAUSTIVE_FREQUENCY=%s.",
@@ -153,7 +153,7 @@ func (r *Run) main() {
 	cfg := r.cfg
 	if !cfg.CheckBackups && !cfg.PruneBackups {
 		r.log.Message(logging.Info, "", "CHECK_BACKUPS and PRUNE_BACKUPS are both false; nothing to do.")
-		r.lock.Record("completed")
+		_ = r.lock.Record("completed")
 		return
 	}
 
@@ -181,7 +181,7 @@ func (r *Run) main() {
 		name := cfg.Targets[0].StorageName()
 		r.log.Message(logging.Error, name, fmt.Sprintf("Storage %s cannot be reached (%v), and the others are registered through it: nothing is maintained this run.", name, err))
 		r.checkin(cfg.Targets[0], false, "cannot be reached")
-		r.lock.Record("failed")
+		_ = r.lock.Record("failed")
 		return
 	}
 	switch stopped, err := r.watched(r.prepare); {
@@ -190,7 +190,7 @@ func (r *Run) main() {
 		return
 	case err != nil:
 		r.log.Message(logging.Error, "", "Cannot prepare the maintenance repository: "+err.Error())
-		r.lock.Record("failed")
+		_ = r.lock.Record("failed")
 		return
 	}
 	for i := 0; i < last; i++ {
@@ -231,7 +231,7 @@ func (r *Run) main() {
 	if r.pruned {
 		r.workers(daemon.CmdLocalChanged)
 	}
-	r.lock.Record("completed")
+	_ = r.lock.Record("completed")
 	took := logging.Duration(r.Now().Unix() - runlock.Summarize(r.lock.State()).Start)
 	var msg string
 	switch n := r.log.Errors(); n {
@@ -291,7 +291,7 @@ func (r *Run) workers(cmd string) bool {
 func (r *Run) endStopped() {
 	r.stopped = true
 	r.log.Message(logging.Info, "", "Stop requested; ending maintenance early.")
-	r.lock.Record("stopped")
+	_ = r.lock.Record("stopped")
 	r.notify.Send("Maintenance Stopped", "Stopped before completing all storages.")
 }
 
@@ -302,7 +302,7 @@ func (r *Run) storage(i int) bool {
 	state := readState(r.Layout.MaintenanceState())
 
 	if r.cfg.CheckBackups {
-		r.lock.SetStage("storage:"+name, "check")
+		_ = r.lock.SetStage("storage:"+name, "check")
 		began := r.Now()
 		// -persist carries on past damage, so every damaged revision is named, not the first.
 		var out strings.Builder
@@ -319,7 +319,9 @@ func (r *Run) storage(i int) bool {
 			r.checkin(t, false, msg)
 		default:
 			state.set(name, fieldCheck, r.Now().Unix())
-			state.write(r.Layout.MaintenanceState())
+			if err := state.write(r.Layout.MaintenanceState()); err != nil {
+				r.log.Message(logging.Warning, name, "Could not record maintenance state: "+err.Error())
+			}
 			r.log.Message(logging.Info, name, fmt.Sprintf("Storage check completed for %s in %s.", name, since(began, r.Now())))
 			r.checkin(t, true, "check passed")
 		}
@@ -342,7 +344,7 @@ func (r *Run) storage(i int) bool {
 	if exhaustive {
 		r.log.Message(logging.Info, name, fmt.Sprintf("Exhaustive prune due for %s (frequency: %s).", name, r.cfg.PruneExhaustiveFrequency))
 	}
-	r.lock.SetStage("storage:"+name, "prune")
+	_ = r.lock.SetStage("storage:"+name, "prune")
 	began := r.Now()
 	var before map[string]bool
 	listed := false
@@ -412,7 +414,9 @@ func (r *Run) storage(i int) bool {
 	if exhaustive {
 		state.set(name, fieldExhaustive, now)
 	}
-	state.write(r.Layout.MaintenanceState())
+	if err := state.write(r.Layout.MaintenanceState()); err != nil {
+		r.log.Message(logging.Warning, name, "Could not record maintenance state: "+err.Error())
+	}
 	// Copy workers mirror a local prune, and only an actual change ends a stop of theirs.
 	// Only two good listings prove a deletion (a failed one proves nothing), and only a
 	// revision that went missing counts: a concurrent backup's new one must not hide it.
@@ -509,7 +513,7 @@ func (r *Run) duplicacyTo(service string, also io.Writer, args ...string) (code 
 			if r.stopRequested() {
 				r.log.Message(logging.Info, service, "Stop requested during duplicacy "+args[0]+".")
 				p.Terminate(false)
-				p.Wait()
+				_, _ = p.Wait()
 				return 0, true
 			}
 		}

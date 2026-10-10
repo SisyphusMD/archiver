@@ -256,7 +256,7 @@ func availableMB(dir string) (int64, error) {
 	if err := syscall.Statfs(dir, &st); err != nil {
 		return 0, err
 	}
-	avail := int64(st.Bavail) * int64(st.Bsize)
+	avail := int64(st.Bavail) * int64(st.Bsize) //nolint:gosec // G115: filesystem sizes and byte values fit
 	return (avail + (1<<20 - 1)) >> 20, nil
 }
 

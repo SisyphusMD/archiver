@@ -60,13 +60,13 @@ func Handler(l layout.Layout, getenv func(string) string) http.Handler {
 		}
 		s := status.Take(l, getenv, time.Now())
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		page.Execute(w, view{S: s, Now: time.Now(), Log: name, Logs: Logs, Lines: tail(filepath.Join(l.LogDir(), name+".log"), logLines)})
+		_ = page.Execute(w, view{S: s, Now: time.Now(), Log: name, Logs: Logs, Lines: tail(filepath.Join(l.LogDir(), name+".log"), logLines)})
 	})
 	mux.HandleFunc("/status.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		enc.Encode(status.Take(l, getenv, time.Now()))
+		_ = enc.Encode(status.Take(l, getenv, time.Now()))
 	})
 	return readOnly(mux)
 }
@@ -96,14 +96,14 @@ func contains(list []string, s string) bool {
 
 // tail is the last n lines of path, read from its end.
 func tail(path string, n int) []string {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
 	if err != nil {
 		return nil
 	}
 	defer f.Close()
 	const window = 512 << 10
 	if fi, err := f.Stat(); err == nil && fi.Size() > window {
-		f.Seek(-window, io.SeekEnd)
+		_, _ = f.Seek(-window, io.SeekEnd)
 	}
 	b, _ := io.ReadAll(f)
 	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")

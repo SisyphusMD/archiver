@@ -28,7 +28,7 @@ func toCP1252(s string) (string, error) {
 		case r == '�':
 			return "", ErrUnprintable // invalid UTF-8
 		case r < 0x80 || (r >= 0xA0 && r <= 0xFF):
-			b.WriteByte(byte(r))
+			b.WriteByte(byte(r)) //nolint:gosec // G115: filesystem sizes and byte values fit
 		default:
 			c, ok := cp1252High[r]
 			if !ok {
@@ -298,7 +298,7 @@ func (r *renderer) element(kind, s string) {
 		label, count, _ := strings.Cut(s, "|")
 		r.lines("F1", 9.5, 12, 5.6, label)
 		n := 0
-		fmt.Sscanf(count, "%d", &n)
+		_, _ = fmt.Sscanf(count, "%d", &n)
 		for range n {
 			r.need(18)
 			r.y -= 18

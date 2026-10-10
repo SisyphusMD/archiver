@@ -94,7 +94,31 @@ jobs:
           # renovate: datasource=docker depName=golang
           GO_IMAGE=golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d
           tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct --entrypoint sh "$GO_IMAGE" -c \
-            'mkdir /w && cd /w && tar -x && test -z "$(gofmt -l cmd internal tests/e2e)" && go vet ./... && go test -race ./cmd/... ./internal/...'
+            'mkdir /w && cd /w && tar -x && test -z "$(gofmt -l cmd internal tests/e2e)" && go vet ./... && go test -race -cover ./cmd/... ./internal/...'
+      - name: golangci-lint (ADR 39)
+        # staticcheck, errcheck, ineffassign, unused, gosec, as .golangci.yml sets them; any
+        # finding fails the change. Coverage above is reported per package, with no floor.
+        run: |
+          set -euo pipefail
+          # renovate: datasource=docker depName=golangci/golangci-lint
+          LINT_IMAGE=golangci/golangci-lint:v2.14.0@sha256:ad862ba6b3798cbe0fd9fd7408d498fd74fbd2623a92406b2fd3898faf0bf98f
+          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct --entrypoint sh "$LINT_IMAGE" -c \
+            'mkdir /w && cd /w && tar -x && golangci-lint run ./...'
+
+  fuzz:
+    name: Fuzz the parsers (30 s each, ADR 39)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Every Fuzz target, 30 seconds each
+        # Targets are found, not listed: a new one is fuzzed without touching this file. A
+        # crash prints its input; add it to that target's seeds as a regression test.
+        run: |
+          set -euo pipefail
+          # renovate: datasource=docker depName=golang
+          GO_IMAGE=golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d
+          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct -e FUZZTIME=30s --entrypoint sh "$GO_IMAGE" -c \
+            'mkdir /w && cd /w && tar -x && sh tests/fuzz.sh'
 
   pr-validate:
     name: PR build & smoke test
@@ -498,7 +522,7 @@ jobs:
   build-and-push:
     name: Build multi-arch and push
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats, go, integration, integration-host, e2e]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats, go, fuzz, integration, integration-host, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

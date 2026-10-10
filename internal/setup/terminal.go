@@ -23,17 +23,17 @@ func HideTerminal(f *os.File) func() (restore func()) {
 		go func() {
 			select {
 			case s := <-sigs:
-				ioctl(f.Fd(), syscall.TCSETS, &saved)
+				_ = ioctl(f.Fd(), syscall.TCSETS, &saved)
 				os.Stdout.WriteString("\n")
 				os.Exit(128 + int(s.(syscall.Signal)))
 			case <-done:
 			}
 		}()
-		ioctl(f.Fd(), syscall.TCSETS, &noEcho)
+		_ = ioctl(f.Fd(), syscall.TCSETS, &noEcho)
 		return func() {
 			signal.Stop(sigs)
 			close(done)
-			ioctl(f.Fd(), syscall.TCSETS, &saved)
+			_ = ioctl(f.Fd(), syscall.TCSETS, &saved)
 		}
 	}
 }

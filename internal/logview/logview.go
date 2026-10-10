@@ -70,7 +70,7 @@ func Follow(ctx context.Context, w io.Writer, l layout.Layout, o Options) int {
 	}
 
 	if logo, err := os.ReadFile(l.Logo()); err == nil {
-		w.Write(logo)
+		_, _ = w.Write(logo)
 		if len(logo) > 0 && logo[len(logo)-1] != '\n' {
 			fmt.Fprintln(w)
 		}
@@ -84,12 +84,12 @@ func Follow(ctx context.Context, w io.Writer, l layout.Layout, o Options) int {
 	defer func() { f.Close() }()
 
 	for {
-		io.Copy(w, f)
+		_, _ = io.Copy(w, f)
 		if !exists(l.BackupLock()) {
 			if !sleep(ctx, o.Linger) {
 				return Interrupted
 			}
-			io.Copy(w, f)
+			_, _ = io.Copy(w, f)
 			fmt.Fprintln(w, "\nBackup completed. Exiting log viewer.")
 			return Done
 		}

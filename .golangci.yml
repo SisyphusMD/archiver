@@ -1,0 +1,36 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - gosec
+  settings:
+    staticcheck:
+      checks:
+        - all
+        # Archiver's errors are full sentences shown to the person who must fix the
+        # configuration, ending in a period, not fragments meant for wrapping.
+        - -ST1005
+        # Package comments and doc-comment forms are left to review, not CI.
+        - -ST1000
+        - -ST1003
+        - -ST1020
+        - -ST1021
+        - -ST1022
+    gosec:
+      excludes:
+        - G104 # unchecked errors: errcheck's job, reported once there
+        # Archiver drives external programs (duplicacy, rclone, openssl, ssh, hooks) with
+        # arguments it builds: exec.Command passes them as argv, never through a shell.
+        - G204
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+    rules:
+      # Tests ignore errors and use fixed paths and modes on purpose.
+      - path: (_test\.go|^tests/)
+        linters: [errcheck, gosec]

@@ -211,11 +211,11 @@ func (e *Env) Drill(o DrillOptions) int {
 	switch {
 	case stopped:
 		log.Message(logging.Info, "", "Restore drill stopped.")
-		lock.Record("stopped")
+		_ = lock.Record("stopped")
 		return 1
 	case failed > 0:
 		log.Unnotified(logging.Error, "", fmt.Sprintf("Restore drill finished: %d of %d restore(s) failed.", failed, tried))
-		lock.Record("failed")
+		_ = lock.Record("failed")
 		return 1
 	case tried == 0:
 		log.Message(logging.Warning, "", "Restore drill finished without restoring anything (every service skipped).")
@@ -223,7 +223,7 @@ func (e *Env) Drill(o DrillOptions) int {
 		log.Message(logging.Info, "", fmt.Sprintf("Restore drill finished: %d restore(s) verified.", tried))
 		n.Send("Restore Drill Complete", fmt.Sprintf("%d restore(s) verified.", tried))
 	}
-	lock.Record("completed")
+	_ = lock.Record("completed")
 	return 0
 }
 
@@ -231,8 +231,8 @@ func (e *Env) Drill(o DrillOptions) int {
 // sees the failure rather than a drill that never ran.
 func (d *drillRun) failedEarly() {
 	d.state.LastRun, d.state.LastFailed = d.now().Unix(), true
-	lockstate.WriteDrillState(d.e.Layout.DrillState(), d.state)
-	d.lock.Record("failed")
+	_ = lockstate.WriteDrillState(d.e.Layout.DrillState(), d.state)
+	_ = d.lock.Record("failed")
 }
 
 // selection is the services (sorted names, exclusions dropped) and storages a drill covers.
@@ -332,7 +332,7 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 		return fail(err.Error())
 	}
 	defer os.RemoveAll(work)
-	d.lock.SetStage("drill", t.StorageName()+"/"+name)
+	_ = d.lock.SetStage("drill", t.StorageName()+"/"+name)
 
 	if err := d.e.connect(work, t, id, out); err != nil {
 		return fail(err.Error())
@@ -422,5 +422,5 @@ func freeBytes(dir string) (int64, bool) {
 	if err := syscall.Statfs(dir, &st); err != nil {
 		return 0, false
 	}
-	return int64(st.Bavail) * int64(st.Bsize), true
+	return int64(st.Bavail) * int64(st.Bsize), true //nolint:gosec // G115: filesystem sizes and byte values fit
 }

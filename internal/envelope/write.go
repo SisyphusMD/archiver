@@ -86,7 +86,7 @@ func notifiedFile(l layout.Layout) string { return filepath.Join(l.LogDir(), ".e
 
 func writeRecord(path, fp string, at time.Time) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(fmt.Sprintf("%s %d\n", fp, at.Unix())), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(fmt.Sprintf("%s %d\n", fp, at.Unix())), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		return err
 	}
 	return os.Rename(tmp, path)
@@ -210,7 +210,7 @@ func Check(l layout.Layout, p *Page, now time.Time) (*Stale, error) {
 	if b, _ := os.ReadFile(notifiedFile(l)); strings.TrimSpace(string(b)) == reason {
 		return nil, nil
 	}
-	if err := os.WriteFile(notifiedFile(l), []byte(reason+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(notifiedFile(l), []byte(reason+"\n"), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		return nil, err
 	}
 	if strings.HasPrefix(reason, "changed:") {

@@ -243,7 +243,7 @@ func (b *Backup) main(dirs []string) int {
 			b.skipForPrimary(dir)
 		}
 		b.notifyPrimaryDown()
-		b.lock.Record("completed")
+		_ = b.lock.Record("completed")
 		b.complete()
 		return b.exitCode()
 	}
@@ -309,7 +309,7 @@ func (b *Backup) main(dirs []string) int {
 		}
 	}
 	if b.primaryDown.Load() {
-		b.lock.Record("completed")
+		_ = b.lock.Record("completed")
 		b.complete()
 		return b.exitCode()
 	}
@@ -320,14 +320,14 @@ func (b *Backup) main(dirs []string) int {
 			lastWorking = dir
 		}
 	}
-	b.lock.SetStage("duplicacy", "post-backup")
+	_ = b.lock.SetStage("duplicacy", "post-backup")
 	if b.stopped() {
 		b.log.Message(logging.Info, "", "Stop requested. Skipping storage wrap-up, invoking stop handler.")
 		return b.handleStop()
 	}
 	if lastWorking == "" {
 		b.log.Message(logging.Error, "", "No service completed a backup. Skipping storage copies.")
-		b.lock.Record("completed")
+		_ = b.lock.Record("completed")
 		b.complete()
 		return b.exitCode()
 	}
@@ -335,13 +335,13 @@ func (b *Backup) main(dirs []string) int {
 	if b.workers {
 		b.handOffCopies()
 	} else {
-		b.lock.SetStage("duplicacy", "copy")
+		_ = b.lock.SetStage("duplicacy", "copy")
 		b.copies(lastWorking)
 		if b.stopped() {
 			return b.handleStop()
 		}
 		if b.primaryDown.Load() { // lost during the copies: the kit could not be read either
-			b.lock.Record("completed")
+			_ = b.lock.Record("completed")
 			b.complete()
 			return b.exitCode()
 		}
@@ -350,7 +350,7 @@ func (b *Backup) main(dirs []string) int {
 	if b.stopped() {
 		return b.handleStop()
 	}
-	b.lock.Record("completed")
+	_ = b.lock.Record("completed")
 	b.complete()
 	return b.exitCode()
 }
@@ -488,7 +488,7 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 	log(logging.Info, fmt.Sprintf("Starting backup for %s service.", svc.Name))
 	ctx := "service:" + svc.Dir
 	result := hooks.Success
-	b.lock.SetStage(ctx, "pre-backup")
+	_ = b.lock.SetStage(ctx, "pre-backup")
 	preRan := false
 	if hasPre {
 		b.waitWhilePaused()
@@ -517,7 +517,7 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 		if b.stopped() {
 			result = hooks.Stopped
 		} else {
-			b.lock.SetStage(ctx, "backup")
+			_ = b.lock.SetStage(ctx, "backup")
 			result = b.primaryBackup(svc, filters, log)
 		}
 	}
@@ -525,7 +525,7 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 	// The post hook undoes the pre hook (restarts what it stopped), so it runs whenever the
 	// pre hook ran: after a failed pre hook, a failed backup, or a stop. Without a pre hook
 	// it always runs.
-	b.lock.SetStage(ctx, "post-backup")
+	_ = b.lock.SetStage(ctx, "post-backup")
 	if hasPost && (preRan || !hasPre) {
 		b.waitWhilePaused()
 		code, err := hooks.Run(b.log, b.Environ, svc, hooks.PostBackup, result)
@@ -549,7 +549,7 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 	if !b.stopped() {
 		b.addStorages(svc, log)
 	}
-	b.lock.SetStage("duplicacy", "backup")
+	_ = b.lock.SetStage("duplicacy", "backup")
 	if b.stopped() {
 		log(logging.Info, "Stop requested. Service cleanup complete, invoking stop handler.")
 		return true, true
@@ -678,7 +678,7 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 	}
 	// Removed first: writing through a symlink here would truncate its target.
 	os.Remove(filepath.Join(repo, "filters"))
-	if err := os.WriteFile(filepath.Join(repo, "filters"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repo, "filters"), []byte(content), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		log(logging.Error, fmt.Sprintf("Unable to create the Duplicacy filters file for the %s service.", svc.Name))
 	}
 	log(logging.Info, fmt.Sprintf("Duplicacy filters configured for %s service.", svc.Name))
@@ -719,7 +719,7 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 			if b.lock.StopRequested() {
 				log(logging.Info, fmt.Sprintf("Stop requested during duplicacy backup for %s service.", svc.Name))
 				p.Terminate(b.lock.State().Paused())
-				p.Wait()
+				_, _ = p.Wait()
 				log(logging.Info, fmt.Sprintf("Duplicacy backup stopped for %s service.", svc.Name))
 				return hooks.Stopped
 			}
@@ -784,12 +784,6 @@ func (b *Backup) refreshFailing() {
 	b.mu.Lock()
 	b.failing = failing
 	b.mu.Unlock()
-}
-
-func (b *Backup) isFailing(storage string) bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.failing[storage]
 }
 
 // copyWorkersRun asks the daemon whether copy workers keep the secondaries caught up.
@@ -1294,7 +1288,7 @@ func (b *Backup) handleStop() int {
 	st := b.lock.State()
 	alreadyRecorded := len(st.Events) > 0 && st.Events[len(st.Events)-1].State == "stopped"
 	if !alreadyRecorded {
-		b.lock.Record("stopped")
+		_ = b.lock.Record("stopped")
 		s := runlock.Summarize(b.lock.State())
 		took := logging.Duration(time.Now().Unix() - s.Start)
 		var msg string

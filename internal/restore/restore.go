@@ -468,7 +468,7 @@ func prepare(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(abs, 0o755); err != nil {
+	if err := os.MkdirAll(abs, 0o755); err != nil { //nolint:gosec // G301: a directory holding nothing secret
 		return "", err
 	}
 	return abs, nil
@@ -490,7 +490,7 @@ func linkedDirs(dir string) [][2]string {
 	if err != nil {
 		return nil
 	}
-	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if len(found) >= 20 {
 			return filepath.SkipAll
 		}

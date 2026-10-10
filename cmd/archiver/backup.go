@@ -16,11 +16,6 @@ import (
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
-func exists(p string) bool {
-	_, err := os.Lstat(p)
-	return err == nil
-}
-
 // backupCommand runs `archiver backup [--detach]`; ok is false for other arguments, which
 // get the usage.
 func backupCommand(args []string) (int, bool) {
@@ -77,7 +72,7 @@ func detachBackup(l layout.Layout) int {
 		fmt.Fprintln(os.Stderr, "archiver: cannot start the backup:", err)
 		return 1
 	}
-	cmd.Process.Release()
+	_ = cmd.Process.Release()
 	fmt.Println("Backup started in the background (follow with 'archiver logs').")
 	return 0
 }

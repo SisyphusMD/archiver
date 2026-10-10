@@ -101,7 +101,7 @@ func (e *Env) PlaceKeys() error {
 			return err
 		}
 		dst := filepath.Join(keys, k.dst)
-		if err := os.WriteFile(dst, data, k.mode); err != nil {
+		if err := os.WriteFile(dst, data, k.mode); err != nil { //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
 			return err
 		}
 		if err := os.Chmod(dst, k.mode); err != nil {
@@ -170,7 +170,7 @@ func Follow(path, banner string, w io.Writer, stop <-chan struct{}) {
 	for f == nil {
 		if fi, err := os.Stat(path); err == nil && fi.Mode().IsRegular() {
 			if f, err = os.Open(path); err == nil {
-				f.Seek(0, io.SeekEnd)
+				_, _ = f.Seek(0, io.SeekEnd)
 				break
 			}
 		}
@@ -189,7 +189,7 @@ func Follow(path, banner string, w io.Writer, stop <-chan struct{}) {
 			}
 			data := append(partial, buf[:n]...)
 			if i := strings.LastIndexByte(string(data), '\n'); i >= 0 {
-				w.Write(data[:i+1])
+				_, _ = w.Write(data[:i+1])
 				partial = append([]byte(nil), data[i+1:]...)
 			} else {
 				partial = data
