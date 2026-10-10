@@ -187,11 +187,11 @@ func entrypointCommand(args []string) int {
 			return 0
 		}
 	}
-	if err := config.CheckMetricsPort(os.Getenv("METRICS_PORT")); err != nil {
+	if err := config.CheckPorts(os.Getenv("METRICS_PORT"), os.Getenv("WEB_PORT")); err != nil {
 		fmt.Println("ERROR:", err)
 		return 1
 	}
-	// No daemon in manual mode: the metrics run here (ADR 35).
+	// No daemon in manual mode: the metrics and the status page run here (ADRs 35, 38).
 	metricsCtx, endMetrics := context.WithCancel(context.Background())
 	defer endMetrics()
 	startMetrics(metricsCtx, l)

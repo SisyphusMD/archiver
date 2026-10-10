@@ -709,6 +709,12 @@ BACKUP_PARALLELISM="2"
 
 It lists why, and `archiver status` shows it first. For a monitor such as Uptime Kuma, run `docker exec archiver archiver health --backups` and alert on a non-zero exit, or read `backup_health` from `archiver status --json`, which also carries each service's last backup, the copy workers, drills, storage maintenance and the open incidents. Each service's last backup is kept in `logs/.backup-state.json`.
 
+### Status Page
+
+With `WEB_PORT` set (for example `8470`), Archiver serves a read-only page: backup health and why, each service's last backup, the copy workers, storage maintenance, restore drills, open incidents and the last 200 lines of a log (backup, maintenance, copies or drill). It refreshes every 30 seconds, and `/status.json` serves the same as `archiver status --json`. Nothing on it changes anything (anything but GET is refused), and no secret appears on it.
+
+**It has no login of its own.** Put it behind a reverse proxy that authenticates (Caddy, Traefik or nginx with basic auth or forward auth such as Authelia), or publish the port only on a trusted network, for example `127.0.0.1:8470:8470` for a proxy on the same host. A startup line warns while it is on. Without `WEB_PORT` nothing listens.
+
 ### Check-ins
 
 A check-in is a dead man's switch: an outside monitor (an Uptime Kuma push monitor, healthchecks.io) expects to hear from Archiver on a schedule and alerts when it does not, so a container that is down or a backup that never ran is noticed as surely as one that failed.

@@ -329,6 +329,10 @@ jobs:
         run: |
           docker run -i --rm --hostname ck-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/checkins.sh
+      - name: Read-only status page on WEB_PORT, refused writes, startup warning (ADR 38)
+        run: |
+          docker run -i --rm --hostname wb-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/web.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \

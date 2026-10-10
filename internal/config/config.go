@@ -83,6 +83,7 @@ type Config struct {
 	CheckInterval            string // CHECK_INTERVAL: the default for every target
 	AlertRepeatInterval      string // ALERT_REPEAT_INTERVAL: how often an ongoing failure re-notifies
 	MetricsPort              string // METRICS_PORT: serve /metrics there (ADR 35); empty serves nothing
+	WebPort                  string // WEB_PORT: serve the read-only status page there (ADR 38)
 	CheckinURL               string // CHECKIN_URL: pinged after each backup run (ADR 37)
 	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
 	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
@@ -204,6 +205,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		CheckInterval:            src.Getenv("CHECK_INTERVAL"),
 		AlertRepeatInterval:      src.Getenv("ALERT_REPEAT_INTERVAL"),
 		MetricsPort:              src.Getenv("METRICS_PORT"),
+		WebPort:                  src.Getenv("WEB_PORT"),
 		CheckinURL:               src.Getenv("CHECKIN_URL"),
 		Parallelism:              src.Getenv("BACKUP_PARALLELISM"),
 		HooksDir:                 src.Getenv("HOOKS_DIR"),
@@ -355,7 +357,7 @@ func (c *Config) Validate(secretsDir string) error {
 	default:
 		return fmt.Errorf("PRUNE_EXHAUSTIVE_FREQUENCY must be one of: off, daily, weekly, monthly (got '%s').", c.PruneExhaustiveFrequency)
 	}
-	if err := CheckMetricsPort(c.MetricsPort); err != nil {
+	if err := CheckPorts(c.MetricsPort, c.WebPort); err != nil {
 		return err
 	}
 	if err := checkin.Valid(c.CheckinURL); err != nil {
@@ -497,12 +499,33 @@ func (c *Config) TargetCheckInterval(t Target) time.Duration {
 }
 
 // CheckMetricsPort validates METRICS_PORT; empty is off.
-func CheckMetricsPort(port string) error {
+func CheckMetricsPort(port string) error { return checkPort("METRICS_PORT", port) }
+
+// CheckPorts validates METRICS_PORT and WEB_PORT (ADRs 35, 38): ports, and not the same one.
+func CheckPorts(metrics, web string) error {
+	if err := checkPort("METRICS_PORT", metrics); err != nil {
+		return err
+	}
+	if err := checkPort("WEB_PORT", web); err != nil {
+		return err
+	}
+	if m, w := portNumber(metrics), portNumber(web); m != 0 && m == w {
+		return fmt.Errorf("METRICS_PORT and WEB_PORT are both %s; give them different ports.", web)
+	}
+	return nil
+}
+
+func portNumber(port string) int {
+	n, _ := strconv.Atoi(port)
+	return n
+}
+
+func checkPort(name, port string) error {
 	if port == "" {
 		return nil
 	}
 	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
-		return fmt.Errorf("METRICS_PORT must be a port number, 1 to 65535 (got '%s').", port)
+		return fmt.Errorf("%s must be a port number, 1 to 65535 (got '%s').", name, port)
 	}
 	return nil
 }
