@@ -34,7 +34,7 @@ jobs:
               m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?", t)
               pre = [(0, int(p), "") if p.isdigit() else (1, 0, p) for p in m.group(4).split(".")] if m.group(4) else None
               return (int(m.group(1)), int(m.group(2)), int(m.group(3)), pre is None, pre or [])
-          tags = [t for t in json.load(sys.stdin)["Tags"] if re.fullmatch(r"\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?", t)]
+          tags = [t for t in json.load(sys.stdin)["Tags"] if re.fullmatch(r"\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?", t) and not t.endswith("-slim")]
           print(max(tags, key=key))
           ')
           echo "Scanning $repo:$newest"

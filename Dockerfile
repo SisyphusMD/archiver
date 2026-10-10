@@ -61,22 +61,72 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
     echo "$SHA256  /tmp/rclone.zip" | sha256sum -c - && \
     unzip -j /tmp/rclone.zip "*/rclone" -d /out && chmod 755 /out/rclone
 
-FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0
+# The slim image (ADR 41): everything Archiver itself runs, and nothing only hooks use.
+# The full image below adds those tools, and is the default target.
+FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0 AS slim
 
 ARG TARGETARCH
 
 ARG DEBIAN_MIRROR=http://deb.debian.org
-RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.list.d/contrib.list && \
-    { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/contrib.list 2>/dev/null || true; } && \
-    apt-get update && apt-get install -y \
-    openssh-client \
+RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; } && \
+    apt-get update && apt-get install -y --no-install-recommends \
     tini \
+    openssh-client \
     openssl \
     curl \
     ca-certificates \
     tzdata \
-    sqlite3 \
     qrencode \
+    && { sed -i "s#${DEBIAN_MIRROR}#http://deb.debian.org#g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; } \
+    && rm -rf /var/lib/apt/lists/*
+
+
+WORKDIR /opt/archiver
+
+COPY lib/logos/ ./lib/logos/
+COPY docs/examples/ ./examples/
+
+RUN mkdir -p /opt/archiver/logs /opt/archiver/keys
+
+COPY --from=cli /out/archiver /usr/local/bin/archiver
+COPY --from=rclone /out/rclone /usr/local/bin/rclone
+COPY --from=duplicacy /out/duplicacy /usr/local/bin/duplicacy
+
+
+# Hooks are executables (ADR 20); the e2e harness reads this to write them in that form.
+LABEL io.archiver.hooks="executable"
+
+ENV BACKUP_SCHEDULE=""
+
+# Volumes
+# /opt/archiver/logs - Optional: persistent logs directory
+# User must also mount their service directories to backup
+# /opt/archiver/bundle is deliberately NOT declared: Compose carries the previous
+# container's mount over for image-declared volume paths on recreate, so a deployment that
+# converted from a bundle would inherit the old bundle mount and refuse to start.
+
+VOLUME ["/opt/archiver/logs"]
+
+# Health check: Use archiver's built-in healthcheck command
+# Runs comprehensive checks including config, keys, logs, and disk space
+HEALTHCHECK --interval=5m --timeout=10s --start-period=1m --retries=3 \
+    CMD archiver healthcheck >/dev/null 2>&1 || exit 1
+
+# tini is PID 1: it reaps processes orphaned by hooks (a Go PID 1 would not) and passes
+# docker stop's SIGTERM to the entrypoint, which stops everything gracefully.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/archiver", "entrypoint"]
+CMD []
+
+# The full image: the slim one plus the tools hooks use (docker, systemctl, zfs, btrfs,
+# python3 with lmdb, sqlite3, an editor, ping, ps), so a hook needs no helper container.
+FROM slim AS full
+
+ARG TARGETARCH
+ARG DEBIAN_MIRROR=http://deb.debian.org
+RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.list.d/contrib.list && \
+    { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list.d/contrib.list 2>/dev/null || true; } && \
+    apt-get update && apt-get install -y \
+    sqlite3 \
     procps \
     nano \
     vim \
@@ -124,40 +174,3 @@ RUN ARCH_SUFFIX="" && \
     echo "$SHA256  /tmp/docker-cli.tgz" | sha256sum -c - && \
     tar -xzC /usr/local/bin --strip-components=1 -f /tmp/docker-cli.tgz docker/docker && \
     rm /tmp/docker-cli.tgz
-
-
-WORKDIR /opt/archiver
-
-COPY lib/logos/ ./lib/logos/
-COPY docs/examples/ ./examples/
-
-RUN mkdir -p /opt/archiver/logs /opt/archiver/keys
-
-COPY --from=cli /out/archiver /usr/local/bin/archiver
-COPY --from=rclone /out/rclone /usr/local/bin/rclone
-COPY --from=duplicacy /out/duplicacy /usr/local/bin/duplicacy
-
-
-# Hooks are executables (ADR 20); the e2e harness reads this to write them in that form.
-LABEL io.archiver.hooks="executable"
-
-ENV BACKUP_SCHEDULE=""
-
-# Volumes
-# /opt/archiver/logs - Optional: persistent logs directory
-# User must also mount their service directories to backup
-# /opt/archiver/bundle is deliberately NOT declared: Compose carries the previous
-# container's mount over for image-declared volume paths on recreate, so a deployment that
-# converted from a bundle would inherit the old bundle mount and refuse to start.
-
-VOLUME ["/opt/archiver/logs"]
-
-# Health check: Use archiver's built-in healthcheck command
-# Runs comprehensive checks including config, keys, logs, and disk space
-HEALTHCHECK --interval=5m --timeout=10s --start-period=1m --retries=3 \
-    CMD archiver healthcheck >/dev/null 2>&1 || exit 1
-
-# tini is PID 1: it reaps processes orphaned by hooks (a Go PID 1 would not) and passes
-# docker stop's SIGTERM to the entrypoint, which stops everything gracefully.
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/archiver", "entrypoint"]
-CMD []
