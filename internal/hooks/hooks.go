@@ -6,6 +6,7 @@
 package hooks
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -68,7 +69,12 @@ func Hooks(hooksDir, serviceDir string) string {
 // Exists reports whether dir has the named hook. A path that exists but is not an
 // executable regular file is an error, so a hook missing its execute bit is not silently
 // skipped; so is one that someone other than its owner could change (Safe).
-func Exists(dir, name string) (bool, error) {
+func Exists(dir, name string) (bool, error) { return ExistsFor(dir, dir, name) }
+
+// ExistsFor is Exists for a hook in dir that runs for the service in serviceDir (they
+// differ with HOOKS_DIR). A hook the migration generated sources the old settings file from
+// the service directory, so that file is held to the same rule.
+func ExistsFor(dir, serviceDir, name string) (bool, error) {
 	path := filepath.Join(dir, name)
 	if _, err := os.Lstat(path); os.IsNotExist(err) {
 		return false, nil
@@ -83,7 +89,19 @@ func Exists(dir, name string) (bool, error) {
 	if err := Safe(path); err != nil {
 		return false, err
 	}
+	if b, err := os.ReadFile(path); err == nil && bytes.Contains(b, []byte(LegacyKept)) {
+		if kept := filepath.Join(serviceDir, LegacyKept); exists(kept) {
+			if err := Safe(kept); err != nil {
+				return false, err
+			}
+		}
+	}
 	return true, nil
+}
+
+func exists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
 }
 
 // Safe refuses a file that root would run although someone other than its owner could

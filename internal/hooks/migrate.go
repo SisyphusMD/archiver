@@ -54,6 +54,10 @@ func Migrate(dir, hostname string) (*Migration, error) {
 	if _, err := os.Stat(legacy); os.IsNotExist(err) {
 		return nil, nil
 	}
+	// Migration sources the file as root, so it is held to the rule for hooks (ADR 45).
+	if err := Safe(legacy); err != nil {
+		return nil, err
+	}
 	for _, name := range []string{PreBackup, PostBackup, Filters, LegacyKept} {
 		if _, err := os.Lstat(filepath.Join(dir, name)); err == nil {
 			return nil, fmt.Errorf("%s: %s already exists; move it aside and run the migration again", dir, name)

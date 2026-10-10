@@ -140,4 +140,21 @@ OVERWRITE=1 SNAPSHOT_ID="$HOST-app" LOCAL_DIR=/restore/links archiver auto-resto
 [ ! -L /restore/links/file.txt ] && [ "$(cat /restore/links/file.txt)" = "app two (changed)" ] || die "the link was not replaced by the restored file"
 [ "$(cat /tmp/outside/f)" = untouched ] || die "the restore with OVERWRITE wrote through the link"
 
+log "a restore killed mid-hook takes its hook with it (it would run on without the restore lock)"
+mkdir -p /restore/hooked && printf '#!/bin/sh\ntrap "" TERM\ntouch /tmp/hook-started\nwhile :; do sleep 0.2; done\n' >/data/services/web/post-restore
+chmod 755 /data/services/web/post-restore
+rm -rf /data/services/old3 # left unmigrated on purpose above; it would fail this backup
+archiver backup >/tmp/b5 2>&1 || { cat /tmp/b5; grep -E "ERROR" /opt/archiver/logs/archiver.log | tail -5; die "the backup with the looping hook failed"; }
+rm -f /data/services/web/post-restore
+SNAPSHOT_ID="$HOST-web" LOCAL_DIR=/restore/hooked RUN_RESTORE_SERVICE=1 archiver auto-restore >/tmp/h1 2>&1 &
+pid=$!
+for _ in $(seq 1 60); do [ -e /tmp/hook-started ] && break; sleep 0.5; done
+[ -e /tmp/hook-started ] || { cat /tmp/h1; die "the restore hook never started"; }
+kill -9 "$pid"; wait "$pid" 2>/dev/null
+sleep 2
+# Through /proc, not pgrep: the slim image has no procps.
+for c in /proc/[0-9]*/cmdline; do
+  tr '\0' ' ' <"$c" 2>/dev/null | grep -q /restore/hooked/post-restore && die "the restore hook outlived the killed restore"
+done
+
 echo "=== RESTORE-COMMANDS OK: snapshot-exists answers and codes; auto-restore fallback, pinning, errors, hook; auto-restore-all; busy refusal; post-restore and migration of restored settings ==="

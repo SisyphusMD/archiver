@@ -371,3 +371,41 @@ func TestDotDotAfterLinkChecksWhatRuns(t *testing.T) {
 		t.Fatalf("checked the wrong file: %v", err)
 	}
 }
+
+// Migration sources the settings file as root, so one others can change is refused; and the
+// generated hooks source it later, so a hook whose kept settings file others can change is
+// refused too.
+func TestLegacySettingsHeldToHookRule(t *testing.T) {
+	dir := t.TempDir()
+	os.Chmod(dir, 0o755)
+	legacy := filepath.Join(dir, Legacy)
+	os.WriteFile(legacy, []byte("service_specific_pre_backup_function() { :; }\n"), 0o666)
+	os.Chmod(legacy, 0o666)
+	if _, err := Migrate(dir, "h"); err == nil || !strings.Contains(err.Error(), "chmod go-w") {
+		t.Fatalf("a world-writable settings file was migrated: %v", err)
+	}
+	os.Chmod(legacy, 0o644)
+	if _, err := Migrate(dir, "h"); err != nil {
+		t.Fatalf("migration: %v", err)
+	}
+	if ok, err := Exists(dir, PreBackup); !ok || err != nil {
+		t.Fatalf("migrated hook: %v %v", ok, err)
+	}
+	os.Chmod(filepath.Join(dir, LegacyKept), 0o664)
+	if ok, err := Exists(dir, PreBackup); ok || err == nil {
+		t.Fatal("a hook whose kept settings file others can change was accepted")
+	}
+	// In HOOKS_DIR, a generated hook sources the file from the service directory: that copy
+	// is the one checked. A hook that does not source it is not refused over it.
+	hooksDir := t.TempDir()
+	os.Chmod(hooksDir, 0o755)
+	b, _ := os.ReadFile(filepath.Join(dir, PreBackup))
+	os.WriteFile(filepath.Join(hooksDir, PreBackup), b, 0o755)
+	os.WriteFile(filepath.Join(hooksDir, PostBackup), []byte("#!/bin/sh\ntrue\n"), 0o755)
+	if ok, err := ExistsFor(hooksDir, dir, PreBackup); ok || err == nil {
+		t.Fatal("a HOOKS_DIR hook sourcing a settings file others can change was accepted")
+	}
+	if ok, err := ExistsFor(hooksDir, dir, PostBackup); !ok || err != nil {
+		t.Fatalf("a hook that sources nothing was refused: %v", err)
+	}
+}

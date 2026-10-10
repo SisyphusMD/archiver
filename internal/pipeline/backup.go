@@ -253,7 +253,7 @@ func (b *Backup) finishInterrupted() resume.Record {
 		}
 		svc := hooks.Service{Name: name, Dir: dir, SnapshotID: b.Hostname + "-" + name, HookDir: hooks.Hooks(b.cfg.HooksDir, dir)}
 		svc.StateDir = b.Layout.HookState(svc.SnapshotID)
-		if has, err := hooks.Exists(svc.HookDir, hooks.PostBackup); err != nil {
+		if has, err := hooks.ExistsFor(svc.HookDir, svc.Dir, hooks.PostBackup); err != nil {
 			b.log.Message(logging.Error, name, fmt.Sprintf("The interrupted backup left this service after its pre-backup hook, and its post-backup hook cannot run: %v. Check that whatever the pre hook stopped is running.", err))
 		} else if has {
 			_ = os.MkdirAll(svc.StateDir, 0o700)
@@ -576,10 +576,10 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 			}
 		}
 	}
-	hasPre, err := hooks.Exists(svc.HookDir, hooks.PreBackup)
+	hasPre, err := hooks.ExistsFor(svc.HookDir, svc.Dir, hooks.PreBackup)
 	if err == nil {
 		var hasPost bool
-		hasPost, err = hooks.Exists(svc.HookDir, hooks.PostBackup)
+		hasPost, err = hooks.ExistsFor(svc.HookDir, svc.Dir, hooks.PostBackup)
 		if err == nil {
 			return b.backupService(svc, filters, hasPre, hasPost, log)
 		}
