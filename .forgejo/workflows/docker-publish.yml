@@ -599,6 +599,9 @@ jobs:
       # Cache miss on first build of a new minor is non-fatal — buildkit
       # logs a warning and proceeds with a full build.
       - name: Build (multi-arch, OCI archive output)
+        id: build
+        # ADR 40: attestations never fail a release: without them, the next step builds again.
+        continue-on-error: true
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
@@ -606,6 +609,33 @@ jobs:
           push: false
           outputs: type=oci,dest=${{ github.workspace }}/image.tar
           labels: ${{ steps.meta.outputs.labels }}
+          # ADR 40: an SBOM and a provenance attestation in every published image; neither
+          # can fail the build.
+          sbom: true
+          provenance: mode=max
+          # Moving major tag (metadata-action's {{major}} pattern) so the cache ref stays
+          # current across minor releases without a manual bump. Cache miss is non-fatal.
+          cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0
+          cache-to: type=inline
+          build-args: |
+            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+      - name: Warn that the release carries no attestations
+        if: steps.build.outcome == 'failure'
+        run: echo "::warning title=No SBOM or provenance::The attested build failed; this release was built without them."
+      - name: Build without attestations (the attested build failed)
+        if: steps.build.outcome == 'failure'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          outputs: type=oci,dest=${{ github.workspace }}/image.tar
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: false
+          provenance: false
           # Moving major tag (metadata-action's {{major}} pattern) so the cache ref stays
           # current across minor releases without a manual bump. Cache miss is non-fatal.
           cache-from: type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0
@@ -629,10 +659,13 @@ jobs:
       # Stage the archive into a docker-managed named volume via
       # `docker cp` — it streams over the docker socket and named volumes
       # don't require host path translation.
-      - name: Push to cluster Forgejo via skopeo (per tag)
+      # Pushed to one candidate tag first: the release tags are set only once its digest is
+      # signed (ADR 40), so no release tag ever names an unsigned image.
+      - name: Push the candidate to cluster Forgejo via skopeo
+        id: push
         env:
           DST_CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
-          META_TAGS: ${{ steps.meta.outputs.tags }}
+          META_TAGS: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:release-candidate
           IMAGE_TAR: ${{ github.workspace }}/image.tar
         run: |
           set -euo pipefail
@@ -642,24 +675,97 @@ jobs:
           # renovate: datasource=docker depName=quay.io/skopeo/stable
           SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
 
-          docker volume create skopeo-stage >/dev/null
-          trap 'docker volume rm -f skopeo-stage >/dev/null 2>&1' EXIT
+          VOL=skopeo-stage-${{ github.run_id }}
+          docker volume create "$VOL" >/dev/null
+          trap 'docker volume rm -f "$VOL" >/dev/null 2>&1' EXIT
 
-          STAGE=$(docker create -v skopeo-stage:/data "$SKOPEO_IMAGE")
+          STAGE=$(docker create -v "$VOL":/data "$SKOPEO_IMAGE")
           docker cp "${IMAGE_TAR}" "${STAGE}:/data/image.tar"
           docker rm "${STAGE}" >/dev/null
 
           while IFS= read -r dst; do
             [ -z "$dst" ] && continue
             docker run --rm \
-              -v skopeo-stage:/data \
+              -v "$VOL":/data \
               -e DST_CREDS \
               "$SKOPEO_IMAGE" \
-              copy --all \
+              copy --all --digestfile /data/digest \
                 --dest-creds "$DST_CREDS" \
                 oci-archive:/data/image.tar \
                 "docker://${dst}"
           done <<< "$META_TAGS"
+          # The digest of exactly what this run pushed: the candidate tag may be moved by
+          # another release run before this one signs.
+          digest=$(docker run --rm -v "$VOL":/data --entrypoint cat "$SKOPEO_IMAGE" /data/digest)
+          case "$digest" in sha256:*) ;; *) echo "::error::no digest recorded for the candidate"; exit 1;; esac
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      # ADR 40: the release is signed before it is mirrored or announced. A failed signature
+      # fails this job, so the mirrors and the release notes never carry an unsigned image.
+      # No transparency log: the signature lives beside the image in the registry, and
+      # cosign.pub in the repository verifies it.
+      - name: Sign the release (cosign)
+        id: sign
+        env:
+          REGISTRY_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          CANDIDATE: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:release-candidate
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [ -n "$COSIGN_PRIVATE_KEY" ] && [ -n "$COSIGN_PASSWORD" ] || { echo "::error::COSIGN_PRIVATE_KEY or COSIGN_PASSWORD is not set; not releasing unsigned"; exit 1; }
+          # renovate: datasource=docker depName=quay.io/skopeo/stable
+          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          # renovate: datasource=docker depName=ghcr.io/sigstore/cosign/cosign
+          COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.0.2@sha256:b29487e48205d875c324c79583e2806d9d269c0fa299e0861bbec023d8430c8b
+          repo="${CANDIDATE%:*}"
+          digest="$DIGEST"
+          # The registry login goes in through a volume's config.json, never cosign's argv.
+          AUTH=cosign-auth-${{ github.run_id }}
+          docker volume create "$AUTH" >/dev/null
+          trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
+          docker run --rm -e REGISTRY_PAT -v "$AUTH":/cfg --entrypoint sh "$SKOPEO_IMAGE" -c \
+            'printf "{\"auths\":{\"forgejo.bryantserver.com\":{\"auth\":\"%s\"}}}" "$(printf "cody:%s" "$REGISTRY_PAT" | base64 -w0)" > /cfg/config.json'
+          docker run --rm -v "$AUTH":/cfg -e DOCKER_CONFIG=/cfg -e COSIGN_PRIVATE_KEY -e COSIGN_PASSWORD "$COSIGN_IMAGE" \
+            sign --yes --key env://COSIGN_PRIVATE_KEY --use-signing-config=false --tlog-upload=false "${repo}@${digest}"
+          docker run --rm -v "$AUTH":/cfg -e DOCKER_CONFIG=/cfg -e COSIGN_PUBLIC_KEY="$(cat cosign.pub)" "$COSIGN_IMAGE" \
+            verify --key env://COSIGN_PUBLIC_KEY --insecure-ignore-tlog=true "${repo}@${digest}" >/dev/null
+          echo "Signed and verified ${repo}@${digest}"
+          echo "sig_tag=sha256-${digest#sha256:}" >> "$GITHUB_OUTPUT"
+          echo "signed=${repo}@${digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag the signed release
+        env:
+          CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+          # By digest, not the candidate tag: another release run may have moved that tag
+          # since this one signed.
+          SIGNED: ${{ steps.sign.outputs.signed }}
+        run: |
+          set -euo pipefail
+          # renovate: datasource=docker depName=quay.io/skopeo/stable
+          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          while IFS= read -r dst; do
+            [ -z "$dst" ] && continue
+            docker run --rm -e CREDS "$SKOPEO_IMAGE" \
+              copy --all --src-creds "$CREDS" --dest-creds "$CREDS" "docker://${SIGNED}" "docker://${dst}"
+          done <<< "$META_TAGS"
+
+      # ADR 40: known vulnerabilities reported for each release, never blocking it (most
+      # come from Debian packages with no fix available).
+      - name: Scan the release (trivy, advisory)
+        continue-on-error: true
+        env:
+          REGISTRY_PAT: ${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
+          META_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          # renovate: datasource=docker depName=aquasec/trivy
+          TRIVY_IMAGE=aquasec/trivy:0.69.1@sha256:1c78ed1ef824ab8bb05b04359d186e4c1229d0b3e67005faacb54a7d71974f73
+          first=$(printf '%s\n' "$META_TAGS" | head -1)
+          docker run --rm -e TRIVY_USERNAME=cody -e TRIVY_PASSWORD="$REGISTRY_PAT" "$TRIVY_IMAGE" \
+            image --scanners vuln --severity HIGH,CRITICAL --no-progress "$first"
 
       # Full repo sync, not per-tag copy. NAS is the canonical mirror of the
       # cluster registry — DR depends on it being complete. `skopeo sync` walks
@@ -716,6 +822,15 @@ jobs:
                 --dest-creds "$DST_CREDS" \
                 "docker://${src}" "docker://${dst}"
           done <<< "$META_TAGS"
+          # The signature (ADR 40) travels with the image.
+          sig="forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:${{ steps.sign.outputs.sig_tag }}"
+          docker run --rm \
+            -e SRC_CREDS -e DST_CREDS \
+            "$SKOPEO_IMAGE" \
+            copy --all \
+              --src-creds "$SRC_CREDS" \
+              --dest-creds "$DST_CREDS" \
+              "docker://${sig}" "docker://${sig/forgejo.bryantserver.com/ghcr.io}"
 
       # Surface mirror failures as warnings only; do NOT exit 1 here. Failing
       # this job would skip create-release via `needs:`, blocking the very

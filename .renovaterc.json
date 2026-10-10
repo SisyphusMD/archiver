@@ -19,7 +19,8 @@
     ".forgejo/workflows/docker-publish.yml",
     ".forgejo/workflows/release.yml",
     ".forgejo/workflows/real-backends.yml",
-    ".forgejo/workflows/fuzz-weekly.yml"
+    ".forgejo/workflows/fuzz-weekly.yml",
+    ".forgejo/workflows/scan-weekly.yml"
   ],
   "github-actions": {
     "managerFilePatterns": ["/\\.forgejo/workflows/.+\\.ya?ml$/"]
