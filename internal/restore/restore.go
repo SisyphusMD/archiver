@@ -370,7 +370,7 @@ func (e *Env) restore(dir string, t config.Target, id string, rev int, o Options
 		}
 	}
 	for _, l := range linkedDirs(dir) {
-		fmt.Fprintf(out, "[WARN] '%s' is a link to a directory outside '%s' ('%s'); Duplicacy restores through it, so files under it land there. Remove or move the link first if that is not intended.\n", l[0], dir, l[1])
+		fmt.Fprintf(out, "[WARN] '%s' is a link to a directory outside '%s' ('%s'). The restore never writes through it: where the snapshot has a directory there it is replaced (with OVERWRITE) or the restore stops, and files the snapshot has below it are not restored.\n", l[0], dir, l[1])
 	}
 	// Registered in use, so no prune deletes the revision meanwhile (ADR 19).
 	release, err := inuse.Gate(e.context(), e.Layout.InUseDir(), t.StorageName(), false)
@@ -482,8 +482,8 @@ func yes(in *bufio.Reader) bool {
 }
 
 // linkedDirs lists the symlinks under dir that resolve to a directory outside it, each with
-// its target, stopping after 20: Duplicacy writes a snapshot's files through such a link
-// rather than replacing it, so whoever could write dir chose where they go.
+// its target, stopping after 20. Archiver's Duplicacy never writes through one
+// (restore-links.patch), but whoever could write dir may not expect what happens to it.
 func linkedDirs(dir string) [][2]string {
 	var found [][2]string
 	root, err := filepath.EvalSymlinks(dir)
