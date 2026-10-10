@@ -33,6 +33,7 @@ jobs:
             --severity=warning
             --shell=bash
             .forgejo/scripts/next-version.sh
+            lib/host/archiver
 
   validate-changelog:
     name: Validate CHANGELOG structure
@@ -514,6 +515,8 @@ jobs:
       # workspace bind mounts land empty (same reason the tests above pipe via stdin).
       - name: docker stop during a backup stops gracefully (SIGTERM, no prune, exit 0)
         run: IMAGE=hosttests:local bash tests/integration/sigterm-stop.sh
+      - name: Podman parity, socket hooks through Podman's API and the host-side command (ADR 5)
+        run: IMAGE=hosttests:local bash tests/integration/podman.sh
       - name: Malformed BACKUP_SCHEDULE fails the container fast
         run: IMAGE=hosttests:local bash tests/integration/invalid-cron.sh
       - name: LOG_FORMAT=json makes every docker logs line JSON

@@ -86,6 +86,7 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
 WORKDIR /opt/archiver
 
 COPY lib/logos/ ./lib/logos/
+COPY lib/host/archiver ./host/archiver
 COPY docs/examples/ ./examples/
 
 RUN mkdir -p /opt/archiver/logs /opt/archiver/keys

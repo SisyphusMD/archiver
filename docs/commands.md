@@ -2,6 +2,18 @@
 
 Everything `archiver` does, run with `docker exec archiver archiver <command>` (or `docker compose exec`).
 
+## From the host
+
+The image carries a small `archiver` command for the host, so `archiver status` runs `archiver status` in the container. It finds docker or podman (set `ARCHIVER_RUNTIME` to choose one, or to give its path), uses `sudo` when the runtime needs root, as Synology's docker does, passes your terminal on when there is one, and talks to the container named `archiver` (set `ARCHIVER_CONTAINER` for another). Install it once from the running container:
+
+```bash
+sudo docker cp archiver:/opt/archiver/host/archiver /usr/local/bin/archiver   # or: podman cp
+archiver status
+archiver restore
+```
+
+It is a plain shell script; re-copy it after an upgrade to pick up changes. Shell completions work through it too (`archiver completion bash`).
+
 With `BACKUP_SCHEDULE`/`MAINTENANCE_SCHEDULE` set, the pipelines run automatically. Without them, run commands manually.
 
 ## View logs
