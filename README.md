@@ -445,6 +445,8 @@ The entrypoint selects one of three modes based on the first container argument:
 
 The settings below define what to backup and where. Supply them as environment variables plus file-based secrets (see [Configuration Sources](#configuration-sources) below), and edit them wherever they live — your compose file, ConfigMap, or secret store.
 
+**Every setting is listed in the [configuration reference](docs/configuration.md)**, generated from the code, so it is never out of date: each variable's default, accepted values and meaning, and each storage type's variables. [docs/archiver.schema.json](docs/archiver.schema.json) is the same as a JSON Schema, for an editor or a tool such as `check-jsonschema` to complete and check a set of settings; it also flags a secret set as an environment variable instead of a file.
+
 ### Configuration Sources
 
 Environment variables carry the non-secret settings and files under `/run/secrets` carry the secrets and keys, so the configuration stays under version control (compose file / ConfigMap) and the secrets stay in a secret store. Nothing is read from a configuration file, and nothing configured is ever executed.
