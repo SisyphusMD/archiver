@@ -12,6 +12,7 @@ on:
           - minor
           - major
           - alpha
+          - rc
       skip_real_backends:
         description: 'Release without the real-service round trips (only for an outside service outage; the release notes say so)'
         required: false
@@ -39,7 +40,7 @@ jobs:
           git config user.email "forgejo-actions[bot]@users.noreply.bryantserver.com"
 
       # The branch rules live in the script, tested by tests/next_version.bats: main cuts 0.x
-      # releases until its first 1.0.0 alpha, then alphas and 1.0.0; release/<major>.<minor>
+      # releases until its first 1.0.0 alpha, then alphas, rcs and 1.0.0; release/<major>.<minor>
       # cuts that line's patches. The bump commit is pushed back to the dispatching branch.
       - name: Compute next version
         id: ver
@@ -148,9 +149,9 @@ jobs:
           ' CHANGELOG.md > CHANGELOG.md.new
           mv CHANGELOG.md.new CHANGELOG.md
 
-      # An alpha leaves the documented image on the newest stable release (ADR 9).
+      # A prerelease leaves the documented image on the newest stable release (ADR 9).
       - name: Bump image tag in compose.yaml, README, and guides
-        if: inputs.bump != 'alpha'
+        if: inputs.bump != 'alpha' && inputs.bump != 'rc'
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
