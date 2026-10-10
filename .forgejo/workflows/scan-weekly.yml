@@ -24,7 +24,7 @@ jobs:
           # renovate: datasource=docker depName=quay.io/skopeo/stable
           SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
           # renovate: datasource=docker depName=aquasec/trivy
-          TRIVY_IMAGE=aquasec/trivy:0.69.1@sha256:1c78ed1ef824ab8bb05b04359d186e4c1229d0b3e67005faacb54a7d71974f73
+          TRIVY_IMAGE=aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
           repo=forgejo.bryantserver.com/sisyphusmd/archiver
           newest=$(docker run --rm -e REGISTRY_PAT --entrypoint sh "$SKOPEO_IMAGE" -c 'skopeo list-tags --creds "cody:$REGISTRY_PAT" "docker://$0"' "$repo" \
             | python3 -c '

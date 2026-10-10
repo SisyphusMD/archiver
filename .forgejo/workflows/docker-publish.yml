@@ -833,7 +833,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=aquasec/trivy
-          TRIVY_IMAGE=aquasec/trivy:0.69.1@sha256:1c78ed1ef824ab8bb05b04359d186e4c1229d0b3e67005faacb54a7d71974f73
+          TRIVY_IMAGE=aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
           first=$(printf '%s\n' "$META_TAGS" | head -1)
           docker run --rm -e TRIVY_USERNAME=cody -e TRIVY_PASSWORD="$REGISTRY_PAT" "$TRIVY_IMAGE" \
             image --scanners vuln --severity HIGH,CRITICAL --no-progress "$first"
