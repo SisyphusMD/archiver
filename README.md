@@ -565,6 +565,18 @@ When the container runs on a schedule (`BACKUP_SCHEDULE`), each secondary has it
 
 Without a schedule (manual mode or a one-shot `run backup`), there are no workers: the backup copies to every secondary itself and exits non-zero if a copy fails.
 
+#### Upload limits and copy windows
+
+```bash
+STORAGE_TARGET_1_UPLOAD_LIMIT="20000"        # kB/s for backups to the primary
+STORAGE_TARGET_2_UPLOAD_LIMIT="2500"         # kB/s for copies to this secondary
+STORAGE_TARGET_2_COPY_WINDOW="01:00-06:00"   # copy to it only between these local times
+```
+
+`STORAGE_TARGET_N_UPLOAD_LIMIT` caps how fast data is sent to that storage, in kilobytes per second: duplicacy's `-limit-rate` for a backup to the primary, `-upload-limit-rate` for a copy to a secondary. When several services back up at once (`BACKUP_PARALLELISM`), each gets an equal share of the primary's limit, so together they keep to it (the limit must be at least `BACKUP_PARALLELISM`); copies run one per secondary and get its whole limit.
+
+`STORAGE_TARGET_N_COPY_WINDOW` holds a secondary's copy worker outside those hours (`TZ`, local time; `22:00-06:00` runs past midnight). Outside the window the worker copies, mirrors, prunes and checks nothing, the recovery kit is not uploaded there (it follows at a later run), and `archiver status` shows it waiting and when the window opens. A copy still running when the window closes ends there, and duplicacy picks up where it left off when the window next opens, without sending again what it already had. Backups to the primary are never held. Without the daemon, a backup outside a secondary's window skips that copy and says so; the next backup inside it copies everything since. A target with a window has a day longer to catch up before backup health counts it behind.
+
 ### Secrets
 
 ```bash
@@ -866,7 +878,16 @@ archiver envelope confirm  # Record the envelope as printed, so status can say w
 archiver healthcheck       # Liveness check (Docker HEALTHCHECK uses this; on Kubernetes wire it as an exec probe)
 archiver health --backups  # Backup health: OK, DEGRADED or FAILING and why; exits 0, 1 or 2 for monitors
 archiver status --json     # Everything status shows, and backup health, as JSON
+archiver completion bash|zsh|fish  # Print shell completions for these commands
 archiver help              # Show help
+```
+
+Shell completions, for typing `archiver` commands where the binary runs (inside the container, or a shell with it on the PATH):
+
+```bash
+eval "$(archiver completion bash)"                 # bash, e.g. in ~/.bashrc
+archiver completion zsh > "${fpath[1]}/_archiver"  # zsh
+archiver completion fish | source                  # fish
 ```
 
 </details>

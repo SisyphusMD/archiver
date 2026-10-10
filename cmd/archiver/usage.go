@@ -8,7 +8,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
 )
 
-const usageText = `Usage: archiver {backup|maintenance|drill|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|help}
+const usageText = `Usage: archiver {backup|maintenance|drill|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|completion|help}
 Note:
   backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background.
   maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune.
@@ -26,6 +26,7 @@ Note:
   envelope [DIR] writes the printable break-glass envelope (default /opt/archiver/envelope); 'envelope confirm' records it as printed.
   pause|logs|status|restore|auto-restore|auto-restore-all|snapshot-exists|healthcheck|help cannot have further arguments.
   auto-restore and snapshot-exists are non-interactive and driven by environment variables.
+  completion bash|zsh|fish prints shell completions for these commands.
 `
 
 // usage handles every command line no command took: help, or a mistake, which it names

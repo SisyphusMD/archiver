@@ -148,9 +148,13 @@ func lastLine(s string) string {
 // StartCopy copies every snapshot the target lacks from the primary.
 func (d *Duplicacy) StartCopy(string) (Copy, error) {
 	t := d.Target.StorageName()
+	args := []string{"copy", "-from", d.Primary.StorageName(), "-to", t, "-key", d.PrivKey, "-threads", d.Threads, "-download-threads", d.Threads}
+	if d.Target.UploadLimit != "" {
+		args = append(args, "-upload-limit-rate", d.Target.UploadLimit)
+	}
 	p, err := proc.Start(proc.Spec{
 		Path: d.Bin, Dir: d.Repo, Env: d.Env, Log: d.Log, Service: t,
-		Args: proc.NoScript("copy", "-from", d.Primary.StorageName(), "-to", t, "-key", d.PrivKey, "-threads", d.Threads, "-download-threads", d.Threads),
+		Args: proc.NoScript(args...),
 	})
 	if err != nil {
 		return nil, err

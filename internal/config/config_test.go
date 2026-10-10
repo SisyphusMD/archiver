@@ -325,3 +325,86 @@ func TestPurgeRawSecrets(t *testing.T) {
 		t.Fatalf("warnings %q", warnings)
 	}
 }
+
+func TestWindow(t *testing.T) {
+	for _, bad := range []string{"", "1-6", "01:00", "01:00-01:00", "24:00-01:00", "01:60-02:00", "1:5-02:00", "a-b"} {
+		if _, err := ParseWindow(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	day, _ := ParseWindow("01:00-06:00")
+	night, _ := ParseWindow("22:00-06:00")
+	at := func(h, m int) time.Time { return time.Date(2026, 10, 10, h, m, 0, 0, time.UTC) }
+	for _, c := range []struct {
+		w    Window
+		t    time.Time
+		open bool
+		next time.Time
+	}{
+		{day, at(0, 59), false, at(1, 0)},
+		{day, at(1, 0), true, at(6, 0)},
+		{day, at(5, 59), true, at(6, 0)},
+		{day, at(6, 0), false, at(25, 0)},
+		{night, at(23, 0), true, at(30, 0)},
+		{night, at(3, 0), true, at(6, 0)},
+		{night, at(12, 0), false, at(22, 0)},
+	} {
+		if c.w.Open(c.t) != c.open || !c.w.Next(c.t).Equal(c.next) {
+			t.Errorf("%s at %s: open %v next %s", c.w, c.t.Format("15:04"), c.w.Open(c.t), c.w.Next(c.t))
+		}
+	}
+	// Local time across a DST change: the window still opens at 01:00 on the clock.
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("no zoneinfo")
+	}
+	before := time.Date(2026, 11, 1, 0, 30, 0, 0, ny) // EDT; 02:00 EDT becomes 01:00 EST
+	if n := night.Next(before); n.Hour() != 6 || n.Day() != 1 {
+		t.Errorf("next after %s is %s", before, n)
+	}
+	if n := day.Next(time.Date(2026, 11, 1, 7, 0, 0, 0, ny)); n.Hour() != 1 || n.Day() != 2 {
+		t.Errorf("next opening is %s", n)
+	}
+	// 01:15 in the repeated hour (EST, the second time): a window to 01:30 closes in 15
+	// minutes, not tomorrow.
+	early, _ := ParseWindow("00:00-01:30")
+	second := time.Date(2026, 11, 1, 5, 0, 0, 0, time.UTC).Add(75 * time.Minute).In(ny) // 01:15 EST
+	if n := early.Next(second); n.Sub(second) != 15*time.Minute {
+		t.Errorf("from %s the window closes at %s", second, n)
+	}
+	// 02:30 does not exist on 2026-03-08: the window opens when the clock reaches 03:00.
+	gap, _ := ParseWindow("02:30-06:00")
+	if n := gap.Next(time.Date(2026, 3, 8, 1, 0, 0, 0, ny)); n.Hour() != 3 || n.Minute() != 0 || n.Day() != 8 {
+		t.Errorf("across the spring gap the window opens at %s", n)
+	}
+}
+
+func TestUploadLimitAndWindowValidated(t *testing.T) {
+	for _, c := range []struct {
+		n             int
+		limit, window string
+		ok            bool
+	}{
+		{2, "500", "", true},
+		{2, "0", "", false},
+		{2, "5M", "", false},
+		{2, "", "22:00-06:00", true},
+		{2, "", "nightly", false},
+		{1, "", "01:00-06:00", false},
+		{1, "500", "", true},
+		{1, "1", "", false}, // below the default BACKUP_PARALLELISM of 2
+	} {
+		cfg := &Config{
+			ServiceDirectories: []string{"/srv/*/"},
+			Targets: []Target{
+				{N: 1, Name: "local", Type: "local", Values: Values{"LOCAL_PATH": "/s"}},
+				{N: 2, Name: "off", Type: "local", Values: Values{"LOCAL_PATH": "/o"}},
+			},
+			StoragePassword: "longenough", RSAPassphrase: "rp", PruneExhaustiveFrequency: "monthly",
+		}
+		cfg.Targets[c.n-1].UploadLimit, cfg.Targets[c.n-1].CopyWindow = c.limit, c.window
+		if err := cfg.Validate("/run/secrets"); (err == nil) != c.ok {
+			t.Errorf("target %d limit %q window %q: %v", c.n, c.limit, c.window, err)
+		}
+	}
+}

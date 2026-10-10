@@ -355,6 +355,10 @@ jobs:
         run: |
           docker run -i --rm --hostname ck-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/checkins.sh
+      - name: Upload limits reach duplicacy; copy windows skip inline copies and hold workers (ADR 44)
+        run: |
+          docker run -i --rm --hostname bw-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/bandwidth.sh
       - name: Read-only status page on WEB_PORT, refused writes, startup warning (ADR 38)
         run: |
           docker run -i --rm --hostname wb-host --cap-drop ALL --cap-add DAC_OVERRIDE \
