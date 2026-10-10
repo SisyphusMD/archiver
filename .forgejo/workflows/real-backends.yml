@@ -29,9 +29,9 @@ jobs:
         with:
           buildkitd-config-inline: |
             [registry."docker.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/docker.io"]
             [registry."ghcr.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/ghcr.io"]
       - name: Build amd64 (load locally)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -40,10 +40,10 @@ jobs:
           load: true
           tags: nightly:local
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
       - name: Round trips (backup, copy, kit, restore, maintenance)
         env:
           IMAGE: nightly:local

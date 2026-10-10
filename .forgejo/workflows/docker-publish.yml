@@ -94,7 +94,7 @@ jobs:
           set -euo pipefail
           # renovate: datasource=docker depName=golang
           GO_IMAGE=golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d
-          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct --entrypoint sh "$GO_IMAGE" -c \
+          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct --entrypoint sh "$GO_IMAGE" -c \
             'mkdir /w && cd /w && tar -x && test -z "$(gofmt -l cmd internal tests/e2e)" && go vet ./... && go test -race -cover ./cmd/... ./internal/...'
       - name: golangci-lint (ADR 39)
         # staticcheck, errcheck, ineffassign, unused, gosec, as .golangci.yml sets them; any
@@ -103,7 +103,7 @@ jobs:
           set -euo pipefail
           # renovate: datasource=docker depName=golangci/golangci-lint
           LINT_IMAGE=golangci/golangci-lint:v2.14.0@sha256:ad862ba6b3798cbe0fd9fd7408d498fd74fbd2623a92406b2fd3898faf0bf98f
-          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct --entrypoint sh "$LINT_IMAGE" -c \
+          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct --entrypoint sh "$LINT_IMAGE" -c \
             'mkdir /w && cd /w && tar -x && golangci-lint run ./...'
 
   fuzz:
@@ -118,7 +118,7 @@ jobs:
           set -euo pipefail
           # renovate: datasource=docker depName=golang
           GO_IMAGE=golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d
-          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct -e FUZZTIME=30s --entrypoint sh "$GO_IMAGE" -c \
+          tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct -e FUZZTIME=30s --entrypoint sh "$GO_IMAGE" -c \
             'mkdir /w && cd /w && tar -x && sh tests/fuzz.sh'
 
   pr-validate:
@@ -153,15 +153,15 @@ jobs:
           # BuildKit has its own registry client and does not inherit dockerd's mirror.
           buildkitd-config-inline: |
             [registry."docker.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/docker.io"]
             [registry."ghcr.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/ghcr.io"]
             [registry."quay.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/quay.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/quay.io"]
             [registry."registry.k8s.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/registry.k8s.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/registry.k8s.io"]
             [registry."public.ecr.aws"]
-              mirrors = ["image-mirror.nas.bryantserver.com/public.ecr.aws"]
+              mirrors = ["image-mirror.lan.bryantserver.com/public.ecr.aws"]
       - name: Build amd64 (load locally)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -170,10 +170,10 @@ jobs:
           load: true
           tags: smoke-test:local
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
       - name: Smoke test (no config exits cleanly; a bundle-era BUNDLE_PASSWORD refuses)
         run: |
           set +e
@@ -214,10 +214,10 @@ jobs:
           platforms: linux/arm64
           push: false
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
 
   integration:
     name: Round-trip + scheduler smoke
@@ -230,15 +230,15 @@ jobs:
           # BuildKit has its own registry client and does not inherit dockerd's mirror.
           buildkitd-config-inline: |
             [registry."docker.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/docker.io"]
             [registry."ghcr.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/ghcr.io"]
             [registry."quay.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/quay.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/quay.io"]
             [registry."registry.k8s.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/registry.k8s.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/registry.k8s.io"]
             [registry."public.ecr.aws"]
-              mirrors = ["image-mirror.nas.bryantserver.com/public.ecr.aws"]
+              mirrors = ["image-mirror.lan.bryantserver.com/public.ecr.aws"]
       - name: Build amd64 (load locally)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -247,10 +247,10 @@ jobs:
           load: true
           tags: roundtrip:local
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
       - name: Backup -> restore round-trip (asserts content + mode + UID/GID preserved)
         # Pipe the script via stdin (bash -s) instead of -v mounting the workspace:
         # the runner-container path differs from the docker host path, so a bind mount
@@ -447,11 +447,11 @@ jobs:
           # BuildKit has its own registry client and does not inherit dockerd's mirror.
           buildkitd-config-inline: |
             [registry."docker.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/docker.io"]
             [registry."ghcr.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/ghcr.io"]
             [registry."quay.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/quay.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/quay.io"]
       - name: Build the slim target, amd64 (load locally)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -461,10 +461,10 @@ jobs:
           load: true
           tags: slim:local
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
       - name: Everything Archiver runs, none of the hook tools
         run: docker run -i --rm -e SLIM=1 --entrypoint bash slim:local -s < tests/integration/slim-tools.sh
       - name: Backup, restore, recovery kit, envelope, maintenance and recovery on the slim image
@@ -488,15 +488,15 @@ jobs:
           # BuildKit has its own registry client and does not inherit dockerd's mirror.
           buildkitd-config-inline: |
             [registry."docker.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/docker.io"]
             [registry."ghcr.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/ghcr.io"]
             [registry."quay.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/quay.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/quay.io"]
             [registry."registry.k8s.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/registry.k8s.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/registry.k8s.io"]
             [registry."public.ecr.aws"]
-              mirrors = ["image-mirror.nas.bryantserver.com/public.ecr.aws"]
+              mirrors = ["image-mirror.lan.bryantserver.com/public.ecr.aws"]
       - name: Build amd64 (load locally)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -505,10 +505,10 @@ jobs:
           load: true
           tags: hosttests:local
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
       # These drive the REAL entrypoint container (docker run/stop/exec) or storage
       # sidecars on a docker network, so they run on the host rather than via
       # --entrypoint bash. Secrets reach containers through named volumes: runner
@@ -547,15 +547,15 @@ jobs:
           # BuildKit has its own registry client and does not inherit dockerd's mirror.
           buildkitd-config-inline: |
             [registry."docker.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/docker.io"]
             [registry."ghcr.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/ghcr.io"]
             [registry."quay.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/quay.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/quay.io"]
             [registry."registry.k8s.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/registry.k8s.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/registry.k8s.io"]
             [registry."public.ecr.aws"]
-              mirrors = ["image-mirror.nas.bryantserver.com/public.ecr.aws"]
+              mirrors = ["image-mirror.lan.bryantserver.com/public.ecr.aws"]
       - name: Build amd64 (load locally)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -564,13 +564,13 @@ jobs:
           load: true
           tags: e2e:local
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
       - name: Go black-box tests (upgrade from the last bash release, restore, rollback, recovery kit)
         env:
-          GOPROXY: https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
+          GOPROXY: https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
         run: ARCHIVER_IMAGE=e2e:local bash tests/e2e/run.sh -v
 
   build-and-push:
@@ -621,15 +621,15 @@ jobs:
           # BuildKit has its own registry client and does not inherit dockerd's mirror.
           buildkitd-config-inline: |
             [registry."docker.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/docker.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/docker.io"]
             [registry."ghcr.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/ghcr.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/ghcr.io"]
             [registry."quay.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/quay.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/quay.io"]
             [registry."registry.k8s.io"]
-              mirrors = ["image-mirror.nas.bryantserver.com/registry.k8s.io"]
+              mirrors = ["image-mirror.lan.bryantserver.com/registry.k8s.io"]
             [registry."public.ecr.aws"]
-              mirrors = ["image-mirror.nas.bryantserver.com/public.ecr.aws"]
+              mirrors = ["image-mirror.lan.bryantserver.com/public.ecr.aws"]
 
       - name: Log in to cluster Forgejo registry
         uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
@@ -686,10 +686,10 @@ jobs:
             type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0-slim
           cache-to: type=inline
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
       - name: Warn that the release carries no attestations
         if: steps.build.outcome == 'failure'
         run: echo "::warning title=No SBOM or provenance::The attested build failed; this release was built without them."
@@ -712,10 +712,10 @@ jobs:
             type=registry,ref=forgejo.bryantserver.com/${{ env.IMAGE_NAME }}:0-slim
           cache-to: type=inline
           build-args: |
-            GOPROXY=https://artifacts.nas.bryantserver.com/proxy.golang.org,direct
-            DEBIAN_MIRROR=http://artifacts.nas.bryantserver.com/deb.debian.org
-            GITHUB_MIRROR=https://artifacts.nas.bryantserver.com/github.com
-            DOCKER_DOWNLOAD_MIRROR=https://artifacts.nas.bryantserver.com/download.docker.com
+            GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct
+            DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
+            GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
+            DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
 
       # Skopeo walks the OCI index manifests serially and `TryReusingBlob`-
       # checks each layer at the destination before PUT, so byte-identical
@@ -744,7 +744,7 @@ jobs:
           # served (nas services/image-mirror retention). quay garbage-collects a tag's old
           # digest when it re-pushes the tag, so a direct pin 404s before Renovate bumps it.
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
 
           VOL=skopeo-stage-${{ github.run_id }}-${{ matrix.variant }}
           docker volume create "$VOL" >/dev/null
@@ -787,7 +787,7 @@ jobs:
           set -euo pipefail
           [ -n "$COSIGN_PRIVATE_KEY" ] && [ -n "$COSIGN_PASSWORD" ] || { echo "::error::COSIGN_PRIVATE_KEY or COSIGN_PASSWORD is not set; not releasing unsigned"; exit 1; }
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
           # renovate: datasource=docker depName=ghcr.io/sigstore/cosign/cosign
           COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.0.2@sha256:b29487e48205d875c324c79583e2806d9d269c0fa299e0861bbec023d8430c8b
           repo="${CANDIDATE%:*}"
@@ -816,7 +816,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
           while IFS= read -r dst; do
             [ -z "$dst" ] && continue
             docker run --rm -e CREDS "$SKOPEO_IMAGE" \
@@ -849,13 +849,13 @@ jobs:
         continue-on-error: true
         env:
           SRC: forgejo.bryantserver.com/${{ env.IMAGE_NAME }}
-          DST_NAMESPACE: forgejo.nas.bryantserver.com/sisyphusmd
+          DST_NAMESPACE: forgejo.lan.bryantserver.com/sisyphusmd
           SRC_CREDS: cody:${{ secrets.CLUSTER_FORGEJO_REGISTRY_PUSH_PAT }}
           DST_CREDS: cody:${{ secrets.NAS_FORGEJO_REGISTRY_PUSH_PAT }}
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
           docker run --rm \
             -e SRC_CREDS -e DST_CREDS \
             "$SKOPEO_IMAGE" \
@@ -881,7 +881,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.nas.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
           while IFS= read -r src; do
             [ -z "$src" ] && continue
             dst="${src/forgejo.bryantserver.com/ghcr.io}"
@@ -916,7 +916,7 @@ jobs:
           GHCR_OUTCOME: ${{ steps.mirror-ghcr.outcome }}
         run: |
           if [ "$NAS_OUTCOME" = "failure" ]; then
-            echo "::warning title=NAS Forgejo mirror failed::Push to forgejo.nas.bryantserver.com failed"
+            echo "::warning title=NAS Forgejo mirror failed::Push to forgejo.lan.bryantserver.com failed"
             echo "nas=failure" >> "$GITHUB_OUTPUT"
           fi
           if [ "$GHCR_OUTCOME" = "failure" ]; then
@@ -954,7 +954,7 @@ jobs:
           CLUSTER_TOKEN: ${{ secrets.CLUSTER_FORGEJO_REPO_WRITE_PAT }}
           CLUSTER_API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases
           NAS_TOKEN: ${{ secrets.NAS_FORGEJO_REPO_WRITE_PAT }}
-          NAS_API: https://forgejo.nas.bryantserver.com/api/v1/repos/${{ github.repository }}/releases
+          NAS_API: https://forgejo.lan.bryantserver.com/api/v1/repos/${{ github.repository }}/releases
           GH_TOKEN: ${{ secrets.GH_REPO_WRITE_PAT }}
           GH_API: https://api.github.com/repos/${{ github.repository }}/releases
         run: |
@@ -1151,7 +1151,7 @@ jobs:
             echo "::warning title=Cluster Forgejo release failures::${CLUSTER_FAILURES} release(s) failed to reconcile on forgejo.bryantserver.com"
           fi
           if [ "${NAS_FAILURES:-0}" != "0" ]; then
-            echo "::warning title=NAS Forgejo release failures::${NAS_FAILURES} release(s) failed to reconcile on forgejo.nas.bryantserver.com"
+            echo "::warning title=NAS Forgejo release failures::${NAS_FAILURES} release(s) failed to reconcile on forgejo.lan.bryantserver.com"
           fi
           if [ "${GITHUB_FAILURES:-0}" != "0" ]; then
             echo "::warning title=GitHub release failures::${GITHUB_FAILURES} release(s) failed to reconcile on github.com"
