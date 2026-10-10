@@ -112,6 +112,9 @@ func entrypointCommand(args []string) int {
 		return 1
 	}
 	e.ClearLocks()
+	// A restarted container keeps /var/lock: the last shutdown's mark must not make this
+	// container's runs keep their records when a person stops them.
+	_ = os.Remove(l.ShutdownFlag())
 
 	stopTailers := make(chan struct{})
 	jsonLogs := os.Getenv("LOG_FORMAT") == "json" && !interactive
@@ -195,6 +198,15 @@ func entrypointCommand(args []string) int {
 	metricsCtx, endMetrics := context.WithCancel(context.Background())
 	defer endMetrics()
 	startMetrics(metricsCtx, l)
+	// Without the daemon, the runs the last container left unfinished start here (ADR 46).
+	for _, kind := range interruptedRuns(l) {
+		fmt.Printf("The last %s was interrupted; running it again now.\n", kind)
+		run := exec.Command(selfPath, kind)
+		run.Stdout, run.Stderr = os.Stdout, os.Stderr
+		if run.Start() == nil {
+			go func() { _ = run.Wait() }()
+		}
+	}
 	fmt.Println("No BACKUP_SCHEDULE set. Container will wait for manual commands.")
 	fmt.Println("Use 'docker exec <container> archiver backup' to run backups manually ('archiver backup --detach' to background)")
 	fmt.Println()
@@ -209,7 +221,7 @@ func entrypointCommand(args []string) int {
 // The wait is bounded well under the documented stop_grace_period of two minutes.
 func shutdown(e *entrypoint.Env, stopTailers chan struct{}) {
 	fmt.Println("Received shutdown signal, attempting graceful stop...")
-	stop := exec.Command(selfPath, "stop")
+	stop := exec.Command(selfPath, "stop", "--shutdown")
 	stop.Stdout, stop.Stderr = os.Stdout, os.Stdout
 	_ = stop.Run()
 	for range 100 {

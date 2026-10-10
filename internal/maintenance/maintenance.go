@@ -28,6 +28,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/proc"
+	"github.com/SisyphusMD/archiver/internal/resume"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -55,8 +56,9 @@ type Run struct {
 	dirs     []string          // the service directories, whose repositories may hold fossil collections
 	urls     map[string]string // each storage's URL, by storage name
 	stopped  bool
-	pruned   bool // the primary's prune deleted revisions
-	reported bool // the run's outcome was notified
+	run      *resume.Run // this run's record on the logs volume (ADR 46)
+	pruned   bool        // the primary's prune deleted revisions
+	reported bool        // the run's outcome was notified
 }
 
 // Execute runs maintenance and returns the exit code: 1 when it failed, had errors, or was
@@ -99,12 +101,17 @@ func (r *Run) execute() int {
 	}
 	r.lock = lock
 	defer r.finish()
+	prior, interrupted := resume.Read(r.Layout.RunRecord("maintenance"))
+	r.run, _ = resume.Begin(r.Layout.RunRecord("maintenance"), resume.Record{})
 
 	r.log.Rotate()
 	if stale {
 		r.log.Message(logging.Warning, "", "Stale maintenance lock file found. Cleaned up and proceeding.")
 	}
 	r.log.Message(logging.Info, "", fmt.Sprintf("Maintenance script started (exhaustive forced: %t).", r.ForceExhaustive))
+	if interrupted {
+		r.log.Message(logging.Warning, "", fmt.Sprintf("The maintenance started %s was interrupted; this run takes its place.", logging.Timestamp(prior.Started)))
+	}
 	for _, w := range warnings {
 		r.log.Message(logging.Warning, "", w)
 	}
@@ -563,6 +570,12 @@ func (r *Run) finish() {
 	r.log.Message(logging.Info, "", "  Total time: "+logging.Duration(s.End-s.Start))
 	r.log.Message(logging.Info, "", "  Pause time: "+logging.Duration(s.Paused))
 	r.log.Message(logging.Info, "", "  Active time: "+logging.Duration(s.Active))
+	// Stopped for a container shutdown, it runs again when the container starts (ADR 46).
+	if s.EndState == "stopped" && resume.ShuttingDown(r.Layout.ShutdownFlag()) {
+		r.log.Message(logging.Info, "", "Maintenance stopped for a container shutdown; it runs again when the container starts.")
+	} else {
+		r.run.End()
+	}
 	r.lock.Release()
 	r.log.Message(logging.Info, "", "Maintenance script exited.")
 }

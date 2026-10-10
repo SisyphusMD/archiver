@@ -147,3 +147,25 @@ func TestDrillEmptyRevision(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestMountedUnder(t *testing.T) {
+	info := filepath.Join(t.TempDir(), "mountinfo")
+	if err := os.WriteFile(info, []byte("22 1 0:21 / / rw - overlay overlay rw\n"+
+		"30 22 8:1 /srv/db /tmp/archiver-drill/drill-x/inner rw - ext4 /dev/sda1 rw\n"+
+		"31 22 8:1 /srv/a /tmp/with\\040space rw - ext4 /dev/sda1 rw\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for dir, want := range map[string]bool{
+		"/tmp/archiver-drill/drill-x": true, // something is mounted inside it
+		"/tmp/archiver-drill/drill-y": false,
+		"/tmp/with space":             true,
+		"/tmp/archiver-drill/drill":   false, // a prefix of a name is not a parent
+	} {
+		if got := mountedUnder(dir, info); got != want {
+			t.Errorf("%s: %v", dir, got)
+		}
+	}
+	if !mountedUnder("/x", filepath.Join(t.TempDir(), "missing")) {
+		t.Error("an unreadable mount table must refuse")
+	}
+}

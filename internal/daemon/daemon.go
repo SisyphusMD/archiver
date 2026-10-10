@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 	"sync"
 	"time"
 
@@ -63,17 +64,41 @@ func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) 
 var RealClock Clock = realClock{}
 
 // Run starts each job on its schedule until ctx ends, then waits for running jobs to
-// finish; it never cuts one short, since stopping a run is `archiver stop`'s job.
-func Run(ctx context.Context, clock Clock, log io.Writer, jobs []Job, run func(Job) int) {
+// finish; it never cuts one short, since stopping a run is `archiver stop`'s job. The jobs
+// named in catchUp, interrupted by the last shutdown or crash (ADR 46), run once at the
+// start too: before their schedule, so never alongside it, or alone when unscheduled.
+func Run(ctx context.Context, clock Clock, log io.Writer, jobs []Job, catchUp []string, run func(Job) int) {
 	var wg sync.WaitGroup
+	scheduled := map[string]bool{}
 	for _, j := range jobs {
+		scheduled[j.Name] = true
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			if slices.Contains(catchUp, j.Name) {
+				runNow(ctx, log, j, run)
+			}
 			schedule(ctx, clock, log, j, run)
 		}()
 	}
+	for _, name := range catchUp {
+		if !scheduled[name] {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				runNow(ctx, log, Job{Name: name}, run)
+			}()
+		}
+	}
 	wg.Wait()
+}
+
+func runNow(ctx context.Context, log io.Writer, j Job, run func(Job) int) {
+	if ctx.Err() != nil {
+		return
+	}
+	fmt.Fprintf(log, "archiver daemon: starting %s now: the last one was interrupted\n", j.Name)
+	fmt.Fprintf(log, "archiver daemon: %s exited %d\n", j.Name, run(j))
 }
 
 func schedule(ctx context.Context, clock Clock, log io.Writer, j Job, run func(Job) int) {

@@ -26,6 +26,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/logview"
 	"github.com/SisyphusMD/archiver/internal/metrics"
 	"github.com/SisyphusMD/archiver/internal/restore"
+	"github.com/SisyphusMD/archiver/internal/resume"
 	"github.com/SisyphusMD/archiver/internal/setup"
 	"github.com/SisyphusMD/archiver/internal/status"
 	"github.com/SisyphusMD/archiver/internal/web"
@@ -205,7 +206,7 @@ func runDaemon(args []string) int {
 		defer workers.shutdown()
 	}
 	startMetrics(ctx, l)
-	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, func(j daemon.Job) int {
+	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, interruptedRuns(l), func(j daemon.Job) int {
 		// A fresh process per run, as under cron: each run starts clean.
 		cmd := exec.Command(selfPath, j.Name)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
@@ -219,6 +220,18 @@ func runDaemon(args []string) int {
 		return 0
 	})
 	return 0
+}
+
+// interruptedRuns are the kinds of run (backup, maintenance, drill) whose record the last
+// container left: a crash, a kill or a shutdown ended them, and they run again now (ADR 46).
+func interruptedRuns(l layout.Layout) []string {
+	var kinds []string
+	for _, k := range []string{"backup", "maintenance", "drill"} {
+		if _, ok := resume.Read(l.RunRecord(k)); ok {
+			kinds = append(kinds, k)
+		}
+	}
+	return kinds
 }
 
 // daemonCtl sends one command to a running daemon. With no daemon it exits 1 quietly.
