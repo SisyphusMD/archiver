@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -468,7 +469,8 @@ func ParseInterval(s string) (time.Duration, error) {
 	}
 	if days, ok := strings.CutSuffix(s, "d"); ok {
 		n, err := strconv.Atoi(days)
-		if err != nil || n <= 0 {
+		// Beyond what a duration holds (about 290 years) it would wrap negative.
+		if err != nil || n <= 0 || n > int(math.MaxInt64/int64(24*time.Hour)) {
 			return 0, fmt.Errorf("'%s' is not an interval (use e.g. 1d, 7d, 12h)", s)
 		}
 		return time.Duration(n) * 24 * time.Hour, nil

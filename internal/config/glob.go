@@ -192,7 +192,8 @@ func classMatch(p, s string) (int, bool) {
 			return i + 1, s != "" && matched != negate
 		}
 		if p[i] == '[' && i+1 < len(p) && p[i+1] == ':' {
-			if e := strings.Index(p[i:], ":]"); e > 0 {
+			// The closing :] comes after the opening [: (in "[:]" they overlap: no class).
+			if e := strings.Index(p[i:], ":]"); e >= 2 {
 				if in, ok := classes[p[i+2:i+e]]; ok {
 					matched = matched || (s != "" && in(c))
 					i += e + 2
