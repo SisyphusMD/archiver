@@ -143,8 +143,10 @@ func (w *Worker) upkeep(ctx context.Context, stops int) (ok bool) {
 			w.record(stops, func(s *State) { s.CheckFailed, s.CheckTried = msg, w.Clock.Now().Unix() })
 			w.log("ERROR", msg)
 			w.raise("check:"+w.Target, notify.Failure, "Storage Check Failed", msg)
+			w.checkin(false, msg)
 			return true
 		}
+		w.checkin(true, "check passed")
 		w.clear("check:"+w.Target, "Storage Check Passing", fmt.Sprintf("The check of %s storage passes again.", w.Target))
 		w.record(stops, func(s *State) {
 			s.LastCheck, s.CheckTried, s.CheckFailed = w.Clock.Now().Unix(), w.Clock.Now().Unix(), ""

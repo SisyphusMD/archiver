@@ -709,6 +709,15 @@ BACKUP_PARALLELISM="2"
 
 It lists why, and `archiver status` shows it first. For a monitor such as Uptime Kuma, run `docker exec archiver archiver health --backups` and alert on a non-zero exit, or read `backup_health` from `archiver status --json`, which also carries each service's last backup, the copy workers, drills, storage maintenance and the open incidents. Each service's last backup is kept in `logs/.backup-state.json`.
 
+### Check-ins
+
+A check-in is a dead man's switch: an outside monitor (an Uptime Kuma push monitor, healthchecks.io) expects to hear from Archiver on a schedule and alerts when it does not, so a container that is down or a backup that never ran is noticed as surely as one that failed.
+
+- `CHECKIN_URL` is called after each backup run that succeeds. After one that fails, its fail variant is called, so the alert comes at once rather than at the monitor's timeout: an Uptime Kuma push URL (`/api/push/…`) gets `status=down`, any other gets `/fail` added to its path (healthchecks.io and its kind).
+- `STORAGE_TARGET_N_CHECKIN_URL` is called when that secondary is caught up (a copy done or a check passed), and its fail variant when copies to it or its check fail.
+
+Set the monitor's expected interval a little longer than the backup schedule's. A check-in that cannot be delivered is logged as a warning; the monitor alerts on the silence anyway. The URLs are settings, not secrets: whoever has one can only send check-ins.
+
 ### Metrics
 
 Archiver keeps Prometheus metrics in `logs/archiver.prom`, rewritten after every backup and every minute while the container runs. Point node-exporter's textfile collector at the logs volume (`--collector.textfile.directory`) and nothing else is needed. With `METRICS_PORT` set (for example `9469`, published in `compose.yaml`), the daemon also serves the same on `http://<host>:<port>/metrics` for Prometheus to scrape; without it nothing listens.

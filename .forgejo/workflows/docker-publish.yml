@@ -325,6 +325,10 @@ jobs:
         run: |
           docker run -i --rm --hostname mx-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/metrics.sh
+      - name: Check-ins ping CHECKIN_URL and each target's URL, with fail variants (ADR 37)
+        run: |
+          docker run -i --rm --hostname ck-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/checkins.sh
       - name: init emits env-native materials that drive a backup
         run: |
           docker run -i --rm --hostname in-host --cap-drop ALL --cap-add DAC_OVERRIDE \

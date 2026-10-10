@@ -96,7 +96,9 @@ type Events struct {
 	// ALERT_REPEAT_INTERVAL while it lasts, and its recovery said.
 	Raise func(key string, k notify.Kind, title, msg string)
 	Clear func(key, title, msg string)
-	Save  func(State)
+	// Checkin tells the target's check-in URL it is caught up, or that it is failing (ADR 37).
+	Checkin func(ok bool, msg string)
+	Save    func(State)
 }
 
 // Upkeep is a worker's maintenance of its target (ADRs 12, 17, 18). Shared storages are
@@ -532,6 +534,16 @@ func (w *Worker) caughtUp(stops int) {
 	// Every caught-up pass, not only the first: a recovery notice an outage kept from a
 	// destination is retried here (Clear says nothing when no incident is open).
 	w.clear("copy:"+w.Target, "Storage Recovered", fmt.Sprintf("%s storage is caught up again.", w.Target))
+	// Caught up is not good while its last check failed: the monitor hears that until a
+	// check passes.
+	w.mu.Lock()
+	checkFailed := w.state.CheckFailed
+	w.mu.Unlock()
+	if checkFailed != "" {
+		w.checkin(false, checkFailed)
+	} else {
+		w.checkin(true, "caught up")
+	}
 }
 
 // failed schedules the next try and reports the target down once it has kept failing. A
@@ -572,8 +584,15 @@ func (w *Worker) failed(stops int, err error) {
 	w.save()
 	w.mu.Unlock()
 	w.log("WARNING", fmt.Sprintf("Copy to %s storage failed (%v); retrying in %s.", w.Target, err, delay))
+	w.checkin(false, err.Error())
 	if note != "" {
 		w.raise("copy:"+w.Target, notify.Failure, "Storage Down", note)
+	}
+}
+
+func (w *Worker) checkin(ok bool, msg string) {
+	if w.Events.Checkin != nil {
+		w.Events.Checkin(ok, msg)
 	}
 }
 

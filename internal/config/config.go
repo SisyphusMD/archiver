@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/SisyphusMD/archiver/internal/checkin"
 )
 
 // Source is where configuration comes from. Tests supply their own.
@@ -42,6 +44,8 @@ type Target struct {
 	Values Values
 	// CheckInterval is STORAGE_TARGET_<N>_CHECK_INTERVAL, empty for the default.
 	CheckInterval string
+	// CheckinURL is STORAGE_TARGET_<N>_CHECKIN_URL, pinged when the target is caught up.
+	CheckinURL string
 }
 
 // Get returns one of the target's values.
@@ -79,6 +83,7 @@ type Config struct {
 	CheckInterval            string // CHECK_INTERVAL: the default for every target
 	AlertRepeatInterval      string // ALERT_REPEAT_INTERVAL: how often an ongoing failure re-notifies
 	MetricsPort              string // METRICS_PORT: serve /metrics there (ADR 35); empty serves nothing
+	CheckinURL               string // CHECKIN_URL: pinged after each backup run (ADR 37)
 	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
 	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
 	// Restore drills (ADR 28); their schedule, RESTORE_DRILL_SCHEDULE, is the daemon's.
@@ -199,6 +204,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		CheckInterval:            src.Getenv("CHECK_INTERVAL"),
 		AlertRepeatInterval:      src.Getenv("ALERT_REPEAT_INTERVAL"),
 		MetricsPort:              src.Getenv("METRICS_PORT"),
+		CheckinURL:               src.Getenv("CHECKIN_URL"),
 		Parallelism:              src.Getenv("BACKUP_PARALLELISM"),
 		HooksDir:                 src.Getenv("HOOKS_DIR"),
 		DrillServices:            src.Getenv("RESTORE_DRILL_SERVICES"),
@@ -232,6 +238,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		}
 		t.Type = src.Getenv(p + "TYPE")
 		t.CheckInterval = src.Getenv(p + "CHECK_INTERVAL")
+		t.CheckinURL = src.Getenv(p + "CHECKIN_URL")
 		t.Values = Values{}
 		for _, f := range Types[t.Type].Fields {
 			if f.Secret {
@@ -350,6 +357,14 @@ func (c *Config) Validate(secretsDir string) error {
 	}
 	if err := CheckMetricsPort(c.MetricsPort); err != nil {
 		return err
+	}
+	if err := checkin.Valid(c.CheckinURL); err != nil {
+		return fmt.Errorf("CHECKIN_URL: %v (got '%s').", err, c.CheckinURL)
+	}
+	for _, t := range c.Targets {
+		if err := checkin.Valid(t.CheckinURL); err != nil {
+			return fmt.Errorf("STORAGE_TARGET_%d_CHECKIN_URL: %v (got '%s').", t.N, err, t.CheckinURL)
+		}
 	}
 	if c.AlertRepeatInterval != "0" {
 		if _, err := ParseInterval(c.AlertRepeatInterval); err != nil {
