@@ -1,0 +1,41 @@
+#!/bin/sh
+# archiver: Archiver's commands from the host, as `archiver status` instead of
+# `docker exec archiver archiver status`. Install it once from the running container:
+#
+#   docker cp archiver:/opt/archiver/host/archiver /usr/local/bin/archiver   # or podman cp
+#
+# It runs `archiver ARGS...` in the container named by ARCHIVER_CONTAINER (default
+# archiver), through docker or podman (ARCHIVER_RUNTIME to choose), with sudo when the
+# runtime needs root, as Synology's docker does. A terminal is passed on when there is one.
+set -eu
+
+container=${ARCHIVER_CONTAINER:-archiver}
+runtime=${ARCHIVER_RUNTIME:-}
+if [ -z "$runtime" ]; then
+	# Synology keeps docker in /usr/local/bin, which is not on every PATH (sudo's included).
+	for candidate in docker podman /usr/local/bin/docker; do
+		if found=$(command -v "$candidate" 2>/dev/null); then
+			runtime=$found
+			break
+		fi
+	done
+fi
+if [ -z "$runtime" ]; then
+	echo "archiver: found neither docker nor podman; set ARCHIVER_RUNTIME to its path" >&2
+	exit 127
+fi
+
+# The container itself is probed, not the runtime: a user's own rootless Podman answers, yet
+# cannot see a rootful container.
+sudo=
+if [ "$(id -u)" != 0 ] && ! "$runtime" container inspect "$container" >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
+	sudo=sudo
+fi
+
+# stdin always (restore prompts, piped input); a TTY only when both ends are one.
+tty=-i
+if [ -t 0 ] && [ -t 1 ]; then
+	tty=-it
+fi
+
+exec $sudo "$runtime" exec $tty "$container" archiver "$@"

@@ -102,6 +102,10 @@ Update paths, then start:
 docker compose up -d
 ```
 
+## Podman
+
+The image runs under rootful Podman as under Docker, with the same capabilities, secrets and mounts (`podman compose`, or `podman run` with the same flags). For a hook that controls other containers, mount Podman's API socket where the docker CLI looks for it (below); the docker CLI in the image talks to Podman through it. CI runs the image under Podman with the hardened capabilities, a hook driving containers through the socket, and the [host-side command](commands.md#from-the-host).
+
 ## Container & Host Sockets (Advanced)
 
 If your backup scripts need to control other containers (e.g., `docker exec` for database dumps), mount the container runtime socket:
