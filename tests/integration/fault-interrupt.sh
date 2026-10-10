@@ -115,6 +115,21 @@ SERVICE_DIRECTORIES="$SERVICES/big" archiver backup >/tmp/b5.out 2>&1 || { cat /
 grep -q 'Previous incomplete backup contains' $LOGS/archiver.log || die "the next backup did not use the resume point"
 rm -rf "$SERVICES/big"
 
+log "an incremental backup killed outright (no signal handled, as in a power cut) resumes from its last periodic save"
+mkdir -p "$SERVICES/inc"; echo first >"$SERVICES/inc/small"
+SERVICE_DIRECTORIES="$SERVICES/inc" archiver backup >/tmp/b6.out 2>&1 || { cat /tmp/b6.out; die "the first backup of inc failed"; }
+head -c 300000000 /dev/urandom >"$SERVICES/inc/blob1"; head -c 100000000 /dev/urandom >"$SERVICES/inc/blob2"
+SERVICE_DIRECTORIES="$SERVICES/inc" DUPLICACY_THREADS=1 DUPLICACY_RESUME_INTERVAL=0 archiver backup >/tmp/b7.out 2>&1 &
+pid=$!
+wait_for '[ -e '$SERVICES'/inc/.duplicacy/cache/local/incomplete_chunks ] && [ "$(find '$STORE'/chunks -type f -newer /tmp/b6.out | wc -l)" -gt 20 ]' 90 || die "the incremental backup never saved a resume point"
+kill -9 "$pid"; pkill -9 -f 'duplicacy.real .*backup'; wait "$pid" 2>/dev/null
+grep -q 'Incomplete snapshot saved' $LOGS/archiver.log && die "the killed backup handled a signal; this case is for one that cannot"
+SERVICE_DIRECTORIES="$SERVICES/inc" archiver backup >/tmp/b8.out 2>&1 || { cat /tmp/b8.out; die "the backup after the kill failed"; }
+grep -q 'Previous incomplete backup contains' $LOGS/archiver.log || die "the backup after the kill did not resume from the periodic save"
+SNAPSHOT_ID=fi-host-inc LOCAL_DIR=/restore/inc archiver auto-restore >/tmp/r1.out 2>&1 || { cat /tmp/r1.out; die "the resumed revision does not restore"; }
+for f in small blob1 blob2; do cmp "$SERVICES/inc/$f" "/restore/inc/$f" || die "$f restored different bytes"; done
+rm -rf "$SERVICES/inc" /restore/inc
+
 log "an interrupted drill's copies are deleted by the next drill"
 mkdir -p /tmp/archiver-drill/drill-local-app-leftover && echo x >/tmp/archiver-drill/drill-local-app-leftover/f
 # The record also names a service's data, as a remount since the drill could make it: never

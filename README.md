@@ -414,7 +414,7 @@ If your post-backup hooks take longer than 2 minutes, increase this value accord
 A backup, maintenance or restore drill that a shutdown, a crash, a kill or a power cut ends is not left to its next scheduled time. Archiver records each run in progress on the logs volume (`logs/.run-*.json`), and when the container starts again:
 
 - A service the run left between its hooks (`pre-backup` ran, `post-backup` did not, as after a crash) gets its `post-backup` hook first, with `ARCHIVER_BACKUP_RESULT=interrupted`, so whatever `pre-backup` stopped runs again. The hook's `ARCHIVER_STATE_DIR` is kept on the logs volume, so it still finds what `pre-backup` left there.
-- The backup then runs again at once, the services it had not finished first. Duplicacy picks up where it was: a stop sends it SIGINT, on which it saves its resume point (for a service's first backup), and chunks already uploaded are never sent again.
+- The backup then runs again at once, the services it had not finished first. Duplicacy picks up where it was: it saves its resume point every five minutes, and again when a stop sends it SIGINT, so after a kill or a power cut too the files it had finished are not read or sent again. (Archiver builds Duplicacy with a patch for this, `build/duplicacy/resume-point.patch`; Duplicacy 3.2.5 itself saves a resume point only on SIGINT, and only for a first backup.) Uploaded chunks a prune has removed since are checked for first, and the resume point is then not used.
 - An interrupted maintenance or drill runs again at once, and the drill's leftover copies are deleted.
 
 A stop you ask for (`archiver stop`) is not an interruption: that run is over and is not resumed. Without a schedule, the container's start runs the interrupted runs the same way.
