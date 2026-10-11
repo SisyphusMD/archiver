@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/hostguard"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
@@ -69,7 +70,7 @@ func Handler(l layout.Layout, getenv func(string) string) http.Handler {
 		enc.SetIndent("", "  ")
 		_ = enc.Encode(status.Take(l, getenv, time.Now()))
 	})
-	return readOnly(mux)
+	return hostguard.Guard(readOnly(mux), hostguard.Allowed(getenv("WEB_ALLOWED_HOSTS")))
 }
 
 func readOnly(h http.Handler) http.Handler {

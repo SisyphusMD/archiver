@@ -210,6 +210,26 @@ func TestWritePrivateReplacesALink(t *testing.T) {
 	}
 }
 
+// A token directory someone else put in place (a logs-volume writer's own 0700 one) is not
+// written to or read from: the token stays in the secret.
+func TestTokenDirOwnedBySomeoneElse(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("needs root to make a directory owned by another user")
+	}
+	dir := filepath.Join(t.TempDir(), "tokens")
+	os.Mkdir(dir, 0o700)
+	if err := os.Chown(dir, 65534, 65534); err != nil {
+		t.Skip(err)
+	}
+	p := filepath.Join(dir, "od-one_token")
+	if WritePrivate(p, []byte("tok")) == nil {
+		t.Fatal("a directory owned by another user was written to")
+	}
+	if got := currentToken(p, []byte("secret")); string(got) != "secret" {
+		t.Fatalf("read the token from another user's directory: %q", got)
+	}
+}
+
 // The recovery kit carries the notification secrets, so a recovered host keeps notifying.
 func TestSnapshotCarriesNotificationSecrets(t *testing.T) {
 	secrets := t.TempDir()

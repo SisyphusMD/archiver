@@ -16,6 +16,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/backuphealth"
 	"github.com/SisyphusMD/archiver/internal/copier"
+	"github.com/SisyphusMD/archiver/internal/hostguard"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
@@ -170,7 +171,7 @@ func Serve(ctx context.Context, port string, l layout.Layout, getenv func(string
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		fmt.Fprint(w, Render(status.Take(l, getenv, time.Now())))
 	})
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: hostguard.Guard(mux, hostguard.Allowed(getenv("WEB_ALLOWED_HOSTS"))), ReadHeaderTimeout: 10 * time.Second}
 	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		return err

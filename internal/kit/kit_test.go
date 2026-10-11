@@ -429,3 +429,23 @@ func TestLocalAccessFollowsNoLink(t *testing.T) {
 		t.Fatalf("the link's target became %o", fi.Mode().Perm())
 	}
 }
+
+// A hard link where the kit belongs names another file, which keeps its owner and mode: only
+// the fresh file rclone wrote is changed.
+func TestLocalAccessChangesNoHardLink(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "config"), []byte("c"), 0o666)
+	secret := filepath.Join(dir, "secret")
+	os.WriteFile(secret, []byte("s"), 0o600)
+	if err := os.Link(secret, filepath.Join(dir, "kit.tar.enc")); err != nil {
+		t.Skip("no hard links here:", err)
+	}
+	r := &Run{Log: &logging.Log{Dir: t.TempDir(), Basename: "archiver"}}
+	tgt := config.Target{N: 1, Values: config.Values{"LOCAL_PATH": dir}}
+	if code := r.localAccess(tgt, []string{"kit.tar.enc"}); code != Unverified {
+		t.Fatalf("exit %d, want Unverified", code)
+	}
+	if fi, _ := os.Stat(secret); fi.Mode().Perm() != 0o600 {
+		t.Fatalf("the linked file became %o", fi.Mode().Perm())
+	}
+}
