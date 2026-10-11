@@ -172,6 +172,8 @@ Every storage Duplicacy 3.2.5 supports is a type (ADR 23). Settings are plain `S
 | `storj` | `STORJ_SATELLITE` (`host:port` for Storj's public satellites, `nodeid@host:port` for any other), `STORJ_BUCKET` (create it first), *`STORJ_PATH`* | `STORJ_KEY`, `STORJ_PASSPHRASE` | |
 | `fabric` | `FABRIC_ENDPOINT`, *`FABRIC_PATH`* | `FABRIC_TOKEN` | Storage Made Easy File Fabric. |
 
+**SFTP host keys.** The first time Archiver reaches an SFTP server it records the server's key, and from then on every backup, copy, restore, drill and kit upload refuses a server presenting a different one. The keys are kept on the logs volume, in `logs/.ssh/duplicacy_known_hosts` (Duplicacy's, by address and port) and `logs/.ssh/known_hosts` (OpenSSH's, for the recovery kit), so they survive container recreation. At container start, the keys repositories pinned before this record existed are added to it (an upgrade keeps them); where two disagree for one server, the first is kept and a warning names both files, and the repository holding the other is refused until the wrong key is deleted. If a server's key changed on purpose (a reinstall), delete its lines from both files.
+
 When Duplicacy cannot open a storage, the error says why: the storage's directory does not exist (Duplicacy does not create it on SFTP, WebDAV or SMB), or the storage cannot be reached, with the reason.
 
 Checks default to daily on object storage and weekly on SFTP, WebDAV, SMB, File Fabric and the consumer drives (`STORAGE_TARGET_N_CHECK_INTERVAL` overrides). Every type receives the [recovery kit](recovery.md#automatic-recovery-kit), and the [envelope](recovery.md#break-glass-envelope) prints each type's settings and credentials.

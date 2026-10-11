@@ -24,6 +24,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/hooks"
+	"github.com/SisyphusMD/archiver/internal/hostkeys"
 	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
@@ -717,6 +718,9 @@ func (b *Backup) serviceRepo(svc hooks.Service) (string, error) {
 		if err := layout.Private(d); err != nil {
 			return "", err
 		}
+	}
+	if err := hostkeys.Pin(b.Layout.HostKeys(), filepath.Join(work, ".duplicacy")); err != nil {
+		return "", err
 	}
 	return work, nil
 }

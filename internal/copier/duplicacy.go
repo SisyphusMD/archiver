@@ -19,6 +19,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/damage"
+	"github.com/SisyphusMD/archiver/internal/hostkeys"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/proc"
 	"github.com/SisyphusMD/archiver/internal/runlock"
@@ -36,6 +37,7 @@ type Duplicacy struct {
 	Threads    string
 	PrivKey    string
 	PubKey     string
+	HostKeys   string // the shared SFTP host key record (layout.HostKeys); "" keeps the repository's own
 	SnapshotID string // required by init; never backed up
 	Primary    config.Target
 	Target     config.Target
@@ -66,6 +68,11 @@ func (d *Duplicacy) Prepare(ctx context.Context) error {
 	// are orphaned until the next exhaustive prune.
 	if err := os.MkdirAll(filepath.Join(d.Repo, ".duplicacy"), 0o700); err != nil {
 		return err
+	}
+	if d.HostKeys != "" {
+		if err := hostkeys.Pin(d.HostKeys, filepath.Join(d.Repo, ".duplicacy")); err != nil {
+			return err
+		}
 	}
 	if err := os.Remove(filepath.Join(d.Repo, ".duplicacy", "preferences")); err != nil && !os.IsNotExist(err) {
 		return err

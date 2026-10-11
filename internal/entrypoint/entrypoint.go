@@ -16,6 +16,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/hooks"
+	"github.com/SisyphusMD/archiver/internal/hostkeys"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
@@ -242,6 +243,37 @@ func (e *Env) LocksClear() bool {
 // Exec replaces this process with `archiver args...`.
 func (e *Env) Exec(args ...string) error {
 	return syscall.Exec(e.Self, append([]string{e.Self}, args...), os.Environ())
+}
+
+// SeedHostKeys puts the SFTP host keys every existing repository pinned into the shared
+// record before any job connects, so the first to connect cannot trust a changed key over a
+// pin it never saw: the service repositories, including those still in the service
+// directories from before they moved to the logs volume, the copy workers' and maintenance's.
+func (e *Env) SeedHostKeys(src config.Source) {
+	logs := e.Layout.LogDir()
+	// The service repositories first: theirs are the pins every backup has been checking.
+	sources, _ := filepath.Glob(filepath.Join(e.Layout.ServiceRepos(), "*", ".duplicacy", "known_hosts"))
+	if cfg, _, err := config.Load(src, nil); err == nil {
+		dirs, _ := config.ExpandServiceDirectories(cfg.ServiceDirectories)
+		for _, d := range dirs {
+			sources = append(sources, filepath.Join(d, ".duplicacy", "known_hosts"))
+		}
+	}
+	copies, _ := filepath.Glob(filepath.Join(logs, ".copy-repos", "*", ".duplicacy", "known_hosts"))
+	sources = append(append(sources, copies...), filepath.Join(logs, ".maintenance-repo", ".duplicacy", "known_hosts"))
+	// The recovery kit's OpenSSH record lived in the container's home before.
+	if home := e.Getenv("HOME"); home != "" {
+		if err := hostkeys.CopyIfMissing(filepath.Join(home, ".ssh", "known_hosts"), e.Layout.KnownHosts()); err != nil {
+			fmt.Fprintln(e.Stderr, "WARNING: SFTP host keys:", err)
+		}
+	}
+	conflicts, err := hostkeys.Seed(e.Layout.HostKeys(), sources)
+	if err != nil {
+		fmt.Fprintln(e.Stderr, "WARNING: SFTP host keys:", err)
+	}
+	for _, c := range conflicts {
+		fmt.Fprintf(e.Stderr, "WARNING: %s; Archiver keeps the first, and refuses the other repository until the wrong key is deleted.\n", c)
+	}
 }
 
 // LegacyServices lists the configured service directories that still hold the sourced

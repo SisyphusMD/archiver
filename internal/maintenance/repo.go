@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/SisyphusMD/archiver/internal/atomicfile"
+	"github.com/SisyphusMD/archiver/internal/hostkeys"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/proc"
@@ -37,6 +38,9 @@ const identities = "storages"
 func (r *Run) prepare(ctx context.Context) error {
 	dot := filepath.Join(r.repo, ".duplicacy")
 	if err := os.MkdirAll(dot, 0o700); err != nil {
+		return err
+	}
+	if err := hostkeys.Pin(r.Layout.HostKeys(), dot); err != nil {
 		return err
 	}
 	if err := os.Remove(filepath.Join(dot, "preferences")); err != nil && !os.IsNotExist(err) {
