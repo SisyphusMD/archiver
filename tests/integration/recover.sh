@@ -36,9 +36,14 @@ for s in apps/app dbs/db; do
   mkdir -p "$SERVICES/$s/sub"
   head -c 30000 /dev/urandom >"$SERVICES/$s/blob.bin"; echo "$s" >"$SERVICES/$s/sub/name.txt"
 done
-(cd "$SERVICES" && find . -type f | sort | xargs sha256sum) >/tmp/before.sums
 archiver backup >/tmp/backup.out 2>&1 || { cat /tmp/backup.out; die "backup failed"; }
 kit=$(ls "$STORE"/archiver-recovery-kit-rc-host.tar.enc) || die "no kit on the storage"
+# A legacy settings file that got into a snapshot (as a service's owner could slip one in
+# while a backup reads the directory) is code: recover without --hook must not run it.
+printf 'touch /tmp/pwned-by-recover\n' >"$SERVICES/apps/app/service-backup-settings.sh"
+(cd "$SERVICES/apps/app" && DUPLICACY_LOCAL_PASSWORD=testpassword DUPLICACY_LOCAL_RSA_PASSPHRASE="${RSA_PASSPHRASE}" \
+  duplicacy backup -storage local >/dev/null) || die "planting the settings file in a revision failed"
+(cd "$SERVICES" && find . -path '*/.duplicacy' -prune -o -type f -print | sort | xargs sha256sum) >/tmp/before.sums
 
 log "the host is lost: keys, configuration, secrets (all but the password) and data"
 cp "$kit" /tmp/kit.tar.enc
@@ -60,6 +65,8 @@ log "recover from the kit alone"
 archiver entrypoint recover /tmp/kit.tar.enc --yes >/tmp/recover.out 2>&1 || { cat /tmp/recover.out; die "recover failed"; }
 grep -qF "All 2 services restored" /tmp/recover.out || { cat /tmp/recover.out; die "recover did not restore both services"; }
 grep -qF "hostname 'rc-host'" /tmp/recover.out || { cat /tmp/recover.out; die "recover does not say which hostname to keep"; }
+[ ! -e /tmp/pwned-by-recover ] || die "recover without --hook ran a restored service-backup-settings.sh"
+grep -qF "Nothing in it was run" /tmp/recover.out || { cat /tmp/recover.out; die "recover did not warn about the restored settings file"; }
 [ -f /opt/archiver/recovered/archiver.env ] || die "no recovered archiver.env"
 [ "$(stat -c %a /opt/archiver/recovered/secrets/storage_password)" = 600 ] || die "a recovered secret is not owner-only"
 [ -f /opt/archiver/keys/private.pem ] || die "the RSA key was not placed"

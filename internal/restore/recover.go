@@ -19,6 +19,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
+	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/kit"
 )
 
@@ -135,8 +136,17 @@ func (e *Env) Recover(o RecoverOptions) int {
 	for k, v := range env {
 		e.Environ = append(e.Environ, k+"="+v)
 	}
-	if o.Migrate != nil {
+	// A restored legacy settings file is code, so only --hook migrates it (which also keeps
+	// HOOKS_DIR, under which migration refuses); without it the file is left with a warning.
+	switch {
+	case o.Hook && o.Migrate != nil:
 		e.AfterRestore = o.Migrate(src, host)
+	case !o.Hook:
+		e.AfterRestore = func(dir string) {
+			if _, err := os.Lstat(filepath.Join(dir, hooks.Legacy)); err == nil {
+				fmt.Fprintf(out, "  WARNING: %s holds a restored %s, which backups refuse. Nothing in it was run (recover runs no service code without --hook): remove it, or run 'archiver migrate hooks %s' if you trust it.\n", dir, hooks.Legacy, dir)
+			}
+		}
 	}
 	if !e.load() {
 		return 1

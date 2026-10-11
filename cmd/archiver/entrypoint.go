@@ -69,8 +69,8 @@ func entrypointCommand(args []string) int {
 	}
 
 	refuseLegacy := func() bool {
-		if dirs := entrypoint.LegacyServices(config.FromEnvironment()); len(dirs) > 0 {
-			fmt.Fprint(os.Stderr, entrypoint.LegacyHelp(dirs))
+		if dirs, hooksDir := entrypoint.LegacyServices(config.FromEnvironment()); len(dirs) > 0 {
+			fmt.Fprint(os.Stderr, entrypoint.LegacyHelp(dirs, hooksDir))
 			return true
 		}
 		return false

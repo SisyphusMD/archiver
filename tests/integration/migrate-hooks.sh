@@ -95,4 +95,19 @@ done
 [ ! -e "$RESTORE/skip/excluded.txt" ] || die "filters no longer exclude skip/"
 grep -q "revision 1" "$RESTORE/data/kept.txt" || die "restored the wrong revision"
 
-echo "=== MIGRATE-HOOKS OK: legacy hooks migrated, run by the Go pipeline, filters unchanged ==="
+log "with HOOKS_DIR set, a settings file in a service directory is foreign content, never run"
+mkdir -p /data/services/untrusted /hooks
+printf 'touch /tmp/pwned-by-migrate\n' >/data/services/untrusted/service-backup-settings.sh
+export HOOKS_DIR=/hooks
+archiver migrate hooks >/tmp/migrate3.out 2>&1 && die "migrate hooks under HOOKS_DIR migrated an unnamed service directory"
+[ ! -e /tmp/pwned-by-migrate ] || die "migrate hooks under HOOKS_DIR ran a service directory's settings file"
+grep -q "not migrated, since HOOKS_DIR is set" /tmp/migrate3.out || die "no explanation: $(cat /tmp/migrate3.out)"
+archiver backup >/tmp/run3.out 2>&1
+grep -q "HOOKS_DIR is set, so nothing in a service directory runs: remove it" "$LOG" || die "the backup does not say to remove the file"
+archiver entrypoint true >/tmp/start3.out 2>&1 && die "the container started with a legacy file in a service directory"
+grep -q "Remove it (your hooks are in HOOKS_DIR)" /tmp/start3.out || die "the start refusal does not say to remove the file: $(cat /tmp/start3.out)"
+[ ! -e /tmp/pwned-by-migrate ] || die "something ran the settings file"
+unset HOOKS_DIR
+rm -f /data/services/untrusted/service-backup-settings.sh
+
+echo "=== MIGRATE-HOOKS OK: legacy hooks migrated, run by the Go pipeline, filters unchanged, never run under HOOKS_DIR ==="
