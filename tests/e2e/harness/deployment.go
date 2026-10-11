@@ -98,7 +98,7 @@ func (d *Deployment) Start(t testing.TB) {
 		if t.Failed() {
 			t.Logf("logs of %s (%s):\n%s", d.name, d.Image, docker(t, "logs", d.name).Output())
 		}
-		docker(t, "rm", "-f", d.name)
+		docker(t, "rm", "-fv", d.name)
 	})
 	d.waitReady(t)
 }
@@ -130,7 +130,7 @@ func (d *Deployment) waitReady(t testing.TB) {
 // Stop removes the container early, so another image can take over the installation.
 func (d *Deployment) Stop(t testing.TB) {
 	t.Helper()
-	docker(t, "rm", "-f", d.name)
+	docker(t, "rm", "-fv", d.name)
 }
 
 // Archiver runs `archiver <args>` inside the running container.

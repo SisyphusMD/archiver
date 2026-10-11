@@ -76,7 +76,7 @@ func WatchArgv(t testing.TB, d *Deployment, secrets map[string]string) *ArgvWatc
 	if r.Code != 0 {
 		t.Fatalf("start argv watch: %s", r.Output())
 	}
-	t.Cleanup(func() { docker(t, "rm", "-f", w.name) })
+	t.Cleanup(func() { docker(t, "rm", "-fv", w.name) })
 	waitFor(t, 30*time.Second, "argv watch to start", func() bool {
 		_, err := os.Stat(filepath.Join(dir, "ready"))
 		return err == nil
@@ -380,7 +380,7 @@ func (d *Deployment) startRaw(t testing.TB, env map[string]string, secretsDir st
 		if t.Failed() {
 			t.Logf("logs of %s (%s):\n%s", name, d.Image, docker(t, "logs", name).Output())
 		}
-		docker(t, "rm", "-f", name)
+		docker(t, "rm", "-fv", name)
 	})
 	d.waitStarted(t)
 }
