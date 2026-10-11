@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/lockstate"
+	"github.com/SisyphusMD/archiver/internal/resume"
 )
 
 func drillFixture(t *testing.T, services ...string) *fixture {
@@ -167,5 +168,52 @@ func TestMountedUnder(t *testing.T) {
 	}
 	if !mountedUnder("/x", filepath.Join(t.TempDir(), "missing")) {
 		t.Error("an unreadable mount table must refuse")
+	}
+}
+
+// A killed drill leaves its repository behind as well as its copy: the next drill deletes it,
+// but only a real directory of Archiver's own named as workRepo names them, directly in the
+// temporary directory, since the record is on the logs volume.
+func TestDrillDeletesInterruptedRepositories(t *testing.T) {
+	f := drillFixture(t, "app")
+	f.revs(1, "1")
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	mk := func(p string, mode os.FileMode) string {
+		t.Helper()
+		if err := os.MkdirAll(p, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		os.Chmod(p, mode)
+		os.WriteFile(filepath.Join(p, "marker"), nil, 0o600)
+		return p
+	}
+	old := mk(filepath.Join(tmp, "archiver-restore-old"), 0o700)
+	open := mk(filepath.Join(tmp, "archiver-restore-open"), 0o777)
+	target := mk(filepath.Join(f.root, "target"), 0o700)
+	link := filepath.Join(tmp, "archiver-restore-link")
+	os.Symlink(target, link)
+	outside := mk(filepath.Join(f.root, "archiver-restore-outside"), 0o700)
+	run, err := resume.Begin(f.env.Layout.RunRecord("drill"), resume.Record{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{old, open, link, outside} {
+		run.Set(p, resume.Pending)
+	}
+
+	if code := f.env.Drill(DrillOptions{}); code != 0 {
+		t.Fatalf("exit %d: %s %s", code, f.out.String(), f.err.String())
+	}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("the interrupted drill's repository was not deleted: %v", err)
+	}
+	for _, p := range []string{open, filepath.Join(target, "marker"), link, outside} {
+		if _, err := os.Lstat(p); err != nil {
+			t.Fatalf("%s was deleted: %v", p, err)
+		}
+	}
+	if left, _ := filepath.Glob(filepath.Join(tmp, "archiver-restore-*")); len(left) != 2 {
+		t.Fatalf("this drill's repository was left behind: %v", left)
 	}
 }

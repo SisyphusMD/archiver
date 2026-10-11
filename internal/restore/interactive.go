@@ -222,10 +222,15 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 	if err := e.guard(dir); err != nil {
 		return 1, err
 	}
-	if err := e.connect(dir, t, id, out); err != nil {
+	repo, err := workRepo()
+	if err != nil {
 		return 1, err
 	}
-	if err := e.restore(dir, t, id, rev, o, out); err != nil {
+	defer os.RemoveAll(repo)
+	if err := e.connect(repo, dir, t, id, out); err != nil {
+		return 1, err
+	}
+	if err := e.restore(repo, dir, t, id, rev, o, out); err != nil {
 		return 1, fmt.Errorf("the restore from '%s' failed: %v", t.Name, err)
 	}
 	fmt.Fprintln(out, "Repository restored.")

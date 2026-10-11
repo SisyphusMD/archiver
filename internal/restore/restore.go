@@ -264,8 +264,27 @@ func (e *Env) inherit(cmd *exec.Cmd) {
 	}
 }
 
-// connect makes dir a duplicacy repository of snapshot id on t, replacing any it was.
-func (e *Env) connect(dir string, t config.Target, id string, out io.Writer) error {
+// workRepo is a new repository for one restore, deleted by the caller afterwards. It is
+// kept out of the destination, which may be a service directory: whoever owns that must not
+// supply the configuration or cache a root restore follows.
+func workRepo() (string, error) { return os.MkdirTemp("", workRepoPrefix) }
+
+const workRepoPrefix = "archiver-restore-"
+
+// isWorkRepo reports whether p, read from a record on the logs volume (which someone less
+// trusted may be able to write), is one of workRepo's repositories and so safe to delete: a
+// real directory with its prefix directly in the temporary directory, Archiver's own.
+func isWorkRepo(p string) bool {
+	if filepath.Dir(p) != filepath.Clean(os.TempDir()) || !strings.HasPrefix(filepath.Base(p), workRepoPrefix) {
+		return false
+	}
+	fi, err := os.Lstat(p)
+	return err == nil && layout.Owned(fi)
+}
+
+// connect makes repo a duplicacy repository of snapshot id on t, replacing any it was, that
+// restores into dest (repo itself when dest is empty).
+func (e *Env) connect(repo, dest string, t config.Target, id string, out io.Writer) error {
 	if t.Type == "sftp" || t.Type == "sftpc" {
 		for _, k := range []string{e.Layout.SSHPrivateKey(), e.Layout.SSHPrivateKey() + ".pub"} {
 			if _, err := os.Stat(k); err != nil {
@@ -277,10 +296,13 @@ func (e *Env) connect(dir string, t config.Target, id string, out io.Writer) err
 	if err != nil {
 		return err
 	}
-	if err := os.RemoveAll(filepath.Join(dir, ".duplicacy")); err != nil {
+	if err := os.RemoveAll(filepath.Join(repo, ".duplicacy")); err != nil {
 		return err
 	}
-	pub := filepath.Join(e.Layout.Root, "keys", "public.pem")
+	args := []string{"init", "-e", "-key", filepath.Join(e.Layout.Root, "keys", "public.pem"), "-storage-name", t.StorageName()}
+	if dest != "" {
+		args = append(args, "-repository", dest)
+	}
 	// init creates the storage when it does not exist yet; a backup, copy or maintenance
 	// creating it at the same time could leave two configurations, so it takes their lock.
 	release, err := runlock.Exclusive(e.context(), e.Layout.StorageInit(t.StorageName()))
@@ -288,7 +310,7 @@ func (e *Env) connect(dir string, t config.Target, id string, out io.Writer) err
 		return err
 	}
 	defer release()
-	if err := e.duplicacy(dir, out, "init", "-e", "-key", pub, "-storage-name", t.StorageName(), id, url).Run(); err != nil {
+	if err := e.duplicacy(repo, out, append(args, id, url)...).Run(); err != nil {
 		if why := kit.Diagnose(e.Layout, "", t); why != "" {
 			return fmt.Errorf("duplicacy %s storage initialization failed for '%s': %s", t.Type, t.StorageName(), why)
 		}
@@ -362,9 +384,10 @@ func missingCaps(capEff int64) []string {
 	return m
 }
 
-// restore restores revision rev of id from t into dir, already connected. A restore is never
-// refused for missing ownership capabilities: without them it restores without ownership.
-func (e *Env) restore(dir string, t config.Target, id string, rev int, o Options, out io.Writer) error {
+// restore restores revision rev of id from t into dir, through repo, already connected to
+// restore there. A restore is never refused for missing ownership capabilities: without them
+// it restores without ownership.
+func (e *Env) restore(repo, dir string, t config.Target, id string, rev int, o Options, out io.Writer) error {
 	if !o.IgnoreOwner {
 		if m := missingCaps(e.CapEff); len(m) > 0 {
 			fmt.Fprintf(out, "[WARN] The %s capability is not granted, so this restore cannot preserve original ownership: restored files will be owned by root. Add CHOWN and FOWNER to the container's cap_add to keep ownership, or set IGNORE_OWNERSHIP=1 to silence this warning.\n", strings.Join(m, " "))
@@ -389,7 +412,7 @@ func (e *Env) restore(dir string, t config.Target, id string, rev int, o Options
 	if len(o.Paths) > 0 {
 		args = append(append(args, "--"), patterns(o.Paths)...)
 	}
-	cmd := e.duplicacy(dir, out, args...)
+	cmd := e.duplicacy(repo, out, args...)
 	// duplicacy shares the registration's lock, so a restore that outlives this process
 	// (killed mid-restore) still keeps its revision from being pruned.
 	cmd.ExtraFiles = append(cmd.ExtraFiles, h.File())

@@ -59,7 +59,7 @@ func (e *Env) probe(t config.Target, id string) (revs []int, ok bool) {
 		return nil, false
 	}
 	defer os.RemoveAll(dir)
-	if err := e.connect(dir, t, id, e.Stderr); err != nil {
+	if err := e.connect(dir, "", t, id, e.Stderr); err != nil {
 		fmt.Fprintln(e.Stderr, "  unreachable:", err)
 		return nil, false
 	}
@@ -225,15 +225,21 @@ func (e *Env) run(req request) int {
 		fmt.Fprintln(e.Stderr, "ERROR:", err)
 		return Busy
 	}
+	repo, err := workRepo()
+	if err != nil {
+		fmt.Fprintln(e.Stderr, "ERROR:", err)
+		return Unreachable
+	}
+	defer os.RemoveAll(repo)
 	unreachable := 0
 	for _, t := range req.targets {
 		fmt.Fprintf(e.Stdout, "Trying '%s' (%s)...\n", t.Name, t.Type)
-		if err := e.connect(dir, t, req.id, e.Stdout); err != nil {
+		if err := e.connect(repo, dir, t, req.id, e.Stdout); err != nil {
 			fmt.Fprintln(e.Stdout, "  unreachable:", err)
 			unreachable++
 			continue
 		}
-		revs, err := e.revisions(dir, req.id)
+		revs, err := e.revisions(repo, req.id)
 		if err != nil {
 			fmt.Fprintln(e.Stdout, "  list failed")
 			unreachable++
@@ -250,7 +256,7 @@ func (e *Env) run(req request) int {
 		}
 		fmt.Fprintf(e.Stdout, "  using revision %d\n", rev)
 		fmt.Fprintf(e.Stdout, "Restoring from '%s' at revision %d...\n", t.Name, rev)
-		if err := e.restore(dir, t, req.id, rev, req.opts, e.Stdout); err != nil {
+		if err := e.restore(repo, dir, t, req.id, rev, req.opts, e.Stdout); err != nil {
 			fmt.Fprintf(e.Stderr, "ERROR: Restore from '%s' failed: %v\n", t.Name, err)
 			return NotFound
 		}
