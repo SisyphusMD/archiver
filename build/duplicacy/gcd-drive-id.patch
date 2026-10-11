@@ -1,0 +1,100 @@
+--- /dev/null
++++ b/src/duplicacy_gcdstorage_drive_test.go
+@@ -0,0 +1,43 @@
++package duplicacy
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++
++	"golang.org/x/net/context"
++	"google.golang.org/api/drive/v3"
++	"google.golang.org/api/option"
++)
++
++// A shared drive is found by its name or by its ID, the value its URL shows.
++func TestSharedDriveByNameOrID(t *testing.T) {
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.Header().Set("Content-Type", "application/json")
++		switch {
++		case r.URL.Path == "/drives" && strings.Contains(r.URL.Query().Get("q"), "'Backups'"):
++			w.Write([]byte(`{"drives":[{"id":"0AbcDEF","name":"Backups"}]}`))
++		case r.URL.Path == "/drives":
++			w.Write([]byte(`{"drives":[]}`))
++		case r.URL.Path == "/drives/0AbcDEF":
++			w.Write([]byte(`{"id":"0AbcDEF","name":"Backups"}`))
++		default:
++			w.WriteHeader(http.StatusNotFound)
++			w.Write([]byte(`{"error":{"code":404,"message":"Shared drive not found"}}`))
++		}
++	}))
++	defer server.Close()
++	service, err := drive.NewService(context.Background(), option.WithEndpoint(server.URL+"/"), option.WithHTTPClient(server.Client()))
++	if err != nil {
++		t.Fatal(err)
++	}
++	for in, want := range map[string]string{"Backups": "0AbcDEF", "0AbcDEF": "0AbcDEF"} {
++		if got, err := resolveSharedDrive(service, in); err != nil || got != want {
++			t.Errorf("%s: got %q, %v; want %q", in, got, err, want)
++		}
++	}
++	if _, err := resolveSharedDrive(service, "nothing"); err == nil {
++		t.Error("an unknown drive was accepted")
++	}
++}
+--- a/src/duplicacy_gcdstorage.go
++++ b/src/duplicacy_gcdstorage.go
+@@ -343,6 +343,25 @@
+ }
+ 
+ // CreateGCDStorage creates a GCD storage object.
++// resolveSharedDrive returns the ID of the shared drive named or identified by drive: a name is
++// looked up first, then the value is tried as an ID, which is what the drive's URL shows.
++func resolveSharedDrive(service *drive.Service, driveID string) (string, error) {
++	query := fmt.Sprintf("name='%s'", driveID)
++	driveList, err := drive.NewDrivesService(service).List().Q(query).Do()
++	if err != nil {
++		return driveID, nil
++	}
++	for _, d := range driveList.Drives {
++		if d.Name == driveID {
++			return d.Id, nil
++		}
++	}
++	if d, err := drive.NewDrivesService(service).Get(driveID).Do(); err == nil {
++		return d.Id, nil
++	}
++	return "", fmt.Errorf("%s is not the id or name of a shared drive", driveID)
++}
++
+ func CreateGCDStorage(tokenFile string, driveID string, storagePath string, threads int) (storage *GCDStorage, err error) {
+ 
+ 	ctx := context.Background()
+@@ -407,23 +426,8 @@
+ 
+ 	if len(driveID) == 0 {
+ 		driveID = GCDUserDrive
+-	} else {
+-		// In case the driveID is a name, convert it to an id
+-		query := fmt.Sprintf("name='%s'", driveID)
+-		driveList, err := drive.NewDrivesService(service).List().Q(query).Do()
+-		if err == nil {
+-			found := false
+-			for _, drive := range driveList.Drives {
+-				if drive.Name == driveID {
+-					found = true
+-					driveID = drive.Id
+-					break
+-				}
+-			}
+-			if !found {
+-				return nil, fmt.Errorf("%s is not the id or name of a shared drive", driveID)
+-			}
+-		}
++	} else if driveID, err = resolveSharedDrive(service, driveID); err != nil {
++		return nil, err
+ 	}
+ 
+ 	storage = &GCDStorage{

@@ -75,7 +75,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver` is now a small Go program, the first step of the v1 rewrite. For now it runs the same bash commands as before, so every command, flag, exit code, and output is unchanged; scheduled runs, `docker stop`, and `init` go through it too. `archiver init` also works inside a running container.
 
 ### Fixed
-
+- **A Google Drive shared drive works by its ID**, as `GCD_DRIVE` asks: Duplicacy 3.2.5 looked a shared drive up only by name and refused the ID its URL shows, while the recovery kit takes only the ID, so neither worked end to end (patched in the Duplicacy build; a name still works for Duplicacy).
+- **A storage that cannot be opened is no longer blamed on a missing directory** on types where Duplicacy creates the directory itself (all but SFTP, WebDAV, SMB, File Fabric, OneDrive and Azure's container); Duplicacy's own error is shown instead.
+- **`STORJ_SATELLITE` says what a private satellite needs:** `nodeid@host:port` (`host:port` works only for Storj's public satellites), and the bucket must exist first.
 - A `SERVICE_DIRECTORIES` pattern holding `[[:]` crashed Archiver; it is now taken literally. An interval of over about 106,000 days (`CHECK_INTERVAL=110000d`) wrapped negative and was accepted; it is now refused. Both found by fuzzing (ADR 39).
 - `archiver init` fails if it cannot make the generated private keys and `archiver.env` owner-only, instead of carrying on.
 - **Maintenance no longer ends with "Maintenance completed successfully" after a failed check or prune;** its summary counts the errors, as the backup's does.

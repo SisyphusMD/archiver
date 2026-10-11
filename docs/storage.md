@@ -169,7 +169,7 @@ Every storage Duplicacy 3.2.5 supports is a type (ADR 23). Settings are plain `S
 | `swift` | `SWIFT_URL`: `user@auth-host/v3/container[/path][?domain=…&tenant=…]` | `SWIFT_KEY` | OpenStack Swift, in Duplicacy's URL form; add `protocol=http` for plain HTTP. |
 | `webdav`, `webdav-http` | `WEBDAV_HOST` (host[:port]), `WEBDAV_USER`, `WEBDAV_PATH` | `WEBDAV_PASSWORD` | HTTPS or plain HTTP. The path must exist. |
 | `smb` | `SMB_HOST` (host[:port]), `SMB_USER`, `SMB_SHARE`, *`SMB_PATH`* | `SMB_PASSWORD` | SMB 2/3. The path must exist. |
-| `storj` | `STORJ_SATELLITE` (host:port), `STORJ_BUCKET`, *`STORJ_PATH`* | `STORJ_KEY`, `STORJ_PASSPHRASE` | |
+| `storj` | `STORJ_SATELLITE` (`host:port` for Storj's public satellites, `nodeid@host:port` for any other), `STORJ_BUCKET` (create it first), *`STORJ_PATH`* | `STORJ_KEY`, `STORJ_PASSPHRASE` | |
 | `fabric` | `FABRIC_ENDPOINT`, *`FABRIC_PATH`* | `FABRIC_TOKEN` | Storage Made Easy File Fabric. |
 
 When Duplicacy cannot open a storage, the error says why: the storage's directory does not exist (Duplicacy does not create it on SFTP, WebDAV or SMB), or the storage cannot be reached, with the reason.

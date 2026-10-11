@@ -369,7 +369,7 @@
       "type": "string"
     },
     "^STORAGE_TARGET_[0-9]+_STORJ_SATELLITE$": {
-      "description": "Storj satellite (host:port).",
+      "description": "Storj satellite (host:port for a public one, else nodeid@host:port).",
       "type": "string"
     },
     "^STORAGE_TARGET_[0-9]+_SWIFT_KEY$": {

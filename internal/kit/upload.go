@@ -120,8 +120,9 @@ func (r *Run) upload(t config.Target, kit, readme string) int {
 	}
 	names := []string{r.KitName(), r.readmeName()}
 	for i, src := range []string{kit, readme} {
-		// rclone writes a temporary file and renames it over the live one once it is complete
-		// and checked, so a failed upload leaves the previous kit in place. --ignore-times: a
+		// rclone writes a temporary file and renames it over the live one (file-system storages)
+		// or the service publishes the object only once complete (object stores, upload
+		// sessions), so a failed upload leaves the previous kit in place. --ignore-times: a
 		// kit chosen for upload is always sent; matching size and time (coarse on some servers)
 		// would otherwise skip a changed kit and leave the old one marked current.
 		cmd := exec.Command(r.rclone(), "--config", os.DevNull, "copyto", "--ignore-times", "--retries", "3",

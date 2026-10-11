@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Round trips through every storage type an emulator can stand in for (ADRs 23, 25): each is
+# Round trips through every storage type, each against a local stand-in (ADRs 23, 47): each is
 # the primary of a fresh archiver container, which backs up, places the recovery kit, and
 # restores. The kit is fetched back through a remote written here, not by archiver's code,
-# and decrypted with plain openssl. Types only a real service provides run in the real-service job (ADRs 25, 27).
+# and decrypted with plain openssl. Nothing reaches an outside service.
 #
 # One TLS front (Caddy, a throwaway CA the archiver containers trust) serves the HTTPS
 # names: Garage for minios/s3c/wasabi (virtual-host style needs the bucket alias), Azurite
-# behind Azure's fixed *.blob.core.windows.net, and WebDAV over HTTPS.
+# behind Azure's fixed *.blob.core.windows.net, WebDAV over HTTPS, and tests/fakes (the
+# services no published emulator covers) behind those services' real hostnames.
+#
+# The types tests/fakes serves have their cases in backends.d/<type>.sh: each file adds its
+# types to CASES and its hostnames to FAKE_HOSTS, and defines case_<type> (- as _).
 #
 # HOST-DRIVEN: run on the docker host (not via --entrypoint bash).
 #
@@ -41,19 +45,30 @@ AZ_KEY="YXJjaGl2ZXItdGVzdC1henVyZS1rZXktMDEyMzQ1Njc4OWFiY2RlZg=="
 AZ_HOST="$AZ_ACCOUNT.blob.core.windows.net"
 RECOVERY="recovery-pw"
 
-ALL=(minio minios s3c wasabi sftpc webdav webdav-http smb swift azure gcs dropbox)
+HERE="$(cd "$(dirname "$0")" && pwd)"
+CASES=() FAKE_HOSTS=(duplicacy.com)
+for f in "$HERE"/backends.d/*.sh; do
+  [ -e "$f" ] || continue
+  # shellcheck disable=SC1090
+  . "$f"
+done
+ALL=(minio minios s3c wasabi sftpc webdav webdav-http smb swift azure gcs "${CASES[@]}")
 WANT=("$@")
 [ ${#WANT[@]} -gt 0 ] || WANT=("${ALL[@]}")
 wanted() { local t; for t in "${WANT[@]}"; do [ "$t" = "$1" ] && return 0; done; return 1; }
+for t in "${WANT[@]}"; do
+  [[ " ${ALL[*]} " == *" $t "* ]] || { printf 'FAIL: no case for storage type %s (known: %s)\n' "$t" "${ALL[*]}" >&2; exit 1; }
+done
 
 log() { printf '>>> %s\n' "$*"; }
 die() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 # fail NAME MESSAGE: die with the end of that archiver container's log, Duplicacy's own words.
 fail() { docker exec "$P-$1" bash -c 'tail -n 40 /opt/archiver/logs/archiver.log' >&2 2>/dev/null; die "$1: $2"; }
 cleanup() {
-  docker ps -aq --filter "name=^$P-" | xargs -r docker rm -f >/dev/null 2>&1 || true
+  docker ps -aq --filter "name=^$P-" | xargs -r docker rm -fv >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   docker volume rm "$CFG" >/dev/null 2>&1 || true
+  docker rmi "$P-fakes" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 # KEEP=1 leaves the containers, network and volume behind for debugging.
@@ -63,11 +78,21 @@ garage() { docker exec "$P-garage" /garage -c /cfg/garage.toml "$@"; }
 docker network create "$NET" >/dev/null
 docker volume create "$CFG" >/dev/null
 
+log "the cloud service fakes"
+docker build -q -t "$P-fakes" "$HERE/../fakes" >/dev/null || die "the fakes failed to build"
+docker run -d --name "$P-fakes" --network "$NET" --network-alias cloudfake \
+  -e WASABI_S3_KEY="$S3_KEY" -e WASABI_S3_SECRET="$S3_SECRET" -e WASABI_S3_ENDPOINT=http://garage-api:3900 -e WASABI_S3_REGION="$REGION" \
+  "$P-fakes" >/dev/null || die "the fakes failed to start"
+FAKE_SAN="" FAKE_ALIASES=() FAKE_SITES=""
+for h in "${FAKE_HOSTS[@]}"; do
+  FAKE_SAN+=",DNS:$h" FAKE_ALIASES+=(--network-alias "$h") FAKE_SITES+="${FAKE_SITES:+, }https://$h"
+done
+
 log "a throwaway CA's cert for every HTTPS name, Garage's config, the Caddyfile, an SSH key"
 docker run --rm -i -v "$CFG":/cfg --entrypoint bash "$IMAGE" -s <<EOF || die "config generation failed"
 set -e
 openssl req -x509 -newkey rsa:2048 -nodes -days 2 -keyout /cfg/private.key -out /cfg/public.crt -subj '/CN=archiver-test' \
-  -addext 'subjectAltName=DNS:garage,DNS:${BUCKET}.garage,DNS:${AZ_HOST},DNS:webdav-tls,DNS:seaweed,DNS:api.dropboxapi.com,DNS:content.dropboxapi.com,DNS:www.googleapis.com,DNS:storage.googleapis.com,DNS:oauth2.googleapis.com' 2>/dev/null
+  -addext 'subjectAltName=DNS:garage,DNS:${BUCKET}.garage,DNS:${AZ_HOST},DNS:webdav-tls,DNS:seaweed,DNS:www.googleapis.com,DNS:storage.googleapis.com,DNS:oauth2.googleapis.com${FAKE_SAN}' 2>/dev/null
 chmod 644 /cfg/public.crt /cfg/private.key
 ssh-keygen -t ed25519 -N "" -f /cfg/id_ed25519 -q
 mkdir -p /cfg/sshkeys && cp /cfg/id_ed25519.pub /cfg/sshkeys/ && chmod 644 /cfg/id_ed25519 /cfg/sshkeys/id_ed25519.pub
@@ -85,32 +110,16 @@ s3_region = "${REGION}"
 api_bind_addr = "[::]:3900"
 root_domain = ".garage"
 TOML
-# Request logs keep the Authorization header: the Dropbox case reads which token was used.
 cat > /cfg/Caddyfile <<CADDY
 {
 	auto_https off
 	admin off
-	servers {
-		log_credentials
-	}
-}
-# Dropbox stand-in: the token endpoint answers, every API call is refused as not found.
-https://api.dropboxapi.com, https://content.dropboxapi.com {
-	tls /cfg/public.crt /cfg/private.key
-	log {
-		output stdout
-		format json
-	}
-	header Content-Type application/json
-	handle /oauth2/token {
-		respond "{\\"access_token\\":\\"fake-access\\",\\"token_type\\":\\"bearer\\",\\"expires_in\\":14400}" 200
-	}
-	handle {
-		respond "{\\"error_summary\\":\\"path/not_found/..\\",\\"error\\":{\\".tag\\":\\"path\\",\\"path\\":{\\".tag\\":\\"not_found\\"}}}" 409
-	}
 }
 https://garage, https://${BUCKET}.garage {
 	tls /cfg/public.crt /cfg/private.key
+	# Wasabi's own MOVE request, which Garage does not serve: tests/fakes carries it out.
+	@move method MOVE
+	reverse_proxy @move cloudfake:8080
 	reverse_proxy garage-api:3900
 }
 https://${AZ_HOST} {
@@ -125,6 +134,9 @@ https://webdav-tls {
 # endpoint that grants any signed service-account assertion.
 https://www.googleapis.com, https://storage.googleapis.com {
 	tls /cfg/public.crt /cfg/private.key
+	# Google Drive shares the host with Cloud Storage; tests/fakes serves it.
+	@drive path /drive/* /upload/drive/*
+	reverse_proxy @drive cloudfake:8080
 	# fake-gcs omits it on object downloads; Duplicacy's GCS library parses it beside X-Goog-Generation.
 	header ?X-Goog-Metageneration 1
 	reverse_proxy fake-gcs:4443
@@ -139,6 +151,12 @@ https://seaweed {
 	reverse_proxy seaweed-s3:8333
 }
 CADDY
+[ -z "$FAKE_SITES" ] || cat >> /cfg/Caddyfile <<CADDY
+$FAKE_SITES {
+	tls /cfg/public.crt /cfg/private.key
+	reverse_proxy cloudfake:8080
+}
+CADDY
 cat > /cfg/seaweed.json <<JSON
 {"identities": [{"name": "archiver", "credentials": [{"accessKey": "${S3_KEY}", "secretKey": "${S3_SECRET}"}],
   "actions": ["Admin", "Read", "Write", "List", "Tagging"]}]}
@@ -147,11 +165,11 @@ EOF
 
 docker run -d --name "$P-proxy" --network "$NET" --network-alias garage --network-alias "$BUCKET.garage" \
   --network-alias "$AZ_HOST" --network-alias webdav-tls --network-alias seaweed \
-  --network-alias api.dropboxapi.com --network-alias content.dropboxapi.com \
+  "${FAKE_ALIASES[@]}" \
   --network-alias www.googleapis.com --network-alias storage.googleapis.com --network-alias oauth2.googleapis.com \
   -v "$CFG":/cfg "$CADDY_IMAGE" caddy run --config /cfg/Caddyfile --adapter caddyfile >/dev/null || die "caddy failed to start"
 # The real hosts answer for any alias the front does not hold, so a front that failed to start
-# must stop the run rather than let a case reach Google, Azure or Dropbox.
+# must stop the run rather than let a case reach Google, Azure or another real service.
 sleep 2
 [ "$(docker inspect -f '{{.State.Running}}' "$P-proxy" 2>/dev/null)" = true ] || { docker logs "$P-proxy" >&2; die "the TLS front is not running"; }
 
@@ -237,6 +255,11 @@ roundtrip() {
     cmd=$(grep -o "<pre>RCLONE_CONFIG_KIT_TYPE=.*</pre>" /tmp/env/envelope-*.html | head -n 1 | sed -e "s#^<pre>##" -e "s#</pre>\$##" \
       -e "s/&quot;/\"/g" -e "s/&lt;/</g" -e "s/&gt;/>/g" -e "s/&amp;/\&/g")
     mkdir /tmp/fetch && cd /tmp/fetch
+    # A token that changes as it is used cannot be printed; the page says to use the provider.
+    if [ -z "$cmd" ] && grep -q "Its token changes as it is used" /tmp/env/envelope-*.html; then
+      echo "--- no fetch command on the page: its token rotates"
+      exit 0
+    fi
     if [ -z "$cmd" ]; then
       # An SFTP page prints an sftp command and the key to save as ssh_private_key.
       cmd=$(grep -o "<pre>Fetch: sftp .*</pre>" /tmp/env/envelope-*.html | head -n 1 | sed -e "s#^<pre>Fetch: ##" -e "s#</pre>\$##")
@@ -251,7 +274,7 @@ roundtrip() {
     "$P-$name" archiver auto-restore || fail "$name" "auto-restore exited non-zero"
   docker exec "$P-$name" bash -c 'diff /data/fixtures/file.txt /data/restore/file.txt && cmp /data/fixtures/blob.bin /data/restore/blob.bin' \
     || die "$name: restored content differs from the source"
-  docker rm -f "$P-$name" >/dev/null
+  docker rm -fv "$P-$name" >/dev/null
   echo "=== $name OK as the primary ==="
 }
 
@@ -281,25 +304,20 @@ copy_lifecycle() {
   until_in "$name" 120 "grep -q 'Copy to offsite storage completed' $lg/copies.log" || { docker exec "$P-$name" tail -n 30 "$lg/copies.log" >&2; die "$name: worker did not copy"; }
   until_in "$name" 120 "grep -q 'Check of offsite storage completed' $lg/copies.log" || { docker exec "$P-$name" tail -n 30 "$lg/copies.log" >&2; die "$name: worker did not check"; }
 
-  if [ -n "${NO_MOVE:-}" ]; then
-    # Deleting a revision fossilizes chunks with the storage's move, which this one's emulator lacks.
-    echo "--- $name: mirroring and exhaustive prune not run here ($NO_MOVE); the real-service job covers them (ADR 27)"
-  else
-    log "$name: a revision local prunes is mirrored off it"
-    docker exec -w /data/fixtures -e DUPLICACY_LOCAL_PASSWORD=testpassword -e DUPLICACY_LOCAL_RSA_PASSPHRASE=testpassphrase "$P-$name" \
-      duplicacy prune -storage local -id "$id" -r 1 >/dev/null || die "$name: local prune of revision 1 failed"
-    docker exec "$P-$name" bash -c "archiver mirror --dry-run | grep -q 'offsite: delete $id revisions 1\$'" || die "$name: mirroring does not plan the deletion"
-    docker exec "$P-$name" archiver daemon ctl local-changed >/dev/null || die "$name: could not wake the worker"
-    until_in "$name" 120 "grep -q 'Mirror: deleting revisions 1 of $id from offsite storage' $lg/copies.log" || die "$name: revision 1 not mirrored"
-    until_in "$name" 60 "! archiver mirror --dry-run | grep -q 'offsite: delete'" || die "$name: revision 1 still on it after mirroring"
-  
-    log "$name: exhaustive prune, pause, resume and stop reach its worker"
-    # The worker may have pruned exhaustively while catching up; wait for the one asked for here.
-    local before
-    before=$(docker exec "$P-$name" grep -c 'Exhaustive prune of offsite storage completed' "$lg/copies.log")
-    docker exec "$P-$name" archiver maintenance exhaustive >/dev/null || die "$name: exhaustive maintenance failed"
-    until_in "$name" 120 "[ \$(grep -c 'Exhaustive prune of offsite storage completed' $lg/copies.log) -gt $before ]" || die "$name: worker did not prune exhaustively"
-  fi
+  log "$name: a revision local prunes is mirrored off it"
+  docker exec -w /data/fixtures -e DUPLICACY_LOCAL_PASSWORD=testpassword -e DUPLICACY_LOCAL_RSA_PASSPHRASE=testpassphrase "$P-$name" \
+    duplicacy prune -storage local -id "$id" -r 1 >/dev/null || die "$name: local prune of revision 1 failed"
+  docker exec "$P-$name" bash -c "archiver mirror --dry-run | grep -q 'offsite: delete $id revisions 1\$'" || die "$name: mirroring does not plan the deletion"
+  docker exec "$P-$name" archiver daemon ctl local-changed >/dev/null || die "$name: could not wake the worker"
+  until_in "$name" 120 "grep -q 'Mirror: deleting revisions 1 of $id from offsite storage' $lg/copies.log" || die "$name: revision 1 not mirrored"
+  until_in "$name" 60 "! archiver mirror --dry-run | grep -q 'offsite: delete'" || die "$name: revision 1 still on it after mirroring"
+
+  log "$name: exhaustive prune, pause, resume and stop reach its worker"
+  # The worker may have pruned exhaustively while catching up; wait for the one asked for here.
+  local before
+  before=$(docker exec "$P-$name" grep -c 'Exhaustive prune of offsite storage completed' "$lg/copies.log")
+  docker exec "$P-$name" archiver maintenance exhaustive >/dev/null || die "$name: exhaustive maintenance failed"
+  until_in "$name" 120 "[ \$(grep -c 'Exhaustive prune of offsite storage completed' $lg/copies.log) -gt $before ]" || die "$name: worker did not prune exhaustively"
   docker exec "$P-$name" bash -c 'archiver pause | grep -q "Copies to the secondary storages paused"' || die "$name: pause did not reach the worker"
   docker exec "$P-$name" bash -c 'archiver resume | grep -q "Copies to the secondary storages resumed"' || die "$name: resume did not reach the worker"
   docker exec "$P-$name" bash -c 'archiver stop | grep -q "Copies to the secondary storages stopped"' || die "$name: stop did not reach the worker"
@@ -308,7 +326,7 @@ copy_lifecycle() {
   docker exec -e SNAPSHOT_ID="$id" -e STORAGE_TARGET=offsite -e LOCAL_DIR=/data/restore -e OVERWRITE=1 -e HASH_COMPARE=1 -e IGNORE_OWNERSHIP=1 \
     "$P-$name" archiver auto-restore || fail "$name" "restore from the copy exited non-zero"
   docker exec "$P-$name" grep -qx two /data/restore/file.txt || die "$name: the copy does not hold the latest revision"
-  docker rm -f "$P-$name" >/dev/null
+  docker rm -fv "$P-$name" >/dev/null
   echo "=== $1 OK as a copy ==="
 }
 
@@ -352,7 +370,9 @@ fi
 if wanted wasabi; then
   FIELDS=(TYPE=wasabi WASABI_ENDPOINT=garage "WASABI_REGION=$REGION" "WASABI_BUCKETNAME=$BUCKET" "WASABI_PATH=wasabi/%D")
   SECRETS=("WASABI_KEY=$S3_KEY" "WASABI_SECRET=$S3_SECRET") PREP=s3_ready S3_PROBE=https://garage
-  NO_MOVE="Wasabi's own MOVE request, which Garage does not serve" run_case wasabi "$BUCKET/wasabi/%D" "${S3CHECK[@]}" "ENDPOINT=https://garage"
+  run_case wasabi "$BUCKET/wasabi/%D" "${S3CHECK[@]}" "ENDPOINT=https://garage"
+  # Fossils are made with Wasabi's MOVE, not S3's copy and delete.
+  grep -q '^.* MOVE garage /.* -> 200$' <<<"$(docker logs "$P-fakes" 2>&1)" || die "wasabi: no MOVE request reached the stand-in"
 fi
 
 if wanted sftpc; then
@@ -404,14 +424,14 @@ if wanted webdav-http; then
   # Found by the preflight probe (ADR 34): PRIMARY DOWN, saying why.
   docker exec "$P-diagnose" grep -q "\[ERROR\].*PRIMARY DOWN: storage 'offsite' cannot be reached (the storage's directory does not exist: /missing/dir; create it first" /opt/archiver/logs/archiver.log \
     || fail diagnose "a missing directory is not explained"
-  docker rm -f "$P-diagnose" >/dev/null
+  docker rm -fv "$P-diagnose" >/dev/null
   start_archiver diagnose -e STORAGE_TARGET_1_NAME=offsite -e STORAGE_TARGET_1_TYPE=webdav-http -e STORAGE_TARGET_1_WEBDAV_HOST=no-such-host:8080 \
     -e STORAGE_TARGET_1_WEBDAV_USER=davuser -e STORAGE_TARGET_1_WEBDAV_PATH=x
   secret diagnose storage_target_1_webdav_password davpass
   docker exec "$P-diagnose" archiver backup >/dev/null 2>&1 && die "a backup to an unreachable host succeeded"
   docker exec "$P-diagnose" grep -q "\[ERROR\].*PRIMARY DOWN: storage 'offsite' cannot be reached (.*no-such-host" /opt/archiver/logs/archiver.log \
     || fail diagnose "an unreachable host is not explained"
-  docker rm -f "$P-diagnose" >/dev/null
+  docker rm -fv "$P-diagnose" >/dev/null
   echo "=== failures to open a storage are explained ==="
 fi
 
@@ -473,25 +493,11 @@ if wanted gcs; then
   run_case gcs "$BUCKET/%D" TYPE="google cloud storage" SERVICE_ACCOUNT_FILE=/run/secrets/storage_target_1_gcs_token BUCKET_POLICY_ONLY=true
 fi
 
-# Dropbox has no emulator (its round trip runs against a real account, ADRs 25, 27). This proves the wiring: the
-# app's credentials reach Duplicacy, which refreshes at Dropbox's own token endpoint with
-# them and calls the API with the token it got, never duplicacy.com.
-if wanted dropbox; then
-  start_archiver dropbox -e STORAGE_TARGET_1_NAME=offsite -e STORAGE_TARGET_1_TYPE=dropbox -e STORAGE_TARGET_1_DROPBOX_PATH=backups \
-    -e STORAGE_TARGET_1_DROPBOX_APP_KEY=app-key
-  secret dropbox storage_target_1_dropbox_app_secret app-secret
-  secret dropbox storage_target_1_dropbox_token refresh-token
-  log "dropbox: backup against the stand-in (expected to fail: every API call is refused)"
-  docker exec "$P-dropbox" timeout 120 archiver backup >/dev/null 2>&1 && die "dropbox: a backup against the refusing stand-in succeeded"
-  logs="$(docker logs "$P-proxy" 2>&1)"
-  basic="Basic $(printf 'app-key:app-secret' | base64)"
-  grep -qF "$basic" <<<"$(grep '"uri":"/oauth2/token"' <<<"$logs")" || die "dropbox: no token refresh with the app's credentials"
-  if ! grep -qF 'Bearer fake-access' <<<"$(grep '"uri":"/2/' <<<"$logs")"; then
-    grep -o '"uri":"[^"]*"' <<<"$logs" >&2
-    fail dropbox "no API call with the refreshed token"
-  fi
-  docker rm -f "$P-dropbox" >/dev/null
-  echo "=== dropbox OK (token wiring) ==="
+for t in "${CASES[@]}"; do
+  wanted "$t" && "case_${t//-/_}"
+done
+if grep -q ' duplicacy.com ' <<<"$(docker logs "$P-fakes" 2>&1)"; then
+  die "a client tried to refresh a token through duplicacy.com"
 fi
 
 echo "=== BACKENDS OK: ${WANT[*]} ==="

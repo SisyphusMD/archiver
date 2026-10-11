@@ -377,7 +377,7 @@ func init() {
 	register(Type{
 		Name: "storj",
 		Fields: []Field{
-			{Name: "STORJ_SATELLITE", Prompt: "Storj satellite (host:port)"},
+			{Name: "STORJ_SATELLITE", Prompt: "Storj satellite (host:port for a public one, else nodeid@host:port)"},
 			{Name: "STORJ_BUCKET", Prompt: "Storj bucket"},
 			{Name: "STORJ_PATH", Optional: true, Prompt: "Path inside the bucket"},
 			{Name: "STORJ_KEY", Secret: true, Key: "storj_key", BreakGlass: true, Prompt: "Storj API key"},
