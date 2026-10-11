@@ -80,7 +80,9 @@ docker volume create "$CFG" >/dev/null
 
 log "the cloud service fakes"
 docker build -q -t "$P-fakes" "$HERE/../fakes" >/dev/null || die "the fakes failed to build"
-docker run -d --name "$P-fakes" --network "$NET" --network-alias cloudfake "$P-fakes" >/dev/null || die "the fakes failed to start"
+docker run -d --name "$P-fakes" --network "$NET" --network-alias cloudfake \
+  -e WASABI_S3_KEY="$S3_KEY" -e WASABI_S3_SECRET="$S3_SECRET" -e WASABI_S3_ENDPOINT=http://garage-api:3900 -e WASABI_S3_REGION="$REGION" \
+  "$P-fakes" >/dev/null || die "the fakes failed to start"
 FAKE_SAN="" FAKE_ALIASES=() FAKE_SITES=""
 for h in "${FAKE_HOSTS[@]}"; do
   FAKE_SAN+=",DNS:$h" FAKE_ALIASES+=(--network-alias "$h") FAKE_SITES+="${FAKE_SITES:+, }https://$h"
@@ -297,25 +299,20 @@ copy_lifecycle() {
   until_in "$name" 120 "grep -q 'Copy to offsite storage completed' $lg/copies.log" || { docker exec "$P-$name" tail -n 30 "$lg/copies.log" >&2; die "$name: worker did not copy"; }
   until_in "$name" 120 "grep -q 'Check of offsite storage completed' $lg/copies.log" || { docker exec "$P-$name" tail -n 30 "$lg/copies.log" >&2; die "$name: worker did not check"; }
 
-  if [ -n "${NO_MOVE:-}" ]; then
-    # Deleting a revision fossilizes chunks with the storage's move, which this one's emulator lacks.
-    echo "--- $name: mirroring and exhaustive prune not run here ($NO_MOVE)"
-  else
-    log "$name: a revision local prunes is mirrored off it"
-    docker exec -w /data/fixtures -e DUPLICACY_LOCAL_PASSWORD=testpassword -e DUPLICACY_LOCAL_RSA_PASSPHRASE=testpassphrase "$P-$name" \
-      duplicacy prune -storage local -id "$id" -r 1 >/dev/null || die "$name: local prune of revision 1 failed"
-    docker exec "$P-$name" bash -c "archiver mirror --dry-run | grep -q 'offsite: delete $id revisions 1\$'" || die "$name: mirroring does not plan the deletion"
-    docker exec "$P-$name" archiver daemon ctl local-changed >/dev/null || die "$name: could not wake the worker"
-    until_in "$name" 120 "grep -q 'Mirror: deleting revisions 1 of $id from offsite storage' $lg/copies.log" || die "$name: revision 1 not mirrored"
-    until_in "$name" 60 "! archiver mirror --dry-run | grep -q 'offsite: delete'" || die "$name: revision 1 still on it after mirroring"
-  
-    log "$name: exhaustive prune, pause, resume and stop reach its worker"
-    # The worker may have pruned exhaustively while catching up; wait for the one asked for here.
-    local before
-    before=$(docker exec "$P-$name" grep -c 'Exhaustive prune of offsite storage completed' "$lg/copies.log")
-    docker exec "$P-$name" archiver maintenance exhaustive >/dev/null || die "$name: exhaustive maintenance failed"
-    until_in "$name" 120 "[ \$(grep -c 'Exhaustive prune of offsite storage completed' $lg/copies.log) -gt $before ]" || die "$name: worker did not prune exhaustively"
-  fi
+  log "$name: a revision local prunes is mirrored off it"
+  docker exec -w /data/fixtures -e DUPLICACY_LOCAL_PASSWORD=testpassword -e DUPLICACY_LOCAL_RSA_PASSPHRASE=testpassphrase "$P-$name" \
+    duplicacy prune -storage local -id "$id" -r 1 >/dev/null || die "$name: local prune of revision 1 failed"
+  docker exec "$P-$name" bash -c "archiver mirror --dry-run | grep -q 'offsite: delete $id revisions 1\$'" || die "$name: mirroring does not plan the deletion"
+  docker exec "$P-$name" archiver daemon ctl local-changed >/dev/null || die "$name: could not wake the worker"
+  until_in "$name" 120 "grep -q 'Mirror: deleting revisions 1 of $id from offsite storage' $lg/copies.log" || die "$name: revision 1 not mirrored"
+  until_in "$name" 60 "! archiver mirror --dry-run | grep -q 'offsite: delete'" || die "$name: revision 1 still on it after mirroring"
+
+  log "$name: exhaustive prune, pause, resume and stop reach its worker"
+  # The worker may have pruned exhaustively while catching up; wait for the one asked for here.
+  local before
+  before=$(docker exec "$P-$name" grep -c 'Exhaustive prune of offsite storage completed' "$lg/copies.log")
+  docker exec "$P-$name" archiver maintenance exhaustive >/dev/null || die "$name: exhaustive maintenance failed"
+  until_in "$name" 120 "[ \$(grep -c 'Exhaustive prune of offsite storage completed' $lg/copies.log) -gt $before ]" || die "$name: worker did not prune exhaustively"
   docker exec "$P-$name" bash -c 'archiver pause | grep -q "Copies to the secondary storages paused"' || die "$name: pause did not reach the worker"
   docker exec "$P-$name" bash -c 'archiver resume | grep -q "Copies to the secondary storages resumed"' || die "$name: resume did not reach the worker"
   docker exec "$P-$name" bash -c 'archiver stop | grep -q "Copies to the secondary storages stopped"' || die "$name: stop did not reach the worker"
@@ -368,7 +365,9 @@ fi
 if wanted wasabi; then
   FIELDS=(TYPE=wasabi WASABI_ENDPOINT=garage "WASABI_REGION=$REGION" "WASABI_BUCKETNAME=$BUCKET" "WASABI_PATH=wasabi/%D")
   SECRETS=("WASABI_KEY=$S3_KEY" "WASABI_SECRET=$S3_SECRET") PREP=s3_ready S3_PROBE=https://garage
-  NO_MOVE="Wasabi's own MOVE request, which Garage does not serve" run_case wasabi "$BUCKET/wasabi/%D" "${S3CHECK[@]}" "ENDPOINT=https://garage"
+  run_case wasabi "$BUCKET/wasabi/%D" "${S3CHECK[@]}" "ENDPOINT=https://garage"
+  # Fossils are made with Wasabi's MOVE, not S3's copy and delete.
+  grep -q '^.* MOVE garage /.* -> 200$' <<<"$(docker logs "$P-fakes" 2>&1)" || die "wasabi: no MOVE request reached the stand-in"
 fi
 
 if wanted sftpc; then
