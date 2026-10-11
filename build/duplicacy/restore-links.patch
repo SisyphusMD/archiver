@@ -96,17 +96,27 @@
  		stat, _ := os.Stat(fullPath)
  		if stat != nil {
  			if quickMode {
-@@ -948,6 +1007,9 @@
+@@ -948,7 +1007,19 @@
  		// Reverse the order to make sure directories are empty before being deleted
  		for i := range extraFiles {
  			file := extraFiles[len(extraFiles)-1-i]
 +			if replacedLinks[file] {
 +				continue
 +			}
++			// The listing follows a link at the top that points elsewhere, so what it found
++			// below the link is not this directory's to delete; the link itself is.
++			if link := linkedAncestor(top, file); link != "" {
++				LOG_INFO("RESTORE_KEEP", "Kept %s: it is reached through the symbolic link %s", file, link)
++				continue
++			}
  			fullPath := joinPath(top, file)
++			if lstat, err := os.Lstat(strings.TrimSuffix(fullPath, "/")); err == nil && lstat.Mode()&os.ModeSymlink != 0 {
++				fullPath = strings.TrimSuffix(fullPath, "/")
++			}
  			os.Remove(fullPath)
  			LOG_INFO("RESTORE_DELETE", "Deleted %s", file)
-@@ -1824,3 +1886,36 @@
+ 		}
+@@ -1824,3 +1895,36 @@
  
  	return true
  }
@@ -145,7 +155,7 @@
 +}
 --- /dev/null
 +++ b/src/duplicacy_restorelinks_test.go
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,215 @@
 +// Copyright (c) Acrosync LLC. All rights reserved.
 +// Free for personal use and commercial trial
 +// Commercial use requires per-user licenses available from https://duplicacy.com
@@ -283,6 +293,27 @@
 +		t.Error("something was restored into a directory a link pointed to")
 +	}
 +	untouched()
++
++	// A link at the top, by a name the snapshot lacks, to a directory elsewhere: the listing
++	// follows it, but -delete removes only the link, never what it points to.
++	os.MkdirAll(outside+"/victim/sub", 0700)
++	os.WriteFile(outside+"/victim/keep", []byte("keep"), 0600)
++	os.WriteFile(outside+"/victim/sub/keep", []byte("keep"), 0600)
++	dir = testDir + "/planted"
++	os.MkdirAll(dir+"/.duplicacy", 0700)
++	os.Symlink(outside+"/victim", dir+"/zz")
++	SetDuplicacyPreferencePath(dir + "/.duplicacy")
++	if failed, refused := restore(dir, true, nil, true); refused || failed != 0 {
++		t.Fatalf("restore with -delete beside a planted link: refused %v, %d failed", refused, failed)
++	}
++	for _, name := range []string{"keep", "sub/keep"} {
++		if b, _ := os.ReadFile(outside + "/victim/" + name); string(b) != "keep" {
++			t.Errorf("-delete removed %s through a planted link", name)
++		}
++	}
++	if _, err := os.Lstat(dir + "/zz"); err == nil {
++		t.Error("the planted link, an extra entry, was not deleted")
++	}
 +
 +	// In quick mode a top-level link to a file the size and time of the snapshot's is still
 +	// refused, and replaced when overwriting.
