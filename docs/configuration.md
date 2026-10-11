@@ -184,7 +184,7 @@ Each storage is `STORAGE_TARGET_<N>_*`, numbered from 1 without gaps; target 1 i
 | `STORAGE_TARGET_<N>_SMB_PATH` | smb |  | Path inside the share. Optional. |
 | `STORAGE_TARGET_<N>_SMB_PASSWORD` (secret) | smb |  | SMB password. |
 | `STORAGE_TARGET_<N>_BREAKGLASS_SMB_PASSWORD` (secret) | smb |  | A narrower credential than SMB_PASSWORD (read-only), printed on the envelope instead of it (ADR 23). Optional. |
-| `STORAGE_TARGET_<N>_STORJ_SATELLITE` | storj |  | Storj satellite (host:port). |
+| `STORAGE_TARGET_<N>_STORJ_SATELLITE` | storj |  | Storj satellite (host:port for a public one, else nodeid@host:port). |
 | `STORAGE_TARGET_<N>_STORJ_BUCKET` | storj |  | Storj bucket. |
 | `STORAGE_TARGET_<N>_STORJ_PATH` | storj |  | Path inside the bucket. Optional. |
 | `STORAGE_TARGET_<N>_STORJ_KEY` (secret) | storj |  | Storj API key. |
