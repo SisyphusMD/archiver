@@ -154,8 +154,9 @@ var chmod = (*os.File).Chmod
 // (Synology's) any chmod discards the inherited ACL, even one to the mode already shown.
 //
 // Whoever owns the storage directory can swap entries in it, so nothing here follows a
-// link: a symlink put where the kit was would otherwise hand them ownership of whatever it
-// points at (the secrets, the keys).
+// link, and only the file rclone just wrote is changed: a symlink, or a hard link, put where
+// the kit was would otherwise hand them ownership of whatever it points at (the secrets,
+// the keys).
 func (r *Run) localAccess(t config.Target, names []string) int {
 	// Read through a link (only the kit's own files are written to, never through one).
 	ref, err := os.Stat(filepath.Join(t.Get("LOCAL_PATH"), "config"))
@@ -184,6 +185,11 @@ func (r *Run) adjust(p string, ref os.FileInfo) bool {
 	defer f.Close()
 	fi, err := f.Stat()
 	if err != nil || !fi.Mode().IsRegular() {
+		return false
+	}
+	// rclone's rename leaves a fresh inode of this process's with one name; a second name is
+	// a hard link to some other file, owned or not.
+	if own, ok := fi.Sys().(*syscall.Stat_t); !ok || own.Nlink != 1 || int(own.Uid) != os.Geteuid() {
 		return false
 	}
 	if st, ok := ref.Sys().(*syscall.Stat_t); ok {
