@@ -15,7 +15,7 @@ import (
 
 // Diagnose explains why Duplicacy could not open storage t, for its error message: it looks at
 // the storage's directory through the same rclone remote the kit uses. Duplicacy itself says
-// only that loading failed, and does not create a missing directory on SFTP, WebDAV or SMB.
+// only that loading failed, and on some types (mustPreexist) does not create a missing directory.
 // It returns "" when it finds nothing wrong.
 func Diagnose(l layout.Layout, rclone string, t config.Target) string {
 	r := &Run{Layout: l, Rclone: rclone}
@@ -41,6 +41,10 @@ func Diagnose(l layout.Layout, rclone string, t config.Target) string {
 		msg = msg[i+1:]
 	}
 	if strings.Contains(msg, "not found") {
+		// Elsewhere Duplicacy creates the directory itself, so its absence explains nothing.
+		if !mustPreexist[t.Type] {
+			return ""
+		}
 		return fmt.Sprintf("Storage '%s' (%s): %s does not exist there. Create it first: Duplicacy does not create a storage's directory.", t.Name, t.Type, dir)
 	}
 	return fmt.Sprintf("Storage '%s' (%s) cannot be reached: %s", t.Name, t.Type, msg)
@@ -83,7 +87,10 @@ func Probe(ctx context.Context, l layout.Layout, t config.Target, inUse bool) (e
 	return false, err
 }
 
-var mustPreexist = map[string]bool{"sftp": true, "sftpc": true, "webdav": true, "webdav-http": true, "smb": true}
+// mustPreexist are the types whose storage directory Duplicacy refuses to create (Azure's is
+// its container).
+var mustPreexist = map[string]bool{"sftp": true, "sftpc": true, "webdav": true, "webdav-http": true, "smb": true,
+	"fabric": true, "one": true, "odb": true, "azure": true}
 
 // HasFile reports whether storage t holds the file name beside its Duplicacy config (a
 // recovery kit), read-only.
