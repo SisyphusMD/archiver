@@ -117,7 +117,7 @@ func migrateHooks(dirs []string) int {
 	code, migrated := 0, 0
 	for _, d := range dirs {
 		if untrusted {
-			if _, err := os.Lstat(filepath.Join(d, hooks.Legacy)); err == nil {
+			if _, err := os.Lstat(filepath.Join(d, hooks.Legacy)); err == nil { //nolint:gosec // G703: a configured service directory, not untrusted input
 				fmt.Fprintf(os.Stderr, "archiver: %s: not migrated, since HOOKS_DIR is set and nothing in a service directory runs: migrating would run its %s as root. Remove it (your hooks are in HOOKS_DIR), or if you wrote it and mean to run it, name the directory: archiver migrate hooks %s\n", d, hooks.Legacy, d)
 				code = 1
 			}
