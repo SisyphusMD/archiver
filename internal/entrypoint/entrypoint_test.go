@@ -159,11 +159,27 @@ func TestLegacyServices(t *testing.T) {
 		}
 		return ""
 	}, SecretsDir: t.TempDir()}
-	got := LegacyServices(src)
-	if len(got) != 1 || filepath.Base(got[0]) != "db" {
-		t.Fatalf("got %v", got)
+	got, hooksDir := LegacyServices(src)
+	if len(got) != 1 || filepath.Base(got[0]) != "db" || hooksDir {
+		t.Fatalf("got %v, HOOKS_DIR %v", got, hooksDir)
 	}
-	if !strings.Contains(LegacyHelp(got), "docker compose run --rm archiver migrate hooks") {
+	if !strings.Contains(LegacyHelp(got, false), "docker compose run --rm archiver migrate hooks") {
 		t.Error("the help does not name the conversion")
+	}
+	// With HOOKS_DIR set, the file is foreign content: removed, not migrated by default.
+	withHooks := config.Source{Getenv: func(k string) string {
+		switch k {
+		case "SERVICE_DIRECTORIES":
+			return svcs + "/*/"
+		case "HOOKS_DIR":
+			return t.TempDir()
+		}
+		return ""
+	}, SecretsDir: t.TempDir()}
+	if _, hooksDir := LegacyServices(withHooks); !hooksDir {
+		t.Error("HOOKS_DIR not reported")
+	}
+	if help := LegacyHelp(got, true); !strings.Contains(help, "Remove it") || strings.Contains(help, "archiver migrate hooks\n") {
+		t.Errorf("the HOOKS_DIR help should say to remove the file, not migrate everything: %s", help)
 	}
 }

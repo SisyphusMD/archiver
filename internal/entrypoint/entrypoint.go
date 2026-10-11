@@ -245,11 +245,12 @@ func (e *Env) Exec(args ...string) error {
 }
 
 // LegacyServices lists the configured service directories that still hold the sourced
-// service-backup-settings.sh, which this release does not run (ADR 20).
-func LegacyServices(src config.Source) []string {
+// service-backup-settings.sh, which this release does not run (ADR 20), and whether
+// HOOKS_DIR is set, under which such a file is foreign content rather than a hook.
+func LegacyServices(src config.Source) ([]string, bool) {
 	cfg, _, err := config.Load(src, nil)
 	if err != nil {
-		return nil // the commands report a configuration problem themselves
+		return nil, false // the commands report a configuration problem themselves
 	}
 	dirs, _ := config.ExpandServiceDirectories(cfg.ServiceDirectories)
 	var legacy []string
@@ -258,11 +259,21 @@ func LegacyServices(src config.Source) []string {
 			legacy = append(legacy, d)
 		}
 	}
-	return legacy
+	return legacy, cfg.HooksDir != ""
 }
 
-// LegacyHelp is what a deployment with legacy settings files is told to do.
-func LegacyHelp(dirs []string) string {
+// LegacyHelp is what a deployment with legacy settings files is told to do. With HOOKS_DIR
+// set, migrating would run a file from a service directory, so it is to be removed instead.
+func LegacyHelp(dirs []string, hooksDir bool) string {
+	if hooksDir {
+		return fmt.Sprintf(`ERROR: service-backup-settings.sh is in: %s.
+HOOKS_DIR is set, so nothing in a service directory runs, and this file was not written by
+Archiver's migration. Remove it (your hooks are in HOOKS_DIR), then start again. If you wrote
+it yourself and mean to run it, migrate that directory by name:
+
+  docker compose run --rm archiver migrate hooks DIR
+`, strings.Join(dirs, ", "))
+	}
 	return fmt.Sprintf(`ERROR: service-backup-settings.sh, which this release does not run, is still in: %s.
 Convert it once, with this container's mounts and environment:
 

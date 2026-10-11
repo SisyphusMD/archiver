@@ -559,7 +559,11 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 	}
 	// Lstat: a broken symlink still means the service has not been migrated.
 	if _, err := os.Lstat(filepath.Join(dir, hooks.Legacy)); err == nil {
-		log(logging.Error, fmt.Sprintf("%s is not run by this pipeline, so this service's backup is skipped. Convert it with 'archiver migrate hooks'.", hooks.Legacy))
+		fix := "Convert it with 'archiver migrate hooks'."
+		if b.cfg.HooksDir != "" {
+			fix = "HOOKS_DIR is set, so nothing in a service directory runs: remove it."
+		}
+		log(logging.Error, fmt.Sprintf("%s is not run by this pipeline, so this service's backup is skipped. %s", hooks.Legacy, fix))
 		b.record(dir, hooks.Failed, time.Now())
 		return false, false
 	}

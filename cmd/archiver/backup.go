@@ -80,12 +80,17 @@ func detachBackup(l layout.Layout) int {
 // migrateHooks runs `archiver migrate hooks [DIR...]`: every configured service directory,
 // or the ones named.
 func migrateHooks(dirs []string) int {
-	if len(dirs) == 0 {
+	named := len(dirs) > 0
+	untrusted := false
+	if !named {
 		cfg, _, err := config.Load(config.FromEnvironment(), nil)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "archiver:", err)
 			return 1
 		}
+		// With HOOKS_DIR set nothing in a service directory runs, and migration runs the
+		// settings file: only a directory the operator names is migrated.
+		untrusted = cfg.HooksDir != ""
 		var unmatched []string
 		dirs, unmatched = config.ExpandServiceDirectories(cfg.ServiceDirectories)
 		for _, u := range unmatched {
@@ -111,6 +116,13 @@ func migrateHooks(dirs []string) int {
 	defer lock.Release()
 	code, migrated := 0, 0
 	for _, d := range dirs {
+		if untrusted {
+			if _, err := os.Lstat(filepath.Join(d, hooks.Legacy)); err == nil {
+				fmt.Fprintf(os.Stderr, "archiver: %s: not migrated, since HOOKS_DIR is set and nothing in a service directory runs: migrating would run its %s as root. Remove it (your hooks are in HOOKS_DIR), or if you wrote it and mean to run it, name the directory: archiver migrate hooks %s\n", d, hooks.Legacy, d)
+				code = 1
+			}
+			continue
+		}
 		m, err := hooks.Migrate(d, pipeline.Hostname(os.Getenv))
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "archiver:", err)
