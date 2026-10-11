@@ -1,7 +1,11 @@
 // Package layout names the files archiver keeps inside the image.
 package layout
 
-import "path/filepath"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"path/filepath"
+)
 
 // Layout is every path the Go commands read. Tests point Root and Lock at temp dirs.
 type Layout struct {
@@ -45,6 +49,20 @@ func (l Layout) RunRecord(kind string) string {
 // post-backup hook still finds what its pre-backup hook left.
 func (l Layout) HookState(snapshotID string) string {
 	return filepath.Join(l.LogDir(), ".hook-state", snapshotID)
+}
+
+// ServiceRepos holds each service's Duplicacy repository, outside the service directory:
+// whoever owns a service directory must not supply the configuration, cache or resume point
+// a root backup follows (ADR 45 treats that owner as possibly less trusted than Archiver).
+func (l Layout) ServiceRepos() string { return filepath.Join(l.LogDir(), ".service-repos") }
+
+// ServiceRepo is the repository backing up service directory dir (absolute) to snapshot ID
+// id. Directories with one basename share a snapshot ID, but each has a repository of its
+// own: Duplicacy matches a saved resume point by snapshot ID alone, so one directory's
+// would be taken up by the other's backup, recording the first one's files.
+func (l Layout) ServiceRepo(id, dir string) string {
+	sum := sha256.Sum256([]byte(dir))
+	return filepath.Join(l.ServiceRepos(), id+"-"+hex.EncodeToString(sum[:])[:12])
 }
 
 // StorageInit is the lock held around duplicacy init or add of one storage: created by

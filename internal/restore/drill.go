@@ -143,6 +143,12 @@ func (e *Env) Drill(o DrillOptions) int {
 	if prior, ok := resume.Read(e.Layout.RunRecord("drill")); ok {
 		log.Message(logging.Warning, "", fmt.Sprintf("The restore drill started %s was interrupted; deleting its copies, and this drill takes its place.", logging.Timestamp(prior.Started)))
 		for work := range prior.Services {
+			if isWorkRepo(work) {
+				if err := os.RemoveAll(work); err != nil {
+					log.Message(logging.Warning, "", fmt.Sprintf("Could not delete %s, an interrupted drill's repository: %v", work, err))
+				}
+				continue
+			}
 			// Judged against the configured drill directory, never the one the record (on
 			// the logs volume) names.
 			if !e.leftover(work, d.root) {
@@ -406,7 +412,18 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	}()
 	_ = d.lock.SetStage("drill", t.StorageName()+"/"+name)
 
-	if err := d.e.connect(work, t, id, out); err != nil {
+	repo, err := workRepo()
+	if err != nil {
+		return fail(err.Error())
+	}
+	// Recorded like the copy, so a drill killed now has it deleted by the next.
+	_ = d.run.Set(repo, resume.Pending)
+	defer func() {
+		if os.RemoveAll(repo) == nil {
+			d.run.Forget(repo)
+		}
+	}()
+	if err := d.e.connect(repo, work, t, id, out); err != nil {
 		return fail(err.Error())
 	}
 	// The revision is chosen and registered in use under the storage's gate, so no prune
@@ -422,7 +439,7 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 		release()
 		return skip("stop requested")
 	}
-	revs, err := d.e.revisions(work, id)
+	revs, err := d.e.revisions(repo, id)
 	if err != nil {
 		release()
 		return fail("cannot list its revisions")
@@ -439,7 +456,7 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	}
 	defer held.Release()
 	var listing strings.Builder
-	if err := d.e.duplicacy(work, &listing, "list", "-files", "-r", strconv.Itoa(r.Revision), "-id", id).Run(); err != nil {
+	if err := d.e.duplicacy(repo, &listing, "list", "-files", "-r", strconv.Itoa(r.Revision), "-id", id).Run(); err != nil {
 		return fail(fmt.Sprintf("cannot list the files of revision %d", r.Revision))
 	}
 	// The files listed are counted: duplicacy's "Files:" summary is missing for a revision
@@ -455,7 +472,7 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 		return skip("stop requested")
 	}
 	d.log.Message(logging.Info, name, fmt.Sprintf("Drilling %s revision %d from '%s' (%d files).", id, r.Revision, t.Name, want))
-	if err := d.e.restore(work, t, id, r.Revision, Options{IgnoreOwner: true, Threads: d.e.cfg.Threads}, out); err != nil {
+	if err := d.e.restore(repo, work, t, id, r.Revision, Options{IgnoreOwner: true, Threads: d.e.cfg.Threads}, out); err != nil {
 		return fail(fmt.Sprintf("restoring revision %d: %v", r.Revision, err))
 	}
 	got, err := countFiles(work)
@@ -470,16 +487,12 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	return r
 }
 
-// countFiles counts the regular files under dir, its .duplicacy repository left out: the
-// number duplicacy's listing reports.
+// countFiles counts the regular files under dir: the number duplicacy's listing reports.
 func countFiles(dir string) (int, error) {
 	n := 0
-	err := filepath.WalkDir(dir, func(p string, de fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(_ string, de fs.DirEntry, err error) error {
 		if err != nil {
 			return err
-		}
-		if de.IsDir() && p == filepath.Join(dir, ".duplicacy") {
-			return filepath.SkipDir
 		}
 		if de.Type().IsRegular() {
 			n++

@@ -36,8 +36,9 @@ func TestMissingCaps(t *testing.T) {
 
 // fakeDuplicacy stands in for duplicacy, failing any command run without -no-script: a storage URL holding "down" fails init; list
 // prints the revisions in <storage URL>/revs (with -files, as many file lines as <storage URL>/files says, else 3; <storage URL>/empty makes restore write nothing); restore writes what it restored, its flags,
-// what its fd 3 is, and, when the storage has one, a restore hook. With FAKE_LOCK, restore
-// then starts a "backup" (a lock held by the test process).
+// what its fd 3 is, and, when the storage has one, a restore hook, into the directory init's
+// -repository named. With FAKE_LOCK, restore then starts a "backup" (a lock held by the test
+// process).
 const fakeDuplicacy = `#!/bin/sh
 [ "$1" = -no-script ] || { echo "run without -no-script: $*"; exit 99; }
 shift
@@ -45,9 +46,9 @@ shift
 [ -f .duplicacy/url ] || [ ! -f .duplicacy/preferences ] || sed -n 's/.*"storage":"\([^"]*\)".*/\1/p' .duplicacy/preferences > .duplicacy/url
 case "$1" in
 init)
-  url=""; for a in "$@"; do url="$a"; done
+  url=""; repo=.; prev=""; for a in "$@"; do [ "$prev" = -repository ] && repo="$a"; prev="$a"; url="$a"; done
   case "$url" in *down*) echo "cannot reach $url"; exit 100;; esac
-  mkdir -p .duplicacy && echo "$url" > .duplicacy/url ;;
+  mkdir -p .duplicacy && echo "$url" > .duplicacy/url && echo "$repo" > .duplicacy/repo ;;
 list)
   url=$(cat .duplicacy/url)
   case " $* " in *" -files "*)
@@ -59,6 +60,7 @@ list)
   for r in $(cat "$url/revs" 2>/dev/null); do echo "Snapshot $3 revision $r created at x"; done ;;
 restore)
   url=$(cat .duplicacy/url); shift
+  cd "$(cat .duplicacy/repo 2>/dev/null || echo .)" || exit 98
   [ -f "$url/empty" ] && exit 0
   echo "$2 from $url" > restored.txt; echo "$*" > flags.txt
   readlink /proc/$$/fd/3 > fd3.txt 2>/dev/null
@@ -157,6 +159,31 @@ func TestAutoFallsBackAndPins(t *testing.T) {
 	f.vars["REVISION"] = "9"
 	if code := f.env.Auto(); code != NotFound {
 		t.Fatalf("a missing revision: exit %d, want %d", code, NotFound)
+	}
+}
+
+// The repository a restore runs from is never the destination's: a destination may be a
+// service directory, whose owner could plant a .duplicacy for the root restore to follow.
+// One left there (by an older version, say) is neither used nor removed.
+func TestRestoreRepositoryOutsideDestination(t *testing.T) {
+	f := newFixture(t)
+	t.Setenv("TMPDIR", t.TempDir())
+	f.revs(1, "4")
+	dest := filepath.Join(f.root, "r")
+	os.MkdirAll(filepath.Join(dest, ".duplicacy"), 0o755)
+	os.WriteFile(filepath.Join(dest, ".duplicacy", "url"), []byte(filepath.Join(f.root, "evil")), 0o644)
+	f.vars["SNAPSHOT_ID"], f.vars["LOCAL_DIR"] = "h-app", dest
+	if code := f.env.Auto(); code != OK {
+		t.Fatalf("exit %d: %s %s", code, f.out.String(), f.err.String())
+	}
+	if got := f.read(t, "r/restored.txt"); got != "4 from "+filepath.Join(f.root, "store1") {
+		t.Fatalf("restored %q, want revision 4 from the configured storage", got)
+	}
+	if got := f.read(t, "r/.duplicacy/url"); got != filepath.Join(f.root, "evil") {
+		t.Fatalf("the destination's own .duplicacy was changed: %q", got)
+	}
+	if left, _ := filepath.Glob(filepath.Join(os.TempDir(), "archiver-restore-*")); len(left) > 0 {
+		t.Fatalf("restore repositories left behind: %v", left)
 	}
 }
 

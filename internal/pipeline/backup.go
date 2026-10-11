@@ -450,7 +450,7 @@ func (b *Backup) main(dirs []string) int {
 		b.handOffCopies()
 	} else {
 		_ = b.lock.SetStage("duplicacy", "copy")
-		b.copies(lastWorking)
+		b.copies(b.serviceRepoOf(lastWorking))
 		if b.stopped() {
 			return b.handleStop()
 		}
@@ -698,6 +698,29 @@ func exitText(code int, err error) string {
 	return "exit " + strconv.Itoa(code)
 }
 
+// serviceRepoOf is the repository service directory dir backs up from.
+func (b *Backup) serviceRepoOf(dir string) string {
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	return b.Layout.ServiceRepo(b.Hostname+"-"+filepath.Base(dir), dir)
+}
+
+// serviceRepo prepares the repository svc's backups run from, refusing one anybody but
+// Archiver could have changed.
+func (b *Backup) serviceRepo(svc hooks.Service) (string, error) {
+	work := b.Layout.ServiceRepo(svc.SnapshotID, svc.Dir)
+	if err := os.MkdirAll(b.Layout.LogDir(), 0o755); err != nil { //nolint:gosec // G301: the logs directory holds nothing secret
+		return "", err
+	}
+	for _, d := range []string{b.Layout.ServiceRepos(), work, filepath.Join(work, ".duplicacy")} {
+		if err := layout.Private(d); err != nil {
+			return "", err
+		}
+	}
+	return work, nil
+}
+
 func (b *Backup) duplicacy(dir, service string, args ...string) proc.Spec {
 	return proc.Spec{Path: b.Duplicacy, Args: proc.NoScript(args...), Dir: dir, Env: b.env, Log: b.log, Service: service, Interrupt: true}
 }
@@ -788,19 +811,28 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 		log(logging.Error, err.Error()+".")
 		return hooks.Failed
 	}
-	repo := filepath.Join(svc.Dir, ".duplicacy")
+	work, err := b.serviceRepo(svc)
+	if err != nil {
+		log(logging.Error, fmt.Sprintf("Cannot prepare the Duplicacy repository for the %s service: %v", svc.Name, err))
+		return hooks.Failed
+	}
+	repo := filepath.Join(work, ".duplicacy")
 	if err := os.Remove(filepath.Join(repo, "preferences")); err != nil && !os.IsNotExist(err) {
 		log(logging.Error, fmt.Sprintf("Error removing preferences file for the %s service.", svc.Name))
 	}
 	log(logging.Info, fmt.Sprintf("Initializing primary storage for %s service.", svc.Name))
-	if b.runInit(storage, b.duplicacy(svc.Dir, svc.Name, "init", "-e", "-key", filepath.Join(b.Layout.Root, "keys", "public.pem"),
-		"-storage-name", storage, svc.SnapshotID, url)) != 0 {
+	// -repository records the service directory as what this repository backs up, so every
+	// later command runs from the work directory and never reads a .duplicacy in the service.
+	if b.runInit(storage, b.duplicacy(work, svc.Name, "init", "-e", "-key", filepath.Join(b.Layout.Root, "keys", "public.pem"),
+		"-storage-name", storage, "-repository", svc.Dir, svc.SnapshotID, url)) != 0 {
 		log(logging.Error, fmt.Sprintf("Primary storage initialization failed for %s service.", svc.Name))
 		if why := kit.Diagnose(b.Layout, "", primary); why != "" {
 			log(logging.Error, why)
 		}
+		// Whatever preferences are there now, this run did not write them.
+		return hooks.Failed
 	}
-	if b.run(b.duplicacy(svc.Dir, svc.Name, "list", "-storage", storage)) != 0 {
+	if b.run(b.duplicacy(work, svc.Name, "list", "-storage", storage)) != 0 {
 		log(logging.Error, fmt.Sprintf("Primary storage verification failed for %s service.", svc.Name))
 	} else {
 		log(logging.Info, fmt.Sprintf("Primary storage verified for %s service.", svc.Name))
@@ -824,7 +856,7 @@ func (b *Backup) primaryBackup(svc hooks.Service, filters []string, log func(str
 	if primary.UploadLimit != "" {
 		args = append(args, "-limit-rate", b.rate(primary.UploadLimit))
 	}
-	spec := b.duplicacy(svc.Dir, svc.Name, args...)
+	spec := b.duplicacy(work, svc.Name, args...)
 	lw := b.log.Writer(logging.Info, svc.Name)
 	var out strings.Builder
 	spec.Output = io.MultiWriter(lw, &out)
@@ -888,7 +920,7 @@ func (b *Backup) addStorages(svc hooks.Service, log func(string, string)) {
 			continue
 		}
 		log(logging.Info, fmt.Sprintf("Adding %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
-		spec := b.duplicacy(svc.Dir, svc.Name, "add", "-e", "-copy", primary, "-bit-identical", "-key",
+		spec := b.duplicacy(b.Layout.ServiceRepo(svc.SnapshotID, svc.Dir), svc.Name, "add", "-e", "-copy", primary, "-bit-identical", "-key",
 			filepath.Join(b.Layout.Root, "keys", "public.pem"), t.StorageName(), svc.SnapshotID, url)
 		if b.runInit(t.StorageName(), spec) != 0 {
 			log(logging.Error, fmt.Sprintf("Failed to add %s storage %s for %s service.", t.Type, t.StorageName(), svc.Name))
@@ -951,10 +983,10 @@ func (b *Backup) handOffCopies() {
 	b.log.Message(logging.Info, "", "Copies to the secondary storages run in the background; follow them in copies.log or with 'archiver status'.")
 }
 
-// copies copies the primary to every secondary in parallel, from dir's repository, and
+// copies copies the primary to every secondary in parallel, from the repository repo, and
 // retries a failed copy once: a copy can lose a rare race with a concurrent non-exclusive
 // prune, and a fresh copy resumes where it stopped.
-func (b *Backup) copies(dir string) {
+func (b *Backup) copies(repo string) {
 	if len(b.cfg.Targets) < 2 {
 		return
 	}
@@ -974,7 +1006,7 @@ func (b *Backup) copies(dir string) {
 		return
 	}
 	names = b.reachable(names)
-	failed := b.copyLegs(dir, names)
+	failed := b.copyLegs(repo, names)
 	final = failed
 	if len(failed) == 0 || b.isSignaled() {
 		return
@@ -990,7 +1022,7 @@ func (b *Backup) copies(dir string) {
 		return
 	}
 	b.log.Message(logging.Warning, "", "Retrying failed copies once: "+strings.Join(failed, " ")+".")
-	final = b.copyLegs(dir, failed)
+	final = b.copyLegs(repo, failed)
 	for _, n := range final {
 		b.log.Message(logging.Error, n, fmt.Sprintf("Copy to %s storage failed after retry.", n))
 	}

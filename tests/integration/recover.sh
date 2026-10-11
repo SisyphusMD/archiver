@@ -41,7 +41,9 @@ kit=$(ls "$STORE"/archiver-recovery-kit-rc-host.tar.enc) || die "no kit on the s
 # A legacy settings file that got into a snapshot (as a service's owner could slip one in
 # while a backup reads the directory) is code: recover without --hook must not run it.
 printf 'touch /tmp/pwned-by-recover\n' >"$SERVICES/apps/app/service-backup-settings.sh"
-(cd "$SERVICES/apps/app" && DUPLICACY_LOCAL_PASSWORD=testpassword DUPLICACY_LOCAL_RSA_PASSPHRASE="${RSA_PASSPHRASE}" \
+# Backed up through the service's own repository, which Archiver keeps on the logs volume.
+repo="/opt/archiver/logs/.service-repos/rc-host-app-$(printf %s "$SERVICES/apps/app" | sha256sum | cut -c1-12)"
+(cd "$repo" && DUPLICACY_LOCAL_PASSWORD=testpassword DUPLICACY_LOCAL_RSA_PASSPHRASE="${RSA_PASSPHRASE}" \
   duplicacy backup -storage local >/dev/null) || die "planting the settings file in a revision failed"
 (cd "$SERVICES" && find . -path '*/.duplicacy' -prune -o -type f -print | sort | xargs sha256sum) >/tmp/before.sums
 

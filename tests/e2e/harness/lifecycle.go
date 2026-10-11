@@ -228,6 +228,6 @@ func (d *Deployment) run(t testing.TB, args []string) {
 		if t.Failed() {
 			t.Logf("logs of %s (%s):\n%s", name, d.Image, docker(t, "logs", name).Output())
 		}
-		docker(t, "rm", "-f", name)
+		docker(t, "rm", "-fv", name)
 	})
 }

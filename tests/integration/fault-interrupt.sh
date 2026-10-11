@@ -35,7 +35,11 @@ chmod 755 "$SERVICES/db/pre-backup" "$SERVICES/db/post-backup"
 archiver backup >/tmp/b0.out 2>&1 || { cat /tmp/b0.out; die "first backup failed"; }
 : >/tmp/db-post
 
+# The repository a service directory backs up from: logs/.service-repos/<snapshot id>-<hash
+# of the directory>.
+repo_of() { printf '/opt/archiver/logs/.service-repos/%s-%s-%s' "$(hostname)" "$(basename "$1")" "$(printf %s "$1" | sha256sum | cut -c1-12)"; }
 # A shadow duplicacy holds a backup of the directory named in /tmp/hold, to be killed there.
+# Backups run from the service's repository (repo_of), which the shadow is handed.
 REAL="$(command -v duplicacy)"
 mv "$REAL" "${REAL}.real"
 cat >"$REAL" <<'WRAP'
@@ -48,7 +52,7 @@ exec "$0.real" "$@"
 WRAP
 chmod +x "$REAL"
 crash() { # archiver backup, killed while duplicacy backs up $1
-  echo "$1" >/tmp/hold
+  repo_of "$1" >/tmp/hold
   archiver backup >/tmp/crash.out 2>&1 &
   local pid=$!
   wait_for '[ -e /tmp/holding ]' 30 || die "the backup never reached $1"
@@ -121,7 +125,7 @@ SERVICE_DIRECTORIES="$SERVICES/inc" archiver backup >/tmp/b6.out 2>&1 || { cat /
 head -c 300000000 /dev/urandom >"$SERVICES/inc/blob1"; head -c 100000000 /dev/urandom >"$SERVICES/inc/blob2"
 SERVICE_DIRECTORIES="$SERVICES/inc" DUPLICACY_THREADS=1 DUPLICACY_RESUME_INTERVAL=0 archiver backup >/tmp/b7.out 2>&1 &
 pid=$!
-wait_for '[ -e '$SERVICES'/inc/.duplicacy/cache/local/incomplete_chunks ] && [ "$(find '$STORE'/chunks -type f -newer /tmp/b6.out | wc -l)" -gt 20 ]' 90 || die "the incremental backup never saved a resume point"
+wait_for '[ -e '"$(repo_of "$SERVICES/inc")"'/.duplicacy/cache/local/incomplete_chunks ] && [ "$(find '$STORE'/chunks -type f -newer /tmp/b6.out | wc -l)" -gt 20 ]' 90 || die "the incremental backup never saved a resume point"
 kill -9 "$pid"; pkill -9 -f 'duplicacy.real .*backup'; wait "$pid" 2>/dev/null
 grep -q 'Incomplete snapshot saved' $LOGS/archiver.log && die "the killed backup handled a signal; this case is for one that cannot"
 SERVICE_DIRECTORIES="$SERVICES/inc" archiver backup >/tmp/b8.out 2>&1 || { cat /tmp/b8.out; die "the backup after the kill failed"; }

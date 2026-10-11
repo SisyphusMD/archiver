@@ -125,3 +125,94 @@ func TestIdentitiesRoundTrip(t *testing.T) {
 		t.Fatal("an unreadable file read as empty")
 	}
 }
+
+// A service directory's owner controls its legacy repository, and the collections taken
+// from it feed a root prune: none is taken through a link, from a directory someone else
+// owns or can write, or from a file that is a link, has other names or is someone else's.
+func TestAdoptFossilsRefusesForeignTrees(t *testing.T) {
+	root := t.TempDir()
+	dot := filepath.Join(root, "repo", ".duplicacy")
+	prefs := []byte(`[{"name":"local","id":"x","storage":"/storage/1"}]`)
+	secret := filepath.Join(root, "secret")
+	if err := os.WriteFile(secret, []byte("private key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// legacy makes a service directory with a valid legacy repository holding collection 1.
+	legacy := func(name string) (dir, fossils string) {
+		t.Helper()
+		dir = filepath.Join(root, name)
+		fossils = filepath.Join(dir, ".duplicacy", "cache", "local", "fossils")
+		if err := os.MkdirAll(fossils, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for p := fossils; p != dir; p = filepath.Dir(p) {
+			os.Chmod(p, 0o755) // whatever the umask
+		}
+		os.WriteFile(filepath.Join(dir, ".duplicacy", "preferences"), prefs, 0o600)
+		os.WriteFile(filepath.Join(fossils, "1"), []byte(name), 0o600)
+		return dir, fossils
+	}
+	var dirs []string
+	add := func(dir string) { dirs = append(dirs, dir) }
+
+	// The whole .duplicacy a link to a tree that would otherwise qualify.
+	_, realFossils := legacy("real")
+	linked := filepath.Join(root, "linked-dot")
+	os.MkdirAll(linked, 0o755)
+	os.Symlink(filepath.Join(root, "real", ".duplicacy"), filepath.Join(linked, ".duplicacy"))
+	add(linked)
+	// The fossils directory a link.
+	d, fossils := legacy("linked-fossils")
+	os.RemoveAll(fossils)
+	os.Symlink(realFossils, fossils)
+	add(d)
+	// A group-writable .duplicacy, and a group-writable cache directory.
+	d, _ = legacy("writable-dot")
+	os.Chmod(filepath.Join(d, ".duplicacy"), 0o775)
+	add(d)
+	d, _ = legacy("writable")
+	os.Chmod(filepath.Join(d, ".duplicacy", "cache"), 0o775)
+	add(d)
+	// Collections that are a symlink and a hard link to a file elsewhere.
+	d, fossils = legacy("links")
+	os.Remove(filepath.Join(fossils, "1"))
+	os.Symlink(secret, filepath.Join(fossils, "1"))
+	if err := os.Link(secret, filepath.Join(fossils, "2")); err != nil {
+		t.Fatal(err)
+	}
+	add(d)
+	// A preferences file that is a link to one that would match.
+	d, _ = legacy("linked-prefs")
+	os.Remove(filepath.Join(d, ".duplicacy", "preferences"))
+	os.Symlink(filepath.Join(root, "real", ".duplicacy", "preferences"), filepath.Join(d, ".duplicacy", "preferences"))
+	add(d)
+	if os.Geteuid() == 0 {
+		// Another user's tree, and another user's collection in Archiver's own tree.
+		d, _ = legacy("foreign")
+		os.Chown(filepath.Join(d, ".duplicacy"), 1000, 1000)
+		add(d)
+		d, fossils = legacy("foreign-file")
+		os.Chown(filepath.Join(fossils, "1"), 1000, 1000)
+		add(d)
+	}
+
+	fds := func() int { e, _ := os.ReadDir("/proc/self/fd"); return len(e) }
+	before := fds()
+	moved, err := adoptFossils(dot, "local", "/storage/1", dirs)
+	if err != nil || moved != 0 {
+		t.Fatalf("moved %d, %v; want nothing taken", moved, err)
+	}
+	if after := fds(); after != before {
+		t.Fatalf("%d file descriptors left open by refused repositories", after-before)
+	}
+	if b, err := os.ReadFile(secret); err != nil || string(b) != "private key" {
+		t.Fatalf("the file a link pointed at was changed: %q, %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(realFossils, "1")); err != nil {
+		t.Fatalf("a collection was taken through a link: %v", err)
+	}
+	// The real tree itself still qualifies.
+	if moved, err := adoptFossils(dot, "local", "/storage/1", []string{filepath.Join(root, "real")}); err != nil || moved != 1 {
+		t.Fatalf("the real repository: moved %d, %v", moved, err)
+	}
+}

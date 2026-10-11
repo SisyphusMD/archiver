@@ -71,7 +71,9 @@ SNAPSHOT_ID=$ID LOCAL_DIR=/restore/app archiver auto-restore >/tmp/r1.out 2>&1 &
 grep -qiE "no space|space left" /tmp/r1.out || { tail -5 /tmp/r1.out; die "no clear error for a full restore target"; }
 rm -rf /restore/app
 
-log "the logs volume full: the run fails with a clear message on stdout and notifies, the backup itself stands"
+# Each service's repository is on the logs volume, so with it full no service backs up:
+# the run fails, and the next one after space returns takes the change.
+log "the logs volume full: the run fails with a clear message on stdout and notifies; once space returns the next backup takes the change"
 : >/tmp/notified
 free=$(df --output=avail -k /opt/archiver/logs | tail -1)
 dd if=/dev/zero of=/opt/archiver/logs/filler bs=1k count="$free" 2>/dev/null
@@ -80,6 +82,7 @@ archiver backup >/tmp/b3.out 2>&1 && { cat /tmp/b3.out; die "a backup with a ful
 grep -q "Failed to log message" /tmp/b3.out || { tail -5 /tmp/b3.out; die "no clear message for a full logs volume"; }
 grep -q . /tmp/notified || die "a backup with a full logs volume did not notify"
 rm -f /opt/archiver/logs/filler
+archiver backup >/tmp/b4.out 2>&1 || { cat /tmp/b4.out; die "the backup after the logs volume emptied failed"; }
 mkdir -p /restore2 && SNAPSHOT_ID=$ID LOCAL_DIR=/restore2/app archiver auto-restore >/tmp/r2.out 2>&1 || { cat /tmp/r2.out; die "the newest revision does not restore after the logs filled"; }
 cmp "$SERVICES/app/small.bin" /restore2/app/small.bin || die "the newest revision restored different bytes"
 
