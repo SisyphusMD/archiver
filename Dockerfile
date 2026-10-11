@@ -22,7 +22,9 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 # backup's resume point every five minutes, so one killed or cut off by a power loss resumes
 # where it was, and lets incremental backups resume too (ADR 46). restore-links.patch keeps a
 # restore from writing through a symbolic link in its destination (a link where the snapshot
-# has a directory or a file is replaced when overwriting and refused otherwise). Modules are vendored
+# has a directory or a file is replaced when overwriting and refused otherwise). host-keys-append.patch
+# appends SFTP host keys to known_hosts, so repositories sharing one record never overwrite each
+# other's keys. Modules are vendored
 # against the source's go.sum; the CLI still runs as a child process.
 FROM --platform=$BUILDPLATFORM golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d AS duplicacy
 ARG TARGETOS
@@ -42,8 +44,9 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
     mkdir /src && tar -xzf /tmp/duplicacy.tar.gz -C /src --strip-components=1 && \
     cd /src && patch -p1 < /patches/dropbox-app.patch && patch -p1 < /patches/resume-point.patch && \
     patch -p1 < /patches/restore-links.patch && patch -p1 < /patches/gcd-drive-id.patch && \
+    patch -p1 < /patches/host-keys-append.patch && \
     go mod vendor && patch -p1 < /patches/highwayhash-arm64.patch && \
-    go test -count=1 -run 'TestDropboxAppTokens|TestResumePoint|TestRestoreNeverFollowsLinks|TestSharedDriveByNameOrID' ./src/ && \
+    go test -count=1 -run 'TestDropboxAppTokens|TestResumePoint|TestRestoreNeverFollowsLinks|TestSharedDriveByNameOrID|TestHostKeysAppendConcurrently' ./src/ && \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/duplicacy ./duplicacy
 
 # rclone places the recovery kit on every storage type (ADR 24). Its release is a zip, so a
