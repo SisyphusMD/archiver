@@ -183,3 +183,37 @@ func TestLegacyServices(t *testing.T) {
 		t.Errorf("the HOOKS_DIR help should say to remove the file, not migrate everything: %s", help)
 	}
 }
+
+func TestSeedHostKeysFromEveryRepository(t *testing.T) {
+	svcs := t.TempDir()
+	root := t.TempDir()
+	l := layout.Layout{Root: root}
+	pin := func(dir, line string) {
+		os.MkdirAll(filepath.Join(dir, ".duplicacy"), 0o700)
+		os.WriteFile(filepath.Join(dir, ".duplicacy", "known_hosts"), []byte(line+"\n"), 0o600)
+	}
+	pin(filepath.Join(svcs, "app"), "10.0.0.1:2222 ssh-ed25519 AAAAinTree")
+	pin(filepath.Join(l.ServiceRepos(), "host-db-0123456789ab"), "10.0.0.2:22 ssh-ed25519 AAAAmoved")
+	pin(filepath.Join(l.LogDir(), ".copy-repos", "offsite-abc"), "10.0.0.3:22 ssh-ed25519 AAAAcopy")
+	pin(filepath.Join(l.LogDir(), ".maintenance-repo"), "10.0.0.1:2222 ssh-ed25519 AAAAdifferent")
+	src := config.Source{Getenv: func(k string) string {
+		if k == "SERVICE_DIRECTORIES" {
+			return svcs + "/*/"
+		}
+		return ""
+	}, SecretsDir: t.TempDir()}
+	var stderr strings.Builder
+	(&Env{Layout: l, Getenv: func(string) string { return "" }, Stderr: &stderr}).SeedHostKeys(src)
+	got, err := os.ReadFile(l.HostKeys())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"AAAAinTree", "AAAAmoved", "AAAAcopy"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("%s missing from the record:\n%s", want, got)
+		}
+	}
+	if strings.Contains(string(got), "AAAAdifferent") || !strings.Contains(stderr.String(), "10.0.0.1:2222") {
+		t.Errorf("a conflicting pin was not reported:\nrecord:\n%s\nstderr: %s", got, stderr.String())
+	}
+}

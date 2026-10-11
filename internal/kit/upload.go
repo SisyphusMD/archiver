@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/layout"
 )
 
 // remote is the rclone remote that reaches t for the kit (ADR 24): the type's settings
@@ -230,11 +231,17 @@ func symbolicMode(perms string) os.FileMode {
 // adding the server's keys the first time (trust on first use, as ssh's accept-new: a later
 // change of key fails the connection).
 func (r *Run) knownHosts(ctx context.Context, t config.Target) (path, algorithms string, err error) {
-	dir := filepath.Join(os.Getenv("HOME"), ".ssh")
-	if dir == ".ssh" {
-		dir = "/root/.ssh"
+	// On the logs volume: one in the container's home went with every recreation, and the
+	// next connection trusted whatever key answered.
+	dir := r.Layout.SSHDir()
+	path = r.Layout.KnownHosts()
+	// Trusted only from a directory Archiver owns: a key planted there would be trusted too.
+	if err := os.MkdirAll(r.Layout.LogDir(), 0o755); err != nil { //nolint:gosec // G301: the logs directory holds nothing secret
+		return "", "", err
 	}
-	path = filepath.Join(dir, "known_hosts")
+	if err := layout.Private(dir); err != nil {
+		return "", "", err
+	}
 	host := t.Get("SFTP_URL")
 	if t.Get("SFTP_PORT") != "" && t.Get("SFTP_PORT") != "22" {
 		host = "[" + t.Get("SFTP_URL") + "]:" + t.Get("SFTP_PORT")
@@ -249,9 +256,6 @@ func (r *Run) knownHosts(ctx context.Context, t config.Target) (path, algorithms
 	keys, err := exec.CommandContext(ctx, "ssh-keyscan", "-T", "15", "-p", port, t.Get("SFTP_URL")).Output()
 	if err != nil || len(bytes.TrimSpace(keys)) == 0 {
 		return "", "", fmt.Errorf("no host key from %s:%s", t.Get("SFTP_URL"), port)
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil { //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
-		return "", "", err
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600) //nolint:gosec // G703: a path from the layout or configuration, not from untrusted input
 	if err != nil {

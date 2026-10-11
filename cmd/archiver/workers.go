@@ -140,7 +140,7 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 		cw.names = append(cw.names, name)
 		d := &copier.Duplicacy{
 			Bin: "duplicacy", Repo: copier.RepoDir(l.LogDir(), cfg.Targets[0], t), Env: env, Log: log, Threads: cfg.Threads,
-			PrivKey: l.RSAPrivateKey(), PubKey: filepath.Join(l.Root, "keys", "public.pem"),
+			PrivKey: l.RSAPrivateKey(), PubKey: filepath.Join(l.Root, "keys", "public.pem"), HostKeys: l.HostKeys(),
 			SnapshotID: host + "-archiver-copies", Primary: cfg.Targets[0], Target: t, InitLock: l.StorageInit,
 			Diagnose: func(t config.Target) string { return kit.Diagnose(l, "", t) },
 		}

@@ -26,6 +26,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/hooks"
+	"github.com/SisyphusMD/archiver/internal/hostkeys"
 	"github.com/SisyphusMD/archiver/internal/inuse"
 	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
@@ -299,6 +300,13 @@ func (e *Env) connect(repo, dest string, t config.Target, id string, out io.Writ
 	if err := os.RemoveAll(filepath.Join(repo, ".duplicacy")); err != nil {
 		return err
 	}
+	// The server's key is checked against every key Archiver has seen, not trusted afresh.
+	if err := os.MkdirAll(filepath.Join(repo, ".duplicacy"), 0o700); err != nil {
+		return err
+	}
+	if err := hostkeys.Pin(e.Layout.HostKeys(), filepath.Join(repo, ".duplicacy")); err != nil {
+		return err
+	}
 	args := []string{"init", "-e", "-key", filepath.Join(e.Layout.Root, "keys", "public.pem"), "-storage-name", t.StorageName()}
 	if dest != "" {
 		args = append(args, "-repository", dest)
@@ -551,7 +559,7 @@ func linkedDirs(dir string) [][2]string {
 // attach makes dir a repository of t by writing its preferences, without duplicacy init:
 // init creates a storage that does not exist, and a probe must never write one. Every
 // Archiver storage is encrypted.
-func attach(dir string, t config.Target, id string) error {
+func attach(dir string, t config.Target, id, hostKeys string) error {
 	url, err := t.URL()
 	if err != nil {
 		return err
@@ -561,6 +569,9 @@ func attach(dir string, t config.Target, id string) error {
 		"no_backup": true, "no_restore": false, "no_save_password": true, "keys": nil,
 	}})
 	if err := os.MkdirAll(filepath.Join(dir, ".duplicacy"), 0o700); err != nil {
+		return err
+	}
+	if err := hostkeys.Pin(hostKeys, filepath.Join(dir, ".duplicacy")); err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, ".duplicacy", "preferences"), prefs, 0o600)
@@ -601,7 +612,7 @@ func (e *Env) Snapshots(t config.Target) (map[string]SnapshotInfo, error) {
 	}
 	defer os.RemoveAll(dir)
 	var out strings.Builder
-	if err := attach(dir, t, "archiver-probe"); err != nil {
+	if err := attach(dir, t, "archiver-probe", e.Layout.HostKeys()); err != nil {
 		return nil, err
 	}
 	// The newest revisions are listed and held in use under the storage's gate, so no prune

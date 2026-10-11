@@ -126,7 +126,7 @@ func (e *Env) dryRun(req request) int {
 			return Unreachable
 		}
 		defer os.RemoveAll(work)
-		if err := attach(work, t, req.id); err != nil {
+		if err := attach(work, t, req.id, e.Layout.HostKeys()); err != nil {
 			fmt.Fprintln(e.Stdout, "  unreachable:", err)
 			unreachable++
 			continue

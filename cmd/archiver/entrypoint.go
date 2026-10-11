@@ -86,6 +86,7 @@ func entrypointCommand(args []string) int {
 			return false
 		}
 		fmt.Println("Configuration: keys loaded from files.")
+		e.SeedHostKeys(config.FromEnvironment())
 		return true
 	}
 

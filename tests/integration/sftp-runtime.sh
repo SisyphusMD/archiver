@@ -59,7 +59,8 @@ docker run -d --name "$ARCH" --network "$NET" \
 log "in-container: RSA keys, secrets, SSH client key at its canonical path, known_hosts"
 docker exec "$ARCH" bash -c '
   set -e
-  mkdir -p /opt/archiver/keys /run/secrets /data/fixtures /root/.ssh
+  mkdir -p /opt/archiver/keys /run/secrets /data/fixtures
+  mkdir -p -m 700 /opt/archiver/logs/.ssh
   openssl genrsa -aes256 -passout pass:testpassphrase -out /opt/archiver/keys/private.pem -traditional 2048 2>/dev/null
   openssl rsa -in /opt/archiver/keys/private.pem -passin pass:testpassphrase -pubout -out /opt/archiver/keys/public.pem 2>/dev/null
   chmod 600 /opt/archiver/keys/private.pem
@@ -72,7 +73,7 @@ docker exec "$ARCH" bash -c '
   echo "hello via sftp" > /data/fixtures/file.txt
   head -c 8192 /dev/urandom > /data/fixtures/blob.bin
   for _ in $(seq 1 30); do
-    ssh-keyscan -T 3 sftp-server > /root/.ssh/known_hosts 2>/dev/null && [ -s /root/.ssh/known_hosts ] && exit 0
+    ssh-keyscan -T 3 sftp-server > /opt/archiver/logs/.ssh/known_hosts 2>/dev/null && [ -s /opt/archiver/logs/.ssh/known_hosts ] && exit 0
     sleep 1
   done
   echo "sftp server never answered keyscan" >&2; exit 1
@@ -88,7 +89,7 @@ docker exec "$SFTP" test -f "/home/backup/upload/archiver-recovery-kit-${HOSTN}.
 docker exec "$SFTP" test -f "/home/backup/upload/archiver-recovery-kit-${HOSTN}.README.txt" || die "no kit README on the sftp server"
 docker exec "$ARCH" bash -c '
   set -e
-  sftp -q -P 22 -i /opt/archiver/keys/id_ed25519 -o BatchMode=yes -b - backup@sftp-server \
+  sftp -q -P 22 -i /opt/archiver/keys/id_ed25519 -o BatchMode=yes -o UserKnownHostsFile=/opt/archiver/logs/.ssh/known_hosts -b - backup@sftp-server \
     <<< "get /upload/archiver-recovery-kit-$(hostname).tar.enc /tmp/kit.enc" >/dev/null
   openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:recovery-sftp-password -in /tmp/kit.enc | tar -xf - -C /tmp
   grep -q "^STORAGE_TARGET_1_SFTP_URL=sftp-server$" /tmp/archiver.env
@@ -123,7 +124,7 @@ docker exec "$SFTP" sh -c 'ssh-keygen -q -t ecdsa -N "" -f /etc/ssh/ssh_host_ecd
   || die "could not add an ECDSA host key"
 docker exec "$SFTP" kill -HUP 1 || die "could not reload the sftp server"
 sleep 2
-docker exec "$ARCH" bash -c 'ssh-keyscan -T 5 sftp-server 2>/dev/null | grep " ecdsa-" >/dev/null && grep " ssh-ed25519 " /root/.ssh/known_hosts > /tmp/kh && [ -s /tmp/kh ] && mv /tmp/kh /root/.ssh/known_hosts' \
+docker exec "$ARCH" bash -c 'ssh-keyscan -T 5 sftp-server 2>/dev/null | grep " ecdsa-" >/dev/null && grep " ssh-ed25519 " /opt/archiver/logs/.ssh/known_hosts > /tmp/kh && [ -s /tmp/kh ] && mv /tmp/kh /opt/archiver/logs/.ssh/known_hosts' \
   || die "the server does not offer ECDSA, or no Ed25519 key was recorded"
 docker exec "$ARCH" archiver recovery-kit force >/tmp/sftp-onekey.out 2>&1 || { cat /tmp/sftp-onekey.out; die "kit upload failed with one trusted key type"; }
 
@@ -138,4 +139,20 @@ grep -q "upload of .* failed" /tmp/sftp-nosetstat.out && { cat /tmp/sftp-nosetst
 after="$(docker exec "$SFTP" stat -c '%i %Y' "/home/backup/upload/archiver-recovery-kit-${HOSTN}.tar.enc")"
 [ "$before" != "$after" ] || { cat /tmp/sftp-nosetstat.out; die "the kit was not replaced on a server that refuses SETSTAT"; }
 
-echo "=== SFTP-RUNTIME OK: backup + restore over ssh + kit perms match storage config; no SETSTAT needed ==="
+log "the server's key is pinned once for every repository, and a changed key is refused"
+docker exec "$ARCH" bash -c '
+  set -e
+  grep -q "^[^ ]*:22 ssh-" /opt/archiver/logs/.ssh/duplicacy_known_hosts
+  for k in /opt/archiver/logs/.service-repos/*/.duplicacy/known_hosts; do
+    [ "$(readlink "$k")" = /opt/archiver/logs/.ssh/duplicacy_known_hosts ]
+  done
+' || die "the server's key is not in the shared record, or a repository keeps its own"
+docker exec "$SFTP" sh -c 'rm -f /etc/ssh/ssh_host_*key* && ssh-keygen -A >/dev/null && kill -HUP 1' || die "could not give the server new host keys"
+sleep 2
+docker exec "$ARCH" archiver backup >/tmp/sftp-newkey.out 2>&1 && { cat /tmp/sftp-newkey.out; die "a backup trusted a server whose key changed"; }
+docker exec -e SNAPSHOT_ID="$HOSTN-fixtures" -e LOCAL_DIR=/data/restore-newkey -e OVERWRITE=1 "$ARCH" archiver auto-restore >/tmp/sftp-newkey-restore.out 2>&1 \
+  && { cat /tmp/sftp-newkey-restore.out; die "a restore trusted a server whose key changed"; }
+docker exec "$ARCH" archiver recovery-kit force >/tmp/sftp-newkey-kit.out 2>&1
+grep -qi "host key\|REMOTE HOST IDENTIFICATION" /tmp/sftp-newkey-kit.out /tmp/sftp-newkey-restore.out || { cat /tmp/sftp-newkey-kit.out /tmp/sftp-newkey-restore.out; die "no host-key refusal reported"; }
+
+echo "=== SFTP-RUNTIME OK: backup + restore over ssh + kit perms match storage config; no SETSTAT needed; host keys pinned across repositories ==="

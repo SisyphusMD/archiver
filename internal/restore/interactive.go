@@ -113,7 +113,7 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 		return 1, err
 	}
 	defer os.RemoveAll(scratch)
-	if err := attach(scratch, t, id); err != nil {
+	if err := attach(scratch, t, id, e.Layout.HostKeys()); err != nil {
 		return 1, err
 	}
 	revs, err := e.revisions(scratch, id)

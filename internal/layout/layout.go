@@ -56,6 +56,13 @@ func (l Layout) HookState(snapshotID string) string {
 // a root backup follows (ADR 45 treats that owner as possibly less trusted than Archiver).
 func (l Layout) ServiceRepos() string { return filepath.Join(l.LogDir(), ".service-repos") }
 
+// SSHDir holds the SFTP host keys Archiver has seen, kept across container recreations:
+// HostKeys in Duplicacy's own format, for every repository, and KnownHosts in OpenSSH's, for
+// rclone and sftp.
+func (l Layout) SSHDir() string     { return filepath.Join(l.LogDir(), ".ssh") }
+func (l Layout) HostKeys() string   { return filepath.Join(l.SSHDir(), "duplicacy_known_hosts") }
+func (l Layout) KnownHosts() string { return filepath.Join(l.SSHDir(), "known_hosts") }
+
 // ServiceRepo is the repository backing up service directory dir (absolute) to snapshot ID
 // id. Directories with one basename share a snapshot ID, but each has a repository of its
 // own: Duplicacy matches a saved resume point by snapshot ID alone, so one directory's
