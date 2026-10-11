@@ -305,7 +305,7 @@ copy_lifecycle() {
   until_in "$name" 120 "grep -q 'Check of offsite storage completed' $lg/copies.log" || { docker exec "$P-$name" tail -n 30 "$lg/copies.log" >&2; die "$name: worker did not check"; }
 
   log "$name: a revision local prunes is mirrored off it"
-  docker exec -w /data/fixtures -e DUPLICACY_LOCAL_PASSWORD=testpassword -e DUPLICACY_LOCAL_RSA_PASSPHRASE=testpassphrase "$P-$name" \
+  docker exec -w "$lg/.service-repos/$id-$(printf %s /data/fixtures | sha256sum | cut -c1-12)" -e DUPLICACY_LOCAL_PASSWORD=testpassword -e DUPLICACY_LOCAL_RSA_PASSPHRASE=testpassphrase "$P-$name" \
     duplicacy prune -storage local -id "$id" -r 1 >/dev/null || die "$name: local prune of revision 1 failed"
   docker exec "$P-$name" bash -c "archiver mirror --dry-run | grep -q 'offsite: delete $id revisions 1\$'" || die "$name: mirroring does not plan the deletion"
   docker exec "$P-$name" archiver daemon ctl local-changed >/dev/null || die "$name: could not wake the worker"

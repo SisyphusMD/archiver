@@ -23,6 +23,9 @@ die() { printf 'FAIL: %s\n' "$*" >&2; tail -20 "$CLOG" >&2 2>/dev/null; archiver
 revisions() { ls "$1/snapshots/${HOST}-app" 2>/dev/null | wc -l; }
 wait_for() { local _; for _ in $(seq 1 "$2"); do eval "$1" && return 0; sleep 1; done; return 1; }
 
+# The repository a service directory backs up from: logs/.service-repos/<snapshot id>-<hash
+# of the directory>.
+repo_of() { printf '/opt/archiver/logs/.service-repos/%s-%s-%s' "$(hostname)" "$(basename "$1")" "$(printf %s "$1" | sha256sum | cut -c1-12)"; }
 log "env-native config with a local primary and a local offsite"
 mkdir -p /opt/archiver/keys "${SECRETS_DIR}" "$STORE" "$OFFSITE" "$OFFSITE2" "$SVC"
 openssl genrsa -aes256 -passout "pass:${RSA_PASSPHRASE}" -out /opt/archiver/keys/private.pem -traditional 2048 2>/dev/null || die "genrsa"
@@ -81,7 +84,7 @@ log "the workers check their targets (local-type default: daily, so at once)"
 wait_for 'grep -q "offsite: caught up.*checked" <<<"$(archiver status)"' 60 || die "offsite not checked by its worker"
 
 log "mirroring: a revision local prunes is deleted from the secondaries too (ADR 12)"
-(cd "$SVC" && DUPLICACY_LOCAL_PASSWORD=testpassword DUPLICACY_LOCAL_RSA_PASSPHRASE="${RSA_PASSPHRASE}" \
+(cd "$(repo_of "$SVC")" && DUPLICACY_LOCAL_PASSWORD=testpassword DUPLICACY_LOCAL_RSA_PASSPHRASE="${RSA_PASSPHRASE}" \
   duplicacy prune -storage local -id "${HOST}-app" -r 1 >/dev/null 2>&1) || die "local prune of revision 1 failed"
 [ ! -e "$STORE/snapshots/${HOST}-app/1" ] || die "local still has revision 1"
 grep -q "offsite: delete ${HOST}-app revisions 1$" <<<"$(archiver mirror --dry-run)" || die "dry run does not plan the deletion: $(archiver mirror --dry-run)"

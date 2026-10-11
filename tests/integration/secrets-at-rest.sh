@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Storage secrets must never be written to disk inside the backed-up data. duplicacy
-# persists anything given to `duplicacy set -key ... -value` in the repository's plaintext
-# .duplicacy/preferences, which lives in every service directory (usually a host bind
-# mount), and puts the value on argv while it runs. The credentials must reach duplicacy
+# Storage secrets must never be written to disk. duplicacy persists anything given to
+# `duplicacy set -key ... -value` in the repository's plaintext .duplicacy/preferences (each
+# service's, on the logs volume, and each restore's), and puts the value on argv while it
+# runs. The credentials must reach duplicacy
 # through DUPLICACY_<NAME>_* env vars only. Covers the backup, the copy leg (which needs the
 # RSA passphrase for its source), a restore, and a storage literally named `default`, whose
 # env vars duplicacy reads without the name prefix.
@@ -13,6 +13,7 @@
 set -uo pipefail
 
 FIXTURES=/data/fixtures
+REPO="/opt/archiver/logs/.service-repos/$(hostname)-fixtures-$(printf %s "$FIXTURES" | sha256sum | cut -c1-12)"
 STORE1=/backup-store-1
 STORE2=/backup-store-2
 SECRETS_DIR=/run/secrets
@@ -51,16 +52,19 @@ export STORAGE_TARGET_2_LOCAL_PATH="${STORE2}"
 log "backup + copy to the secondary"
 archiver backup || die "backup exited non-zero"
 [ -d "$STORE2/snapshots" ] || die "copy to the secondary did not run"
-assert_no_secrets "$FIXTURES/.duplicacy"
+assert_no_secrets "$REPO" "$FIXTURES"
+[ ! -e "$FIXTURES/.duplicacy" ] || die "the backup wrote a repository into the service directory"
 
 log "restore from the secondary (the copy's RSA path)"
 SNAPSHOT_ID="$(hostname)-fixtures" LOCAL_DIR=/data/restore STORAGE_TARGET=secondary archiver auto-restore \
   || die "auto-restore exited non-zero"
 diff "$FIXTURES/file.txt" /data/restore/file.txt || die "restored content differs"
-assert_no_secrets /data/restore/.duplicacy
+assert_no_secrets /data/restore /tmp
+# Duplicacy's restore always makes an empty .duplicacy in its destination; nothing goes in it.
+[ -z "$(ls -A /data/restore/.duplicacy 2>/dev/null)" ] || die "the restore wrote a repository into its destination"
 
 log "a storage named 'default' (duplicacy reads its env vars without the name prefix)"
-rm -rf "$FIXTURES/.duplicacy" /data/restore
+rm -rf "$REPO" /data/restore
 export STORAGE_TARGET_1_NAME="default"
 export STORAGE_TARGET_1_LOCAL_PATH=/backup-store-default
 unset STORAGE_TARGET_2_NAME STORAGE_TARGET_2_TYPE STORAGE_TARGET_2_LOCAL_PATH
@@ -69,6 +73,6 @@ archiver backup || die "backup to a storage named 'default' exited non-zero"
 SNAPSHOT_ID="$(hostname)-fixtures" LOCAL_DIR=/data/restore archiver auto-restore \
   || die "restore from a storage named 'default' exited non-zero"
 diff "$FIXTURES/file.txt" /data/restore/file.txt || die "restored content differs ('default')"
-assert_no_secrets "$FIXTURES/.duplicacy" /data/restore/.duplicacy
+assert_no_secrets "$REPO" "$FIXTURES" /data/restore
 
 echo "=== SECRETS-AT-REST OK: no storage password or RSA passphrase on disk; backup, copy, restore, and 'default' still work ==="
