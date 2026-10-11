@@ -87,3 +87,11 @@ func main() {
 	log.Printf("serving %d hosts on %s", len(services), *addr)
 	log.Fatal(http.ListenAndServe(*addr, http.HandlerFunc(serve)))
 }
+
+// duplicacy.com refreshes tokens for anyone using its own apps. Archiver always uses the
+// user's own app, so a request here means a client fell back to it: refused, never answered.
+func init() {
+	register(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "archiver never refreshes through duplicacy.com", http.StatusForbidden)
+	}), "duplicacy.com")
+}

@@ -46,7 +46,7 @@ AZ_HOST="$AZ_ACCOUNT.blob.core.windows.net"
 RECOVERY="recovery-pw"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-CASES=() FAKE_HOSTS=()
+CASES=() FAKE_HOSTS=(duplicacy.com)
 for f in "$HERE"/backends.d/*.sh; do
   [ -e "$f" ] || continue
   # shellcheck disable=SC1090
@@ -65,7 +65,7 @@ die() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 # fail NAME MESSAGE: die with the end of that archiver container's log, Duplicacy's own words.
 fail() { docker exec "$P-$1" bash -c 'tail -n 40 /opt/archiver/logs/archiver.log' >&2 2>/dev/null; die "$1: $2"; }
 cleanup() {
-  docker ps -aq --filter "name=^$P-" | xargs -r docker rm -f >/dev/null 2>&1 || true
+  docker ps -aq --filter "name=^$P-" | xargs -r docker rm -fv >/dev/null 2>&1 || true
   docker network rm "$NET" >/dev/null 2>&1 || true
   docker volume rm "$CFG" >/dev/null 2>&1 || true
   docker rmi "$P-fakes" >/dev/null 2>&1 || true
@@ -255,6 +255,11 @@ roundtrip() {
     cmd=$(grep -o "<pre>RCLONE_CONFIG_KIT_TYPE=.*</pre>" /tmp/env/envelope-*.html | head -n 1 | sed -e "s#^<pre>##" -e "s#</pre>\$##" \
       -e "s/&quot;/\"/g" -e "s/&lt;/</g" -e "s/&gt;/>/g" -e "s/&amp;/\&/g")
     mkdir /tmp/fetch && cd /tmp/fetch
+    # A token that changes as it is used cannot be printed; the page says to use the provider.
+    if [ -z "$cmd" ] && grep -q "Its token changes as it is used" /tmp/env/envelope-*.html; then
+      echo "--- no fetch command on the page: its token rotates"
+      exit 0
+    fi
     if [ -z "$cmd" ]; then
       # An SFTP page prints an sftp command and the key to save as ssh_private_key.
       cmd=$(grep -o "<pre>Fetch: sftp .*</pre>" /tmp/env/envelope-*.html | head -n 1 | sed -e "s#^<pre>Fetch: ##" -e "s#</pre>\$##")
@@ -269,7 +274,7 @@ roundtrip() {
     "$P-$name" archiver auto-restore || fail "$name" "auto-restore exited non-zero"
   docker exec "$P-$name" bash -c 'diff /data/fixtures/file.txt /data/restore/file.txt && cmp /data/fixtures/blob.bin /data/restore/blob.bin' \
     || die "$name: restored content differs from the source"
-  docker rm -f "$P-$name" >/dev/null
+  docker rm -fv "$P-$name" >/dev/null
   echo "=== $name OK as the primary ==="
 }
 
@@ -321,7 +326,7 @@ copy_lifecycle() {
   docker exec -e SNAPSHOT_ID="$id" -e STORAGE_TARGET=offsite -e LOCAL_DIR=/data/restore -e OVERWRITE=1 -e HASH_COMPARE=1 -e IGNORE_OWNERSHIP=1 \
     "$P-$name" archiver auto-restore || fail "$name" "restore from the copy exited non-zero"
   docker exec "$P-$name" grep -qx two /data/restore/file.txt || die "$name: the copy does not hold the latest revision"
-  docker rm -f "$P-$name" >/dev/null
+  docker rm -fv "$P-$name" >/dev/null
   echo "=== $1 OK as a copy ==="
 }
 
@@ -419,14 +424,14 @@ if wanted webdav-http; then
   # Found by the preflight probe (ADR 34): PRIMARY DOWN, saying why.
   docker exec "$P-diagnose" grep -q "\[ERROR\].*PRIMARY DOWN: storage 'offsite' cannot be reached (the storage's directory does not exist: /missing/dir; create it first" /opt/archiver/logs/archiver.log \
     || fail diagnose "a missing directory is not explained"
-  docker rm -f "$P-diagnose" >/dev/null
+  docker rm -fv "$P-diagnose" >/dev/null
   start_archiver diagnose -e STORAGE_TARGET_1_NAME=offsite -e STORAGE_TARGET_1_TYPE=webdav-http -e STORAGE_TARGET_1_WEBDAV_HOST=no-such-host:8080 \
     -e STORAGE_TARGET_1_WEBDAV_USER=davuser -e STORAGE_TARGET_1_WEBDAV_PATH=x
   secret diagnose storage_target_1_webdav_password davpass
   docker exec "$P-diagnose" archiver backup >/dev/null 2>&1 && die "a backup to an unreachable host succeeded"
   docker exec "$P-diagnose" grep -q "\[ERROR\].*PRIMARY DOWN: storage 'offsite' cannot be reached (.*no-such-host" /opt/archiver/logs/archiver.log \
     || fail diagnose "an unreachable host is not explained"
-  docker rm -f "$P-diagnose" >/dev/null
+  docker rm -fv "$P-diagnose" >/dev/null
   echo "=== failures to open a storage are explained ==="
 fi
 
@@ -491,5 +496,8 @@ fi
 for t in "${CASES[@]}"; do
   wanted "$t" && "case_${t//-/_}"
 done
+if grep -q ' duplicacy.com ' <<<"$(docker logs "$P-fakes" 2>&1)"; then
+  die "a client tried to refresh a token through duplicacy.com"
+fi
 
 echo "=== BACKENDS OK: ${WANT[*]} ==="
