@@ -184,7 +184,7 @@ docker run -it --rm --entrypoint rclone ghcr.io/sisyphusmd/archiver authorize on
 docker run -it --rm --entrypoint rclone ghcr.io/sisyphusmd/archiver authorize drive "CLIENT_ID" "CLIENT_SECRET"
 ```
 
-Each prints a token as JSON. For Dropbox, `DROPBOX_TOKEN` is its `refresh_token`. For OneDrive, the whole JSON is `ONE_TOKEN` (or `ODB_TOKEN`). Microsoft replaces the token each time it is refreshed, so Duplicacy works from a copy under `logs/.tokens` and the recovery kit carries the latest one; the envelope cannot, and points to signing in to OneDrive instead. For Google Drive, `GCD_TOKEN` is `{"client_id": "CLIENT_ID", "client_secret": "CLIENT_SECRET", "end_point": {"TokenURL": "https://oauth2.googleapis.com/token"}, "token": <the JSON>}`; a service-account key needs none of this.
+Each prints a token as JSON. For Dropbox, `DROPBOX_TOKEN` is its `refresh_token`. For OneDrive, the whole JSON is `ONE_TOKEN` (or `ODB_TOKEN`). Microsoft replaces the token each time it is refreshed, so Duplicacy works from a copy under `logs/.tokens` (used only while that directory is Archiver's own and no one else can write it; keep the logs volume writable by root alone, since whoever can write it can swap entries in it) and the recovery kit carries the latest one; the envelope cannot, and points to signing in to OneDrive instead. For Google Drive, `GCD_TOKEN` is `{"client_id": "CLIENT_ID", "client_secret": "CLIENT_SECRET", "end_point": {"TokenURL": "https://oauth2.googleapis.com/token"}, "token": <the JSON>}`; a service-account key needs none of this.
 
 ## Copies to secondary storages
 

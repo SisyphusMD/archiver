@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // Sanitize turns a storage name into the Duplicacy storage name and the fragment of its
@@ -131,7 +132,9 @@ func WritableToken(t Target, f Field) string {
 	if err != nil {
 		return src
 	}
-	if _, err := os.Stat(dst); err == nil && seeded(dst, seed) {
+	// A copy is used only from a directory this process owns: anyone else's could hand the
+	// refreshed token to them.
+	if _, err := os.Stat(dst); err == nil && privateDir(filepath.Dir(dst)) == nil && seeded(dst, seed) {
 		return dst
 	}
 	if WritePrivate(dst, seed) != nil || WritePrivate(dst+".seed", []byte(seedMark(seed))) != nil {
@@ -142,15 +145,15 @@ func WritableToken(t Target, f Field) string {
 
 // WritePrivate replaces path with a new 0600 file holding data. A new file is renamed over
 // the old entry, so nothing already at path (a symlink, a readable file someone with access
-// to the logs volume put there) receives the token; a directory others can write is refused,
-// since they could swap the entry back.
+// to the logs volume put there) receives the token; a directory someone else owns or others
+// can write is refused, since they could read it or swap the entry back.
 func WritePrivate(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() || fi.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("%s is not a directory only its owner can write", dir)
+	if err := privateDir(dir); err != nil {
+		return err
 	}
 	f, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
@@ -167,6 +170,18 @@ func WritePrivate(path string, data []byte) error {
 	return os.Rename(f.Name(), path)
 }
 
+// privateDir refuses dir unless it is a real directory this process owns and no one else can
+// write.
+func privateDir(dir string) error {
+	fi, err := os.Lstat(dir)
+	if err == nil && fi.IsDir() && fi.Mode().Perm()&0o022 == 0 {
+		if st, ok := fi.Sys().(*syscall.Stat_t); ok && int(st.Uid) == os.Geteuid() {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s is not a directory owned by this process that only it can write", dir)
+}
+
 // tokenCopy is where t keeps its writable copy of the token field f.
 func tokenCopy(t Target, f Field) string {
 	return filepath.Join(TokenDir, t.StorageName()+"-"+strings.ToLower(f.Name))
@@ -175,6 +190,9 @@ func tokenCopy(t Target, f Field) string {
 // currentToken is the token as Duplicacy last refreshed it into the copy at path, or secret
 // when the copy is missing or was seeded from a different secret.
 func currentToken(path string, secret []byte) []byte {
+	if privateDir(filepath.Dir(path)) != nil {
+		return secret
+	}
 	if b, err := os.ReadFile(path); err == nil && seeded(path, secret) {
 		return b
 	}
