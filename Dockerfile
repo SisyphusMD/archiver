@@ -41,9 +41,9 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
     echo "$DUPLICACY_SOURCE_SHA256  /tmp/duplicacy.tar.gz" | sha256sum -c - && \
     mkdir /src && tar -xzf /tmp/duplicacy.tar.gz -C /src --strip-components=1 && \
     cd /src && patch -p1 < /patches/dropbox-app.patch && patch -p1 < /patches/resume-point.patch && \
-    patch -p1 < /patches/restore-links.patch && \
+    patch -p1 < /patches/restore-links.patch && patch -p1 < /patches/gcd-drive-id.patch && \
     go mod vendor && patch -p1 < /patches/highwayhash-arm64.patch && \
-    go test -count=1 -run 'TestDropboxAppTokens|TestResumePoint|TestRestoreNeverFollowsLinks' ./src/ && \
+    go test -count=1 -run 'TestDropboxAppTokens|TestResumePoint|TestRestoreNeverFollowsLinks|TestSharedDriveByNameOrID' ./src/ && \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/duplicacy ./duplicacy
 
 # rclone places the recovery kit on every storage type (ADR 24). Its release is a zip, so a
