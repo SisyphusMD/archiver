@@ -20,7 +20,8 @@ func TestPage(t *testing.T) {
 	lockstate.WriteBackupState(l.BackupState(), lockstate.BackupState{Services: map[string]lockstate.ServiceResult{
 		filepath.Join(root, "srv", "app"): {LastAttempt: 1, LastSuccess: 1, Result: "success", Revision: 3}}})
 	os.WriteFile(filepath.Join(l.LogDir(), "archiver.log"), []byte("line one\n<script>alert(1)</script>\n"), 0o644)
-	env := map[string]string{"SERVICE_DIRECTORIES": filepath.Join(root, "srv") + "/*/"}
+	// httptest addresses requests to example.com.
+	env := map[string]string{"SERVICE_DIRECTORIES": filepath.Join(root, "srv") + "/*/", "WEB_ALLOWED_HOSTS": "example.com"}
 	h := Handler(l, func(k string) string { return env[k] })
 
 	rec := httptest.NewRecorder()
@@ -47,6 +48,14 @@ func TestPage(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/status.json", nil))
 	if !strings.Contains(rec.Body.String(), `"backup_health"`) {
 		t.Error("no JSON")
+	}
+	// A name the deployment did not list (a rebound attacker's) gets nothing.
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/status.json", nil)
+	req.Host = "attacker.example:8470"
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMisdirectedRequest || strings.Contains(rec.Body.String(), "backup_health") {
+		t.Errorf("an unknown name was answered: %d", rec.Code)
 	}
 }
 

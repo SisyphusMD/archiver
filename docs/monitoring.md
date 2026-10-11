@@ -20,6 +20,8 @@ With `WEB_PORT` set (for example `8470`), Archiver serves a read-only page: back
 
 **It has no login of its own.** Put it behind a reverse proxy that authenticates (Caddy, Traefik or nginx with basic auth or forward auth such as Authelia), or publish the port only on a trusted network, for example `127.0.0.1:8470:8470` for a proxy on the same host. A startup line warns while it is on. Without `WEB_PORT` nothing listens.
 
+It answers only requests addressed to an IP address, `localhost`, the container's hostname or a name in `WEB_ALLOWED_HOSTS` (separated by commas), and refuses any other name with `421`: otherwise a web page anyone on your network visits could point its own name at Archiver and read the page through their browser. If you reach it by a name, such as your proxy's upstream name or `nas.lan`, list that name. The same applies to `/metrics`.
+
 ## Check-ins
 
 A check-in is a dead man's switch: an outside monitor (an Uptime Kuma push monitor, healthchecks.io) expects to hear from Archiver on a schedule and alerts when it does not, so a container that is down or a backup that never ran is noticed as surely as one that failed.
@@ -31,7 +33,7 @@ Set the monitor's expected interval a little longer than the backup schedule's. 
 
 ## Metrics
 
-Archiver keeps Prometheus metrics in `logs/archiver.prom`, rewritten after every backup and every minute while the container runs. Point node-exporter's textfile collector at the logs volume (`--collector.textfile.directory`) and nothing else is needed. With `METRICS_PORT` set (for example `9469`, published in `compose.yaml`), the daemon also serves the same on `http://<host>:<port>/metrics` for Prometheus to scrape; without it nothing listens.
+Archiver keeps Prometheus metrics in `logs/archiver.prom`, rewritten after every backup and every minute while the container runs. Point node-exporter's textfile collector at the logs volume (`--collector.textfile.directory`) and nothing else is needed. With `METRICS_PORT` set (for example `9469`, published in `compose.yaml`), the daemon also serves the same on `http://<host>:<port>/metrics` for Prometheus to scrape; without it nothing listens. Scrape it by address, or list the name Prometheus uses in `WEB_ALLOWED_HOSTS`.
 
 | Metric | Labels | Meaning |
 |---|---|---|

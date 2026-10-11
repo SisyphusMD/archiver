@@ -63,6 +63,7 @@ Settings are environment variables. **Secrets** are files, never environment var
 | `CHECKIN_URL` |  | A dead man's switch pinged after each backup run (ADR 37): Uptime Kuma push URLs get `status=up`/`down`, others `/fail` on failure. |
 | `METRICS_PORT` |  | Serves Prometheus metrics on `/metrics` there (ADR 35); `logs/archiver.prom` is written either way. |
 | `WEB_PORT` |  | Serves the read-only status page there (ADR 38). It has no login: put it behind an authenticating proxy. |
+| `WEB_ALLOWED_HOSTS` |  | Names the status page and `/metrics` answer to besides addresses, `localhost` and the container's hostname, separated by commas (such as the name your proxy or Prometheus uses). Any other name is refused, so a web page cannot rebind its own name to Archiver and read them. |
 | `LOG_FORMAT` | `text` | `json` writes the container's output as one JSON object per line. One of `text`, `json`. |
 
 ## Restore drills

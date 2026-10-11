@@ -64,6 +64,7 @@ var Reference = []Var{
 	{Name: "CHECKIN_URL", Group: "Monitoring", Kind: "url", Desc: "A dead man's switch pinged after each backup run (ADR 37): Uptime Kuma push URLs get `status=up`/`down`, others `/fail` on failure."},
 	{Name: "METRICS_PORT", Group: "Monitoring", Kind: "port", Desc: "Serves Prometheus metrics on `/metrics` there (ADR 35); `logs/archiver.prom` is written either way."},
 	{Name: "WEB_PORT", Group: "Monitoring", Kind: "port", Desc: "Serves the read-only status page there (ADR 38). It has no login: put it behind an authenticating proxy."},
+	{Name: "WEB_ALLOWED_HOSTS", Group: "Monitoring", Kind: "list", Desc: "Names the status page and `/metrics` answer to besides addresses, `localhost` and the container's hostname, separated by commas (such as the name your proxy or Prometheus uses). Any other name is refused, so a web page cannot rebind its own name to Archiver and read them."},
 	{Name: "LOG_FORMAT", Group: "Monitoring", Kind: "string", Default: "text", Values: []string{"text", "json"}, Desc: "`json` writes the container's output as one JSON object per line."},
 
 	{Name: "RESTORE_DRILL_SERVICES", Pattern: `^$|^([1-9][0-9]*|all)$`, Group: "Restore drills", Kind: "string", Default: "1", Desc: "How many services each drill restores from each storage, rotating; `all` restores every one."},

@@ -400,6 +400,6 @@ func startMetrics(ctx context.Context, l layout.Layout) {
 			}
 		}()
 		fmt.Printf("Serving the read-only status page on port %s.\n", port)
-		fmt.Println("WARNING: the status page has no login of its own. Put it behind a reverse proxy with authentication, or publish the port only on a trusted network.")
+		fmt.Println("WARNING: the status page has no login of its own. Put it behind a reverse proxy with authentication, or publish the port only on a trusted network; it answers only to addresses, localhost, its hostname and WEB_ALLOWED_HOSTS.")
 	}
 }
