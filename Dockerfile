@@ -51,7 +51,7 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
 
 # rclone places the recovery kit on every storage type (ADR 24). Its release is a zip, so a
 # throwaway stage unpacks it and only the binary reaches the image.
-FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0 AS rclone
+FROM debian:trixie-20261005-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS rclone
 ARG TARGETARCH
 ARG DEBIAN_MIRROR=http://deb.debian.org
 ARG GITHUB_MIRROR=https://github.com
@@ -71,7 +71,7 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
 
 # The slim image (ADR 41): everything Archiver itself runs, and nothing only hooks use.
 # The full image below adds those tools, and is the default target.
-FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0 AS slim
+FROM debian:trixie-20261005-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS slim
 
 ARG TARGETARCH
 
@@ -161,9 +161,9 @@ ARG GITHUB_MIRROR=https://github.com
 # is published shortly after each engine release, without checksums; these are the
 # digests of the reviewed archives.
 # renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.+)$
-ENV DOCKER_CLI_VERSION=29.6.2
-ARG DOCKER_CLI_SHA256_AMD64=d6204aea92238e2453d5445c885b9d2e5eb8f82915568ec50edf9dbe12a3ac74
-ARG DOCKER_CLI_SHA256_ARM64=8d16d8b3b158c132a9fb9963d4b4345746f925e287e154c9ed880ac257baf292
+ENV DOCKER_CLI_VERSION=29.9.0
+ARG DOCKER_CLI_SHA256_AMD64=33e1ab8b63d14bca449f7a3d30d7f6aa669daa544e60a86b17fec87f61afe2b4
+ARG DOCKER_CLI_SHA256_ARM64=811f6eee271678fc98dbe5c4d896c00fc5fe2daa4f7a37069c17abc036eab85b
 
 # Pull the docker CLI binary directly from Docker's static archive
 # instead of installing the docker-ce-cli debian package. The apt path

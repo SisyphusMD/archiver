@@ -24,11 +24,11 @@ NET="$P-net"
 CFG="$P-cfg"
 # Digest-pinned: this test gates releases. (Renovate does not scan shell scripts; bump the
 # digests by hand.) Garage and Caddy match s3-garage.sh, atmoz/sftp matches sftp-runtime.sh.
-GARAGE_IMAGE="dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690"
-CADDY_IMAGE="caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b"
-SFTP_IMAGE="atmoz/sftp:alpine@sha256:a6cb3eb29202ca7f57e73bb7e527286e66e0e822fff65609207c7e0ef2d135a3"
+GARAGE_IMAGE="dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020"
+CADDY_IMAGE="caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f"
+SFTP_IMAGE="atmoz/sftp:alpine@sha256:7e439fabeae536fa254340724c042e11999924d906417dbb5c73602ad518813f"
 SAMBA_IMAGE="ghcr.io/servercontainers/samba:latest@sha256:ac7c406702a3bf4137fcd04ce031d87adbda1b819f698fe89a89b5ee46618dfb"
-SWIFT_IMAGE="openstackswift/saio:latest@sha256:3bfb86f881faafa0994be1901f1a0a9a182d976d41cbceb18fbecfe017d0fc66"
+SWIFT_IMAGE="openstackswift/saio:latest@sha256:9c91b87887d1392050d81b8a797467cd5916c26c97dda3fb5f86d8da91f31f94"
 # SeaweedFS answers V2-signed requests, which s3c (goamz) sends and Garage refuses.
 SEAWEED_IMAGE="chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d"
 FAKEGCS_IMAGE="fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef"

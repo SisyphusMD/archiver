@@ -25,9 +25,9 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:e5d5d2815b94d74767d40be7111647c3e9cdc84406a638ffe1c7ea1f286f52a3
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:9ba3be83f5613e71b428eabb1234e46d42d0fef735cfb8b39ae3e8efa6a5d919
           # renovate: datasource=docker depName=aquasec/trivy
-          TRIVY_IMAGE=aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
+          TRIVY_IMAGE=aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
           repo=forgejo.bryantserver.com/sisyphusmd/archiver
           AUTH=skopeo-auth-scan-${{ github.run_id }}
           trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
