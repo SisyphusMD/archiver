@@ -51,7 +51,7 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
 
 # rclone places the recovery kit on every storage type (ADR 24). Its release is a zip, so a
 # throwaway stage unpacks it and only the binary reaches the image.
-FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0 AS rclone
+FROM debian:trixie-20261005-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS rclone
 ARG TARGETARCH
 ARG DEBIAN_MIRROR=http://deb.debian.org
 ARG GITHUB_MIRROR=https://github.com
@@ -71,7 +71,7 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
 
 # The slim image (ADR 41): everything Archiver itself runs, and nothing only hooks use.
 # The full image below adds those tools, and is the default target.
-FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0 AS slim
+FROM debian:trixie-20261005-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS slim
 
 ARG TARGETARCH
 

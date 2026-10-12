@@ -50,6 +50,12 @@
       "addLabels": ["docker"]
     },
     {
+      "description": "Debian's dated slim tags (trixie-YYYYMMDD-slim) are not SemVer: without this Renovate never proposes a newer one",
+      "matchDatasources": ["docker"],
+      "matchDepNames": ["debian"],
+      "versioning": "regex:^(?<compatibility>[a-z]+)-(?<major>\\d{4})(?<minor>\\d{2})(?<patch>\\d{2})-slim$"
+    },
+    {
       "description": "Major Updates",
       "matchUpdateTypes": ["major"],
       "addLabels": ["major-update"]
