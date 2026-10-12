@@ -637,6 +637,12 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 			// Backing them up would make that the newest revision, the one auto-restore picks.
 			log(logging.Error, fmt.Sprintf("Pre-backup hook failed for %s service (%s); skipping its backup so the newest revision stays the last good one.", svc.Name, exitText(code, err)))
 			result = hooks.Skipped
+		} else if f, err := hooks.ReadFilters(svc.Dir); err != nil {
+			log(logging.Error, fmt.Sprintf("Cannot read the filters file after the pre-backup hook, so this service's backup is skipped: %v", err))
+			result = hooks.Failed
+		} else {
+			// Read again: the hook may choose what is backed up (a snapshot it just took).
+			filters = f
 		}
 	}
 	began := time.Now()
