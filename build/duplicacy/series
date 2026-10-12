@@ -1,0 +1,8 @@
+# Applied in this order with `patch -p1` by the Dockerfile; each patch says at its top what it
+# changes, why, and which test proves it. A patch to vendor/ is applied after `go mod vendor`.
+dropbox-app.patch
+resume-point.patch
+restore-links.patch
+gcd-drive-id.patch
+host-keys-append.patch
+highwayhash-arm64.patch

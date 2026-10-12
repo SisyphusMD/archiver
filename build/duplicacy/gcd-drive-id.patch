@@ -1,3 +1,10 @@
+Google Drive: find a shared drive by its ID as well as by its name
+
+Why: Duplicacy 3.2.5 looks a shared drive up only by name, but the value a shared drive's URL
+shows, and the one people copy, is its ID.
+Test: TestSharedDriveByNameOrID
+Upstream: not submitted (upstreaming deferred, 2026-10-11).
+
 --- /dev/null
 +++ b/src/duplicacy_gcdstorage_drive_test.go
 @@ -0,0 +1,43 @@

@@ -1,3 +1,12 @@
+Dropbox: refresh tokens with your own Dropbox app, not only through duplicacy.com
+
+Why: Duplicacy 3.2.5 refreshes a Dropbox token only through duplicacy.com, which keeps its
+app's secret, so a Dropbox backup stops whenever that site does (ADR 26). With
+dropbox_client_id and dropbox_client_secret set, tokens refresh against Dropbox directly with
+your own app; a token Dropbox rejects (401) is dropped so the next request refreshes it.
+Test: TestDropboxAppTokensReplaceRejected
+Upstream: not submitted (upstreaming deferred, 2026-10-11).
+
 --- a/src/duplicacy_dropboxapp_test.go
 +++ b/src/duplicacy_dropboxapp_test.go
 @@ -0,0 +1,63 @@

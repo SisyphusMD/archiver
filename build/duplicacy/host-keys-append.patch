@@ -1,3 +1,11 @@
+SFTP: append host keys to known_hosts instead of writing at the end of what was read
+
+Why: Archiver points every repository's known_hosts at one shared record on the logs volume.
+Duplicacy wrote a new host key at the offset where its read ended, so two processes meeting new
+servers at once overwrote each other's key; appending keeps both.
+Test: TestHostKeysAppendConcurrently
+Upstream: not submitted (upstreaming deferred, 2026-10-11).
+
 --- a/src/duplicacy_storage.go
 +++ b/src/duplicacy_storage.go
 @@ -168,7 +168,9 @@
