@@ -18,7 +18,7 @@ TOXI="archiver-fnet-toxi-$$"
 ARCH="archiver-fnet-arch-$$"
 KEYVOL="archiver-fnet-keys-$$"
 # Digest-pinned like every sidecar here (Renovate does not scan shell scripts).
-SFTP_IMAGE="atmoz/sftp:alpine@sha256:a6cb3eb29202ca7f57e73bb7e527286e66e0e822fff65609207c7e0ef2d135a3"
+SFTP_IMAGE="atmoz/sftp:alpine@sha256:7e439fabeae536fa254340724c042e11999924d906417dbb5c73602ad518813f"
 TOXI_IMAGE="ghcr.io/shopify/toxiproxy:2.12.0@sha256:9378ed52a28bc50edc1350f936f518f31fa95f0d15917d6eb40b8e376d1a214e"
 ID=fn-host-app
 

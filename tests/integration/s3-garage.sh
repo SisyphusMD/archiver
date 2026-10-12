@@ -20,8 +20,8 @@ ARCH="archiver-s3-arch-$$"
 CFGVOL="archiver-s3-cfg-$$"
 # Digest-pinned: this test gates releases; keep deterministic. (Renovate does not scan
 # shell scripts — bump the digests by hand when updating.) Garage matches the NAS's pin.
-GARAGE_IMAGE="dxflrs/garage:v2.3.0@sha256:866bd13ed2038ba7e7190e840482bc27234c4afaf77be8cfa439ae088c1e4690"
-CADDY_IMAGE="caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b"
+GARAGE_IMAGE="dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020"
+CADDY_IMAGE="caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f"
 # `garage key import` accepts caller-chosen credentials in Garage's own shape.
 S3_KEY="GK0123456789abcdef01234567"
 S3_SECRET="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

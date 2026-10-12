@@ -6,8 +6,8 @@ CASES+=(storj)
 # Digest-pinned like backends.sh's images (Renovate does not scan shell scripts; bump by hand).
 # Satellite and node v1.158.2 serve Duplicacy 3.2.5's uplink v1.12.1 as well as rclone's.
 STORJ_IMAGE="ghcr.io/storj/up/storj:1.158.2@sha256:d33eb84607ccf56423b0cd0c83e6fa0d355fc2688302ed57c518689fd0bda13c"
-STORJ_PG_IMAGE="postgres:17.8-alpine@sha256:3430fe182f5065a6ea505c3d432d2c7fff18fbab954df8f277c1dbf4c70124af"
-STORJ_REDIS_IMAGE="redis:7.4.7-alpine@sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf"
+STORJ_PG_IMAGE="postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873"
+STORJ_REDIS_IMAGE="redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0"
 # storj-up's predefined satellite identity; uplink needs the node ID for any satellite it does not know.
 STORJ_SAT="12whfK1EDvHJtajBiAUeajQLYcWqxcQmdYQU5zX5cCf6bAxfgu4@satellite-api:7777"
 STORJ_PASS="storj-test-passphrase"
@@ -50,7 +50,7 @@ case_storj() {
 
   log "Storj: Postgres, Redis, a satellite and one storage node"
   # tmpfs over the images' VOLUMEs, so no anonymous volume outlives the run.
-  docker run -d --name "$P-storj-pg" --network "$NET" --network-alias postgres --tmpfs /var/lib/postgresql/data \
+  docker run -d --name "$P-storj-pg" --network "$NET" --network-alias postgres --tmpfs /var/lib/postgresql \
     -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=master "$STORJ_PG_IMAGE" >/dev/null || die "storj: postgres failed to start"
   docker run -d --name "$P-storj-redis" --network "$NET" --network-alias redis --tmpfs /data "$STORJ_REDIS_IMAGE" >/dev/null \
     || die "storj: redis failed to start"
