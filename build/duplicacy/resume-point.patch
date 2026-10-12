@@ -1,3 +1,12 @@
+Backup: save the resume point every five minutes, and let incremental backups resume
+
+Why: Duplicacy 3.2.5 saves a resume point only on SIGINT and only for a first backup, so a
+backup killed or cut off by a power loss starts over and reads and sends every file again
+(ADR 46). The resume point is now saved periodically and used by any backup; chunks a prune
+removed since are checked for first, and the resume point is then not used.
+Test: TestResumePoint
+Upstream: not submitted (upstreaming deferred, 2026-10-11).
+
 --- a/src/duplicacy_backupmanager.go
 +++ b/src/duplicacy_backupmanager.go
 @@ -180,10 +180,9 @@

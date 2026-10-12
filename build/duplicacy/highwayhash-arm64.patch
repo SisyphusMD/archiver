@@ -1,3 +1,15 @@
+arm64: rename a vendored assembly table whose name Go 1.27's linker rejects
+
+Why: Duplicacy keeps a fork of highwayhash that computes a wrong hash on arm64, to read chunks
+older arm64 builds wrote. The "wrong hash" came from its assembly table sharing the name of a Go
+function: the code read 48 bytes of that function's compiled wrapper instead of the constants.
+Go 1.27's linker refuses the clash, so arm64 no longer builds. The table is renamed and holds
+exactly the 48 bytes the released 3.2.5 arm64 binary read, so hashes match the release's.
+Applies to vendor/, so after go mod vendor.
+Test: an arm64 build; both directions of a restore between the official 3.2.5 arm64 binary and
+ours were checked by hand (2026-10-11).
+Upstream: not submitted (upstreaming deferred, 2026-10-11).
+
 --- a/vendor/github.com/gilbertchen/highwayhash/highwayhash_arm64.s
 +++ b/vendor/github.com/gilbertchen/highwayhash/highwayhash_arm64.s
 @@ -140,7 +140,7 @@

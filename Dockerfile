@@ -14,18 +14,9 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/archiver ./cmd/archiver
 
-# Duplicacy is built from its pinned source with reviewed patches (ADR 26): build/duplicacy/
-# dropbox-app.patch lets Dropbox refresh tokens with your own app instead of duplicacy.com, and
-# highwayhash-arm64.patch renames an arm64 assembly table in a vendored fork whose name clash
-# with a Go function current Go's linker rejects, keeping the exact bytes the released 3.2.5
-# arm64 binary read there (so its hashes match the release's). resume-point.patch saves a
-# backup's resume point every five minutes, so one killed or cut off by a power loss resumes
-# where it was, and lets incremental backups resume too (ADR 46). restore-links.patch keeps a
-# restore from writing through a symbolic link in its destination (a link where the snapshot
-# has a directory or a file is replaced when overwriting and refused otherwise). host-keys-append.patch
-# appends SFTP host keys to known_hosts, so repositories sharing one record never overwrite each
-# other's keys. Modules are vendored
-# against the source's go.sum; the CLI still runs as a child process.
+# Duplicacy is built from its pinned source with the patches in build/duplicacy/ (ADR 26), in
+# the order its series file gives; each patch says at its top what it changes, why, and which
+# test proves it, and those tests run here. The CLI still runs as a child process.
 FROM --platform=$BUILDPLATFORM golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d AS duplicacy
 ARG TARGETOS
 ARG TARGETARCH
@@ -42,11 +33,14 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
         "${GITHUB_MIRROR}/gilbertchen/duplicacy/archive/refs/tags/v${DUPLICACY_VERSION}.tar.gz" -o /tmp/duplicacy.tar.gz && \
     echo "$DUPLICACY_SOURCE_SHA256  /tmp/duplicacy.tar.gz" | sha256sum -c - && \
     mkdir /src && tar -xzf /tmp/duplicacy.tar.gz -C /src --strip-components=1 && \
-    cd /src && patch -p1 < /patches/dropbox-app.patch && patch -p1 < /patches/resume-point.patch && \
-    patch -p1 < /patches/restore-links.patch && patch -p1 < /patches/gcd-drive-id.patch && \
-    patch -p1 < /patches/host-keys-append.patch && \
-    go mod vendor && patch -p1 < /patches/highwayhash-arm64.patch && \
-    go test -count=1 -run 'TestDropboxAppTokens|TestResumePoint|TestRestoreNeverFollowsLinks|TestSharedDriveByNameOrID|TestHostKeysAppendConcurrently' ./src/ && \
+    cd /src && series=$(grep -v '^#' /patches/series) && \
+    for p in $series; do grep -q '^+++ b/vendor/' "/patches/$p" || patch -p1 < "/patches/$p" || exit 1; done && \
+    go mod vendor && \
+    for p in $series; do ! grep -q '^+++ b/vendor/' "/patches/$p" || patch -p1 < "/patches/$p" || exit 1; done && \
+    tests=$(cd /patches && sed -n 's/^Test: \(Test[A-Za-z0-9_]*\)$/\1/p' $series | paste -sd'|') && \
+    { go test -count=1 -vet=off -v -run "^($tests)\$" ./src/ > /tmp/patch-tests.out 2>&1 || { cat /tmp/patch-tests.out; exit 1; }; } && \
+    grep '^--- ' /tmp/patch-tests.out && \
+    [ "$(grep -c '^--- PASS' /tmp/patch-tests.out)" -eq "$(echo "$tests" | tr '|' '\n' | grep -c .)" ] && \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/duplicacy ./duplicacy
 
 # rclone places the recovery kit on every storage type (ADR 24). Its release is a zip, so a

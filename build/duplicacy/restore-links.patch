@@ -1,3 +1,14 @@
+Restore: never write through a symbolic link already in the destination
+
+Why: Duplicacy wrote restored files through an existing link to a directory, and into an
+existing link to a file, so whoever could write the destination chose where restored files
+landed, outside it included. A link where the snapshot has a directory or a file is replaced
+when overwriting and refused otherwise; nothing below a linked directory outside the restored
+paths is restored; -delete never deletes through a link.
+Test: TestRestoreNeverFollowsLinks
+Upstream: not submitted (upstreaming deferred, 2026-10-11). Upstream PR #691 fixes part of
+this (a link where the snapshot has a file or directory, with -overwrite).
+
 --- a/src/duplicacy_backupmanager.go
 +++ b/src/duplicacy_backupmanager.go
 @@ -706,6 +706,10 @@
