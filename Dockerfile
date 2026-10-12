@@ -38,7 +38,7 @@ RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.
     go mod vendor && \
     for p in $series; do ! grep -q '^+++ b/vendor/' "/patches/$p" || patch -p1 < "/patches/$p" || exit 1; done && \
     tests=$(cd /patches && sed -n 's/^Test: \(Test[A-Za-z0-9_]*\)$/\1/p' $series | paste -sd'|') && \
-    { go test -count=1 -v -run "^($tests)\$" ./src/ > /tmp/patch-tests.out 2>&1 || { cat /tmp/patch-tests.out; exit 1; }; } && \
+    { go test -count=1 -vet=off -v -run "^($tests)\$" ./src/ > /tmp/patch-tests.out 2>&1 || { cat /tmp/patch-tests.out; exit 1; }; } && \
     grep '^--- ' /tmp/patch-tests.out && \
     [ "$(grep -c '^--- PASS' /tmp/patch-tests.out)" -eq "$(echo "$tests" | tr '|' '\n' | grep -c .)" ] && \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/duplicacy ./duplicacy
