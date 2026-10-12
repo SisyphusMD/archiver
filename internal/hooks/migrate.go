@@ -75,6 +75,10 @@ func Migrate(dir, hostname string) (*Migration, error) {
 source ./`+Legacy+` >/dev/null || exit 3
 declare -F service_specific_pre_backup_function >/dev/null && echo pre
 declare -F service_specific_post_backup_function >/dev/null && echo post
+for f in $(declare -F | awk '{print $3}'); do
+  case "$f" in log_message|log_output|handle_error) continue ;; esac
+  declare -f "$f" | grep -q DUPLICACY_FILTERS_PATTERNS && echo "filterfunc:$f"
+done
 if declare -p DUPLICACY_FILTERS_PATTERNS >/dev/null 2>&1; then
   echo filters
   printf '%s\0' "${DUPLICACY_FILTERS_PATTERNS[@]}" >&3
@@ -157,6 +161,11 @@ fi
 	}
 	if have["filters"] && shellVariable.MatchString(arrayText(string(src))) {
 		m.Warnings = append(m.Warnings, fmt.Sprintf("%s: DUPLICACY_FILTERS_PATTERNS used variables; the filters file holds their values as of this migration. Check it.", dir))
+	}
+	for _, f := range strings.Fields(funcs.String()) {
+		if fn, ok := strings.CutPrefix(f, "filterfunc:"); ok {
+			m.Warnings = append(m.Warnings, fmt.Sprintf("%s: %s changes DUPLICACY_FILTERS_PATTERNS while a backup runs, which the filters file cannot carry: it holds the list the settings file starts with. Have the pre-backup hook write the list it chooses into %s (it is read after the hook runs).", dir, fn, Filters))
+		}
 	}
 	if have["pre"] && have["post"] {
 		for _, v := range sharedVariables(string(src)) {

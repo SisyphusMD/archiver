@@ -76,4 +76,16 @@ rc=$?
 snapshot_exists svc-d || die "svc-d was not backed up"
 grep -rq "\[ERROR\].*svc-d.*[Pp]ost-backup hook failed" /opt/archiver/logs/ || die "no ERROR naming svc-d's failed post hook"
 
-echo "=== HOOK-FAILURES OK: failed pre hook skips only its service (post still runs); non-executable and failed post hooks are errors ==="
+log "a pre-backup hook that rewrites the filters file chooses what that run backs up"
+rm -rf "${SERVICES:?}"/svc-* /opt/archiver/logs/*
+mkdir -p "$SERVICES/svc-e/live" "$SERVICES/svc-e/pit"
+echo "live" >"$SERVICES/svc-e/live/data.txt"
+echo "point in time" >"$SERVICES/svc-e/pit/data.txt"
+printf -- '+live/\n+live/*\n-*\n' >"$SERVICES/svc-e/filters"
+hook svc-e pre-backup "printf -- '+pit/\\n+pit/*\\n-*\\n' > $SERVICES/svc-e/filters"
+archiver backup >/tmp/run3.out 2>&1 || { cat /tmp/run3.out; die "the backup with a filter-writing pre hook failed"; }
+SNAPSHOT_ID="$(hostname)-svc-e" LOCAL_DIR=/restore/svc-e archiver auto-restore >/tmp/r3.out 2>&1 || { cat /tmp/r3.out; die "restore failed"; }
+[ -f /restore/svc-e/pit/data.txt ] || die "the files the pre hook's filters chose were not backed up"
+[ ! -e /restore/svc-e/live ] || die "the filters the pre hook replaced were still used"
+
+echo "=== HOOK-FAILURES OK: failed pre hook skips only its service (post still runs); non-executable and failed post hooks are errors; a pre hook's filters count ==="
