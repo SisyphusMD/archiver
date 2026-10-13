@@ -1,12 +1,18 @@
 package maintenance
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/inuse"
+	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/logging"
+	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
 // The record keeps each storage's other fields when one changes, and reads back what bash
@@ -214,5 +220,76 @@ func TestAdoptFossilsRefusesForeignTrees(t *testing.T) {
 	// The real tree itself still qualifies.
 	if moved, err := adoptFossils(dot, "local", "/storage/1", []string{filepath.Join(root, "real")}); err != nil || moved != 1 {
 		t.Fatalf("the real repository: moved %d, %v", moved, err)
+	}
+}
+
+func TestSecondaryPruneLeavesRevisionsInUse(t *testing.T) {
+	for _, all := range []bool{false, true} {
+		t.Run(map[bool]string{false: "revision", true: "storage-wide"}[all], func(t *testing.T) {
+			root := t.TempDir()
+			l := layout.Layout{Root: root, Lock: filepath.Join(root, "locks")}
+			for _, dir := range []string{l.Lock, l.LogDir()} {
+				if err := os.MkdirAll(dir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			lock, _, err := runlock.Acquire(l.MaintenanceLock(), filepath.Join(l.Lock, "stop"), "maintenance", "prune")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer lock.Release()
+			rev := inuse.Revision{Storage: "second", ID: "host-app", Rev: 1}
+			if all {
+				rev.ID, rev.Rev, rev.AndNewer = "*", 0, true
+			}
+			hold, err := inuse.Hold(l.InUseDir(), "deep-check", []inuse.Revision{rev})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer hold.Release()
+			calls := filepath.Join(root, "calls")
+			bin := filepath.Join(root, "duplicacy")
+			script := `#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS"
+case " $* " in
+  *" -dry-run "*)
+    echo 'Deleting snapshot host-app at revision 1'
+    echo 'Deleting snapshot host-app at revision 2'
+    echo 'Deleting snapshot host-other at revision 1'
+    ;;
+esac
+`
+			if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			r := &Run{Layout: l, Duplicacy: bin, ForceExhaustive: true,
+				cfg:  &config.Config{Targets: []config.Target{{Name: "local"}, {Name: "second"}}, PruneBackups: true, PruneKeep: "-keep 0:1", Threads: "1"},
+				lock: lock, log: &logging.Log{Dir: l.LogDir(), Basename: "maintenance", Stdout: io.Discard},
+				repo: root, env: append(os.Environ(), "CALLS="+calls), Now: time.Now,
+				Probe: func(config.Target) error { return nil },
+			}
+			if !r.storage(1) || r.log.Errors() != 0 {
+				t.Fatal("secondary prune failed")
+			}
+			b, err := os.ReadFile(calls)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "-no-script prune -all -dry-run -storage second -keep 0:1 -threads 1\n"
+			if !all {
+				want += "-no-script prune -id host-app -storage second -threads 1 -r 2\n"
+				want += "-no-script prune -id host-other -storage second -threads 1 -r 1\n"
+			}
+			want += "-no-script prune -all -storage second -threads 1 -exhaustive\n"
+			if string(b) != want {
+				t.Fatalf("prune calls:\n%s\nwant:\n%s", b, want)
+			}
+			if strings.Contains(string(b), "-exclusive") || r.pruned {
+				t.Fatal("secondary prune was exclusive or woke primary copy workers")
+			}
+			if s := readState(l.MaintenanceState()); s.get("second", fieldPrune) == 0 || s.get("second", fieldExhaustive) == 0 {
+				t.Fatal("successful secondary prune not recorded")
+			}
+		})
 	}
 }
