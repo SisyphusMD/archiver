@@ -34,7 +34,7 @@ openssl enc -d -aes-256-cbc -pbkdf2 -in archiver-recovery-kit-<hostname>.tar.enc
 
 It prompts for the password and yields `archiver.env` + `secrets/` + `RECREATE.txt` (+ `deployment/` with your manifests) — everything needed to recreate the deployment (the recovery password itself is included, so the recreated deployment maintains its kit immediately). From there, restore your data with `archiver restore` as usual.
 
-`archiver recovery-kit` uploads on demand (useful right after setup); `archiver recovery-kit force` re-uploads everywhere even if unchanged. An upload failure is logged and notified but never fails the backup; the failed target is retried on the next run. The kit is **write-only**: nothing ever reads it back at runtime, so it is never a boot dependency.
+`archiver recovery-kit` uploads on demand (useful right after setup); `archiver recovery-kit force` re-uploads everywhere even if unchanged. An upload failure is logged and notified but never fails the backup; the failed target is retried on the next run. Kit placement is never a boot dependency; optional kit drills read it back to prove the recovery path.
 
 On B2, each update creates a new file version; old versions age out per your bucket lifecycle rules (they are ciphertext, so lingering versions are harmless).
 
@@ -52,7 +52,7 @@ rm -rf ./envelope
 
 The page holds the recovery password, the decrypt command, and for each storage target where the kit sits (address, user, bucket, path) with a credential that can read it, as text and as QR codes, plus space to write account-recovery codes by hand. Each storage's block also has a command that downloads the kit from any machine: `sftp` for an SFTP storage, and for the others one `rclone copyto` line that needs nothing but rclone (no config file; it carries the credential shown in `RCLONE_CONFIG_KIT_*` variables, so it never appears in the process list). A OneDrive token changes as it is used, so a OneDrive block says to sign in and download the kit instead. The files are plaintext, owner-only, and never sent anywhere: print one and delete them.
 
-**Break-glass credentials.** By default each storage's block carries its backup credential, marked **FULL ACCESS**, because whoever holds the page could also delete those backups. Where the provider allows a narrower credential, create one that can only read the bucket and give it to archiver as a secret file; the page then carries it instead (archiver never uses it for anything else):
+**Break-glass credentials.** By default each storage's block carries its backup credential, marked **FULL ACCESS**, because whoever holds the page could also delete those backups. Where the provider allows a narrower credential, create one that can only read the bucket and give it to archiver as a secret file; the page then carries it instead (used only by the envelope and kit drills):
 
 | Storage type | Secret files (`/run/secrets/...`) |
 |---|---|
@@ -62,6 +62,18 @@ The page holds the recovery password, the decrypt command, and for each storage 
 | Any other type | `storage_target_N_breakglass_<secret>` for each of its keys, passwords and tokens that has one: `wasabi_key`/`wasabi_secret`, `azure_key`, `swift_key`, `webdav_password`, `smb_password`, `storj_key`, `fabric_token` (the S3 and B2 variants use the rows above). The page uses them only when all of a target's are set. Drive tokens, app secrets, service-account keys and the Storj passphrase have none: the page carries the backup ones, marked **FULL ACCESS**. |
 
 **Keeping it current.** `archiver envelope confirm` records a fingerprint of what the page says (a hash keyed by the recovery password; it reveals nothing). After every recovery-kit run archiver compares it with what the page would say now: when a secret or storage on it changes, `archiver status` shows `Envelope: OUT OF DATE`, healthcheck warns, and one notification is sent. A year after confirming, the same happens as a reminder to check the envelope is still there and readable.
+
+### Kit drills
+
+`archiver kit-drill [STORAGE]` rehearses the envelope recovery path for every offsite storage, including a remote primary. A named storage limits the run; local-type targets are left out. Set `KIT_DRILL_SCHEDULE` to a cron expression to run it regularly (unset means off); an invalid expression refuses startup. `KIT_DRILL_TIMEOUT` bounds the active time of the whole run, default `6h`.
+
+The drill downloads the kit using the same on-the-fly rclone remote or SFTP command as the envelope, with its break-glass credential when complete, otherwise the backup credential the envelope prints. It decrypts with stock `openssl enc -d -aes-256-cbc -pbkdf2`, with the password on a file descriptor. In a private temporary directory it builds the current local payload and checks every expected entry and each file's SHA-256, including current secrets, keys, manifests and extras. It compares payloads because OpenSSL's random salt can give identical kits different encrypted bytes. Temporary files are deleted when the run ends; an interrupted run cleans up its recorded scratch directory on restart.
+
+OneDrive personal and business use Archiver's own rotating token. Status explicitly says that signing in to the provider is left to a person; this drill proves the kit is present, current and decrypts, while the human sign-in step still needs rehearsal.
+
+Failures name the storage and raise an incident, with notifications on by default. A later pass clears that storage's incident. A failed or interrupted drill is retried at the next scheduled time; a container shutdown resumes an interrupted run at startup. `archiver stop drill`, `pause` and `resume` control kit drills through the lock shared with restore drills. Only one drill can run at a time.
+
+`archiver status` and `status --json` show the last kit drill per storage. `METRICS_PORT` exports `archiver_kit_drill_last_timestamp_seconds`, `archiver_kit_drill_last_ok`, `archiver_kit_drill_last_duration_seconds` and `archiver_kit_drill_last_success_timestamp_seconds`, each labeled by `storage`.
 
 ## Recovering a Lost Host (`archiver recover`)
 

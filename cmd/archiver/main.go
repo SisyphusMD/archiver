@@ -103,6 +103,14 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "deep-check" && len(os.Args) <= 3 {
 		os.Exit(deepCheckCommand(os.Args[2:]))
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "kit-drill" && len(os.Args) <= 3 {
+		r, _ := kitRun(config.FromEnvironment())
+		storage := ""
+		if len(os.Args) == 3 {
+			storage = os.Args[2]
+		}
+		os.Exit(r.Drill(storage))
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "drill" && len(os.Args) <= 4 {
 		o := restore.DrillOptions{}
 		if len(os.Args) >= 3 {
@@ -236,7 +244,7 @@ func runDaemon(args []string) int {
 // container left: a crash, a kill or a shutdown ended them, and they run again now (ADR 46).
 func interruptedRuns(l layout.Layout) []string {
 	var kinds []string
-	for _, k := range []string{"backup", "maintenance", "drill"} {
+	for _, k := range []string{"backup", "maintenance", "drill", "kit-drill"} {
 		if _, ok := resume.Read(l.RunRecord(k)); ok {
 			kinds = append(kinds, k)
 		}

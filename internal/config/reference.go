@@ -35,6 +35,8 @@ var Reference = []Var{
 
 	{Name: "BACKUP_SCHEDULE", Group: "Schedules", Kind: "cron", Desc: "When backups run, as a cron expression (`0 3 * * *`). Unset: manual mode, nothing is scheduled."},
 	{Name: "MAINTENANCE_SCHEDULE", Group: "Schedules", Kind: "cron", Desc: "When storage check and prune run. Unset: they run only on `archiver maintenance`."},
+	{Name: "KIT_DRILL_SCHEDULE", Group: "Schedules", Kind: "cron", Desc: "When kit drills rehearse recovery from each offsite storage (ADR 51). Unset: off."},
+	{Name: "KIT_DRILL_TIMEOUT", Group: "Recovery kit", Kind: "interval", Default: "6h", Desc: "Maximum active time of a kit drill across all selected offsite storages."},
 	{Name: "RESTORE_DRILL_SCHEDULE", Group: "Schedules", Kind: "cron", Desc: "When restore drills run (ADR 28). Unset: no drills."},
 	{Name: "TZ", Group: "Schedules", Kind: "string", Default: "UTC", Desc: "Time zone for schedules and log timestamps, such as `America/New_York`."},
 

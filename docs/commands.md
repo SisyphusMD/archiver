@@ -53,14 +53,15 @@ archiver backup            # Run the backup pipeline now (synchronous, exit code
 archiver backup --detach   # Run it in the background (follow with 'archiver logs')
 archiver maintenance       # Run per-storage check + prune now (synchronous)
 archiver maintenance exhaustive  # Same, forcing the full-listing exhaustive prune
+archiver kit-drill [STORAGE]  # Rehearse envelope recovery from offsite kits (recovery.md, "Kit drills")
 archiver drill [SERVICE] [STORAGE]  # Run a restore drill now (maintenance.md, "Restore drills")
 archiver doctor [--notify]  # Check everything read-only (maintenance.md, "Checking a deployment"); --notify sends a test
-archiver stop [backup|maintenance|drill|all]  # Stop gracefully (default all: backup, maintenance and a drill)
+archiver stop [backup|maintenance|drill|all]  # Stop gracefully (default all: backup, maintenance and either drill kind)
 archiver stop --immediate  # Stop immediately (skip cleanup); combine with a target
 archiver pause             # Pause backup (experimental)
 archiver resume            # Resume paused backup (experimental)
 archiver logs              # Follow backup logs
-archiver status            # Both pipelines' state + per-storage last check/prune ages
+archiver status            # Pipeline state, per-storage maintenance and last drills
 archiver restore           # Restore data from backup (interactive)
 archiver auto-restore      # Restore one snapshot from backup (non-interactive, env-driven)
 archiver auto-restore-all  # Restore every service in one pass (non-interactive)

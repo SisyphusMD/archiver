@@ -18,6 +18,7 @@ Settings are environment variables. **Secrets** are files, never environment var
 |---|---|---|
 | `BACKUP_SCHEDULE` |  | When backups run, as a cron expression (`0 3 * * *`). Unset: manual mode, nothing is scheduled. |
 | `MAINTENANCE_SCHEDULE` |  | When storage check and prune run. Unset: they run only on `archiver maintenance`. |
+| `KIT_DRILL_SCHEDULE` |  | When kit drills rehearse recovery from each offsite storage (ADR 51). Unset: off. |
 | `RESTORE_DRILL_SCHEDULE` |  | When restore drills run (ADR 28). Unset: no drills. |
 | `TZ` | `UTC` | Time zone for schedules and log timestamps, such as `America/New_York`. |
 
@@ -81,6 +82,7 @@ Settings are environment variables. **Secrets** are files, never environment var
 
 | Variable | Default | Description |
 |---|---|---|
+| `KIT_DRILL_TIMEOUT` | `6h` | Maximum active time of a kit drill across all selected offsite storages. |
 | `RECOVERY_PASSWORD` (secret) |  | Encrypts the recovery kit uploaded beside the backups; without it there is no kit. Keep it in a password manager. |
 | `RECOVERY_KIT_EXTRA_PATHS` |  | Files or directories also carried in the kit's `extra/`, separated by colons. |
 

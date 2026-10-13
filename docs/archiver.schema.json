@@ -569,6 +569,16 @@
       "description": "auto-restore: leave ownership alone (without CHOWN and FOWNER it is left anyway, with a warning).",
       "type": "string"
     },
+    "KIT_DRILL_SCHEDULE": {
+      "description": "When kit drills rehearse recovery from each offsite storage (ADR 51). Unset: off.",
+      "type": "string"
+    },
+    "KIT_DRILL_TIMEOUT": {
+      "default": "6h",
+      "description": "Maximum active time of a kit drill across all selected offsite storages.",
+      "pattern": "^$|^\\+?(?![0.]+(ns|us|µs|μs|ms|s|m|h|d)([0.]+(ns|us|µs|μs|ms|s|m|h))*$)([0-9]+d|(([0-9]+\\.?[0-9]*|\\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+)$",
+      "type": "string"
+    },
     "LOCAL_DIR": {
       "description": "auto-restore: where to restore.",
       "type": "string"

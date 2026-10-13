@@ -95,15 +95,6 @@ func Build(s Source) *Page {
 	return p
 }
 
-// credential is a storage's break-glass pair when both are set, else its backup pair.
-func credential(s Source, pre, a, b string) (x, y string, breakglass bool) {
-	x, y = s.Settings.Secret(pre+"BREAKGLASS_"+a), s.Settings.Secret(pre+"BREAKGLASS_"+b)
-	if x == "" || y == "" {
-		return s.Settings.Secret(pre + a), s.Settings.Secret(pre + b), false
-	}
-	return x, y, true
-}
-
 func (p *Page) access(breakglass bool) {
 	if breakglass {
 		p.add("p", "Credential: this storage's break-glass credential (set for reading the kit, not for backups).")
@@ -128,18 +119,11 @@ func (p *Page) target(s Source, n int, kit string) {
 		p.add("m", "Path in the container: "+path)
 		p.add("m", "Kit: "+strings.TrimSuffix(path, "/")+"/"+kit)
 	case "sftp", "sftpc":
-		key, breakglass := s.Settings.Secret(pre+"BREAKGLASS_SSH_KEY"), true
-		if key == "" {
-			key, breakglass = s.sshKey(), false
-		}
+		key, user, breakglass := s.SSHAccess(n)
 		if key != "" {
 			p.addQR(s, key)
 		}
-		url, user, path := s.get(pre+"SFTP_URL"), s.get(pre+"SFTP_USER"), strings.TrimPrefix(s.get(pre+"SFTP_PATH"), "/")
-		// A break-glass key may belong to its own (read-only) account.
-		if bgUser := s.get(pre + "BREAKGLASS_SFTP_USER"); breakglass && bgUser != "" {
-			user = bgUser
-		}
+		url, path := s.get(pre+"SFTP_URL"), strings.TrimPrefix(s.get(pre+"SFTP_PATH"), "/")
 		port := s.get(pre + "SFTP_PORT")
 		if port == "" {
 			port = "22"
@@ -157,7 +141,8 @@ func (p *Page) target(s Source, n int, kit string) {
 			p.add("warn", "No SSH private key is configured, so this storage cannot be reached from this page.")
 		}
 	case "b2", "b2-custom":
-		id, key, breakglass := credential(s, pre, "B2_ID", "B2_KEY")
+		v, breakglass, _ := s.access(n, typ)
+		id, key := v["B2_ID"], v["B2_KEY"]
 		bucket := s.get(pre + "B2_BUCKETNAME")
 		p.addQR(s, "B2 bucket: "+bucket+"\nKey ID: "+id+"\nApplication key: "+key)
 		p.add("m", "Backblaze B2 bucket: "+bucket)
@@ -172,11 +157,10 @@ func (p *Page) target(s Source, n int, kit string) {
 		p.access(breakglass)
 		p.add("m", "Key ID: "+id)
 		p.add("m", "Application key: "+key)
-		v := valuesOf(s, pre, config.Types[typ])
-		v["B2_ID"], v["B2_KEY"] = id, key
 		p.fetch(typ, v, kit)
 	case "s3", "s3c", "minio", "minios":
-		id, secret, breakglass := credential(s, pre, "S3_ID", "S3_SECRET")
+		v, breakglass, _ := s.access(n, typ)
+		id, secret := v["S3_ID"], v["S3_SECRET"]
 		bucket, endpoint, region := s.get(pre+"S3_BUCKETNAME"), s.get(pre+"S3_ENDPOINT"), s.get(pre+"S3_REGION")
 		if region == "" {
 			region = "none"
@@ -191,8 +175,6 @@ func (p *Page) target(s Source, n int, kit string) {
 		p.access(breakglass)
 		p.add("m", "Access key ID: "+id)
 		p.add("m", "Secret key: "+secret)
-		v := valuesOf(s, pre, config.Types[typ])
-		v["S3_ID"], v["S3_SECRET"] = id, secret
 		p.fetch(typ, v, kit)
 	default:
 		p.generic(s, pre, typ, kit)
@@ -207,37 +189,19 @@ func (p *Page) generic(s Source, pre, typ, kit string) {
 	if !ok {
 		return
 	}
-	var settings, secrets []config.Field
-	breakglass := false
-	rotates := false
+	n, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(pre, "STORAGE_TARGET_"), "_"))
+	shown, breakglass, rotates := s.access(n, typ)
+	var settings []config.Field
+	var creds []string
 	for _, f := range t.Fields {
 		if f.Rotates {
-			rotates = true
 			continue
 		}
 		if f.Secret {
-			secrets = append(secrets, f)
-			if f.BreakGlass && s.Settings.Secret(pre+"BREAKGLASS_"+f.Name) != "" {
-				breakglass = true
-			}
-		} else if v := s.get(pre + f.Name); v != "" {
+			creds = append(creds, f.Prompt+": "+shown[f.Name])
+		} else if s.get(pre+f.Name) != "" {
 			settings = append(settings, f)
 		}
-	}
-	for _, f := range secrets {
-		if f.BreakGlass && s.Settings.Secret(pre+"BREAKGLASS_"+f.Name) == "" {
-			breakglass = false
-		}
-	}
-	var creds []string
-	shown := valuesOf(s, pre, t)
-	for _, f := range secrets {
-		v := s.Settings.Secret(pre + f.Name)
-		if breakglass && f.BreakGlass {
-			v = s.Settings.Secret(pre + "BREAKGLASS_" + f.Name)
-		}
-		shown[f.Name] = v
-		creds = append(creds, f.Prompt+": "+v)
 	}
 	if len(creds) > 0 {
 		p.addQR(s, strings.Join(creds, "\n"))

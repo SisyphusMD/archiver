@@ -532,6 +532,8 @@ jobs:
         run: IMAGE=hosttests:local bash tests/integration/json-logs.sh
       - name: s3 runtime against Garage (backup + restore over the s3 wire, TLS)
         run: IMAGE=hosttests:local bash tests/integration/s3-garage.sh
+      - name: Kit drills recover with envelope credentials, reject stale kits and revoked access (ADR 51)
+        run: IMAGE=hosttests:local bash tests/integration/kit-drill.sh
       - name: sftp runtime against sshd (backup + restore over ssh)
         run: IMAGE=hosttests:local bash tests/integration/sftp-runtime.sh
       - name: "Fault injection: full storage, logs and restore target fail loudly and recover (ADR 31)"

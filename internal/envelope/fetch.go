@@ -40,26 +40,12 @@ func fetchCommand(typ string, v config.Values, kit string) (string, error) {
 			return "", nil
 		}
 	}
-	settings, dir := t.Remote(v)
-	if p, ok := settings["PASS"]; ok {
-		obscured, err := Obscure(p)
-		if err != nil {
-			return "", err
-		}
-		settings["PASS"] = obscured
+	settings, dir, err := FetchSettings(typ, v, nil)
+	if err != nil {
+		return "", err
 	}
 	backend := settings["TYPE"]
-	if b, ok := backends[backend]; ok {
-		backend = b
-	}
 	delete(settings, "TYPE")
-	for k, val := range settings {
-		// A credentials file as downloaded spans lines; a printed command must be one line.
-		var compact bytes.Buffer
-		if strings.HasPrefix(strings.TrimSpace(val), "{") && json.Compact(&compact, []byte(val)) == nil {
-			settings[k] = compact.String()
-		}
-	}
 	keys := make([]string, 0, len(settings))
 	for k, val := range settings {
 		if val != "" {
@@ -81,4 +67,37 @@ func fetchCommand(typ string, v config.Values, kit string) (string, error) {
 // shellQuote single-quotes s for a POSIX shell.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// FetchSettings supplies the same on-the-fly remote as the printed fetch command.
+func FetchSettings(typ string, v config.Values, obscure func(string) (string, error)) (map[string]string, string, error) {
+	t, ok := config.Types[typ]
+	if !ok || t.Remote == nil {
+		return nil, "", fmt.Errorf("no envelope fetch for storage type %s", typ)
+	}
+	settings, dir := t.Remote(v)
+	if p, ok := settings["PASS"]; ok {
+		if obscure == nil {
+			obscure = Obscure
+		}
+		obscured, err := obscure(p)
+		if err != nil {
+			return nil, "", err
+		}
+		settings["PASS"] = obscured
+	}
+	backend := settings["TYPE"]
+	if b, ok := backends[backend]; ok {
+		backend = b
+	}
+	settings["TYPE"] = backend
+	for k, val := range settings {
+		// A credentials file as downloaded spans lines; a printed command must be one line.
+		var compact bytes.Buffer
+		if strings.HasPrefix(strings.TrimSpace(val), "{") && json.Compact(&compact, []byte(val)) == nil {
+			settings[k] = compact.String()
+		}
+	}
+
+	return settings, dir, nil
 }

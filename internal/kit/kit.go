@@ -3,7 +3,8 @@
 // RECOVERY_KIT_EXTRA_PATHS files, encrypted with the recovery password into one file placed
 // beside the backups on every storage. One reachable storage and the password recover
 // everything: `openssl enc -d -aes-256-cbc -pbkdf2 -in <kit> | tar -xvf -`. Nothing reads the
-// kit back, so it is never a dependency of a run.
+// kit back during placement; optional kit drills rehearse reading it without making it
+// a dependency of a backup.
 //
 // The kit is re-placed only when its content changes, when a storage lacks it, or when
 // forced. The state file and fingerprint are the ones existing deployments recorded, so an
@@ -12,6 +13,7 @@ package kit
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -60,6 +62,7 @@ type Run struct {
 	DockerSocket  string // tests point it elsewhere
 	Rclone        string // the rclone binary; tests stand in a fake
 
+	ctx context.Context
 	cfg *config.Config
 }
 
@@ -335,4 +338,11 @@ func (r *Run) encrypt(work, out string) error {
 		return fmt.Errorf("openssl: %v: %s", errEnc, strings.TrimSpace(encErr.String()))
 	}
 	return nil
+}
+
+func (r *Run) context() context.Context {
+	if r.ctx != nil {
+		return r.ctx
+	}
+	return context.Background()
 }
