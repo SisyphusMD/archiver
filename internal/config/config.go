@@ -585,9 +585,6 @@ func (c *Config) TargetCheckInterval(t Target) time.Duration {
 	return 24 * time.Hour
 }
 
-// CheckMetricsPort validates METRICS_PORT; empty is off.
-func CheckMetricsPort(port string) error { return checkPort("METRICS_PORT", port) }
-
 // CheckPorts validates METRICS_PORT and WEB_PORT (ADRs 35, 38): ports, and not the same one.
 func CheckPorts(metrics, web string) error {
 	if err := checkPort("METRICS_PORT", metrics); err != nil {
