@@ -295,7 +295,7 @@ func (e Env) container(r *report, cfg *config.Config) []string {
 			r.bad("%s still has %s, which this release does not run: its backups are skipped until 'archiver migrate hooks' converts it", name, hooks.Legacy)
 		}
 		hd := hooks.Hooks(cfg.HooksDir, d)
-		for _, h := range []string{hooks.PreBackup, hooks.PostBackup, hooks.PostRestore} {
+		for _, h := range []string{hooks.PreBackup, hooks.PostBackup, hooks.PostRestore, hooks.Drill} {
 			if _, err := hooks.Exists(hd, h); err != nil {
 				r.bad("%s: %v", name, err)
 			}

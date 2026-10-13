@@ -73,6 +73,7 @@ Settings are environment variables. **Secrets** are files, never environment var
 | `RESTORE_DRILL_SERVICES` | `1` | How many services each drill restores from each storage, rotating; `all` restores every one. |
 | `RESTORE_DRILL_STORAGES` | `all` | Which storages drills restore from: `all`, `primary`, or storage names separated by commas. |
 | `RESTORE_DRILL_DIR` | `/tmp/archiver-drill` | Scratch space a drill restores into and deletes afterwards; never a service directory. |
+| `RESTORE_DRILL_HOOK_TIMEOUT` | `6h` | Maximum time a service's drill hook may run; a timeout fails the drill and ends the hook and its children. |
 | `RESTORE_DRILL_EXCLUDE` |  | Services drills leave out, separated by commas. |
 
 ## Recovery kit

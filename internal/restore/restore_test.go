@@ -58,7 +58,26 @@ list)
     echo "Total size: 10, file chunks: 1"; exit 0 ;;
   esac
   for r in $(cat "$url/revs" 2>/dev/null); do echo "Snapshot $3 revision $r created at x"; done ;;
+cat)
+  : > .duplicacy/drill
+  url=$(cat .duplicacy/url)
+  f=$(cat "$url/files" 2>/dev/null || echo 3)
+  [ "$f" = none ] && f=0
+  printf '{"files":['
+  i=0; sep=""; while [ $i -lt $f ]; do
+    i=$((i+1))
+    printf '%s{"path":"file%d","size":1,"time":0,"mode":384}' "$sep" "$i"
+    sep=,
+  done
+  printf ']}\n' ;;
 restore)
+  if [ -f .duplicacy/drill ]; then
+    url=$(cat .duplicacy/url)
+    cd "$(cat .duplicacy/repo)" || exit 98
+    [ -f "$url/empty" ] && exit 0
+    for i in 1 2 3; do printf x >"file$i"; chmod 600 "file$i"; touch -t 197001010000 "file$i"; done
+    exit 0
+  fi
   url=$(cat .duplicacy/url); shift
   cd "$(cat .duplicacy/repo 2>/dev/null || echo .)" || exit 98
   [ -f "$url/empty" ] && exit 0

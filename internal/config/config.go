@@ -93,10 +93,11 @@ type Config struct {
 	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
 	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
 	// Restore drills (ADR 28); their schedule, RESTORE_DRILL_SCHEDULE, is the daemon's.
-	DrillServices string // RESTORE_DRILL_SERVICES: how many services per storage per run, or "all"
-	DrillStorages string // RESTORE_DRILL_STORAGES: "all", "primary" or storage names
-	DrillDir      string // RESTORE_DRILL_DIR
-	DrillExclude  string // RESTORE_DRILL_EXCLUDE: service names never drilled
+	DrillServices  string // RESTORE_DRILL_SERVICES: how many services per storage per run, or "all"
+	DrillStorages  string // RESTORE_DRILL_STORAGES: "all", "primary" or storage names
+	DrillDir       string // RESTORE_DRILL_DIR
+	DrillHookLimit string // RESTORE_DRILL_HOOK_TIMEOUT: maximum drill hook duration
+	DrillExclude   string // RESTORE_DRILL_EXCLUDE: service names never drilled
 }
 
 var globalSecret = regexp.MustCompile(`^(STORAGE_PASSWORD|RSA_PASSPHRASE|RECOVERY_PASSWORD|PUSHOVER_USER_KEY|PUSHOVER_API_TOKEN|APPRISE_URL|NTFY_TOKEN)$`)
@@ -218,6 +219,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		DrillStorages:            src.Getenv("RESTORE_DRILL_STORAGES"),
 		DrillDir:                 src.Getenv("RESTORE_DRILL_DIR"),
 		DrillExclude:             src.Getenv("RESTORE_DRILL_EXCLUDE"),
+		DrillHookLimit:           src.Getenv("RESTORE_DRILL_HOOK_TIMEOUT"),
 	}
 
 	prune := src.Getenv("PRUNE_BACKUPS")
@@ -383,6 +385,9 @@ func (c *Config) Validate(secretsDir string) error {
 	}
 	if _, err := ParseInterval(c.CheckInterval); err != nil {
 		return fmt.Errorf("CHECK_INTERVAL: %v", err)
+	}
+	if _, err := c.DrillHookTimeout(); err != nil {
+		return err
 	}
 	if _, err := c.DrillCount(); err != nil {
 		return err
@@ -744,3 +749,15 @@ var snapshotID = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 // ValidSnapshotID reports whether Duplicacy accepts id as a snapshot ID: letters, digits,
 // '_' and '-' only. A backup refuses a service whose ID breaks this.
 func ValidSnapshotID(id string) bool { return snapshotID.MatchString(id) }
+
+// DrillHookTimeout is the maximum duration of a drill hook, six hours by default.
+func (c *Config) DrillHookTimeout() (time.Duration, error) {
+	if c.DrillHookLimit == "" {
+		return 6 * time.Hour, nil
+	}
+	d, err := ParseInterval(c.DrillHookLimit)
+	if err != nil {
+		return 0, fmt.Errorf("RESTORE_DRILL_HOOK_TIMEOUT: %w", err)
+	}
+	return d, nil
+}
