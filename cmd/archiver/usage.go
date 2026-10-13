@@ -8,7 +8,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
 )
 
-const usageText = `Usage: archiver {backup|maintenance|drill|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|completion|help}
+const usageText = `Usage: archiver {backup|maintenance|drill|deep-check|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|completion|help}
 Note:
   backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background.
   maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune.
@@ -17,8 +17,9 @@ Note:
   status --json prints everything status shows, and backup health, as JSON.
   health --backups prints backup health (OK, DEGRADED or FAILING) and why, exiting 0, 1 or 2 for monitors; healthcheck stays the container's liveness check.
   notify test sends one message to every notification destination, saying which events it receives.
+  deep-check [STORAGE] reads and verifies every chunk; no argument selects storages with STORAGE_TARGET_N_DEEP_CHECK schedules.
   drill [SERVICE] [STORAGE] restores newest revisions into RESTORE_DRILL_DIR, checks them and deletes them (normally scheduled via RESTORE_DRILL_SCHEDULE).
-  stop takes an optional target (backup|maintenance|drill|all, default all) and --immediate.
+  stop takes an optional target (backup|maintenance|drill|deep-check|all, default all) and --immediate.
   resume may be used in combination with logs.
   mirror --dry-run shows what the copy workers' next mirror pass would delete on each secondary; mirror --allow-large lets that pass exceed the cap.
   migrate hooks [DIR...] converts each service's service-backup-settings.sh into executable pre-backup/post-backup hooks and a filters file.
@@ -70,17 +71,17 @@ func usage(args []string) int {
 		targets := 0
 		for _, a := range rest {
 			switch a {
-			case "backup", "maintenance", "drill", "all":
+			case "backup", "maintenance", "drill", "deep-check", "all":
 				targets++
 			case "--immediate":
 			default:
-				fmt.Printf("'%s' is not valid for 'archiver stop' (allowed: backup, maintenance, drill, all, --immediate).\n", a)
+				fmt.Printf("'%s' is not valid for 'archiver stop' (allowed: backup, maintenance, drill, deep-check, all, --immediate).\n", a)
 				fmt.Print(usageText)
 				return 1
 			}
 		}
 		if targets > 1 {
-			fmt.Println("'archiver stop' takes at most one target (backup|maintenance|drill|all).")
+			fmt.Println("'archiver stop' takes at most one target (backup|maintenance|drill|deep-check|all).")
 		}
 	case "resume":
 		fmt.Printf("'%s' is not valid for 'archiver resume'.\n", strings.Join(rest, " "))

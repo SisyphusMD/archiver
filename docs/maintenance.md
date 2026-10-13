@@ -78,3 +78,43 @@ RESTORE_DRILL_EXCLUDE="media"        # service names never drilled (too big for 
 Each drill takes, on every chosen storage, the next service in rotation (so one service per week covers every service over time) and restores its newest revision into the drill directory. Duplicacy verifies every chunk as it downloads it, every restored entry is checked against the revision's record (type, size, modification time, mode, and link target for links), with no extra entries except Duplicacy's top-level `.duplicacy` directory. Ownership is not checked because drills restore without ownership. An optional service `drill` hook then runs in the scratch directory to check the application's data; a non-zero exit or exceeding `RESTORE_DRILL_HOOK_TIMEOUT` (six hours by default) fails the drill. The copy is deleted afterwards. Ordinary restore hooks never run, and the live service and its directory are never touched. A service whose revision would not fit the drill directory's free space is skipped with a warning; one with no revision on a storage yet (a secondary still catching up) is skipped too.
 
 A failed drill always notifies ("Restore Drill Failed"); a passing one is routine news (`NOTIFY_ON=everything`). `archiver status` shows each service's last drill per storage, and the healthcheck warns when the last drill failed or none has passed within twice the schedule's interval. Drills run alongside backups (the revision being restored is held in use so no prune removes it meanwhile); `archiver stop`, `pause` and `resume` act on them. `archiver drill [SERVICE] [STORAGE]` runs one now. The restored copy needs as much space as the revision, so point `RESTORE_DRILL_DIR` at a volume with room, or exclude large services. Drills write to `logs/drill.log`.
+
+## Scheduled deep storage checks
+
+Maintenance checks that required chunks exist. A deep check reads and verifies every
+referenced chunk, including fossils, to find damage in place (ADR 50):
+
+```sh
+archiver deep-check local
+archiver deep-check
+```
+
+A named storage runs even without a schedule. Without a name, only storages with
+`STORAGE_TARGET_N_DEEP_CHECK` configured are checked. For example, `0 4 1 * *`
+checks that target monthly. Unset disables scheduled deep checks. Invalid schedules
+refuse container startup.
+
+Deep checks use private repositories under `logs/.deep-check-repos/`, identified by
+storage name and URLs. They open existing storages and never create them. Each runs
+`duplicacy check -all -chunks -fossils -persist`, with scripts disabled, without an
+exclusive check. A revision hold protects the snapshots against Archiver prunes.
+
+A backup takes priority: a deep check detects the backup lock, interrupts Duplicacy
+with SIGINT, and retries at its next scheduled slot. Backups never wait for deep checks.
+`archiver stop deep-check`, `pause`, and `resume` also control them.
+`DEEP_CHECK_TIMEOUT` defaults to `7d`, enough for a slow full offsite read, and includes
+paused time. Timeout and stop preserve Duplicacy's verified-chunk progress. A crash or
+kill retains the last progress Duplicacy saved, which can lag by up to five minutes.
+Any check that finishes, including a failed check, clears only
+`.duplicacy/cache/<storage>/verified_chunks`, so its next complete read starts fresh.
+
+Failed and interrupted checks remain due until a pass. Damage raises a storage-specific
+incident with up to three damaged chunks and three affected revisions when
+Duplicacy provides them. Failures notify by default and repeat on `ALERT_REPEAT_INTERVAL`;
+a passing check clears the incident. An interruption alone does not report storage damage.
+
+`archiver status` and `status --json` show the last attempt and last success per storage.
+The metrics endpoint and textfile export `archiver_deep_check_last_timestamp_seconds`,
+`archiver_deep_check_last_ok` (1 passed, 0 failed or interrupted),
+`archiver_deep_check_last_duration_seconds`, and
+`archiver_deep_check_last_success_timestamp_seconds`, each labeled by `storage`.

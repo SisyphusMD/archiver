@@ -55,6 +55,7 @@ func Pause(e Env) int {
 		fmt.Fprintln(e.Out, "Copies to the secondary storages paused.")
 	}
 	e.pauseDrill()
+	e.deepChecks("pause")
 	l, ok := e.backup()
 	if !ok {
 		fmt.Fprintln(e.Out, "No running backup found.")
@@ -93,6 +94,7 @@ func Resume(e Env) int {
 		fmt.Fprintln(e.Out, "Copies to the secondary storages resumed.")
 	}
 	e.resumeDrill()
+	e.deepChecks("resume")
 	l, ok := e.backup()
 	if !ok {
 		fmt.Fprintln(e.Out, "No paused backup found.")
@@ -142,6 +144,12 @@ func (e Env) waitForEnd(pid int, limit time.Duration) bool {
 // Stop stops the running maintenance and/or backup (target backup, maintenance or all) and
 // the copy workers. immediate ends them now instead of letting them finish cleanly.
 func Stop(e Env, target string, immediate bool) int {
+	if target == "deep-check" || target == "all" {
+		e.deepChecks("stop")
+		if target == "deep-check" {
+			return 0
+		}
+	}
 	if target == "drill" || target == "all" {
 		e.stopDrill(target, immediate)
 		if target == "drill" {
@@ -318,5 +326,39 @@ func exists(path string) bool { _, err := os.Stat(path); return err == nil }
 func touch(path string) {
 	if f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0o644); err == nil { //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
 		f.Close()
+	}
+}
+
+func (e Env) deepChecks(action string) {
+	paths, _ := filepath.Glob(e.Layout.DeepCheckLock("*"))
+	for _, path := range paths {
+		l, held, err := lockstate.ReadLock(path)
+		if err != nil || !held || !l.Alive() {
+			continue
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(path), "archiver-deep-check-"), ".lock")
+		switch action {
+		case "pause":
+			if l.Paused() {
+				continue
+			}
+			if runlock.Append(path, "paused", e.Now()) != nil {
+				continue
+			}
+			signalTree(l.PID, syscall.SIGSTOP)
+			time.Sleep(300 * time.Millisecond)
+			signalTree(l.PID, syscall.SIGSTOP)
+		case "resume":
+			if !l.Paused() {
+				continue
+			}
+			signalTree(l.PID, syscall.SIGCONT)
+			_ = runlock.Append(path, "running", e.Now())
+		case "stop":
+			touch(e.Layout.DeepCheckStopFlag(name))
+			signalTree(l.PID, syscall.SIGCONT)
+			_ = runlock.Append(path, "running", e.Now())
+		}
+		fmt.Fprintf(e.Out, "Deep check of %s: %s requested.\n", name, action)
 	}
 }

@@ -41,7 +41,7 @@ COMP_WORDS=(archiver logs ""); COMP_CWORD=2; _archiver; echo "[${COMPREPLY[*]}]"
 	if err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	want := "maintenance\nbackup maintenance drill all --immediate\n[]\n"
+	want := "maintenance\nbackup maintenance drill deep-check all --immediate\n[]\n"
 	if string(out) != want {
 		t.Errorf("got %q, want %q", out, want)
 	}
@@ -76,7 +76,7 @@ words=(archiver ""); CURRENT=2; _archiver | grep -q maintenance && echo commands
 	if err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if want := "backup maintenance drill all --immediate\ncommands\n"; string(out) != want {
+	if want := "backup maintenance drill deep-check all --immediate\ncommands\n"; string(out) != want {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }

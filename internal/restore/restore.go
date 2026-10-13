@@ -8,7 +8,6 @@ package restore
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +31,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/proc"
+	"github.com/SisyphusMD/archiver/internal/repository"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -556,27 +556,6 @@ func linkedDirs(dir string) [][2]string {
 	return found
 }
 
-// attach makes dir a repository of t by writing its preferences, without duplicacy init:
-// init creates a storage that does not exist, and a probe must never write one. Every
-// Archiver storage is encrypted.
-func attach(dir string, t config.Target, id, hostKeys string) error {
-	url, err := t.URL()
-	if err != nil {
-		return err
-	}
-	prefs, _ := json.Marshal([]map[string]any{{
-		"name": t.StorageName(), "id": id, "repository": "", "storage": url, "encrypted": true,
-		"no_backup": true, "no_restore": false, "no_save_password": true, "keys": nil,
-	}})
-	if err := os.MkdirAll(filepath.Join(dir, ".duplicacy"), 0o700); err != nil {
-		return err
-	}
-	if err := hostkeys.Pin(hostKeys, filepath.Join(dir, ".duplicacy")); err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(dir, ".duplicacy", "preferences"), prefs, 0o600)
-}
-
 // tail keeps the last bytes written to it: duplicacy prints its errors on stdout, among
 // whatever else it writes there.
 type tail struct{ b []byte }
@@ -612,7 +591,7 @@ func (e *Env) Snapshots(t config.Target) (map[string]SnapshotInfo, error) {
 	}
 	defer os.RemoveAll(dir)
 	var out strings.Builder
-	if err := attach(dir, t, "archiver-probe", e.Layout.HostKeys()); err != nil {
+	if err := repository.Attach(dir, t, "archiver-probe", e.Layout.HostKeys()); err != nil {
 		return nil, err
 	}
 	// The newest revisions are listed and held in use under the storage's gate, so no prune

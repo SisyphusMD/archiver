@@ -100,6 +100,9 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "doctor" && (len(os.Args) == 2 || (len(os.Args) == 3 && os.Args[2] == "--notify")) {
 		os.Exit(doctorCommand(len(os.Args) == 3))
 	}
+	if len(os.Args) >= 2 && os.Args[1] == "deep-check" && len(os.Args) <= 3 {
+		os.Exit(deepCheckCommand(os.Args[2:]))
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "drill" && len(os.Args) <= 4 {
 		o := restore.DrillOptions{}
 		if len(os.Args) >= 3 {
@@ -211,7 +214,11 @@ func runDaemon(args []string) int {
 	startMetrics(ctx, l)
 	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, interruptedRuns(l), func(j daemon.Job) int {
 		// A fresh process per run, as under cron: each run starts clean.
-		cmd := exec.Command(selfPath, j.Name)
+		command := j.Command
+		if command == "" {
+			command = j.Name
+		}
+		cmd := exec.Command(selfPath, append([]string{command}, j.Args...)...)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
 			if exit, ok := err.(*exec.ExitError); ok {

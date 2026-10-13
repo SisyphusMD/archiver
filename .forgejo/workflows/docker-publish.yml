@@ -377,6 +377,10 @@ jobs:
         run: |
           docker run -i --rm --hostname rk-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/recovery-kit.sh
+      - name: Deep storage check verifies corruption, resumes and clears completed progress (ADR 50)
+        run: |
+          docker run -i --rm --hostname dc-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/deep-check.sh
       - name: Maintenance pipeline (check/prune split, exhaustive frequency, lock waits, stop)
         run: |
           docker run -i --rm --hostname mt-host --cap-drop ALL --cap-add DAC_OVERRIDE \

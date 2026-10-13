@@ -129,6 +129,12 @@ func (e *Env) ClearLocks() {
 		"archiver-drill.lock", "archiver-drill-stop-requested", "archiver-drill.lock.tmp"} {
 		os.Remove(filepath.Join(e.Layout.Lock, name))
 	}
+	for _, pattern := range []string{e.Layout.DeepCheckLock("*"), e.Layout.DeepCheckStopFlag("*")} {
+		paths, _ := filepath.Glob(pattern)
+		for _, path := range paths {
+			os.Remove(path)
+		}
+	}
 }
 
 // Warnings are configuration problems worth saying at start; fatal ones end the start.
@@ -153,7 +159,7 @@ func (e *Env) Warnings() (fatal string, warnings []string) {
 }
 
 // RunCommands are the commands `run` accepts.
-var RunCommands = []string{"auto-restore", "auto-restore-all", "snapshot-exists", "healthcheck", "backup", "maintenance"}
+var RunCommands = []string{"auto-restore", "auto-restore-all", "snapshot-exists", "healthcheck", "backup", "maintenance", "deep-check"}
 
 // Follow prints path's new lines to w as they are written, from the end of the file when it
 // first appears, after a banner, through rotations (as `tail -F -n 0`), until stop closes.
@@ -218,25 +224,30 @@ func offset(f *os.File) int64 {
 	return o
 }
 
-// LocksClear reports whether no backup, maintenance or drill holds its lock.
+// LocksClear reports whether no backup, maintenance, drill, copy or deep check holds its lock.
 func (e *Env) LocksClear() bool {
 	for _, name := range []string{"archiver-main.lock", "archiver-maintenance.lock", "archiver-drill.lock"} {
 		if _, err := os.Stat(filepath.Join(e.Layout.Lock, name)); err == nil {
 			return false
 		}
 	}
-	// A copy worker holds its storage's copy lock while its duplicacy runs, saving its state
-	// after a stop included; the daemon is signalled only once they are free.
-	copies, _ := filepath.Glob(filepath.Join(e.Layout.Lock, "archiver-copy-*.flock"))
-	for _, p := range copies {
-		f, free, err := runlock.Hold(p)
-		if err == nil && !free {
+	// Workers retain their kernel locks until Duplicacy saves its progress after SIGINT.
+	for _, pattern := range []string{"archiver-copy-*.flock", "archiver-deep-check-*.lock.flock"} {
+		locks, err := filepath.Glob(filepath.Join(e.Layout.Lock, pattern))
+		if err != nil {
 			return false
 		}
-		if f != nil {
-			f.Close()
+		for _, p := range locks {
+			f, free, err := runlock.Hold(p)
+			if f != nil {
+				f.Close()
+			}
+			if err != nil || !free {
+				return false
+			}
 		}
 	}
+
 	return true
 }
 

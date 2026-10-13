@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/repository"
 )
 
 // SnapshotExists answers whether SNAPSHOT_ID has a revision on any storage: EXISTS (0),
@@ -126,7 +127,7 @@ func (e *Env) dryRun(req request) int {
 			return Unreachable
 		}
 		defer os.RemoveAll(work)
-		if err := attach(work, t, req.id, e.Layout.HostKeys()); err != nil {
+		if err := repository.Attach(work, t, req.id, e.Layout.HostKeys()); err != nil {
 			fmt.Fprintln(e.Stdout, "  unreachable:", err)
 			unreachable++
 			continue

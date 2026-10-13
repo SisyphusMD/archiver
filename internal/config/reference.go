@@ -47,6 +47,7 @@ var Reference = []Var{
 	{Name: "PRUNE_KEEP", Group: "Maintenance", Kind: "string", Default: "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1", Desc: "Duplicacy retention: one revision a day for a week, a week for a month, a month for half a year, none older."},
 	{Name: "PRUNE_EXHAUSTIVE_FREQUENCY", CaseFold: true, Group: "Maintenance", Kind: "string", Default: "monthly", Values: []string{"off", "daily", "weekly", "monthly"}, Desc: "How often the prune also removes chunks no revision references."},
 	{Name: "CHECK_INTERVAL", Group: "Maintenance", Kind: "interval", Desc: "How often each secondary is checked (`12h`, `7d`); a target's own STORAGE_TARGET_N_CHECK_INTERVAL wins. Default: a day, a week for SFTP-like storages."},
+	{Name: "DEEP_CHECK_TIMEOUT", Group: "Maintenance", Kind: "interval", Default: "7d", Desc: "Time limit per deep check, including pauses. A week allows a full offsite read on a slow connection while bounding a stalled run. Timeout preserves verified chunks for the next scheduled attempt."},
 
 	{Name: "NOTIFY_ON", CaseFold: true, Group: "Notifications", Kind: "string", Default: "failures", Values: []string{"failures", "problems", "everything"}, Desc: "Which notifications every destination receives (ADR 36)."},
 	{Name: "ALERT_REPEAT_INTERVAL", Pattern: `^$|^0$|` + intervalPattern, Group: "Notifications", Kind: "interval", Default: "24h", Desc: "How often an ongoing failure is notified again (`6h`, `2d`); `0` never repeats (ADR 33)."},
@@ -103,6 +104,7 @@ var Reference = []Var{
 
 // targetSettings are the per-target variables every storage type has.
 var targetSettings = []Var{
+	{Name: "DEEP_CHECK", Kind: "cron", Desc: "When this storage is read and verified in full (ADR 50), e.g. `0 4 1 * *` for monthly. Unset: off. An interrupted check keeps its progress and retries at the next slot; a completed check forgets it. Gives way to backups."},
 	{Name: "NAME", Kind: "string", Desc: "The storage's name. Target 1 is the primary; the others are copies of it."},
 	{Name: "TYPE", Kind: "string", Desc: "The storage type."},
 	{Name: "CHECK_INTERVAL", Kind: "interval", Desc: "How often this secondary is checked; overrides CHECK_INTERVAL."},

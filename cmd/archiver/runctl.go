@@ -27,7 +27,7 @@ func runControl(cmd string, args []string) (code int, ok bool) {
 			// records and start again with the container (ADR 46).
 			case "--shutdown":
 				_ = os.WriteFile(layout.Default().ShutdownFlag(), nil, 0o600)
-			case "backup", "maintenance", "drill", "all":
+			case "backup", "maintenance", "drill", "deep-check", "all":
 				target = a
 				targets++
 			default:

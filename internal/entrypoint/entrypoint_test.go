@@ -68,7 +68,7 @@ func TestPlaceKeys(t *testing.T) {
 
 func TestClearLocksAndLocksClear(t *testing.T) {
 	e := env(t, map[string]string{})
-	for _, n := range []string{"archiver-main.lock", "archiver-stop-requested", "archiver-maintenance.lock", "archiver-in-use"} {
+	for _, n := range []string{"archiver-main.lock", "archiver-stop-requested", "archiver-maintenance.lock", "archiver-deep-check-local.lock", "archiver-deep-check-local-stop-requested", "archiver-in-use"} {
 		os.WriteFile(filepath.Join(e.Layout.Lock, n), nil, 0o600)
 	}
 	if e.LocksClear() {
@@ -77,6 +77,11 @@ func TestClearLocksAndLocksClear(t *testing.T) {
 	e.ClearLocks()
 	if !e.LocksClear() {
 		t.Fatal("locks left")
+	}
+	for _, n := range []string{"archiver-deep-check-local.lock", "archiver-deep-check-local-stop-requested"} {
+		if _, err := os.Stat(filepath.Join(e.Layout.Lock, n)); !os.IsNotExist(err) {
+			t.Fatalf("deep-check lock state left: %s", n)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(e.Layout.Lock, "archiver-in-use")); err != nil {
 		t.Error("cleared more than the pipelines' lock state")

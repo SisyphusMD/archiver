@@ -11,6 +11,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/backuphealth"
 	"github.com/SisyphusMD/archiver/internal/copier"
+	"github.com/SisyphusMD/archiver/internal/deepcheck"
 	"github.com/SisyphusMD/archiver/internal/envelope"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
@@ -98,6 +99,21 @@ func Write(w io.Writer, l layout.Layout, getenv func(string) string, now time.Ti
 		}
 	}
 
+	deepChecks := deepcheck.Read(l)
+	for _, name := range deepCheckNames(deepChecks) {
+		r := deepChecks[name]
+		what := "FAILED (" + r.Message + ")"
+		if r.OK {
+			what = "passed"
+		}
+		if lk, held, err := lockstate.ReadLock(l.DeepCheckLock(name)); err == nil && held && lk.Alive() {
+			what = "running"
+			if lk.Paused() {
+				what = "paused"
+			}
+		}
+		fmt.Fprintf(w, "Deep check of %s: %s %s, last success %s.\n", name, what, Age(r.At, now), Age(r.LastSuccess, now))
+	}
 	storages, err := lockstate.ReadMaintenance(l.MaintenanceState())
 	if err != nil {
 		return err
@@ -208,6 +224,7 @@ type Run struct {
 
 // Snapshot is everything status shows, for monitors and the web page (ADRs 32, 38).
 type Snapshot struct {
+	DeepChecks   map[string]deepcheck.Result                 `json:"deep_checks"`
 	At           int64                                       `json:"at"`
 	BackupHealth backuphealth.Health                         `json:"backup_health"`
 	Backup       Run                                         `json:"backup"`
@@ -234,6 +251,7 @@ func Take(l layout.Layout, getenv func(string) string, now time.Time) Snapshot {
 	s.Backup, s.Maintenance, s.Drill = run(l.BackupLock()), run(l.MaintenanceLock()), run(l.DrillLock())
 	bs, _ := lockstate.ReadBackupState(l.BackupState())
 	s.Services = bs.Services
+	s.DeepChecks = deepcheck.Read(l)
 	s.Copies = (&copier.Store{Path: l.CopyWorkersState()}).Load()
 	if ds, err := lockstate.ReadDrillState(l.DrillState()); err == nil {
 		s.Drills = ds.Results
@@ -249,4 +267,13 @@ func WriteJSON(w io.Writer, l layout.Layout, getenv func(string) string, now tim
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(Take(l, getenv, now))
+}
+
+func deepCheckNames(results map[string]deepcheck.Result) []string {
+	var names []string
+	for name := range results {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

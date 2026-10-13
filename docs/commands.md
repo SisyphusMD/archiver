@@ -146,3 +146,13 @@ Create the ConfigMap and Secret straight from what `init` emitted: `kubectl crea
 The Pod lives for the duration of one backup and exits. If the backup fails, the Pod exits non-zero and Kubernetes marks the Job failed — the usual CronJob semantics apply.
 
 > **Why not `--detach` here?** A detached backup returns exit `0` immediately, before any real work happens — fine interactively, useless to an external scheduler that needs a meaningful exit code. `run backup` blocks until the backup finishes.
+
+## `archiver deep-check [STORAGE]`
+
+Read and verify all referenced chunks on an existing storage (ADR 50). A named storage
+runs without a schedule; with no argument, checks storages with
+`STORAGE_TARGET_N_DEEP_CHECK` set. Gives way to backups and resumes interrupted progress
+at the next scheduled slot. `DEEP_CHECK_TIMEOUT` defaults to seven days. A completed check
+forgets its verified chunks so the next run reads them again. Returns nonzero on failure
+or interruption. `archiver stop deep-check`, `pause`, and `resume` control running checks.
+See [maintenance](maintenance.md#scheduled-deep-storage-checks).

@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/repository"
 )
 
 // errEOF ends an interactive restore whose input ran out before it was answered.
@@ -113,7 +114,7 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 		return 1, err
 	}
 	defer os.RemoveAll(scratch)
-	if err := attach(scratch, t, id, e.Layout.HostKeys()); err != nil {
+	if err := repository.Attach(scratch, t, id, e.Layout.HostKeys()); err != nil {
 		return 1, err
 	}
 	revs, err := e.revisions(scratch, id)

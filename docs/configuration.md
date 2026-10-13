@@ -38,6 +38,7 @@ Settings are environment variables. **Secrets** are files, never environment var
 | `PRUNE_KEEP` | `-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1` | Duplicacy retention: one revision a day for a week, a week for a month, a month for half a year, none older. |
 | `PRUNE_EXHAUSTIVE_FREQUENCY` | `monthly` | How often the prune also removes chunks no revision references. One of `off`, `daily`, `weekly`, `monthly`. |
 | `CHECK_INTERVAL` |  | How often each secondary is checked (`12h`, `7d`); a target's own STORAGE_TARGET_N_CHECK_INTERVAL wins. Default: a day, a week for SFTP-like storages. |
+| `DEEP_CHECK_TIMEOUT` | `7d` | Time limit per deep check, including pauses. A week allows a full offsite read on a slow connection while bounding a stalled run. Timeout preserves verified chunks for the next scheduled attempt. |
 
 ## Notifications
 
@@ -125,6 +126,7 @@ Each storage is `STORAGE_TARGET_<N>_*`, numbered from 1 without gaps; target 1 i
 
 | Variable | Types | Default | Description |
 |---|---|---|---|
+| `STORAGE_TARGET_<N>_DEEP_CHECK` | all |  | When this storage is read and verified in full (ADR 50), e.g. `0 4 1 * *` for monthly. Unset: off. An interrupted check keeps its progress and retries at the next slot; a completed check forgets it. Gives way to backups. |
 | `STORAGE_TARGET_<N>_NAME` | all |  | The storage's name. Target 1 is the primary; the others are copies of it. |
 | `STORAGE_TARGET_<N>_TYPE` | all |  | The storage type. One of `azure`, `b2`, `b2-custom`, `dropbox`, `fabric`, `gcd`, `gcs`, `local`, `minio`, `minios`, `odb`, `one`, `s3`, `s3c`, `sftp`, `sftpc`, `smb`, `storj`, `swift`, `wasabi`, `webdav`, `webdav-http`. |
 | `STORAGE_TARGET_<N>_CHECK_INTERVAL` | all |  | How often this secondary is checked; overrides CHECK_INTERVAL. |

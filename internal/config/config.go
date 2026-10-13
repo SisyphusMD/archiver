@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	"github.com/SisyphusMD/archiver/internal/checkin"
+	"github.com/SisyphusMD/archiver/internal/daemon"
 )
 
 // Source is where configuration comes from. Tests supply their own.
@@ -51,6 +52,7 @@ type Target struct {
 	UploadLimit string
 	// CopyWindow is STORAGE_TARGET_<N>_COPY_WINDOW, such as 01:00-06:00; empty is always.
 	CopyWindow string
+	DeepCheck  string // STORAGE_TARGET_<N>_DEEP_CHECK: cron, empty disables it
 }
 
 // Get returns one of the target's values.
@@ -92,6 +94,7 @@ type Config struct {
 	CheckinURL               string // CHECKIN_URL: pinged after each backup run (ADR 37)
 	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
 	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
+	DeepCheckTimeout         string // DEEP_CHECK_TIMEOUT: limit per attempt, default 7d
 	// Restore drills (ADR 28); their schedule, RESTORE_DRILL_SCHEDULE, is the daemon's.
 	DrillServices  string // RESTORE_DRILL_SERVICES: how many services per storage per run, or "all"
 	DrillStorages  string // RESTORE_DRILL_STORAGES: "all", "primary" or storage names
@@ -220,6 +223,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		DrillDir:                 src.Getenv("RESTORE_DRILL_DIR"),
 		DrillExclude:             src.Getenv("RESTORE_DRILL_EXCLUDE"),
 		DrillHookLimit:           src.Getenv("RESTORE_DRILL_HOOK_TIMEOUT"),
+		DeepCheckTimeout:         src.Getenv("DEEP_CHECK_TIMEOUT"),
 	}
 
 	prune := src.Getenv("PRUNE_BACKUPS")
@@ -233,6 +237,9 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 	}
 	if c.PruneExhaustiveFrequency == "" {
 		c.PruneExhaustiveFrequency = "monthly"
+	}
+	if c.DeepCheckTimeout == "" {
+		c.DeepCheckTimeout = "7d"
 	}
 	if c.Threads == "" {
 		c.Threads = "4"
@@ -250,6 +257,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		t.CheckinURL = src.Getenv(p + "CHECKIN_URL")
 		t.UploadLimit = strings.TrimSpace(src.Getenv(p + "UPLOAD_LIMIT"))
 		t.CopyWindow = strings.TrimSpace(src.Getenv(p + "COPY_WINDOW"))
+		t.DeepCheck = src.Getenv(p + "DEEP_CHECK")
 		t.Values = Values{}
 		for _, f := range Types[t.Type].Fields {
 			if f.Secret {
@@ -389,6 +397,9 @@ func (c *Config) Validate(secretsDir string) error {
 	if _, err := c.DrillHookTimeout(); err != nil {
 		return err
 	}
+	if _, err := ParseInterval(c.DeepCheckTimeout); err != nil {
+		return fmt.Errorf("DEEP_CHECK_TIMEOUT: %v", err)
+	}
 	if _, err := c.DrillCount(); err != nil {
 		return err
 	}
@@ -402,6 +413,11 @@ func (c *Config) Validate(secretsDir string) error {
 		return err
 	}
 	for _, t := range c.Targets {
+		if t.DeepCheck != "" {
+			if err := daemon.ValidSchedule(t.DeepCheck, time.Now()); err != nil {
+				return fmt.Errorf("STORAGE_TARGET_%d_DEEP_CHECK is not a cron schedule that fires", t.N)
+			}
+		}
 		if _, err := ParseInterval(t.CheckInterval); err != nil {
 			return fmt.Errorf("STORAGE_TARGET_%d_CHECK_INTERVAL: %v", t.N, err)
 		}
