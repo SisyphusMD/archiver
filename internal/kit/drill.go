@@ -144,6 +144,11 @@ func (r *Run) Drill(storage string) int {
 	for _, t := range targets {
 		started := time.Now()
 		result := lockstate.KitDrillResult{At: started.Unix(), LastSuccess: results[t.StorageName()].LastSuccess}
+		result.Message = "interrupted; remains due"
+		results[t.StorageName()] = result
+		if err := lockstate.WriteKitDrills(r.Layout.KitDrillState(), results); err != nil {
+			return fail("Kit drill: cannot record the pending result.")
+		}
 		_ = lock.SetStage("kit-drill:"+t.StorageName(), "fetch")
 		err := gate()
 		if err == nil {
@@ -158,6 +163,7 @@ func (r *Run) Drill(storage string) int {
 		if err != nil {
 			result.Message = err.Error()
 		} else {
+			result.Message = ""
 			result.LastSuccess = time.Now().Unix()
 			if result.SignInRequired {
 				result.Message = signInNote

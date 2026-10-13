@@ -45,18 +45,18 @@ Settings are environment variables. **Secrets** are files, never environment var
 
 | Variable | Default | Description |
 |---|---|---|
-| `NOTIFY_ON` | `failures` | Which notifications every destination receives (ADR 36). One of `failures`, `problems`, `everything`. |
+| `NOTIFY_ON` | `failures` | Which notifications every destination receives; append `,-drills` to suppress restore drill, deep check and kit drill results (ADRs 36, 52). One of `failures`, `problems`, `everything`, `failures,-drills`, `problems,-drills`, `everything,-drills`. |
 | `ALERT_REPEAT_INTERVAL` | `24h` | How often an ongoing failure is notified again (`6h`, `2d`); `0` never repeats (ADR 33). |
 | `NOTIFICATION_SERVICE` |  | `Pushover` sends to Pushover with the secrets below (any letter case). One of `Pushover`, `None`. |
 | `PUSHOVER_USER_KEY` (secret) |  | Pushover user key. |
 | `PUSHOVER_API_TOKEN` (secret) |  | Pushover application token. |
-| `PUSHOVER_NOTIFY_ON` |  | NOTIFY_ON for Pushover alone. One of `failures`, `problems`, `everything`. |
+| `PUSHOVER_NOTIFY_ON` |  | NOTIFY_ON for Pushover alone. One of `failures`, `problems`, `everything`, `failures,-drills`, `problems,-drills`, `everything,-drills`. |
 | `APPRISE_URL` (secret) |  | An Apprise API notify URL (`http://apprise:8000/notify/<key>`, with `user:password@` for basic auth). |
 | `APPRISE_TAGS` |  | The Apprise tag for each kind, such as `failure=critical,problem=alerts,routine=quiet`; a kind left out goes to `all`. |
-| `APPRISE_NOTIFY_ON` |  | NOTIFY_ON for Apprise alone. One of `failures`, `problems`, `everything`. |
+| `APPRISE_NOTIFY_ON` |  | NOTIFY_ON for Apprise alone. One of `failures`, `problems`, `everything`, `failures,-drills`, `problems,-drills`, `everything,-drills`. |
 | `NTFY_URL` |  | An ntfy server and topic, such as `https://ntfy.sh/my-archiver`. |
 | `NTFY_TOKEN` (secret) |  | An ntfy access token, if the topic needs one. |
-| `NTFY_NOTIFY_ON` |  | NOTIFY_ON for ntfy alone. One of `failures`, `problems`, `everything`. |
+| `NTFY_NOTIFY_ON` |  | NOTIFY_ON for ntfy alone. One of `failures`, `problems`, `everything`, `failures,-drills`, `problems,-drills`, `everything,-drills`. |
 
 ## Monitoring
 
@@ -75,6 +75,7 @@ Settings are environment variables. **Secrets** are files, never environment var
 | `RESTORE_DRILL_SERVICES` | `1` | How many services each drill restores from each storage, rotating; `all` restores every one. |
 | `RESTORE_DRILL_STORAGES` | `all` | Which storages drills restore from: `all`, `primary`, or storage names separated by commas. |
 | `RESTORE_DRILL_DIR` | `/tmp/archiver-drill` | Scratch space a drill restores into and deletes afterwards; never a service directory. |
+| `RESTORE_DRILL_TIMEOUT` | `24h` | Maximum time of an entire restore drill, including waits and hooks; ends like a stop and remains due until it passes. |
 | `RESTORE_DRILL_HOOK_TIMEOUT` | `6h` | Maximum time a service's drill hook may run; a timeout fails the drill and ends the hook and its children. |
 | `RESTORE_DRILL_EXCLUDE` |  | Services drills leave out, separated by commas. |
 

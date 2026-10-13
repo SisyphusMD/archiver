@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -63,20 +64,20 @@ func (n *Notifier) Raise(key string, k Kind, title, message string) {
 			// must not overtake it. The next raise sends.
 			return
 		case !ok || in.Recovered:
-			to := n.receiving(k)
+			to := n.receiving(k, title)
 			in = incident{Kind: k, Title: title, Opened: now.Unix(), Gen: rand.Int64(), //nolint:gosec // G404: an identifier, not a secret
 				Message: message, To: to, Pending: to, LastSent: now.Unix()}
 		case n.Repeat > 0 && now.Sub(time.Unix(in.LastSent, 0)) >= n.Repeat:
 			in.Kind, in.Title, in.Gen = max(in.Kind, k), title, rand.Int64() //nolint:gosec // G404: an identifier, not a secret
 			in.Message = fmt.Sprintf("Still happening, since %s: %s", time.Unix(in.Opened, 0).Format("2006-01-02 15:04"), message)
 			// The repeat goes to whoever receives it now; the recovery, to everyone told.
-			in.Pending, in.LastSent = n.receiving(in.Kind), now.Unix()
+			in.Pending, in.LastSent = n.receiving(in.Kind, in.Title), now.Unix()
 			in.To = append(in.To, newcomers(in.Pending, in.To)...)
 		case len(in.Pending) > 0:
 			// the last notification, to the destinations it has not reached
-		case len(newcomers(n.receiving(in.Kind), in.To)) > 0:
+		case len(newcomers(n.receiving(in.Kind, in.Title), in.To)) > 0:
 			// destinations configured since: they are told of what is still going on
-			added := newcomers(n.receiving(in.Kind), in.To)
+			added := newcomers(n.receiving(in.Kind, in.Title), in.To)
 			in.To, in.Pending = append(in.To, added...), added
 		default:
 			return
@@ -166,10 +167,10 @@ func (n *Notifier) configured(name string) bool {
 }
 
 // receiving names the destinations that receive kind k.
-func (n *Notifier) receiving(k Kind) []string {
+func (n *Notifier) receiving(k Kind, title string) []string {
 	var out []string
 	for _, d := range n.Destinations {
-		if admits(d.On, k) {
+		if admits(d.On, k) && (!drillTitle(title) || !strings.HasSuffix(d.On, ",-drills")) {
 			out = append(out, d.Name())
 		}
 	}
@@ -199,8 +200,13 @@ func (n *Notifier) deliver(key string, in incident) {
 			return
 		}
 		if !now.Recovered {
+			// An undelivered, suppressed alert must be eligible as a newcomer
+			// if the destination opts back in, even with repeats disabled.
+			now.To = slices.DeleteFunc(now.To, func(d string) bool {
+				return n.drillsSuppressed(d, in.Title) && !slices.Contains(now.Told, d)
+			})
 			for _, d := range now.Pending {
-				if !slices.Contains(missed, d) && !slices.Contains(now.Told, d) {
+				if !n.drillsSuppressed(d, in.Title) && !slices.Contains(missed, d) && !slices.Contains(now.Told, d) {
 					now.Told = append(now.Told, d)
 				}
 			}
@@ -311,4 +317,13 @@ func (n *Notifier) WatchLog(l *logging.Log) {
 	key := "log:" + l.Basename
 	l.Unwritable = func(msg string) { n.Raise(key, Failure, "Log Unwritable", msg) }
 	l.Writable = func() { n.Clear(key, "Log Writable Again", l.Path()+" is written again.") }
+}
+
+func (n *Notifier) drillsSuppressed(name, title string) bool {
+	for _, d := range n.Destinations {
+		if d.Name() == name {
+			return drillTitle(title) && strings.HasSuffix(d.On, ",-drills")
+		}
+	}
+	return false
 }

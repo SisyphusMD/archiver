@@ -485,14 +485,17 @@
             "",
             "failures",
             "problems",
-            "everything"
+            "everything",
+            "failures,-drills",
+            "problems,-drills",
+            "everything,-drills"
           ]
         },
         {
-          "pattern": "^([Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg])$"
+          "pattern": "^([Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg]|[Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss],-[Dd][Rr][Ii][Ll][Ll][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss],-[Dd][Rr][Ii][Ll][Ll][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg],-[Dd][Rr][Ii][Ll][Ll][Ss])$"
         }
       ],
-      "description": "NOTIFY_ON for Apprise alone. One of `failures`, `problems`, `everything`.",
+      "description": "NOTIFY_ON for Apprise alone. One of `failures`, `problems`, `everything`, `failures,-drills`, `problems,-drills`, `everything,-drills`.",
       "type": "string"
     },
     "APPRISE_TAGS": {
@@ -625,15 +628,18 @@
             "",
             "failures",
             "problems",
-            "everything"
+            "everything",
+            "failures,-drills",
+            "problems,-drills",
+            "everything,-drills"
           ]
         },
         {
-          "pattern": "^([Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg])$"
+          "pattern": "^([Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg]|[Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss],-[Dd][Rr][Ii][Ll][Ll][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss],-[Dd][Rr][Ii][Ll][Ll][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg],-[Dd][Rr][Ii][Ll][Ll][Ss])$"
         }
       ],
       "default": "failures",
-      "description": "Which notifications every destination receives (ADR 36). One of `failures`, `problems`, `everything`.",
+      "description": "Which notifications every destination receives; append `,-drills` to suppress restore drill, deep check and kit drill results (ADRs 36, 52). One of `failures`, `problems`, `everything`, `failures,-drills`, `problems,-drills`, `everything,-drills`.",
       "type": "string"
     },
     "NO_PREVIEW": {
@@ -647,14 +653,17 @@
             "",
             "failures",
             "problems",
-            "everything"
+            "everything",
+            "failures,-drills",
+            "problems,-drills",
+            "everything,-drills"
           ]
         },
         {
-          "pattern": "^([Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg])$"
+          "pattern": "^([Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg]|[Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss],-[Dd][Rr][Ii][Ll][Ll][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss],-[Dd][Rr][Ii][Ll][Ll][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg],-[Dd][Rr][Ii][Ll][Ll][Ss])$"
         }
       ],
-      "description": "NOTIFY_ON for ntfy alone. One of `failures`, `problems`, `everything`.",
+      "description": "NOTIFY_ON for ntfy alone. One of `failures`, `problems`, `everything`, `failures,-drills`, `problems,-drills`, `everything,-drills`.",
       "type": "string"
     },
     "NTFY_TOKEN": {
@@ -719,14 +728,17 @@
             "",
             "failures",
             "problems",
-            "everything"
+            "everything",
+            "failures,-drills",
+            "problems,-drills",
+            "everything,-drills"
           ]
         },
         {
-          "pattern": "^([Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg])$"
+          "pattern": "^([Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg]|[Ff][Aa][Ii][Ll][Uu][Rr][Ee][Ss],-[Dd][Rr][Ii][Ll][Ll][Ss]|[Pp][Rr][Oo][Bb][Ll][Ee][Mm][Ss],-[Dd][Rr][Ii][Ll][Ll][Ss]|[Ee][Vv][Ee][Rr][Yy][Tt][Hh][Ii][Nn][Gg],-[Dd][Rr][Ii][Ll][Ll][Ss])$"
         }
       ],
-      "description": "NOTIFY_ON for Pushover alone. One of `failures`, `problems`, `everything`.",
+      "description": "NOTIFY_ON for Pushover alone. One of `failures`, `problems`, `everything`, `failures,-drills`, `problems,-drills`, `everything,-drills`.",
       "type": "string"
     },
     "PUSHOVER_USER_KEY": {
@@ -777,6 +789,12 @@
     "RESTORE_DRILL_STORAGES": {
       "default": "all",
       "description": "Which storages drills restore from: `all`, `primary`, or storage names separated by commas.",
+      "type": "string"
+    },
+    "RESTORE_DRILL_TIMEOUT": {
+      "default": "24h",
+      "description": "Maximum time of an entire restore drill, including waits and hooks; ends like a stop and remains due until it passes.",
+      "pattern": "^$|^\\+?(?![0.]+(ns|us|µs|μs|ms|s|m|h|d)([0.]+(ns|us|µs|μs|ms|s|m|h))*$)([0-9]+d|(([0-9]+\\.?[0-9]*|\\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+)$",
       "type": "string"
     },
     "RESTORE_PATHS": {

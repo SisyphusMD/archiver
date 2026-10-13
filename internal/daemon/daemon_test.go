@@ -201,3 +201,29 @@ func TestKitDrillSchedule(t *testing.T) {
 		t.Fatal("invalid kit drill cron must fail startup")
 	}
 }
+
+func TestAllDrillKindsRetryAtNextSlot(t *testing.T) {
+	for _, tc := range []struct{ key, name string }{{"RESTORE_DRILL_SCHEDULE", "drill"}, {"KIT_DRILL_SCHEDULE", "kit-drill"}, {"STORAGE_TARGET_1_DEEP_CHECK", "deep-check:local"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			clock := &instantClock{now: start}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			jobs := mustJobs(t, map[string]string{tc.key: "0 * * * *", "STORAGE_TARGET_1_NAME": "local"})
+			var got []time.Time
+			Run(ctx, clock, io.Discard, jobs, nil, func(j Job) int {
+				if j.Name != tc.name {
+					t.Errorf("job %s", j.Name)
+				}
+				got = append(got, clock.Now())
+				if len(got) == 3 {
+					cancel()
+					return 0
+				}
+				return 1
+			})
+			if len(got) != 3 || !got[1].Equal(start.Add(2*time.Hour)) || !got[2].Equal(start.Add(3*time.Hour)) {
+				t.Fatalf("retry slots: %v", got)
+			}
+		})
+	}
+}

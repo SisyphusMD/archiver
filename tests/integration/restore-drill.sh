@@ -82,6 +82,19 @@ state 'not r["local"]["db"]["ok"] and not r["offsite"]["db"]["ok"] and "exit 1" 
 grep -q 'its drill hook failed.*exit 1' /tmp/drill-hook-fail.out || die "hook failure was not reported"
 [ -z "$(ls -A /tmp/archiver-drill)" ] || die "failed hook left scratch copies"
 
+log "failed selections retry before rotation advances"
+printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
+archiver drill >/tmp/drill-retry.out 2>&1 || { cat /tmp/drill-retry.out; die "failed selection retry failed"; }
+state 'r["local"]["db"]["ok"] and r["offsite"]["db"]["ok"] and not s.get("pending", {}).get("local") and r["local"]["db"].get("last_success", 0) > 0 and r["local"]["db"].get("seconds", 0) > 0' || die "failed selection did not pass on retry"
+
+log "whole-run timeout ends a hook and keeps the selection due"
+printf '#!/bin/sh\nsleep 30 & wait\n' >"$SERVICES/db/drill"
+RESTORE_DRILL_TIMEOUT=1s archiver drill db local >/tmp/drill-limit.out 2>&1 && die "whole-run timeout passed"
+state 's.get("last_failed") and "db" in s["pending"]["local"] and not r["local"]["db"]["ok"]' || die "timeout did not remain due"
+printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
+archiver drill >/tmp/drill-limit-retry.out 2>&1 || { cat /tmp/drill-limit-retry.out; die "timeout retry failed"; }
+state 'r["local"]["db"]["ok"] and not s.get("pending", {}).get("local")' || die "timeout selection did not retry"
+
 log "a damaged chunk on the primary fails the drill; the offsite copy still passes"
 [ -n "$(find "$STORE1/chunks" -type f)" ] || die "no chunk found to damage"
 for c in $(find "$STORE1/chunks" -type f); do printf 'garbage' | dd of="$c" bs=1 seek=100 conv=notrunc 2>/dev/null; done

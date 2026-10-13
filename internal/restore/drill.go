@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -175,7 +176,8 @@ func (e *Env) Drill(o DrillOptions) int {
 	// A stop ends whatever the drill waits on (a lock a backup or prune holds) or runs, and a
 	// pause holds back every program it would start: with nothing running yet, there would
 	// be no process for the stop or pause to reach.
-	ctx, cancel := context.WithCancel(context.Background())
+	limit, _ := cfg.DrillTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	go func() {
 		for ctx.Err() == nil {
@@ -188,7 +190,7 @@ func (e *Env) Drill(o DrillOptions) int {
 	}()
 	e.ctx = ctx
 	e.beforeRun = func() {
-		for lock.State().Paused() && !lock.StopRequested() {
+		for lock.State().Paused() && !lock.StopRequested() && ctx.Err() == nil {
 			time.Sleep(time.Second)
 		}
 	}
@@ -196,6 +198,9 @@ func (e *Env) Drill(o DrillOptions) int {
 	d.state, err = lockstate.ReadDrillState(e.Layout.DrillState())
 	if err != nil {
 		log.Message(logging.Warning, "", "Unreadable drill state, starting afresh: "+err.Error())
+	}
+	if d.state.Pending == nil {
+		d.state.Pending = map[string][]string{}
 	}
 	if d.state.Rotation == nil {
 		d.state.Rotation = map[string]int{}
@@ -230,18 +235,33 @@ func (e *Env) Drill(o DrillOptions) int {
 	tried, failed, stopped := 0, 0, false
 	started := now()
 	for _, t := range targets {
-		for _, name := range d.pick(t, services, count, o.Service != "") {
+		picked := d.pick(t, services, count, o.Service != "")
+		if err := lockstate.WriteDrillState(e.Layout.DrillState(), d.state); err != nil {
+			d.log.Message(logging.Error, "", "Could not record pending drill selections: "+err.Error())
+			return 1
+		}
+		for _, name := range picked {
 			if d.stopRequested() {
 				stopped = true
 				break
 			}
-			r := d.one(t, name)
+			prior := d.state.Results[t.StorageName()][name]
 			if d.state.Results[t.StorageName()] == nil {
 				d.state.Results[t.StorageName()] = map[string]lockstate.DrillResult{}
 			}
+			d.state.Results[t.StorageName()][name] = lockstate.DrillResult{At: now().Unix(), LastSuccess: prior.LastSuccess, Interrupted: true, Message: "interrupted; remains due"}
+			if err := lockstate.WriteDrillState(e.Layout.DrillState(), d.state); err != nil {
+				d.log.Message(logging.Error, "", "Could not record pending drill result: "+err.Error())
+				return 1
+			}
+			r := d.one(t, name)
 			d.state.Results[t.StorageName()][name] = r
 			key := "drill:" + t.StorageName() + ":" + name
-			if !r.Skipped {
+			if !r.Interrupted && (r.OK || (r.Skipped && !n.IsOpen(key))) {
+				d.state.Pending[t.StorageName()] = slices.DeleteFunc(d.state.Pending[t.StorageName()], func(p string) bool { return p == name })
+			}
+			writeErr := lockstate.WriteDrillState(e.Layout.DrillState(), d.state)
+			if !r.Skipped && !r.Interrupted {
 				tried++
 				if !r.OK {
 					failed++
@@ -250,7 +270,11 @@ func (e *Env) Drill(o DrillOptions) int {
 					n.Clear(key, "Restore Drill Passing", fmt.Sprintf("A restore drill of %s-%s from '%s' passes again.", e.Hostname, name, t.Name))
 				}
 			}
-			if lock.StopRequested() {
+			if writeErr != nil {
+				d.log.Message(logging.Error, "", "Could not record the drill: "+writeErr.Error())
+				return 1
+			}
+			if r.Interrupted || lock.StopRequested() || ctx.Err() != nil {
 				stopped = true
 				break
 			}
@@ -278,7 +302,7 @@ func (e *Env) Drill(o DrillOptions) int {
 	}
 
 	end := now().Unix()
-	d.state.LastRun, d.state.LastFailed = end, failed > 0
+	d.state.LastRun, d.state.LastFailed = end, failed > 0 || stopped
 	if failed == 0 && tried > 0 && !stopped {
 		d.state.LastPass = end
 	}
@@ -287,7 +311,7 @@ func (e *Env) Drill(o DrillOptions) int {
 	}
 	switch {
 	case stopped:
-		log.Message(logging.Info, "", "Restore drill stopped.")
+		log.Message(logging.Info, "", "Restore drill stopped (stop requested or RESTORE_DRILL_TIMEOUT exceeded).")
 		_ = lock.Record("stopped")
 		return 1
 	case failed > 0:
@@ -357,46 +381,78 @@ func (d *drillRun) selection(o DrillOptions) ([]string, []config.Target, error) 
 }
 
 // pick is the services drilled on t this run: all of them for count 0 or a named service,
-// else the next count in rotation, so each is drilled in turn across runs.
+// else unfinished selections first, then the next count in rotation.
 func (d *drillRun) pick(t config.Target, services []string, count int, named bool) []string {
-	if named || count == 0 || count >= len(services) {
-		return services
+	if d.state.Pending == nil {
+		d.state.Pending = map[string][]string{}
 	}
-	start := d.state.Rotation[t.StorageName()] % len(services)
+	storage := t.StorageName()
+	pending := d.state.Pending[storage]
+	if !named {
+		pending = slices.DeleteFunc(pending, func(name string) bool { return !slices.Contains(services, name) })
+		d.state.Pending[storage] = pending
+	}
+	if !named && len(pending) > 0 {
+		d.state.Pending[storage] = pending
+		return slices.Clone(pending)
+	}
 	var out []string
-	for i := 0; i < count; i++ {
-		out = append(out, services[(start+i)%len(services)])
+	if named || count == 0 || count >= len(services) {
+		out = slices.Clone(services)
+	} else {
+		start := d.state.Rotation[storage] % len(services)
+		for i := 0; i < count; i++ {
+			out = append(out, services[(start+i)%len(services)])
+		}
+		d.state.Rotation[storage] = (start + count) % len(services)
 	}
-	d.state.Rotation[t.StorageName()] = (start + count) % len(services)
+	for _, name := range out {
+		if !slices.Contains(d.state.Pending[storage], name) {
+			d.state.Pending[storage] = append(d.state.Pending[storage], name)
+		}
+	}
 	return out
 }
 
 func (d *drillRun) stopRequested() bool {
-	for d.lock.State().Paused() && !d.lock.StopRequested() {
+	for d.lock.State().Paused() && !d.lock.StopRequested() && d.e.context().Err() == nil {
 		time.Sleep(time.Second)
 	}
-	return d.lock.StopRequested()
+	return d.lock.StopRequested() || d.e.context().Err() != nil
 }
 
 // one drills service name on t: its newest revision restored into a scratch directory,
 // every chunk verified by duplicacy as it downloads and every entry checked against the
 // revision's record. Its drill hook runs before the copy is deleted.
-func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
-	r := lockstate.DrillResult{At: d.now().Unix()}
+func (d *drillRun) one(t config.Target, name string) (r lockstate.DrillResult) {
+	started := d.now()
+	r = lockstate.DrillResult{At: started.Unix(), LastSuccess: d.state.Results[t.StorageName()][name].LastSuccess}
+	defer func() {
+		r.Seconds = d.now().Sub(started).Seconds()
+		if r.OK {
+			r.LastSuccess = d.now().Unix()
+		}
+	}()
 	id := d.e.Hostname + "-" + name
 	out := d.log.Writer(logging.Info, name)
 	defer out.Close()
+	interrupt := func() lockstate.DrillResult {
+		r.Interrupted, r.Message = true, "stop requested or RESTORE_DRILL_TIMEOUT exceeded"
+		return r
+	}
 	fail := func(msg string) lockstate.DrillResult {
 		// Whatever a stop interrupted fails; that is the stop, not a broken backup.
-		if d.lock.StopRequested() {
-			r.Skipped, r.Message = true, "stop requested"
-			return r
+		if d.lock.StopRequested() || d.e.context().Err() != nil {
+			return interrupt()
 		}
 		r.Message = msg
 		d.log.Message(logging.Error, name, fmt.Sprintf("Restore drill of %s from '%s' failed: %s", id, t.Name, msg))
 		return r
 	}
 	skip := func(msg string) lockstate.DrillResult {
+		if d.lock.StopRequested() || d.e.context().Err() != nil {
+			return interrupt()
+		}
 		r.Skipped, r.Message = true, msg
 		d.log.Message(logging.Warning, name, fmt.Sprintf("Restore drill of %s from '%s' skipped: %s", id, t.Name, msg))
 		return r
@@ -433,14 +489,11 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	// can delete it between being picked and being restored (ADR 19).
 	release, err := inuse.Gate(d.e.context(), d.e.Layout.InUseDir(), t.StorageName(), false)
 	if err != nil {
-		if d.lock.StopRequested() {
-			return skip("stop requested")
-		}
 		return fail(err.Error())
 	}
 	if d.stopRequested() {
 		release()
-		return skip("stop requested")
+		return interrupt()
 	}
 	revs, err := d.e.revisions(repo, id)
 	if err != nil {
@@ -464,7 +517,7 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	if err := d.e.catRevision(repo, record, id, r.Revision); err != nil {
 		return fail(fmt.Sprintf("cannot read the record of revision %d: %v", r.Revision, err))
 	}
-	want, size, err := revisionSize(record)
+	want, size, err := revisionSize(d.e.context(), record)
 	if err != nil {
 		return fail(fmt.Sprintf("cannot read the record of revision %d: %v", r.Revision, err))
 	}
@@ -472,7 +525,7 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 		return skip(fmt.Sprintf("revision %d needs %d MB but %s has %d MB free", r.Revision, size>>20+1, d.root, free>>20))
 	}
 	if d.stopRequested() {
-		return skip("stop requested")
+		return interrupt()
 	}
 	d.log.Message(logging.Info, name, fmt.Sprintf("Drilling %s revision %d from '%s' (%d files).", id, r.Revision, t.Name, want))
 	if err := d.e.restore(repo, work, t, id, r.Revision, Options{IgnoreOwner: true, Threads: d.e.cfg.Threads}, out); err != nil {
@@ -482,7 +535,7 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	if err != nil {
 		return fail(err.Error())
 	}
-	got, problems, err := verifyRestored(work, skipToJSON(f), false, 10)
+	got, problems, err := verifyRestored(d.e.context(), work, skipToJSON(f), false, 10)
 	f.Close()
 	if err != nil {
 		return fail(err.Error())
@@ -492,6 +545,9 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	}
 	if msg := d.hook(t, name, id, r.Revision, work); msg != "" {
 		return fail(msg)
+	}
+	if d.stopRequested() {
+		return fail("stop requested")
 	}
 	r.OK, r.Files = true, got
 	d.log.Message(logging.Info, name, fmt.Sprintf("Restore drill of %s revision %d from '%s' passed (%d files).", id, r.Revision, t.Name, got))
@@ -535,7 +591,7 @@ func (d *drillRun) hook(t config.Target, name, id string, rev int, work string) 
 	if d.e.beforeRun != nil {
 		d.e.beforeRun()
 	}
-	if d.lock.StopRequested() {
+	if d.lock.StopRequested() || d.e.context().Err() != nil {
 		return "stop requested"
 	}
 	p, err := proc.Start(proc.Spec{Path: filepath.Join(hookDir, hooks.Drill), Dir: work, Env: env,
@@ -565,7 +621,7 @@ func (d *drillRun) hook(t config.Target, name, id string, rev int, work string) 
 		case <-timer.C:
 		case <-poll.C:
 		}
-		if d.lock.StopRequested() {
+		if d.lock.StopRequested() || d.e.context().Err() != nil {
 			return "stop requested"
 		}
 		now, wasPaused := time.Now(), paused
@@ -615,13 +671,16 @@ func (e *Env) catRevision(repo, path, id string, rev int) error {
 }
 
 // revisionSize is the number of regular files the record at path lists, and their total size.
-func revisionSize(path string) (files int, size int64, err error) {
+func revisionSize(ctx context.Context, path string) (files int, size int64, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return 0, 0, err
 	}
 	defer f.Close()
 	err = revisionEntries(skipToJSON(f), func(e revisionEntry) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if os.FileMode(e.Mode).IsRegular() {
 			files++
 			size += e.Size

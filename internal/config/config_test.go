@@ -448,3 +448,29 @@ func TestKitDrillTimeout(t *testing.T) {
 		}
 	}
 }
+
+func TestRestoreDrillTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		value   string
+		want    time.Duration
+		invalid bool
+	}{
+		{"", 24 * time.Hour, false}, {"2h", 2 * time.Hour, false}, {"20ms", 20 * time.Millisecond, false}, {"0", 0, true}, {"-1h", 0, true}, {"bad", 0, true},
+	} {
+		got, err := (&Config{DrillLimit: tc.value}).DrillTimeout()
+		if (err != nil) != tc.invalid || (!tc.invalid && got != tc.want) {
+			t.Errorf("%q: %v, %v", tc.value, got, err)
+		}
+	}
+}
+
+func TestNotifyDrillOptOutValidation(t *testing.T) {
+	for _, on := range []string{"failures,-drills", "problems,-drills", "everything,-drills", "failures,drills", "-drills", "everything,-drills,-drills"} {
+		c := &Config{ServiceDirectories: []string{"/srv/*/"}, Targets: []Target{{N: 1, Name: "local", Type: "local", Values: Values{"LOCAL_PATH": "/s"}}}, StoragePassword: "longenough", RSAPassphrase: "rp", PruneExhaustiveFrequency: "monthly", NotifyOn: on, AppriseNotifyOn: on, NtfyNotifyOn: on, PushoverNotifyOn: on}
+		err := c.Validate("/run/secrets")
+		valid := on == "failures,-drills" || on == "problems,-drills" || on == "everything,-drills"
+		if (err == nil) != valid {
+			t.Errorf("%q: %v", on, err)
+		}
+	}
+}

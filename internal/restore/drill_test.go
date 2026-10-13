@@ -1,13 +1,19 @@
 package restore
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/inuse"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
+	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/resume"
 )
 
@@ -215,5 +221,217 @@ func TestDrillDeletesInterruptedRepositories(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(tmp, "archiver-restore-*")); len(left) != 2 {
 		t.Fatalf("this drill's repository was left behind: %v", left)
+	}
+}
+
+func TestDrillFailureRemainsDue(t *testing.T) {
+	f := drillFixture(t, "app", "db")
+	f.revs(1, "1")
+	hook := filepath.Join(f.root, "services", "app", "drill")
+	os.WriteFile(hook, []byte("#!/bin/sh\nexit 1\n"), 0o700)
+	for i := 0; i < 2; i++ {
+		if f.env.Drill(DrillOptions{Storage: "local"}) != 1 {
+			t.Fatal("failed drill passed")
+		}
+		s := f.drillState(t)
+		if _, ok := s.Results["local"]["db"]; ok {
+			t.Fatal("rotation skipped a failed service")
+		}
+		if len(s.Pending["local"]) != 1 || s.Pending["local"][0] != "app" {
+			t.Fatalf("pending: %+v", s.Pending)
+		}
+	}
+	os.Remove(hook)
+	if f.env.Drill(DrillOptions{Storage: "local"}) != 0 {
+		t.Fatal("retry failed")
+	}
+	r := f.drillState(t).Results["local"]["app"]
+	if r.LastSuccess == 0 || r.Seconds <= 0 {
+		t.Fatalf("missing timing: %+v", r)
+	}
+	if f.env.Drill(DrillOptions{Storage: "local"}) != 0 {
+		t.Fatal("next rotation failed")
+	}
+	if !f.drillState(t).Results["local"]["db"].OK {
+		t.Fatal("rotation did not resume")
+	}
+}
+
+func TestDrillRunTimeoutRemainsDue(t *testing.T) {
+	f := drillFixture(t, "app", "db")
+	f.revs(1, "1")
+	hook := filepath.Join(f.root, "services", "app", "drill")
+	os.WriteFile(hook, []byte("#!/bin/sh\nsleep 30 & wait\n"), 0o700)
+	f.vars["RESTORE_DRILL_TIMEOUT"] = "100ms"
+	began := time.Now()
+	if f.env.Drill(DrillOptions{Storage: "local"}) != 1 {
+		t.Fatal("timed out drill passed")
+	}
+	if time.Since(began) > time.Second {
+		t.Fatal("whole-run timeout did not end hook")
+	}
+	s := f.drillState(t)
+	if !s.LastFailed || len(s.Pending["local"]) != 1 || s.LastPass != 0 {
+		t.Fatalf("state: %+v", s)
+	}
+	delete(f.vars, "RESTORE_DRILL_TIMEOUT")
+	os.Remove(hook)
+	if f.env.Drill(DrillOptions{Storage: "local"}) != 0 || !f.drillState(t).Results["local"]["app"].OK {
+		t.Fatal("interrupted selection was not retried")
+	}
+}
+
+func TestDrillInterruptedBeforeRestoreRemainsDue(t *testing.T) {
+	for _, stage := range []string{"after connect", "before restore", "gate stop", "gate timeout"} {
+		t.Run(stage, func(t *testing.T) {
+			f := drillFixture(t, "app", "db")
+			f.revs(1, "1")
+			releaseGate := func() {}
+			if strings.HasPrefix(stage, "gate ") {
+				release, err := inuse.Gate(context.Background(), f.env.Layout.InUseDir(), "local", true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer release()
+				releaseGate = release
+			}
+			if stage == "gate timeout" {
+				f.vars["RESTORE_DRILL_TIMEOUT"] = "500ms"
+			} else {
+				command := "init)"
+				if stage == "before restore" {
+					command = "cat)"
+				}
+				script := strings.Replace(fakeDuplicacy, command, command+"\n  touch '"+f.env.Layout.DrillStopFlag()+"'", 1)
+				if err := os.WriteFile(f.env.Duplicacy, []byte(script), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if code := f.env.Drill(DrillOptions{Storage: "local"}); code != 1 {
+				t.Fatalf("interrupted drill exited %d", code)
+			}
+			s := f.drillState(t)
+			if r := s.Results["local"]["app"]; !r.Interrupted || r.Skipped || r.OK {
+				t.Fatalf("interruption was not classified explicitly: %+v", r)
+			}
+			if !s.LastFailed || s.LastPass != 0 || len(s.Pending["local"]) != 1 || s.Pending["local"][0] != "app" {
+				t.Fatalf("interrupted selection was forgotten: %+v", s)
+			}
+			releaseGate()
+			delete(f.vars, "RESTORE_DRILL_TIMEOUT")
+			if err := os.WriteFile(f.env.Duplicacy, []byte(fakeDuplicacy), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if code := f.env.Drill(DrillOptions{Storage: "local"}); code != 0 {
+				t.Fatalf("retry exited %d: %s", code, f.out.String())
+			}
+			s = f.drillState(t)
+			if !s.Results["local"]["app"].OK || len(s.Pending["local"]) != 0 {
+				t.Fatalf("interrupted selection did not pass on retry: %+v", s)
+			}
+			if _, ok := s.Results["local"]["db"]; ok {
+				t.Fatal("rotation advanced before retrying interrupted app")
+			}
+		})
+	}
+}
+
+func TestNamedDrillPreservesOtherPendingServices(t *testing.T) {
+	f := drillFixture(t, "app", "db")
+	f.revs(1, "1")
+	hook := filepath.Join(f.root, "services", "app", "drill")
+	os.WriteFile(hook, []byte("#!/bin/sh\nexit 1\n"), 0o700)
+	if f.env.Drill(DrillOptions{Storage: "local"}) != 1 {
+		t.Fatal("failed drill passed")
+	}
+	if f.env.Drill(DrillOptions{Service: "db", Storage: "local"}) != 0 {
+		t.Fatal("named drill failed")
+	}
+	s := f.drillState(t)
+	if len(s.Pending["local"]) != 1 || s.Pending["local"][0] != "app" {
+		t.Fatalf("named drill forgot failure: %+v", s.Pending)
+	}
+}
+
+func TestDrillRetriesPersistedInterruptedSelection(t *testing.T) {
+	f := drillFixture(t, "app", "db")
+	f.revs(1, "1")
+	s := lockstate.DrillState{Rotation: map[string]int{"local": 1}, Pending: map[string][]string{"local": {"app"}}}
+	if err := lockstate.WriteDrillState(f.env.Layout.DrillState(), s); err != nil {
+		t.Fatal(err)
+	}
+	if f.env.Drill(DrillOptions{Storage: "local"}) != 0 {
+		t.Fatal("interrupted selection retry failed")
+	}
+	s = f.drillState(t)
+	if !s.Results["local"]["app"].OK || len(s.Pending["local"]) != 0 {
+		t.Fatalf("state: %+v", s)
+	}
+	if _, ok := s.Results["local"]["db"]; ok {
+		t.Fatal("interrupted selection skipped")
+	}
+}
+
+func TestDrillRepeatedSkipsAdvanceRotation(t *testing.T) {
+	f := drillFixture(t, "app", "db")
+	for i := 0; i < 4; i++ {
+		if code := f.env.Drill(DrillOptions{Storage: "local"}); code != 0 {
+			t.Fatalf("run %d: exit %d", i, code)
+		}
+		s := f.drillState(t)
+		if len(s.Pending["local"]) != 0 {
+			t.Fatalf("run %d: skipped service remains pending: %+v", i, s.Pending)
+		}
+		if i > 0 && !s.Results["local"]["db"].Skipped {
+			t.Fatal("rotation did not reach db")
+		}
+	}
+}
+
+func TestDrillFailureFollowedBySkipsRemainsDue(t *testing.T) {
+	f := drillFixture(t, "app", "db")
+	f.revs(1, "1")
+	if err := os.WriteFile(filepath.Join(f.root, "services", "app", "drill"), []byte("#!/bin/sh\nexit 1\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if f.env.Drill(DrillOptions{Storage: "local"}) != 1 {
+		t.Fatal("failed drill passed")
+	}
+	f.revs(1, "")
+	for i := 0; i < 2; i++ {
+		if f.env.Drill(DrillOptions{Storage: "local"}) != 0 {
+			t.Fatal("skip failed")
+		}
+		s := f.drillState(t)
+		if len(s.Pending["local"]) != 1 || s.Pending["local"][0] != "app" {
+			t.Fatalf("failure forgotten after skip: %+v", s.Pending)
+		}
+		if _, ok := s.Results["local"]["db"]; ok {
+			t.Fatal("rotation passed unresolved failure")
+		}
+	}
+}
+
+func TestDrillFailureNotifiesWhenResultWriteFails(t *testing.T) {
+	f := drillFixture(t, "app")
+	f.revs(1, "1")
+	sent := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent++ }))
+	defer srv.Close()
+	f.vars["NTFY_URL"] = srv.URL + "/archiver"
+	f.vars["NTFY_ON"] = "failures"
+	state := f.env.Layout.DrillState()
+	script := fmt.Sprintf("#!/bin/sh\nrm '%s' && mkdir '%s'\nexit 1\n", state, state)
+	if err := os.WriteFile(filepath.Join(f.root, "services", "app", "drill"), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if f.env.Drill(DrillOptions{Storage: "local"}) != 1 {
+		t.Fatal("failed drill passed")
+	}
+	if !strings.Contains(f.out.String(), "Could not record the drill") {
+		t.Fatalf("state write did not fail: %s", f.out.String())
+	}
+	if _, ok := notify.OpenIncidents(f.env.Layout.Incidents())["drill:local:app"]; !ok || sent != 1 {
+		t.Fatalf("failure lost: incident=%v notifications=%d", ok, sent)
 	}
 }
