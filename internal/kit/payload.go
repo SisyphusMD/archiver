@@ -1,6 +1,7 @@
 package kit
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -33,13 +34,13 @@ func (r *Run) payload(dir string, s *config.Settings) (string, error) {
 	if err := os.WriteFile(filepath.Join(dir, "RECREATE.txt"), []byte(r.recreateNotes(s)), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
 		return "", err
 	}
-	if err := copyVisible(r.deploymentDir(), filepath.Join(dir, "deployment")); err != nil {
+	if err := copyVisibleContext(r.context(), r.deploymentDir(), filepath.Join(dir, "deployment")); err != nil {
 		return "", err
 	}
 	if err := r.copyExtras(dir, s); err != nil {
 		return "", err
 	}
-	return fingerprint(dir)
+	return fingerprintContext(r.context(), dir)
 }
 
 func (r *Run) deploymentDir() string { return filepath.Join(r.Layout.Root, "deployment") }
@@ -48,7 +49,7 @@ func (r *Run) deploymentDir() string { return filepath.Join(r.Layout.Root, "depl
 // binds and Kubernetes ConfigMap volumes present the real content behind links, and a
 // ConfigMap's hidden ..data/..timestamp entries would duplicate every file. No dst is left
 // when nothing visible is there.
-func copyVisible(src, dst string) error {
+func copyVisibleContext(ctx context.Context, src, dst string) error {
 	entries, err := os.ReadDir(src)
 	if err != nil {
 		return nil
@@ -64,7 +65,7 @@ func copyVisible(src, dst string) error {
 		if err := os.MkdirAll(dst, 0o700); err != nil {
 			return err
 		}
-		if err := copyTree(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+		if err := copyTreeContext(ctx, filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
 			return err
 		}
 		copied = true
@@ -80,10 +81,17 @@ func copyVisible(src, dst string) error {
 // would copy without end, a FIFO would block the kit forever. A directory linked back into
 // its own ancestry is skipped rather than followed round.
 func copyTree(src, dst string) error {
-	return copyTreeIn(src, dst, map[[2]uint64]bool{})
+	return copyTreeContext(context.Background(), src, dst)
 }
 
-func copyTreeIn(src, dst string, ancestors map[[2]uint64]bool) error {
+func copyTreeContext(ctx context.Context, src, dst string) error {
+	return copyTreeIn(ctx, src, dst, map[[2]uint64]bool{})
+}
+
+func copyTreeIn(ctx context.Context, src, dst string, ancestors map[[2]uint64]bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	fi, err := os.Stat(src)
 	if err != nil {
 		return err
@@ -106,7 +114,7 @@ func copyTreeIn(src, dst string, ancestors map[[2]uint64]bool) error {
 			return err
 		}
 		for _, e := range entries {
-			if err := copyTreeIn(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name()), ancestors); err != nil {
+			if err := copyTreeIn(ctx, filepath.Join(src, e.Name()), filepath.Join(dst, e.Name()), ancestors); err != nil {
 				return err
 			}
 		}
@@ -127,7 +135,7 @@ func copyTreeIn(src, dst string, ancestors map[[2]uint64]bool) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, in); err != nil {
+	if _, err := io.Copy(out, contextReader{ctx, in}); err != nil {
 		out.Close()
 		return err
 	}
@@ -178,7 +186,7 @@ func (r *Run) copyExtras(dir string, s *config.Settings) error {
 		for n, base := 2, dest; exists(dest); n++ {
 			dest = base + "." + strconv.Itoa(n)
 		}
-		if err := copyTree(p, dest); err != nil {
+		if err := copyTreeContext(r.context(), p, dest); err != nil {
 			return err
 		}
 		copied = true
@@ -198,7 +206,7 @@ func exists(p string) bool {
 //
 //	find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
 //	find extra -type f -printf '%m %p\n' | LC_ALL=C sort    (when extra/ exists)
-func fingerprint(dir string) (string, error) {
+func fingerprintContext(ctx context.Context, dir string) (string, error) {
 	var files []string
 	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -218,7 +226,7 @@ func fingerprint(dir string) (string, error) {
 	var modes []string
 	for _, f := range files {
 		// Streamed: an extra may be a large git bundle.
-		sum, err := hashFile(filepath.Join(dir, f))
+		sum, err := hashFileContext(ctx, filepath.Join(dir, f))
 		if err != nil {
 			return "", err
 		}
@@ -364,15 +372,27 @@ https://github.com/SisyphusMD/archiver
 `, r.Hostname, r.KitName())
 }
 
-func hashFile(p string) (string, error) {
+func hashFileContext(ctx context.Context, p string) (string, error) {
 	f, err := os.Open(p)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	if _, err := io.Copy(h, contextReader{ctx, f}); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+type contextReader struct {
+	ctx context.Context
+	io.Reader
+}
+
+func (r contextReader) Read(b []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.Reader.Read(b)
 }

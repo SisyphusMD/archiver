@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/lockstate"
 )
 
 func testLayout(t *testing.T) layout.Layout {
@@ -94,5 +95,20 @@ func TestAge(t *testing.T) {
 	}
 	if got := Age(0, now); got != "never" {
 		t.Errorf("Age(0) = %q", got)
+	}
+}
+
+func TestKitDrillStatus(t *testing.T) {
+	l := testLayout(t)
+	if err := lockstate.WriteKitDrills(l.KitDrillState(), map[string]lockstate.KitDrillResult{"offsite": {At: 1700000000, OK: true, SignInRequired: true, Message: "Provider sign-in is left to a person."}}); err != nil {
+		t.Fatal(err)
+	}
+	got := report(t, l, time.Now())
+	if !strings.Contains(got, "Kit drills (last per storage)") || !strings.Contains(got, "offsite: passed") || !strings.Contains(got, "sign-in is left to a person") {
+		t.Fatal(got)
+	}
+	snapshot := Take(l, func(string) string { return "" }, time.Now())
+	if !snapshot.KitDrills["offsite"].SignInRequired {
+		t.Fatal("JSON lost human sign-in note")
 	}
 }

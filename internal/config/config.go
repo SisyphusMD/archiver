@@ -95,6 +95,8 @@ type Config struct {
 	Parallelism              string // BACKUP_PARALLELISM: services backed up at once
 	HooksDir                 string // HOOKS_DIR: hooks kept outside the backed-up data (ADR 45)
 	DeepCheckTimeout         string // DEEP_CHECK_TIMEOUT: limit per attempt, default 7d
+	// Kit drills (ADR 51); schedules are managed by the daemon.
+	KitDrillLimit string // KIT_DRILL_TIMEOUT
 	// Restore drills (ADR 28); their schedule, RESTORE_DRILL_SCHEDULE, is the daemon's.
 	DrillServices  string // RESTORE_DRILL_SERVICES: how many services per storage per run, or "all"
 	DrillStorages  string // RESTORE_DRILL_STORAGES: "all", "primary" or storage names
@@ -218,6 +220,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		CheckinURL:               src.Getenv("CHECKIN_URL"),
 		Parallelism:              src.Getenv("BACKUP_PARALLELISM"),
 		HooksDir:                 src.Getenv("HOOKS_DIR"),
+		KitDrillLimit:            src.Getenv("KIT_DRILL_TIMEOUT"),
 		DrillServices:            src.Getenv("RESTORE_DRILL_SERVICES"),
 		DrillStorages:            src.Getenv("RESTORE_DRILL_STORAGES"),
 		DrillDir:                 src.Getenv("RESTORE_DRILL_DIR"),
@@ -393,6 +396,9 @@ func (c *Config) Validate(secretsDir string) error {
 	}
 	if _, err := ParseInterval(c.CheckInterval); err != nil {
 		return fmt.Errorf("CHECK_INTERVAL: %v", err)
+	}
+	if _, err := c.KitDrillTimeout(); err != nil {
+		return err
 	}
 	if _, err := c.DrillHookTimeout(); err != nil {
 		return err
@@ -774,6 +780,18 @@ func (c *Config) DrillHookTimeout() (time.Duration, error) {
 	d, err := ParseInterval(c.DrillHookLimit)
 	if err != nil {
 		return 0, fmt.Errorf("RESTORE_DRILL_HOOK_TIMEOUT: %w", err)
+	}
+	return d, nil
+}
+
+// KitDrillTimeout bounds one run across every selected offsite storage.
+func (c *Config) KitDrillTimeout() (time.Duration, error) {
+	if c.KitDrillLimit == "" {
+		return 6 * time.Hour, nil
+	}
+	d, err := ParseInterval(c.KitDrillLimit)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("KIT_DRILL_TIMEOUT must be a positive interval (got %q)", c.KitDrillLimit)
 	}
 	return d, nil
 }

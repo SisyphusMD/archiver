@@ -135,6 +135,17 @@ func Render(s status.Snapshot) string {
 			w.gauge("archiver_deep_check_last_success_timestamp_seconds", "When the last deep check passed.", float64(r.LastSuccess), l...)
 		}
 	}
+
+	for _, storage := range sortedKeys(s.KitDrills) {
+		r := s.KitDrills[storage]
+		labels := []string{"storage", storage}
+		w.gauge("archiver_kit_drill_last_timestamp_seconds", "When the last kit drill started.", float64(r.At), labels...)
+		w.gauge("archiver_kit_drill_last_ok", "Whether the last kit drill passed.", b2f(r.OK), labels...)
+		w.gauge("archiver_kit_drill_last_duration_seconds", "How long the last kit drill took.", r.Seconds, labels...)
+		if r.LastSuccess != 0 {
+			w.gauge("archiver_kit_drill_last_success_timestamp_seconds", "When the last kit drill passed.", float64(r.LastSuccess), labels...)
+		}
+	}
 	w.gauge("archiver_incidents_open", "Open incidents (ADR 36): failures and problems not yet cleared.", float64(len(s.Incidents)))
 	for _, k := range sortedKeys(s.Incidents) {
 		w.gauge("archiver_incident_open", "An open incident, by key.", 1, "key", k, "title", s.Incidents[k])

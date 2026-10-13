@@ -118,3 +118,7 @@ The metrics endpoint and textfile export `archiver_deep_check_last_timestamp_sec
 `archiver_deep_check_last_ok` (1 passed, 0 failed or interrupted),
 `archiver_deep_check_last_duration_seconds`, and
 `archiver_deep_check_last_success_timestamp_seconds`, each labeled by `storage`.
+
+## Kit drills
+
+`archiver kit-drill [STORAGE]` fetches and decrypts the recovery kit from each offsite storage with the envelope's credentials, checking its entries and secrets against the current local payload. `KIT_DRILL_SCHEDULE` enables cron runs (unset: off), and `KIT_DRILL_TIMEOUT` defaults to six hours of active time. Failures notify per storage; a pass clears the incident. Kit drills share restore drills' lock and stop/pause/resume controls. See recovery.md, "Kit drills", for OneDrive's human sign-in step and the per-storage metrics.

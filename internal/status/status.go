@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/backuphealth"
@@ -53,7 +54,11 @@ func Write(w io.Writer, l layout.Layout, getenv func(string) string, now time.Ti
 		if d.Paused() {
 			state = "paused"
 		}
-		fmt.Fprintf(w, "Restore drill: %s (PID: %d, %s).\n", state, d.PID, d.Stage)
+		kind := "Restore drill"
+		if d.Context == "kit-drill" || strings.HasPrefix(d.Context, "kit-drill:") {
+			kind = "Kit drill"
+		}
+		fmt.Fprintf(w, "%s: %s (PID: %d, %s).\n", kind, state, d.PID, d.Stage)
 	}
 
 	if states := (&copier.Store{Path: l.CopyWorkersState()}).Load(); len(states) > 0 {
@@ -113,6 +118,33 @@ func Write(w io.Writer, l layout.Layout, getenv func(string) string, now time.Ti
 			}
 		}
 		fmt.Fprintf(w, "Deep check of %s: %s %s, last success %s.\n", name, what, Age(r.At, now), Age(r.LastSuccess, now))
+	}
+
+	results, err := lockstate.ReadKitDrills(l.KitDrillState())
+	if err != nil {
+		return err
+	}
+	if len(results) > 0 {
+		fmt.Fprintln(w, "Kit drills (last per storage):")
+		names := make([]string, 0, len(results))
+		for name := range results {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			result := results[name]
+			verdict := "passed"
+			if !result.OK {
+				verdict = "FAILED"
+			}
+			if name == "" {
+				name = "run"
+			}
+			fmt.Fprintf(w, "  %s: %s %s (%.1fs). %s\n", name, verdict, Age(result.At, now), result.Seconds, result.Message)
+			if result.SignInRequired && !strings.Contains(result.Message, "sign-in") {
+				fmt.Fprintln(w, "    Provider sign-in is left to a person.")
+			}
+		}
 	}
 	storages, err := lockstate.ReadMaintenance(l.MaintenanceState())
 	if err != nil {
@@ -232,6 +264,7 @@ type Snapshot struct {
 	Drill        Run                                         `json:"drill"`
 	Services     map[string]lockstate.ServiceResult          `json:"services"`
 	Copies       map[string]copier.State                     `json:"copies"`
+	KitDrills    map[string]lockstate.KitDrillResult         `json:"kit_drills"`
 	Drills       map[string]map[string]lockstate.DrillResult `json:"drills"`
 	Storages     []lockstate.Storage                         `json:"storages"`
 	Incidents    map[string]string                           `json:"incidents"`
@@ -256,6 +289,7 @@ func Take(l layout.Layout, getenv func(string) string, now time.Time) Snapshot {
 	if ds, err := lockstate.ReadDrillState(l.DrillState()); err == nil {
 		s.Drills = ds.Results
 	}
+	s.KitDrills, _ = lockstate.ReadKitDrills(l.KitDrillState())
 	s.Storages, _ = lockstate.ReadMaintenance(l.MaintenanceState())
 	s.Incidents = notify.OpenIncidents(l.Incidents())
 	s.Envelope, _ = envelope.Status(l, now, Age)

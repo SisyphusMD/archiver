@@ -91,3 +91,4 @@ func (l Layout) DeepCheckLock(storage string) string {
 func (l Layout) DeepCheckStopFlag(storage string) string {
 	return filepath.Join(l.Lock, "archiver-deep-check-"+storage+"-stop-requested")
 }
+func (l Layout) KitDrillState() string { return filepath.Join(l.LogDir(), ".kit-drill-state.json") }

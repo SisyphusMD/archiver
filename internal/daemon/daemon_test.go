@@ -185,3 +185,19 @@ func TestCatchUp(t *testing.T) {
 		t.Fatalf("backups at %v, %d drills", backups, drills)
 	}
 }
+
+func TestKitDrillSchedule(t *testing.T) {
+	jobs := mustJobs(t, map[string]string{"KIT_DRILL_SCHEDULE": "0 4 * * 0"})
+	if len(jobs) != 1 || jobs[0].Name != "kit-drill" {
+		t.Fatalf("kit drill schedule: %+v", jobs)
+	}
+	_, err := Jobs(func(name string) string {
+		if name == "KIT_DRILL_SCHEDULE" {
+			return "bad cron"
+		}
+		return ""
+	}, time.Now())
+	if err == nil || !strings.Contains(err.Error(), "KIT_DRILL_SCHEDULE") {
+		t.Fatal("invalid kit drill cron must fail startup")
+	}
+}

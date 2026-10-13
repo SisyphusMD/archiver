@@ -33,6 +33,7 @@ func Jobs(getenv func(string) string, now time.Time) ([]Job, error) {
 	definitions := []Job{
 		{Name: "backup", Env: "BACKUP_SCHEDULE"},
 		{Name: "maintenance", Env: "MAINTENANCE_SCHEDULE"},
+		{Name: "kit-drill", Env: "KIT_DRILL_SCHEDULE"},
 		{Name: "drill", Env: "RESTORE_DRILL_SCHEDULE"},
 	}
 	for n := 1; getenv("STORAGE_TARGET_"+strconv.Itoa(n)+"_NAME") != ""; n++ {

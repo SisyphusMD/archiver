@@ -48,3 +48,18 @@ func TestRender(t *testing.T) {
 		t.Error("TYPE repeated")
 	}
 }
+
+func TestKitDrillMetrics(t *testing.T) {
+	s := status.Snapshot{KitDrills: map[string]lockstate.KitDrillResult{"offsite": {At: 100, OK: false, Seconds: 2.5, LastSuccess: 90}}}
+	got := Render(s)
+	for _, want := range []string{
+		`archiver_kit_drill_last_timestamp_seconds{storage="offsite"} 100`,
+		`archiver_kit_drill_last_ok{storage="offsite"} 0`,
+		`archiver_kit_drill_last_duration_seconds{storage="offsite"} 2.5`,
+		`archiver_kit_drill_last_success_timestamp_seconds{storage="offsite"} 90`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+}

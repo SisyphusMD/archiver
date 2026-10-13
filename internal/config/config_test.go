@@ -432,3 +432,19 @@ func TestDrillHookTimeout(t *testing.T) {
 		}
 	}
 }
+
+func TestKitDrillTimeout(t *testing.T) {
+	for _, test := range []struct {
+		value string
+		want  time.Duration
+		valid bool
+	}{
+		{"", 6 * time.Hour, true}, {"30m", 30 * time.Minute, true}, {"0", 0, false}, {"-1h", 0, false}, {"garbage", 0, false},
+	} {
+		cfg := Config{KitDrillLimit: test.value}
+		got, err := cfg.KitDrillTimeout()
+		if (err == nil) != test.valid || (err == nil && got != test.want) {
+			t.Fatalf("KitDrillTimeout(%q) = %s, %v", test.value, got, err)
+		}
+	}
+}

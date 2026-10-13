@@ -14,6 +14,7 @@ var completions = map[string][]string{
 	"maintenance":      {"exhaustive"},
 	"drill":            nil,
 	"deep-check":       nil,
+	"kit-drill":        nil,
 	"doctor":           {"--notify"},
 	"notify":           {"test"},
 	"recover":          {"--yes", "--hook", "--out"},

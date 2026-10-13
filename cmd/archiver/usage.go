@@ -8,7 +8,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
 )
 
-const usageText = `Usage: archiver {backup|maintenance|drill|deep-check|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|completion|help}
+const usageText = `Usage: archiver {backup|maintenance|drill|deep-check|kit-drill|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|completion|help}
 Note:
   backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background.
   maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune.
@@ -18,6 +18,7 @@ Note:
   health --backups prints backup health (OK, DEGRADED or FAILING) and why, exiting 0, 1 or 2 for monitors; healthcheck stays the container's liveness check.
   notify test sends one message to every notification destination, saying which events it receives.
   deep-check [STORAGE] reads and verifies every chunk; no argument selects storages with STORAGE_TARGET_N_DEEP_CHECK schedules.
+  kit-drill [STORAGE] fetches and decrypts offsite kits with envelope credentials (KIT_DRILL_SCHEDULE, unset: off); stop drill, pause and resume also control it.
   drill [SERVICE] [STORAGE] restores newest revisions into RESTORE_DRILL_DIR, checks them and deletes them (normally scheduled via RESTORE_DRILL_SCHEDULE).
   stop takes an optional target (backup|maintenance|drill|deep-check|all, default all) and --immediate.
   resume may be used in combination with logs.
