@@ -13,6 +13,7 @@ set -uo pipefail
 IMAGE="${IMAGE:?set IMAGE to the archiver image under test}"
 NAME="archiver-badcron-$$"
 NAME_MAINT="archiver-badmaint-$$"
+NAME_EXTRA="archiver-badextra-$$"
 NAME_RENAME="archiver-rename-$$"
 NAME_OK="archiver-schedok-$$"
 VOL="archiver-badcron-secrets-$$"
@@ -20,7 +21,7 @@ VOL="archiver-badcron-secrets-$$"
 log() { printf '>>> %s\n' "$*"; }
 die() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 cleanup() {
-  docker rm -f "$NAME" "$NAME_MAINT" "$NAME_RENAME" "$NAME_OK" >/dev/null 2>&1 || true
+  docker rm -f "$NAME" "$NAME_MAINT" "$NAME_EXTRA" "$NAME_RENAME" "$NAME_OK" >/dev/null 2>&1 || true
   docker volume rm "$VOL" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -69,6 +70,7 @@ EXIT_CODE=$(docker inspect -f '{{.State.ExitCode}}' "$NAME")
 LOGS=$(docker logs "$NAME" 2>&1)
 [ "$EXIT_CODE" -ne 0 ] || die "container exited 0 despite the malformed schedule"
 grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" <<<"$LOGS" || { echo "$LOGS" | tail -5; die "no clear invalid-schedule message"; }
+grep -q 'invalid BACKUP_SCHEDULE "not a cron line":' <<<"$LOGS" || die "no specific backup-schedule error"
 
 log "a malformed MAINTENANCE_SCHEDULE (valid BACKUP_SCHEDULE) must fail fast too"
 docker run -d --name "$NAME_MAINT" \
@@ -86,6 +88,27 @@ MAINT_EXIT=$(wait_exit "$NAME_MAINT")
 [ "$MAINT_EXIT" -ne 0 ] || die "container exited 0 despite the malformed MAINTENANCE_SCHEDULE"
 grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" <<<"$(docker logs "$NAME_MAINT" 2>&1)" \
   || die "no clear invalid-schedule message for MAINTENANCE_SCHEDULE"
+
+for schedule in RESTORE_DRILL_SCHEDULE STORAGE_TARGET_1_DEEP_CHECK; do
+  log "a malformed $schedule must print both schedule diagnostics and fail fast"
+  docker run -d --name "$NAME_EXTRA" \
+    --cap-drop ALL --cap-add DAC_OVERRIDE \
+    -v "$VOL":/run/secrets \
+    -e "$schedule=not a cron line" \
+    -e SERVICE_DIRECTORIES=/data/fixtures/ \
+    -e STORAGE_TARGET_1_NAME=local \
+    -e STORAGE_TARGET_1_TYPE=local \
+    -e STORAGE_TARGET_1_LOCAL_PATH=/backup-store \
+    "$IMAGE" >/dev/null || die "$schedule container failed to start"
+  EXTRA_EXIT=$(wait_exit "$NAME_EXTRA")
+  [ "$EXTRA_EXIT" != "running" ] || die "container still running with a malformed $schedule"
+  [ "$EXTRA_EXIT" -ne 0 ] || die "container exited 0 despite the malformed $schedule"
+  EXTRA_LOGS=$(docker logs "$NAME_EXTRA" 2>&1)
+  grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" <<<"$EXTRA_LOGS" || die "no clear invalid-schedule message for $schedule"
+  grep -q 'STORAGE_TARGET_N_DEEP_CHECK' <<<"$EXTRA_LOGS" || die "invalid-schedule message omits deep-check setting"
+  grep -q "invalid $schedule \"not a cron line\":" <<<"$EXTRA_LOGS" || die "no specific error for $schedule"
+  docker rm "$NAME_EXTRA" >/dev/null || die "$schedule container cleanup failed"
+done
 
 log "a legacy CRON_SCHEDULE (valid cron) must fail fast with the rename message"
 docker run -d --name "$NAME_RENAME" \

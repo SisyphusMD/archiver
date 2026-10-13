@@ -150,8 +150,10 @@ func entrypointCommand(args []string) int {
 	var daemon *exec.Cmd
 	backup, maint, drill := os.Getenv("BACKUP_SCHEDULE"), os.Getenv("MAINTENANCE_SCHEDULE"), os.Getenv("RESTORE_DRILL_SCHEDULE")
 	jobs, scheduleErr := daemonpkg.Jobs(os.Getenv, time.Now())
+	const invalidSchedule = "ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid (or RESTORE_DRILL_SCHEDULE or STORAGE_TARGET_N_DEEP_CHECK)."
 	if scheduleErr != nil {
 		fmt.Fprintln(os.Stderr, scheduleErr)
+		fmt.Fprintln(os.Stderr, invalidSchedule)
 		return 1
 	}
 	if len(jobs) > 0 {
@@ -166,7 +168,7 @@ func entrypointCommand(args []string) int {
 		}
 		// Fail fast on a malformed schedule instead of crash-looping the container.
 		if runDaemon([]string{"--check"}) != 0 {
-			fmt.Println("ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid (or RESTORE_DRILL_SCHEDULE).")
+			fmt.Fprintln(os.Stderr, invalidSchedule)
 			return 1
 		}
 		fmt.Println("Starting scheduler...")
