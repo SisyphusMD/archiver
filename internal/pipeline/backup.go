@@ -575,7 +575,7 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 		return false, false
 	}
 	if svc.HookDir != dir {
-		for _, h := range []string{hooks.PreBackup, hooks.PostBackup} {
+		for _, h := range []string{hooks.PreBackup, hooks.PostBackup, hooks.PostRestore, hooks.Drill} {
 			if _, err := os.Lstat(filepath.Join(dir, h)); err == nil {
 				log(logging.Warning, fmt.Sprintf("%s in the service directory is not run: with HOOKS_DIR set, hooks come from %s.", h, svc.HookDir))
 			}

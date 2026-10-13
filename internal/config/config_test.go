@@ -408,3 +408,27 @@ func TestUploadLimitAndWindowValidated(t *testing.T) {
 		}
 	}
 }
+
+func TestDrillHookTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  time.Duration
+		bad   bool
+	}{
+		{"", 6 * time.Hour, false}, {"20ms", 20 * time.Millisecond, false}, {"2d", 48 * time.Hour, false}, {"0", 0, true}, {"-1h", 0, true}, {"forever", 0, true},
+	} {
+		c, _, err := Load(Source{Getenv: func(k string) string {
+			if k == "RESTORE_DRILL_HOOK_TIMEOUT" {
+				return tc.value
+			}
+			return ""
+		}, SecretsDir: t.TempDir()}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := c.DrillHookTimeout()
+		if (err != nil) != tc.bad || got != tc.want {
+			t.Errorf("%q: %s, %v", tc.value, got, err)
+		}
+	}
+}

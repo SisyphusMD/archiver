@@ -72,7 +72,7 @@ func TestDrillFailsOnMismatchAndSkipsMissing(t *testing.T) {
 		t.Fatalf("exit %d, want 1", code)
 	}
 	s := f.drillState(t)
-	if r := s.Results["local"]["app"]; r.OK || !strings.Contains(r.Message, "restored 3 files, its listing has 7") {
+	if r := s.Results["local"]["app"]; r.OK || !strings.Contains(r.Message, "file4 is missing") {
 		t.Fatalf("local: %+v", r)
 	}
 	if r := s.Results["off_site"]["app"]; !r.Skipped {

@@ -738,6 +738,12 @@
       "description": "Services drills leave out, separated by commas.",
       "type": "string"
     },
+    "RESTORE_DRILL_HOOK_TIMEOUT": {
+      "default": "6h",
+      "description": "Maximum time a service's drill hook may run; a timeout fails the drill and ends the hook and its children.",
+      "pattern": "^$|^\\+?(?![0.]+(ns|us|µs|μs|ms|s|m|h|d)([0.]+(ns|us|µs|μs|ms|s|m|h))*$)([0-9]+d|(([0-9]+\\.?[0-9]*|\\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+)$",
+      "type": "string"
+    },
     "RESTORE_DRILL_SCHEDULE": {
       "description": "When restore drills run (ADR 28). Unset: no drills.",
       "type": "string"

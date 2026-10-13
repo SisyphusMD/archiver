@@ -57,6 +57,31 @@ log "the next drill moves on to the next service"
 archiver drill >/tmp/drill2.out 2>&1 || { cat /tmp/drill2.out; die "the second drill failed"; }
 state 'r["local"]["db"]["ok"]'  || { cat "$STATE"; die "the second drill did not drill db"; }
 
+log "a service drill hook checks the scratch copy and it is deleted afterwards"
+cat >"$SERVICES/app/drill" <<'HOOK'
+#!/bin/sh
+[ "$PWD" = "$ARCHIVER_DRILL_DIR" ] || exit 2
+[ -f "$ARCHIVER_DRILL_DIR/sub/name.txt" ] || exit 3
+[ -z "${STORAGE_PASSWORD+x}${RSA_PASSPHRASE+x}${DUPLICACY_LOCAL_PASSWORD+x}" ] || exit 4
+printf '%s\n' "$ARCHIVER_DRILL_DIR" >> /tmp/drill-hook-ran
+HOOK
+chmod 700 "$SERVICES/app/drill"
+archiver drill app >/tmp/drill-hook.out 2>&1 || { cat /tmp/drill-hook.out; die "passing hook failed"; }
+[ "$(wc -l </tmp/drill-hook-ran)" -eq 2 ] || die "hook did not run on both storages"
+while IFS= read -r scratch; do
+  case "$scratch" in /tmp/archiver-drill/drill-*) ;; *) die "hook ran outside scratch";; esac
+  [ ! -e "$scratch" ] || die "hook scratch was not deleted"
+done </tmp/drill-hook-ran
+[ ! -e "$SERVICES/app/drill-hook-ran" ] || die "hook touched live service"
+
+log "a failed drill hook fails the drill and its result names the exit"
+printf '#!/bin/sh\nexit 1\n' >"$SERVICES/db/drill"
+chmod 700 "$SERVICES/db/drill"
+archiver drill db >/tmp/drill-hook-fail.out 2>&1 && die "failed hook passed"
+state 'not r["local"]["db"]["ok"] and not r["offsite"]["db"]["ok"] and "exit 1" in r["local"]["db"]["message"] and s.get("last_failed")' || die "hook failure was not recorded"
+grep -q 'its drill hook failed.*exit 1' /tmp/drill-hook-fail.out || die "hook failure was not reported"
+[ -z "$(ls -A /tmp/archiver-drill)" ] || die "failed hook left scratch copies"
+
 log "a damaged chunk on the primary fails the drill; the offsite copy still passes"
 [ -n "$(find "$STORE1/chunks" -type f)" ] || die "no chunk found to damage"
 for c in $(find "$STORE1/chunks" -type f); do printf 'garbage' | dd of="$c" bs=1 seek=100 conv=notrunc 2>/dev/null; done

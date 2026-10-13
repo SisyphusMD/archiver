@@ -22,6 +22,7 @@ import (
 const (
 	PreBackup  = "pre-backup"
 	PostBackup = "post-backup"
+	Drill      = "drill"
 	Filters    = "filters"
 	// Legacy is the sourced-bash settings file the Go pipeline does not run.
 	Legacy = "service-backup-settings.sh"
@@ -213,7 +214,7 @@ func Environ(base []string, s Service, result string) []string {
 	return env
 }
 
-// RestoreEnviron is the environment of a post-restore hook: Environ without the backup's
+// RestoreEnviron is the environment of a restore or drill hook: Environ without the backup's
 // variables, plus the revision restored and the storage it came from.
 func RestoreEnviron(base []string, s Service, revision int, storage string) []string {
 	return append(withoutSecrets(base),

@@ -1,12 +1,12 @@
 package restore
 
 import (
+	"bufio"
 	"context"
 	"fmt"
-	"io/fs"
+	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,10 +14,12 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/inuse"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/notify"
+	"github.com/SisyphusMD/archiver/internal/proc"
 	"github.com/SisyphusMD/archiver/internal/resume"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
@@ -41,6 +43,8 @@ type drillRun struct {
 	// restored: the drill got as far as restoring, so its errors are its restores' own
 	// incidents.
 	restored bool
+	// dirs maps a service name to its directory, for its drill hook.
+	dirs map[string]string
 }
 
 // leftover reports whether work, recorded by an interrupted drill, is still safe to delete
@@ -313,8 +317,12 @@ func (d *drillRun) selection(o DrillOptions) ([]string, []config.Target, error) 
 	cfg := d.e.cfg
 	dirs, _ := config.ExpandServiceDirectories(cfg.ServiceDirectories)
 	var services []string
+	d.dirs = map[string]string{}
 	for _, dir := range dirs {
 		name := filepath.Base(dir)
+		if _, ok := d.dirs[name]; !ok {
+			d.dirs[name] = dir
+		}
 		if o.Service != "" {
 			if name == o.Service {
 				services = append(services, name)
@@ -370,14 +378,9 @@ func (d *drillRun) stopRequested() bool {
 	return d.lock.StopRequested()
 }
 
-// listedFile is one file line of `duplicacy list -files`: size (right-aligned, so smaller
-// ones are padded with spaces), date, time, then the hash (blank for an empty file) and path.
-var listedFile = regexp.MustCompile(`(?m)^ *\d+ \d{4}-\d\d-\d\d \d\d:\d\d:\d\d .*$`)
-var listSize = regexp.MustCompile(`(?m)^Total size: (\d+)`)
-
 // one drills service name on t: its newest revision restored into a scratch directory,
-// every chunk verified by duplicacy as it downloads, the file count checked against the
-// revision's listing. Restore hooks never run, and the copy is deleted afterwards.
+// every chunk verified by duplicacy as it downloads and every entry checked against the
+// revision's record. Its drill hook runs before the copy is deleted.
 func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	r := lockstate.DrillResult{At: d.now().Unix()}
 	id := d.e.Hostname + "-" + name
@@ -455,18 +458,18 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 		return fail(err.Error())
 	}
 	defer held.Release()
-	var listing strings.Builder
-	if err := d.e.duplicacy(repo, &listing, "list", "-files", "-r", strconv.Itoa(r.Revision), "-id", id).Run(); err != nil {
-		return fail(fmt.Sprintf("cannot list the files of revision %d", r.Revision))
+	// The revision's own record of every entry, kept beside the repository: the restored
+	// copy is checked against it.
+	record := filepath.Join(repo, "revision.json")
+	if err := d.e.catRevision(repo, record, id, r.Revision); err != nil {
+		return fail(fmt.Sprintf("cannot read the record of revision %d: %v", r.Revision, err))
 	}
-	// The files listed are counted: duplicacy's "Files:" summary is missing for a revision
-	// without files, and for one whose files are all empty.
-	want := len(listedFile.FindAllString(listing.String(), -1))
-	if s := listSize.FindStringSubmatch(listing.String()); s != nil {
-		size, _ := strconv.ParseInt(s[1], 10, 64)
-		if free, ok := freeBytes(d.root); ok && free < size+size/20+64<<20 {
-			return skip(fmt.Sprintf("revision %d needs %d MB but %s has %d MB free", r.Revision, size>>20+1, d.root, free>>20))
-		}
+	want, size, err := revisionSize(record)
+	if err != nil {
+		return fail(fmt.Sprintf("cannot read the record of revision %d: %v", r.Revision, err))
+	}
+	if free, ok := freeBytes(d.root); ok && free < size+size/20+64<<20 {
+		return skip(fmt.Sprintf("revision %d needs %d MB but %s has %d MB free", r.Revision, size>>20+1, d.root, free>>20))
 	}
 	if d.stopRequested() {
 		return skip("stop requested")
@@ -475,31 +478,24 @@ func (d *drillRun) one(t config.Target, name string) lockstate.DrillResult {
 	if err := d.e.restore(repo, work, t, id, r.Revision, Options{IgnoreOwner: true, Threads: d.e.cfg.Threads}, out); err != nil {
 		return fail(fmt.Sprintf("restoring revision %d: %v", r.Revision, err))
 	}
-	got, err := countFiles(work)
+	f, err := os.Open(record)
 	if err != nil {
 		return fail(err.Error())
 	}
-	if got != want {
-		return fail(fmt.Sprintf("revision %d restored %d files, its listing has %d", r.Revision, got, want))
+	got, problems, err := verifyRestored(work, skipToJSON(f), false, 10)
+	f.Close()
+	if err != nil {
+		return fail(err.Error())
+	}
+	if len(problems) > 0 {
+		return fail(fmt.Sprintf("revision %d restored differently from its record: %s", r.Revision, strings.Join(problems, "; ")))
+	}
+	if msg := d.hook(t, name, id, r.Revision, work); msg != "" {
+		return fail(msg)
 	}
 	r.OK, r.Files = true, got
 	d.log.Message(logging.Info, name, fmt.Sprintf("Restore drill of %s revision %d from '%s' passed (%d files).", id, r.Revision, t.Name, got))
 	return r
-}
-
-// countFiles counts the regular files under dir: the number duplicacy's listing reports.
-func countFiles(dir string) (int, error) {
-	n := 0
-	err := filepath.WalkDir(dir, func(_ string, de fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if de.Type().IsRegular() {
-			n++
-		}
-		return nil
-	})
-	return n, err
 }
 
 func freeBytes(dir string) (int64, bool) {
@@ -508,4 +504,143 @@ func freeBytes(dir string) (int64, bool) {
 		return 0, false
 	}
 	return int64(st.Bavail) * int64(st.Bsize), true //nolint:gosec // G115: filesystem sizes and byte values fit
+}
+
+// hook runs the service's drill hook, if it has one, in the restored copy (ADR 48), and
+// returns why the drill fails, or "" when it passes or there is no hook.
+func (d *drillRun) hook(t config.Target, name, id string, rev int, work string) string {
+	dir := d.dirs[name]
+	if dir == "" {
+		return ""
+	}
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return "its drill hook cannot run: " + err.Error()
+	}
+	hookDir := hooks.Hooks(d.e.cfg.HooksDir, dir)
+	ok, err := hooks.ExistsFor(hookDir, dir, hooks.Drill)
+	if err != nil {
+		return "its drill hook cannot run: " + err.Error()
+	}
+	if !ok {
+		return ""
+	}
+	limit, err := d.e.cfg.DrillHookTimeout()
+	if err != nil {
+		return err.Error()
+	}
+	svc := hooks.Service{Name: name, Dir: dir, SnapshotID: id, HookDir: hookDir}
+	env := append(hooks.RestoreEnviron(d.e.Environ, svc, rev, t.Name), "ARCHIVER_DRILL_DIR="+work)
+	d.log.Message(logging.Info, name, fmt.Sprintf("Running the drill hook on revision %d from '%s'.", rev, t.Name))
+	if d.e.beforeRun != nil {
+		d.e.beforeRun()
+	}
+	if d.lock.StopRequested() {
+		return "stop requested"
+	}
+	p, err := proc.Start(proc.Spec{Path: filepath.Join(hookDir, hooks.Drill), Dir: work, Env: env,
+		Log: d.log, Service: name, Hook: true, Group: true})
+	if err != nil {
+		return "its drill hook cannot run: " + err.Error()
+	}
+	// A hook can exit while its background children still use the restored copy.
+	defer func() {
+		p.Terminate(true)
+		<-p.Done()
+	}()
+	remaining, checked := limit, time.Now()
+	paused := d.lock.State().Paused()
+	timer := time.NewTimer(limit)
+	defer timer.Stop()
+	poll := time.NewTicker(50 * time.Millisecond)
+	defer poll.Stop()
+	for {
+		select {
+		case <-p.Done():
+			code, err := p.Wait()
+			if err != nil || code != 0 {
+				return fmt.Sprintf("its drill hook failed on revision %d (%s)", rev, exitText(code, err))
+			}
+			return ""
+		case <-timer.C:
+		case <-poll.C:
+		}
+		if d.lock.StopRequested() {
+			return "stop requested"
+		}
+		now, wasPaused := time.Now(), paused
+		paused = d.lock.State().Paused()
+		// Frozen children cannot use their time budget. Treat a pause transition's
+		// polling interval as paused too, rather than expiring during the transition.
+		if !wasPaused && !paused {
+			remaining -= now.Sub(checked)
+		}
+		checked = now
+		if paused {
+			timer.Stop()
+			continue
+		}
+		if remaining <= 0 {
+			return fmt.Sprintf("its drill hook did not finish within %s", limit)
+		}
+		timer.Reset(remaining)
+	}
+}
+
+func exitText(code int, err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return fmt.Sprintf("exit %d", code)
+}
+
+// catRevision writes the record of revision rev of id (`duplicacy cat` with no file) to
+// path; stderr is kept separately so it cannot corrupt the record.
+func (e *Env) catRevision(repo, path, id string, rev int) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	var stderr strings.Builder
+	cmd := e.duplicacy(repo, f, "cat", "-r", strconv.Itoa(rev), "-id", id)
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return fmt.Errorf("%v %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+// revisionSize is the number of regular files the record at path lists, and their total size.
+func revisionSize(path string) (files int, size int64, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer f.Close()
+	err = revisionEntries(skipToJSON(f), func(e revisionEntry) error {
+		if os.FileMode(e.Mode).IsRegular() {
+			files++
+			size += e.Size
+		}
+		return nil
+	})
+	return files, size, err
+}
+
+// skipToJSON skips any line duplicacy printed before the record's opening brace.
+func skipToJSON(r io.Reader) io.Reader {
+	br := bufio.NewReader(r)
+	for {
+		line, err := br.Peek(1)
+		if err != nil || line[0] == '{' {
+			return br
+		}
+		if _, err := br.ReadString('\n'); err != nil {
+			return br
+		}
+	}
 }

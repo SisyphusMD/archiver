@@ -70,6 +70,7 @@ var Reference = []Var{
 	{Name: "RESTORE_DRILL_SERVICES", Pattern: `^$|^([1-9][0-9]*|all)$`, Group: "Restore drills", Kind: "string", Default: "1", Desc: "How many services each drill restores from each storage, rotating; `all` restores every one."},
 	{Name: "RESTORE_DRILL_STORAGES", Group: "Restore drills", Kind: "string", Default: "all", Desc: "Which storages drills restore from: `all`, `primary`, or storage names separated by commas."},
 	{Name: "RESTORE_DRILL_DIR", Group: "Restore drills", Kind: "path", Default: "/tmp/archiver-drill", Desc: "Scratch space a drill restores into and deletes afterwards; never a service directory."},
+	{Name: "RESTORE_DRILL_HOOK_TIMEOUT", Group: "Restore drills", Kind: "interval", Default: "6h", Desc: "Maximum time a service's drill hook may run; a timeout fails the drill and ends the hook and its children."},
 	{Name: "RESTORE_DRILL_EXCLUDE", Group: "Restore drills", Kind: "list", Desc: "Services drills leave out, separated by commas."},
 
 	{Name: "RECOVERY_PASSWORD", Group: "Recovery kit", Secret: true, Kind: "string", Desc: "Encrypts the recovery kit uploaded beside the backups; without it there is no kit. Keep it in a password manager."},
