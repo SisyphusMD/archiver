@@ -20,7 +20,8 @@
     ".forgejo/workflows/release.yml",
     "tests/fakes/Dockerfile",
     ".forgejo/workflows/fuzz-weekly.yml",
-    ".forgejo/workflows/scan-weekly.yml"
+    ".forgejo/workflows/scan-weekly.yml",
+    "tests/integration/podman.sh"
   ],
   "github-actions": {
     "managerFilePatterns": ["/\\.forgejo/workflows/.+\\.ya?ml$/"]
@@ -28,8 +29,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track inline docker images in workflow shell blocks via `# renovate:` comment",
-      "managerFilePatterns": ["/\\.forgejo/workflows/.+\\.ya?ml$/"],
+      "description": "Track inline docker images in workflow shell blocks and test scripts via `# renovate:` comment",
+      "managerFilePatterns": ["/\\.forgejo/workflows/.+\\.ya?ml$/", "/^tests/.+\\.sh$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\s[^\\n]*?:(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
       ]
