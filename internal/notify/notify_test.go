@@ -479,3 +479,79 @@ func TestClaimedIgnoresFutureClaims(t *testing.T) {
 		}
 	}
 }
+
+func TestDrillOptOutKeepsIncidents(t *testing.T) {
+	for _, title := range []string{"Restore Drill Failed", "Deep Check Failed", "Kit Drill Failed"} {
+		t.Run(title, func(t *testing.T) {
+			sent := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent++ }))
+			defer srv.Close()
+			n := &Notifier{Destinations: []Destination{{&Ntfy{URL: srv.URL}, "everything,-drills"}}, Incidents: t.TempDir() + "/incidents", Repeat: time.Nanosecond}
+			n.Raise("drill", Failure, title, "failed")
+			n.Raise("drill", Failure, title, "still failed")
+			if !n.IsOpen("drill") || sent != 0 {
+				t.Fatalf("open=%v sent=%d", n.IsOpen("drill"), sent)
+			}
+			n.Clear("drill", strings.TrimSuffix(title, "Failed")+"Passing", "passed")
+			if n.IsOpen("drill") || sent != 0 {
+				t.Fatalf("recovery: open=%v sent=%d", n.IsOpen("drill"), sent)
+			}
+			n.Raise("backup", Failure, "Backup Failed", "failed")
+			if sent != 1 {
+				t.Fatal("opt-out suppressed a backup failure")
+			}
+		})
+	}
+}
+
+func TestDrillOptOutSuppressesPreviouslyOwedMessages(t *testing.T) {
+	sent := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent++; w.WriteHeader(400) }))
+	defer srv.Close()
+	n := &Notifier{Destinations: []Destination{{&Ntfy{URL: srv.URL}, "failures"}}, Incidents: t.TempDir() + "/incidents"}
+	n.Raise("drill", Failure, "Restore Drill Failed", "failed")
+	n.Destinations[0].On = "failures,-drills"
+	n.Raise("drill", Failure, "Restore Drill Failed", "failed")
+	if sent != 1 || !n.IsOpen("drill") {
+		t.Fatal("pending alert escaped opt-out")
+	}
+	n.Clear("drill", "Restore Drill Passing", "passed")
+	if sent != 1 || n.IsOpen("drill") {
+		t.Fatal("suppressed pending alert caused a recovery send")
+	}
+}
+
+func TestDrillOptOutUndeliveredAlertBecomesEligibleAgain(t *testing.T) {
+	for _, repeat := range []time.Duration{0, 24 * time.Hour, time.Hour} {
+		t.Run(repeat.String(), func(t *testing.T) {
+			sent := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				sent++
+				if sent == 1 {
+					w.WriteHeader(http.StatusBadRequest)
+				}
+			}))
+			defer srv.Close()
+			clock := time.Unix(2e9, 0)
+			n := &Notifier{Destinations: []Destination{{&Ntfy{URL: srv.URL}, "failures"}}, Incidents: t.TempDir() + "/incidents", Repeat: repeat, Now: func() time.Time { return clock }}
+			n.Raise("drill", Failure, "Restore Drill Failed", "failed")
+			if repeat == time.Hour {
+				clock = clock.Add(repeat)
+			}
+			n.Destinations[0].On = "failures,-drills"
+			n.Raise("drill", Failure, "Restore Drill Failed", "still failed")
+			if sent != 1 {
+				t.Fatal("opt-out sent pending alert")
+			}
+			n.Destinations[0].On = "failures"
+			n.Raise("drill", Failure, "Restore Drill Failed", "still failed")
+			if sent != 2 {
+				t.Fatalf("opt-in did not deliver ongoing failure: sent=%d", sent)
+			}
+			n.Clear("drill", "Restore Drill Passing", "passed")
+			if sent != 3 || n.IsOpen("drill") {
+				t.Fatalf("recovery: sent=%d open=%v", sent, n.IsOpen("drill"))
+			}
+		})
+	}
+}

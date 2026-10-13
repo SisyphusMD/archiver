@@ -101,6 +101,7 @@ type Config struct {
 	DrillServices  string // RESTORE_DRILL_SERVICES: how many services per storage per run, or "all"
 	DrillStorages  string // RESTORE_DRILL_STORAGES: "all", "primary" or storage names
 	DrillDir       string // RESTORE_DRILL_DIR
+	DrillLimit     string // RESTORE_DRILL_TIMEOUT: maximum run duration
 	DrillHookLimit string // RESTORE_DRILL_HOOK_TIMEOUT: maximum drill hook duration
 	DrillExclude   string // RESTORE_DRILL_EXCLUDE: service names never drilled
 }
@@ -225,6 +226,7 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		DrillStorages:            src.Getenv("RESTORE_DRILL_STORAGES"),
 		DrillDir:                 src.Getenv("RESTORE_DRILL_DIR"),
 		DrillExclude:             src.Getenv("RESTORE_DRILL_EXCLUDE"),
+		DrillLimit:               src.Getenv("RESTORE_DRILL_TIMEOUT"),
 		DrillHookLimit:           src.Getenv("RESTORE_DRILL_HOOK_TIMEOUT"),
 		DeepCheckTimeout:         src.Getenv("DEEP_CHECK_TIMEOUT"),
 	}
@@ -354,9 +356,9 @@ func (c *Config) Validate(secretsDir string) error {
 		{"NTFY_NOTIFY_ON", c.NtfyNotifyOn}, {"PUSHOVER_NOTIFY_ON", c.PushoverNotifyOn},
 	} {
 		switch v.val {
-		case "", "failures", "problems", "everything":
+		case "", "failures", "problems", "everything", "failures,-drills", "problems,-drills", "everything,-drills":
 		default:
-			return fmt.Errorf("%s must be one of: failures, problems, everything (got '%s').", v.name, v.val)
+			return fmt.Errorf("%s must be failures, problems or everything, optionally followed by ,-drills (got '%s').", v.name, v.val)
 		}
 	}
 	if _, err := c.AppriseTagMap(); err != nil {
@@ -398,6 +400,9 @@ func (c *Config) Validate(secretsDir string) error {
 		return fmt.Errorf("CHECK_INTERVAL: %v", err)
 	}
 	if _, err := c.KitDrillTimeout(); err != nil {
+		return err
+	}
+	if _, err := c.DrillTimeout(); err != nil {
 		return err
 	}
 	if _, err := c.DrillHookTimeout(); err != nil {
@@ -792,6 +797,18 @@ func (c *Config) KitDrillTimeout() (time.Duration, error) {
 	d, err := ParseInterval(c.KitDrillLimit)
 	if err != nil || d <= 0 {
 		return 0, fmt.Errorf("KIT_DRILL_TIMEOUT must be a positive interval (got %q)", c.KitDrillLimit)
+	}
+	return d, nil
+}
+
+// DrillTimeout bounds the entire restore drill, including waits and hooks.
+func (c *Config) DrillTimeout() (time.Duration, error) {
+	if c.DrillLimit == "" {
+		return 24 * time.Hour, nil
+	}
+	d, err := ParseInterval(c.DrillLimit)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("RESTORE_DRILL_TIMEOUT must be a positive interval (got %q)", c.DrillLimit)
 	}
 	return d, nil
 }

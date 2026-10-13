@@ -1,6 +1,7 @@
 package restore
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -81,7 +82,7 @@ func revisionEntries(r io.Reader, fn func(revisionEntry) error) error {
 // .duplicacy directory Duplicacy makes in a restore's destination. Duplicacy has already compared
 // each file's content with its recorded hash. It returns the number of regular files and
 // the mismatches found, at most limit of them described.
-func verifyRestored(dir string, r io.Reader, owners bool, limit int) (files int, problems []string, err error) {
+func verifyRestored(ctx context.Context, dir string, r io.Reader, owners bool, limit int) (files int, problems []string, err error) {
 	seen := map[string]bool{}
 	mismatches := 0
 	report := func(format string, a ...any) {
@@ -93,6 +94,9 @@ func verifyRestored(dir string, r io.Reader, owners bool, limit int) (files int,
 	const kind = os.ModeDir | os.ModeSymlink | os.ModeNamedPipe | os.ModeSocket | os.ModeDevice | os.ModeCharDevice
 	const perm = os.ModePerm | os.ModeSetuid | os.ModeSetgid | os.ModeSticky
 	err = revisionEntries(r, func(e revisionEntry) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		rel := strings.TrimSuffix(e.Path, "/")
 		if rel == "." || !filepath.IsLocal(rel) || filepath.Clean(rel) != rel {
 			return fmt.Errorf("invalid revision path %q", e.Path)
@@ -139,6 +143,9 @@ func verifyRestored(dir string, r io.Reader, owners bool, limit int) (files int,
 		return files, problems, fmt.Errorf("reading the revision: %w", err)
 	}
 	err = filepath.WalkDir(dir, func(path string, de fs.DirEntry, err error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil {
 			return err
 		}

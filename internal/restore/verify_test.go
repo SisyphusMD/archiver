@@ -1,7 +1,9 @@
 package restore
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +36,7 @@ func TestVerifyRestored(t *testing.T) {
 		b, _ := json.Marshal(map[string]any{"id": "h-app", "revision": 3, "files": es, "chunks": []string{"c"}})
 		return string(b)
 	}
-	files, problems, err := verifyRestored(dir, strings.NewReader(revision(entries)), false, 10)
+	files, problems, err := verifyRestored(context.Background(), dir, strings.NewReader(revision(entries)), false, 10)
 	if err != nil || len(problems) != 0 || files != 2 {
 		t.Fatalf("a matching copy: %d files, %q, %v", files, problems, err)
 	}
@@ -45,7 +47,7 @@ func TestVerifyRestored(t *testing.T) {
 	changed[3].Mode = 0o644                                                          // sub/b differs in mode
 	changed = append(changed, revisionEntry{Path: "gone.txt", Size: 1, Mode: 0o600}) // never restored
 	os.WriteFile(filepath.Join(dir, "extra"), nil, 0o600)                            // not in the revision
-	_, problems, err = verifyRestored(dir, strings.NewReader(revision(changed)), false, 10)
+	_, problems, err = verifyRestored(context.Background(), dir, strings.NewReader(revision(changed)), false, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,10 +58,10 @@ func TestVerifyRestored(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
-	if _, problems, _ = verifyRestored(dir, strings.NewReader(revision(changed)), false, 2); len(problems) != 3 || problems[2] != "and 3 more" {
+	if _, problems, _ = verifyRestored(context.Background(), dir, strings.NewReader(revision(changed)), false, 2); len(problems) != 3 || problems[2] != "and 3 more" {
 		t.Errorf("limited report: %q", problems)
 	}
-	if _, _, err := verifyRestored(dir, strings.NewReader(`{"id":"x"}`), false, 10); err == nil {
+	if _, _, err := verifyRestored(context.Background(), dir, strings.NewReader(`{"id":"x"}`), false, 10); err == nil {
 		t.Error("a revision without a file list passed")
 	}
 }
@@ -83,7 +85,7 @@ func TestVerifyRestoredMetadataAndType(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b, _ := json.Marshal(map[string]any{"files": []revisionEntry{tc.entry}})
-			_, problems, err := verifyRestored(dir, strings.NewReader(string(b)), tc.owners, 10)
+			_, problems, err := verifyRestored(context.Background(), dir, strings.NewReader(string(b)), tc.owners, 10)
 			if err != nil || !strings.Contains(strings.Join(problems, ";"), tc.want) {
 				t.Fatalf("%v, %v", problems, err)
 			}
@@ -97,8 +99,19 @@ func TestVerifyRestoredBadRecord(t *testing.T) {
 		`{"files":[{"path":"../outside"}]}`, `{"files":[{"path":"/outside"}]}`,
 		`{"files":[{"path":"same"},{"path":"same"}]}`,
 	} {
-		if _, _, err := verifyRestored(t.TempDir(), strings.NewReader(record), false, 10); err == nil {
+		if _, _, err := verifyRestored(context.Background(), t.TempDir(), strings.NewReader(record), false, 10); err == nil {
 			t.Errorf("accepted %s", record)
+		}
+	}
+}
+
+func TestVerifyRestoredCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for _, record := range []string{`{"files":[]}`, `{"files":[{"path":"a","mode":420}]}`} {
+		_, _, err := verifyRestored(ctx, t.TempDir(), strings.NewReader(record), false, 10)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("verification ignored cancellation: %v", err)
 		}
 	}
 }

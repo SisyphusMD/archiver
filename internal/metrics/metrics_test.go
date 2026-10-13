@@ -63,3 +63,20 @@ func TestKitDrillMetrics(t *testing.T) {
 		}
 	}
 }
+
+func TestRestoreDrillMetricsAndAliases(t *testing.T) {
+	s := status.Snapshot{Drills: map[string]map[string]lockstate.DrillResult{"local": {"app": {At: 100, Seconds: 2.5, LastSuccess: 90}}}}
+	got := Render(s)
+	for _, sample := range []string{
+		`archiver_restore_drill_last_timestamp_seconds{storage="local",service="app"} 100`,
+		`archiver_restore_drill_last_ok{storage="local",service="app"} 0`,
+		`archiver_restore_drill_last_duration_seconds{storage="local",service="app"} 2.5`,
+		`archiver_restore_drill_last_success_timestamp_seconds{storage="local",service="app"} 90`,
+		`archiver_drill_last_ok{storage="local",service="app"} 0`,
+		`archiver_drill_last_timestamp_seconds{storage="local",service="app"} 100`,
+	} {
+		if !strings.Contains(got, sample) {
+			t.Errorf("missing %s in %s", sample, got)
+		}
+	}
+}

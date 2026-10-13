@@ -9,16 +9,21 @@ import (
 
 // DrillResult is the last drill of one service on one storage.
 type DrillResult struct {
-	At       int64  `json:"at"`
-	Revision int    `json:"revision,omitempty"`
-	Files    int    `json:"files,omitempty"`
-	OK       bool   `json:"ok"`
-	Skipped  bool   `json:"skipped,omitempty"`
-	Message  string `json:"message,omitempty"`
+	Seconds     float64 `json:"seconds,omitempty"`
+	LastSuccess int64   `json:"last_success,omitempty"`
+	At          int64   `json:"at"`
+	Revision    int     `json:"revision,omitempty"`
+	Files       int     `json:"files,omitempty"`
+	OK          bool    `json:"ok"`
+	Skipped     bool    `json:"skipped,omitempty"`
+	Interrupted bool    `json:"interrupted,omitempty"`
+	Message     string  `json:"message,omitempty"`
 }
 
 // DrillState is what drills remember between runs (logs/.drill-state.json).
 type DrillState struct {
+	// Pending is saved before restoring so a killed run cannot advance past its selection.
+	Pending map[string][]string `json:"pending,omitempty"`
 	// Rotation is, per storage, where the next drill's services start in the sorted list.
 	Rotation map[string]int `json:"rotation,omitempty"`
 	// Results are the last drill of each service, by storage then service.

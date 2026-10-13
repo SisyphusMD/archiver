@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Drill scheduling guarantees (ADR 52):** restore drill selections that fail or are interrupted stay due until they pass, retrying at the next scheduled run before rotation continues. `RESTORE_DRILL_TIMEOUT` bounds the entire run (default 24 hours), alongside the hook limit.
+- Restore drills export `archiver_restore_drill_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds` and `_last_success_timestamp_seconds`, matching deep check and kit drill metrics. `archiver_drill_last_ok` and `archiver_drill_last_timestamp_seconds` are deprecated aliases retained this release.
+- `NOTIFY_ON` and destination overrides accept `,-drills` to suppress restore drill, deep check and kit drill notifications while keeping incidents, status, health and metrics. Default notifications are unchanged.
 - Scheduled deep storage checks per target (`STORAGE_TARGET_N_DEEP_CHECK`, ADR 50), with resumable progress, backup priority, time limits, damage incidents, status and metrics.
 - **Kit drills (ADR 51):** `archiver kit-drill [STORAGE]` and optional `KIT_DRILL_SCHEDULE` rehearse offsite recovery using the envelope's credentials and stock OpenSSL, verify every expected entry and current secret, and report per-storage incidents, status and metrics. `KIT_DRILL_TIMEOUT` defaults to six hours; OneDrive uses Archiver's token and leaves sign-in to a person.
 - **Restore drill checks and hooks (ADRs 48, 49):** each restored entry is checked against its revision's record, including metadata and unexpected entries, then an optional owner-only `drill` executable checks the scratch copy with `ARCHIVER_DRILL_DIR`; a failed hook or its configurable `RESTORE_DRILL_HOOK_TIMEOUT` (default six hours) fails the drill.

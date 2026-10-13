@@ -442,6 +442,10 @@ func TestKitDrillSignalsAndKilledScratch(t *testing.T) {
 				}
 				cmd := start()
 				waitDrillFile(t, filepath.Join(root, "ready"))
+				results, err := lockstate.ReadKitDrills(filepath.Join(root, "logs", ".kit-drill-state.json"))
+				if err != nil || results["store1"].At == 0 || results["store1"].OK || !strings.Contains(results["store1"].Message, "interrupted") {
+					t.Fatalf("pending result: %+v, %v", results, err)
+				}
 				scratch := string(waitDrillFile(t, filepath.Join(root, "scratch")))
 				child, err := strconv.Atoi(strings.TrimSpace(string(waitDrillFile(t, filepath.Join(root, "child")))))
 				if err != nil {

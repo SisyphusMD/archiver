@@ -120,6 +120,12 @@ func Render(s status.Snapshot) string {
 				continue
 			}
 			l := []string{"storage", storage, "service", svc}
+			w.gauge("archiver_restore_drill_last_timestamp_seconds", "When the last restore drill started.", float64(d.At), l...)
+			w.gauge("archiver_restore_drill_last_ok", "Whether the last restore drill passed.", b2f(d.OK), l...)
+			w.gauge("archiver_restore_drill_last_duration_seconds", "How long the last restore drill took.", d.Seconds, l...)
+			if d.LastSuccess != 0 {
+				w.gauge("archiver_restore_drill_last_success_timestamp_seconds", "When the last restore drill passed.", float64(d.LastSuccess), l...)
+			}
 			w.gauge("archiver_drill_last_ok", "Whether the last restore drill of the service on the storage passed.", b2f(d.OK), l...)
 			w.gauge("archiver_drill_last_timestamp_seconds", "When the last restore drill of the service on the storage ran.", float64(d.At), l...)
 		}

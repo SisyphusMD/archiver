@@ -69,15 +69,18 @@ A backup nobody has restored is a hope. With `RESTORE_DRILL_SCHEDULE` set (a cro
 
 ```bash
 RESTORE_DRILL_SCHEDULE="0 5 * * 0"   # weekly, Sunday 5am
+RESTORE_DRILL_TIMEOUT="24h"          # maximum time for the entire run, including waits and hooks
 RESTORE_DRILL_SERVICES="1"           # services per storage per drill (default 1, in rotation), or "all"
 RESTORE_DRILL_STORAGES="all"         # "all" (default), "primary", or storage names
 RESTORE_DRILL_DIR="/tmp/archiver-drill"  # scratch space for the restored copy (default)
 RESTORE_DRILL_EXCLUDE="media"        # service names never drilled (too big for the scratch space, say)
 ```
 
+Failed or interrupted selections stay due on each storage and are retried at the next scheduled time until they pass, before rotation continues. Pending selections are recorded before restoring, so a killed process retries them too. `RESTORE_DRILL_TIMEOUT` ends the whole run like a stop, independently of the hook limit.
+
 Each drill takes, on every chosen storage, the next service in rotation (so one service per week covers every service over time) and restores its newest revision into the drill directory. Duplicacy verifies every chunk as it downloads it, every restored entry is checked against the revision's record (type, size, modification time, mode, and link target for links), with no extra entries except Duplicacy's top-level `.duplicacy` directory. Ownership is not checked because drills restore without ownership. An optional service `drill` hook then runs in the scratch directory to check the application's data; a non-zero exit or exceeding `RESTORE_DRILL_HOOK_TIMEOUT` (six hours by default) fails the drill. The copy is deleted afterwards. Ordinary restore hooks never run, and the live service and its directory are never touched. A service whose revision would not fit the drill directory's free space is skipped with a warning; one with no revision on a storage yet (a secondary still catching up) is skipped too.
 
-A failed drill always notifies ("Restore Drill Failed"); a passing one is routine news (`NOTIFY_ON=everything`). `archiver status` shows each service's last drill per storage, and the healthcheck warns when the last drill failed or none has passed within twice the schedule's interval. Drills run alongside backups (the revision being restored is held in use so no prune removes it meanwhile); `archiver stop`, `pause` and `resume` act on them. `archiver drill [SERVICE] [STORAGE]` runs one now. The restored copy needs as much space as the revision, so point `RESTORE_DRILL_DIR` at a volume with room, or exclude large services. Drills write to `logs/drill.log`.
+A failed drill notifies by default ("Restore Drill Failed"); a passing one is routine news (`NOTIFY_ON=everything`). `archiver status` shows each service's last drill per storage, and the healthcheck warns when the last drill failed or none has passed within twice the schedule's interval. Drills run alongside backups (the revision being restored is held in use so no prune removes it meanwhile); `archiver stop`, `pause` and `resume` act on them. `archiver drill [SERVICE] [STORAGE]` runs one now. The restored copy needs as much space as the revision, so point `RESTORE_DRILL_DIR` at a volume with room, or exclude large services. Drills write to `logs/drill.log`.
 
 ## Scheduled deep storage checks
 
@@ -122,3 +125,5 @@ The metrics endpoint and textfile export `archiver_deep_check_last_timestamp_sec
 ## Kit drills
 
 `archiver kit-drill [STORAGE]` fetches and decrypts the recovery kit from each offsite storage with the envelope's credentials, checking its entries and secrets against the current local payload. `KIT_DRILL_SCHEDULE` enables cron runs (unset: off), and `KIT_DRILL_TIMEOUT` defaults to six hours of active time. Failures notify per storage; a pass clears the incident. Kit drills share restore drills' lock and stop/pause/resume controls. See recovery.md, "Kit drills", for OneDrive's human sign-in step and the per-storage metrics.
+
+Each kind has its own cron schedule: `RESTORE_DRILL_SCHEDULE`, each target's `STORAGE_TARGET_N_DEEP_CHECK`, and `KIT_DRILL_SCHEDULE`. Failures and interruptions retry at the next scheduled slot until a pass, with no monthly caps. Deep checks use `DEEP_CHECK_TIMEOUT` (default seven days); kit drills use `KIT_DRILL_TIMEOUT` (default six hours of active time). To alert through metrics instead, append `,-drills` to `NOTIFY_ON`; results and incidents remain recorded.

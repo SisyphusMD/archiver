@@ -50,7 +50,7 @@ func KindOf(title string) Kind {
 
 // admits reports whether a destination set to on (NOTIFY_ON's words) receives kind k.
 func admits(on string, k Kind) bool {
-	switch on {
+	switch strings.TrimSuffix(on, ",-drills") {
 	case "everything":
 		return true
 	case "problems":
@@ -151,7 +151,7 @@ func (n *Notifier) sendTo(k Kind, title, message string, only map[string]bool) (
 	}
 	text := fmt.Sprintf("[%s] [%s] %s", n.Hostname, now().Format("2006-01-02 15:04:05"), message)
 	for _, d := range n.Destinations {
-		if (only == nil && !admits(d.On, k)) || (only != nil && !only[d.Name()]) {
+		if (drillTitle(title) && strings.HasSuffix(d.On, ",-drills")) || (only == nil && !admits(d.On, k)) || (only != nil && !only[d.Name()]) {
 			continue
 		}
 		n.sendMu.Lock()
@@ -352,4 +352,8 @@ func clipBytes(s string, n int) string {
 		cut--
 	}
 	return s[:cut] + clipped
+}
+
+func drillTitle(title string) bool {
+	return strings.HasPrefix(title, "Restore Drill") || strings.HasPrefix(title, "Deep Check") || strings.HasPrefix(title, "Kit Drill")
 }
