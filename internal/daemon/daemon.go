@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -17,31 +18,36 @@ import (
 
 // Job is one scheduled command.
 type Job struct {
-	Name string // the command run, also its name in the log
-	Env  string // the variable its schedule came from
-	Spec string
-	expr *cronexpr.Expression
+	Name    string // the command run, also its name in the log
+	Env     string // the variable its schedule came from
+	Spec    string
+	Command string // empty uses Name
+	Args    []string
+	expr    *cronexpr.Expression
 }
 
 // Jobs reads the schedules from the environment. A malformed schedule, or one that can
 // never fire, is an error: the container must refuse to start rather than never back up.
 func Jobs(getenv func(string) string, now time.Time) ([]Job, error) {
 	var jobs []Job
-	for _, j := range []Job{
+	definitions := []Job{
 		{Name: "backup", Env: "BACKUP_SCHEDULE"},
 		{Name: "maintenance", Env: "MAINTENANCE_SCHEDULE"},
 		{Name: "drill", Env: "RESTORE_DRILL_SCHEDULE"},
-	} {
+	}
+	for n := 1; getenv("STORAGE_TARGET_"+strconv.Itoa(n)+"_NAME") != ""; n++ {
+		p := "STORAGE_TARGET_" + strconv.Itoa(n) + "_"
+		name := getenv(p + "NAME")
+		definitions = append(definitions, Job{Name: "deep-check:" + name, Command: "deep-check", Args: []string{name}, Env: p + "DEEP_CHECK"})
+	}
+	for _, j := range definitions {
 		j.Spec = getenv(j.Env)
 		if j.Spec == "" {
 			continue
 		}
-		expr, err := cronexpr.ParseStrict(j.Spec)
+		expr, err := expression(j.Spec, now)
 		if err != nil {
 			return nil, fmt.Errorf("invalid %s %q: %v", j.Env, j.Spec, err)
-		}
-		if expr.Next(now).IsZero() {
-			return nil, fmt.Errorf("invalid %s %q: it never fires", j.Env, j.Spec)
 		}
 		j.expr = expr
 		jobs = append(jobs, j)
@@ -160,3 +166,17 @@ func Interval(spec string, now time.Time) (time.Duration, bool) {
 	}
 	return b.Sub(a), true
 }
+
+func expression(spec string, now time.Time) (*cronexpr.Expression, error) {
+	expr, err := cronexpr.ParseStrict(spec)
+	if err != nil {
+		return nil, err
+	}
+	if expr.Next(now).IsZero() {
+		return nil, fmt.Errorf("it never fires")
+	}
+	return expr, nil
+}
+
+// ValidSchedule applies the same cron validation as Jobs.
+func ValidSchedule(spec string, now time.Time) error { _, err := expression(spec, now); return err }

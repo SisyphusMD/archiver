@@ -142,6 +142,10 @@ func (l *Lock) State() lockstate.Lock {
 	return s
 }
 
+// File is the kernel lock file. Passing it to a child keeps mutual exclusion alive
+// if the controller dies before that child exits.
+func (l *Lock) File() *os.File { return l.flock }
+
 // Release removes the lock file and the stop flag, then drops the kernel lock.
 func (l *Lock) Release() {
 	os.Remove(l.Path)

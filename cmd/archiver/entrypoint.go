@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	daemonpkg "github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
 	"github.com/SisyphusMD/archiver/internal/layout"
 )
@@ -148,7 +149,14 @@ func entrypointCommand(args []string) int {
 	signal.Notify(sigs, syscall.SIGTERM)
 	var daemon *exec.Cmd
 	backup, maint, drill := os.Getenv("BACKUP_SCHEDULE"), os.Getenv("MAINTENANCE_SCHEDULE"), os.Getenv("RESTORE_DRILL_SCHEDULE")
-	if backup != "" || maint != "" || drill != "" {
+	jobs, scheduleErr := daemonpkg.Jobs(os.Getenv, time.Now())
+	const invalidSchedule = "ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid (or RESTORE_DRILL_SCHEDULE or STORAGE_TARGET_N_DEEP_CHECK)."
+	if scheduleErr != nil {
+		fmt.Fprintln(os.Stderr, scheduleErr)
+		fmt.Fprintln(os.Stderr, invalidSchedule)
+		return 1
+	}
+	if len(jobs) > 0 {
 		if backup != "" {
 			fmt.Println("Backups scheduled: " + backup)
 		}
@@ -160,7 +168,7 @@ func entrypointCommand(args []string) int {
 		}
 		// Fail fast on a malformed schedule instead of crash-looping the container.
 		if runDaemon([]string{"--check"}) != 0 {
-			fmt.Println("ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid (or RESTORE_DRILL_SCHEDULE).")
+			fmt.Fprintln(os.Stderr, invalidSchedule)
 			return 1
 		}
 		fmt.Println("Starting scheduler...")
@@ -219,10 +227,11 @@ func entrypointCommand(args []string) int {
 
 // shutdown stops whatever runs and waits for every run to record the stop and release
 // their locks: exiting first would tear down the PID namespace and kill that cleanup midway.
-// The wait is bounded well under the documented stop_grace_period of two minutes.
+// The 100-second wait covers Duplicacy's 30-second interrupt grace and stays below
+// the documented stop_grace_period of two minutes.
 func shutdown(e *entrypoint.Env, stopTailers chan struct{}) {
 	fmt.Println("Received shutdown signal, attempting graceful stop...")
-	stop := exec.Command(selfPath, "stop", "--shutdown")
+	stop := exec.Command(e.Self, "stop", "--shutdown")
 	stop.Stdout, stop.Stderr = os.Stdout, os.Stdout
 	_ = stop.Run()
 	for range 100 {

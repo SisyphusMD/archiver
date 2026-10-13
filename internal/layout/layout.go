@@ -84,3 +84,10 @@ func (l Layout) StorageInit(storage string) string {
 func (l Layout) CopyLock(storage string) string {
 	return filepath.Join(l.Lock, "archiver-copy-"+storage+".flock")
 }
+
+func (l Layout) DeepCheckLock(storage string) string {
+	return filepath.Join(l.Lock, "archiver-deep-check-"+storage+".lock")
+}
+func (l Layout) DeepCheckStopFlag(storage string) string {
+	return filepath.Join(l.Lock, "archiver-deep-check-"+storage+"-stop-requested")
+}

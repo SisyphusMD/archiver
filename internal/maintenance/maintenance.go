@@ -362,55 +362,41 @@ func (r *Run) storage(i int) bool {
 	if r.stopRequested() {
 		return false
 	}
-	var failed bool
-	if i == 0 {
-		// The primary's prune leaves out revisions a copy or restore is still reading (ADR 19).
-		ctx, cancel := context.WithCancel(context.Background())
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			tick := time.NewTicker(time.Second)
-			defer tick.Stop()
-			for {
-				select {
-				case <-ctx.Done():
+	// Every directly maintained storage leaves out revisions still being read (ADR 19).
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		tick := time.NewTicker(time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				if r.stopRequested() {
+					r.log.Message(logging.Info, name, "Stop requested during prune.")
+					cancel()
 					return
-				case <-tick.C:
-					if r.stopRequested() {
-						r.log.Message(logging.Info, name, "Stop requested during prune.")
-						cancel()
-						return
-					}
 				}
 			}
-		}()
-		out := r.log.Writer(logging.Info, name)
-		err := localprune.Run(ctx, localprune.Options{
-			Bin: r.Duplicacy, Storage: name, Keep: strings.Fields(r.cfg.PruneKeep), Threads: r.cfg.Threads,
-			Exhaustive: exhaustive, InUseDir: r.Layout.InUseDir(), Out: out, Dir: r.repo, Env: r.env,
-		})
-		out.Close()
-		stopped := ctx.Err() != nil
-		cancel()
-		<-done
-		if stopped || r.stopped {
-			return false
 		}
-		failed = err != nil
-		if err != nil {
-			r.log.Message(logging.Info, name, "Prune of local storage failed: "+err.Error())
-		}
-	} else {
-		args := append([]string{"prune", "-all", "-storage", name}, strings.Fields(r.cfg.PruneKeep)...)
-		args = append(args, "-threads", r.cfg.Threads)
-		if exhaustive {
-			args = append(args, "-exhaustive")
-		}
-		code, stopped := r.duplicacy(name, args...)
-		if stopped {
-			return false
-		}
-		failed = code != 0
+	}()
+	out := r.log.Writer(logging.Info, name)
+	err := localprune.Run(ctx, localprune.Options{
+		Bin: r.Duplicacy, Storage: name, Keep: strings.Fields(r.cfg.PruneKeep), Threads: r.cfg.Threads,
+		Exhaustive: exhaustive, InUseDir: r.Layout.InUseDir(), Out: out, Dir: r.repo, Env: r.env,
+	})
+	out.Close()
+	stopped := ctx.Err() != nil
+	cancel()
+	<-done
+	if stopped || r.stopped {
+		return false
+	}
+	failed := err != nil
+	if err != nil {
+		r.log.Message(logging.Info, name, "Prune of "+name+" storage failed: "+err.Error())
 	}
 	if failed {
 		r.log.Message(logging.Error, name, "Prune failed for "+name+" storage. Review the Duplicacy logs for details.")
@@ -455,8 +441,6 @@ func (r *Run) exhaustiveDue(s state, name string) bool {
 	return r.Now().Unix()-s.get(name, fieldExhaustive) >= int64((interval - time.Hour).Seconds())
 }
 
-// duplicacy runs one duplicacy command in the repository, ending it when a stop comes;
-// stopped reports that.
 // checkin tells the storage's check-in URL how its check went (ADR 37), as its copy worker
 // would when it keeps it.
 func (r *Run) checkin(t config.Target, ok bool, msg string) {
@@ -493,11 +477,7 @@ func (r *Run) probe(t config.Target) error {
 	return err
 }
 
-func (r *Run) duplicacy(service string, args ...string) (code int, stopped bool) {
-	return r.duplicacyTo(service, nil, args...)
-}
-
-// duplicacyTo is duplicacy with its output also copied to also.
+// duplicacyTo runs a command until completion or stop, copying its output to also.
 func (r *Run) duplicacyTo(service string, also io.Writer, args ...string) (code int, stopped bool) {
 	spec := proc.Spec{Path: r.Duplicacy, Args: proc.NoScript(args...), Dir: r.repo, Env: r.env, Log: r.log, Service: service, Interrupt: true}
 	if also != nil {

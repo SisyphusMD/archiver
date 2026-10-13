@@ -27,6 +27,8 @@ type Spec struct {
 	Service string // the log's service label
 	// Output, when set, receives stdout and stderr as they are instead of the log.
 	Output io.Writer
+	// ExtraFiles keeps shared kernel locks live if the controller dies before its child.
+	ExtraFiles []*os.File
 	// Hook logs each output line at the level its [ERROR] or [WARNING] prefix asks for.
 	Hook bool
 	// Group runs the program in its own process group, so Terminate ends everything it
@@ -60,6 +62,7 @@ func Start(s Spec) (*Proc, error) {
 	cmd := exec.Command(s.Path, s.Args...)
 	cmd.Dir = s.Dir
 	cmd.Env = s.Env
+	cmd.ExtraFiles = s.ExtraFiles
 	var w io.WriteCloser
 	switch {
 	case s.Output != nil:
