@@ -95,6 +95,33 @@ printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
 archiver drill >/tmp/drill-limit-retry.out 2>&1 || { cat /tmp/drill-limit-retry.out; die "timeout retry failed"; }
 state 'r["local"]["db"]["ok"] and not s.get("pending", {}).get("local")' || die "timeout selection did not retry"
 
+log "drill hook timeout and stop allow TERM cleanup before scratch removal"
+cat >"$SERVICES/db/drill" <<'HOOK'
+#!/bin/sh
+trap 'sleep 0.15; test -d "$ARCHIVER_DRILL_DIR" || exit 9; printf "%s\n" "$ARCHIVER_DRILL_DIR" > /tmp/hook-cleaned; exit 0' TERM
+echo ready >/tmp/hook-started
+sleep 30 & wait
+HOOK
+for reason in timeout stop; do
+  rm -f /tmp/hook-started /tmp/hook-cleaned
+  if [ "$reason" = timeout ]; then
+    RESTORE_DRILL_HOOK_TIMEOUT=200ms RESTORE_DRILL_HOOK_GRACE=2s archiver drill db local >/tmp/hook-cleanup.out 2>&1 && die "hook timeout passed"
+  else
+    RESTORE_DRILL_HOOK_GRACE=2s archiver drill db local >/tmp/hook-cleanup.out 2>&1 &
+    drill_pid=$!
+    for _ in $(seq 1 100); do
+      [ -f /tmp/hook-started ] && break
+      sleep 0.1
+    done
+    [ -f /tmp/hook-started ] || { cat /tmp/hook-cleanup.out; die "hook did not start"; }
+    archiver stop drill >/tmp/hook-stop.out 2>&1 || { cat /tmp/hook-stop.out; die "stop drill"; }
+    wait "$drill_pid" && die "stopped drill passed"
+  fi
+  [ -s /tmp/hook-cleaned ] || { cat /tmp/hook-cleanup.out; die "$reason did not allow TERM cleanup"; }
+  [ ! -e "$(cat /tmp/hook-cleaned)" ] || die "$reason left its scratch copy"
+done
+printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
+
 log "named drills alternate storages, persist the cursor, and retry a failure"
 export RESTORE_DRILL_GARAGE_SCHEDULE="0 8 * * 6#1"
 export RESTORE_DRILL_GARAGE_SERVICES=app,db

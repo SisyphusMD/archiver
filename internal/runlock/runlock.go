@@ -117,17 +117,57 @@ func (l *Lock) Record(state string) error { return Append(l.Path, state, l.now()
 // Append appends a state event to the lock file at path, as the run's owner or as another
 // process (`archiver pause` records "paused" for the run).
 func Append(path, state string, at time.Time) error {
-	return edit(path, func() error {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
-		if err != nil {
+	return edit(path, func() error { return appendEvent(path, state, at) })
+}
+
+func appendEvent(path, state string, at time.Time) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644) //nolint:gosec // G302: deliberate mode: owner-only, or a log or lock that is not secret
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(f, "%d %s\n", at.Unix(), state)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	return err
+}
+
+// Pause records and signals a pause while excluding transitions into hook cleanup.
+// Holding the edit lock through signal prevents an in-flight pause freezing cleanup.
+func Pause(path string, at time.Time, signal func()) (paused bool, err error) {
+	err = edit(path, func() error {
+		state, held, err := lockstate.ReadLock(path)
+		if err != nil || !held || state.Paused() {
 			return err
 		}
-		_, err = fmt.Fprintf(f, "%d %s\n", at.Unix(), state)
-		if cerr := f.Close(); err == nil {
-			err = cerr
+		if len(state.Events) > 0 && state.Events[len(state.Events)-1].State == "cleanup" {
+			return nil
 		}
-		return err
+		if err := appendEvent(path, "paused", at); err != nil {
+			return err
+		}
+		signal()
+		paused = true
+		return nil
 	})
+	return paused, err
+}
+
+// Resume resumes only a paused run, preserving a concurrent cleanup transition.
+func Resume(path string, at time.Time, signal func()) (resumed bool, err error) {
+	err = edit(path, func() error {
+		state, held, err := lockstate.ReadLock(path)
+		if err != nil || !held || !state.Paused() {
+			return err
+		}
+		signal()
+		if err := appendEvent(path, "running", at); err != nil {
+			return err
+		}
+		resumed = true
+		return nil
+	})
+	return resumed, err
 }
 
 // StopRequested reports whether `archiver stop` asked this run to end.
@@ -178,7 +218,7 @@ func Summarize(s lockstate.Lock) Summary {
 		switch {
 		case e.State == "paused":
 			pauseStart = e.At
-		case e.State == "running" && pauseStart >= 0:
+		case (e.State == "running" || e.State == "cleanup") && pauseStart >= 0:
 			sum.Paused += e.At - pauseStart
 			pauseStart = -1
 		}

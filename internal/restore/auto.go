@@ -79,6 +79,7 @@ type request struct {
 	targets  []config.Target
 	opts     Options
 	hook     bool
+	dry      bool
 }
 
 // Auto restores SNAPSHOT_ID into LOCAL_DIR without asking anything, from the first storage
@@ -102,9 +103,6 @@ func (e *Env) Auto() int {
 	req, code := e.request(id, dir)
 	if code != OK {
 		return code
-	}
-	if e.getenv("DRY_RUN") != "" {
-		return e.dryRun(req)
 	}
 	defer e.release()
 	return e.run(req)
@@ -166,11 +164,12 @@ Required env: SNAPSHOT_ID, LOCAL_DIR
 Optional env: REVISION (default 'latest'), STORAGE_TARGET (name or id),
               OVERWRITE, DELETE_EXTRA, HASH_COMPARE, IGNORE_OWNERSHIP,
               RESTORE_PATHS (paths in the snapshot, comma-separated: only these),
-              DRY_RUN (non-empty: show what would be restored, replaced and
+              DRY_RUN (true/1/yes/on: show what would be restored, replaced and
               deleted, and restore nothing),
-              RUN_RESTORE_SERVICE (non-empty: run the service's post-restore hook
+              RUN_RESTORE_SERVICE (true/1/yes/on: run the service's post-restore hook
               after a successful file restore),
               RESTORE_THREADS (default matches DUPLICACY_THREADS)
+Booleans: true/1/yes/on enable; false/0/no/off/empty disable (case-insensitive).
 Exit codes: 0=restored, 1=snapshot not found, restore failed, or the restore hook failed,
             2=unreachable or invalid env, 3=a backup or another restore into a
             service directory is running
@@ -179,21 +178,30 @@ Exit codes: 0=restored, 1=snapshot not found, restore failed, or the restore hoo
 
 // request builds a restore of id into dir from the environment's settings.
 func (e *Env) request(id, dir string) (request, int) {
-	req := request{id: id, dir: dir, revision: e.getenv("REVISION"), hook: e.getenv("RUN_RESTORE_SERVICE") != ""}
+	req := request{id: id, dir: dir, revision: e.getenv("REVISION")}
+	for _, setting := range []struct {
+		name string
+		dest *bool
+	}{
+		{"DRY_RUN", &req.dry}, {"RUN_RESTORE_SERVICE", &req.hook},
+		{"HASH_COMPARE", &req.opts.Hash}, {"OVERWRITE", &req.opts.Overwrite},
+		{"DELETE_EXTRA", &req.opts.Delete}, {"IGNORE_OWNERSHIP", &req.opts.IgnoreOwner},
+	} {
+		value, err := config.ParseBool(setting.name, e.getenv(setting.name))
+		if err != nil {
+			fmt.Fprintln(e.Stderr, "ERROR:", err)
+			return req, Unreachable
+		}
+		*setting.dest = value
+	}
 	if req.revision == "" {
 		req.revision = "latest"
 	} else if _, err := strconv.Atoi(req.revision); err != nil && req.revision != "latest" {
 		fmt.Fprintf(e.Stderr, "ERROR: REVISION '%s' is not a revision number or 'latest'\n", req.revision)
 		return req, Unreachable
 	}
-	req.opts = Options{
-		Hash:        e.getenv("HASH_COMPARE") != "",
-		Overwrite:   e.getenv("OVERWRITE") != "",
-		Delete:      e.getenv("DELETE_EXTRA") != "",
-		IgnoreOwner: e.getenv("IGNORE_OWNERSHIP") != "",
-		Threads:     e.getenv("RESTORE_THREADS"),
-		Paths:       Paths(e.getenv("RESTORE_PATHS")),
-	}
+	req.opts.Threads = e.getenv("RESTORE_THREADS")
+	req.opts.Paths = Paths(e.getenv("RESTORE_PATHS"))
 	// A value that names nothing must not become a restore of everything.
 	if v := e.getenv("RESTORE_PATHS"); v != "" && len(req.opts.Paths) == 0 {
 		fmt.Fprintf(e.Stderr, "ERROR: RESTORE_PATHS '%s' names no path\n", v)
@@ -217,6 +225,9 @@ func (e *Env) request(id, dir string) (request, int) {
 
 // run restores req from the first of its targets that has the revision.
 func (e *Env) run(req request) int {
+	if req.dry {
+		return e.dryRun(req)
+	}
 	dir, err := prepare(req.dir)
 	if err != nil {
 		fmt.Fprintf(e.Stderr, "ERROR: Failed to create '%s': %v\n", req.dir, err)

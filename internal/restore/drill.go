@@ -661,6 +661,10 @@ func (d *drillRun) hook(t config.Target, name, id string, rev int, work string) 
 	if err != nil {
 		return err.Error()
 	}
+	grace, err := d.e.cfg.DrillHookGracePeriod()
+	if err != nil {
+		return err.Error()
+	}
 	svc := hooks.Service{Name: name, Dir: dir, SnapshotID: id, HookDir: hookDir}
 	env := append(hooks.RestoreEnviron(d.e.Environ, svc, rev, t.Name), "ARCHIVER_DRILL_DIR="+work)
 	d.log.Message(logging.Info, name, fmt.Sprintf("Running the drill hook on revision %d from '%s'.", rev, t.Name))
@@ -677,8 +681,9 @@ func (d *drillRun) hook(t config.Target, name, id string, rev int, work string) 
 	}
 	// A hook can exit while its background children still use the restored copy.
 	defer func() {
-		p.Terminate(true)
-		<-p.Done()
+		_ = d.lock.Record("cleanup")
+		p.TerminateGroupGrace(grace)
+		_ = d.lock.Record("running")
 	}()
 	remaining, checked := limit, time.Now()
 	paused := d.lock.State().Paused()

@@ -92,3 +92,51 @@ func TestAcquireWaitsForRelease(t *testing.T) {
 	}
 	l.Release()
 }
+
+func TestPauseSerializesCleanup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "drill.lock")
+	l, _, err := Acquire(path, path+".stop", "drill", "hook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Release()
+	signaling, finish := make(chan struct{}), make(chan struct{})
+	paused := make(chan error, 1)
+	go func() {
+		_, err := Pause(path, time.Now(), func() {
+			close(signaling)
+			<-finish
+		})
+		paused <- err
+	}()
+	<-signaling
+	cleaned := make(chan error, 1)
+	go func() { cleaned <- l.Record("cleanup") }()
+	select {
+	case err := <-cleaned:
+		t.Fatalf("cleanup overtook pause signals: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(finish)
+	if err := <-paused; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-cleaned; err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := Resume(path, time.Now(), func() { t.Error("cleanup was signaled to resume") })
+	if err != nil || resumed {
+		t.Fatalf("cleanup resume: resumed=%v err=%v", resumed, err)
+	}
+	ok, err := Pause(path, time.Now(), func() { t.Error("cleanup was signaled to pause") })
+	if err != nil || ok || l.State().Paused() {
+		t.Fatalf("cleanup pause: paused=%v err=%v state=%+v", ok, err, l.State())
+	}
+	if err := l.Record("running"); err != nil {
+		t.Fatal(err)
+	}
+	ok, err = Pause(path, time.Now(), func() {})
+	if err != nil || !ok || !l.State().Paused() {
+		t.Fatalf("pause after cleanup: paused=%v err=%v", ok, err)
+	}
+}

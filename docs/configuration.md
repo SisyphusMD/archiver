@@ -4,6 +4,8 @@
 
 Settings are environment variables. **Secrets** are files, never environment variables: `<secrets dir>/<name in lower case>` (`/run/secrets/storage_password`), or the file `<NAME>_FILE` names. An editor can validate an env file against [archiver.schema.json](archiver.schema.json).
 
+Boolean settings accept true/1/yes/on and false/0/no/off/empty, case-insensitively; other values are errors. Restore flags default to off. CHECK_BACKUPS and PRUNE_BACKUPS retain their enabled defaults when empty; ROTATE_BACKUPS is the fallback for PRUNE_BACKUPS.
+
 ## Services
 
 | Variable | Default | Description |
@@ -72,7 +74,7 @@ Settings are environment variables. **Secrets** are files, never environment var
 
 | Variable | Default | Description |
 |---|---|---|
-| `RESTORE_DRILL_<NAME>_SCHEDULE` |  | Defines a named drill. NAME matches `[A-Z0-9_]+`; reserved names: SERVICES, STORAGES, DIR, EXCLUDE, TIMEOUT, HOOK, HOOK_TIMEOUT, SCHEDULE. Each named drill has its own schedule, results and pending selection; `archiver drill --named NAME` runs it now. |
+| `RESTORE_DRILL_<NAME>_SCHEDULE` |  | Defines a named drill. NAME matches `[A-Z0-9_]+`; reserved names: SERVICES, STORAGES, DIR, EXCLUDE, TIMEOUT, HOOK, HOOK_TIMEOUT, HOOK_GRACE, SCHEDULE. Each named drill has its own schedule, results and pending selection; `archiver drill --named NAME` runs it now. |
 | `RESTORE_DRILL_<NAME>_SERVICES` |  | Required comma-separated configured service names; every listed service runs, ignoring RESTORE_DRILL_EXCLUDE. |
 | `RESTORE_DRILL_<NAME>_STORAGES` | `all` | Storage selection: all, primary, comma-separated names, alternate, or alternate:NAME,NAME. Alternate selects one storage per run in configuration order, or the listed order for a subset, persisted across restarts; changing the list resets the cursor to the first storage, while a pending storage still in the list retries first; failed or interrupted runs retry the same storage until every service passes or genuinely skips. |
 | `RESTORE_DRILL_<NAME>_TIMEOUT` | `24h` | Maximum named drill duration including waits and hooks; independent of RESTORE_DRILL_TIMEOUT's configured value. |
@@ -80,6 +82,7 @@ Settings are environment variables. **Secrets** are files, never environment var
 | `RESTORE_DRILL_STORAGES` | `all` | Which storages drills restore from: `all`, `primary`, or storage names separated by commas. |
 | `RESTORE_DRILL_DIR` | `/tmp/archiver-drill` | Scratch space a drill restores into and deletes afterwards; never a service directory. |
 | `RESTORE_DRILL_TIMEOUT` | `24h` | Maximum time of an entire restore drill, including waits and hooks; ends like a stop and remains due until it passes. |
+| `RESTORE_DRILL_HOOK_GRACE` | `60s` | Cleanup time after TERM on hook timeout or drill stop, before KILL ends remaining hook processes. The scratch copy stays until cleanup ends. |
 | `RESTORE_DRILL_HOOK_TIMEOUT` | `6h` | Maximum time a service's drill hook may run; a timeout fails the drill and ends the hook and its children. |
 | `RESTORE_DRILL_EXCLUDE` |  | Services drills leave out, separated by commas. |
 
@@ -116,15 +119,15 @@ Settings are environment variables. **Secrets** are files, never environment var
 | `LOCAL_DIR` |  | auto-restore: where to restore. |
 | `REVISION` | `latest` | auto-restore: a revision number or `latest`. |
 | `STORAGE_TARGET` |  | auto-restore: restore from this storage (name or number) only. |
-| `OVERWRITE` |  | auto-restore: replace files that differ. |
-| `DELETE_EXTRA` |  | auto-restore: delete files the revision does not have. |
-| `HASH_COMPARE` |  | auto-restore: compare files by content, not size and time. |
-| `IGNORE_OWNERSHIP` |  | auto-restore: leave ownership alone (without CHOWN and FOWNER it is left anyway, with a warning). |
+| `OVERWRITE` | `false` | auto-restore: replace files that differ. |
+| `DELETE_EXTRA` | `false` | auto-restore: delete files the revision does not have. |
+| `HASH_COMPARE` | `false` | auto-restore: compare files by content, not size and time. |
+| `IGNORE_OWNERSHIP` | `false` | auto-restore: leave ownership alone (without CHOWN and FOWNER it is left anyway, with a warning). |
 | `RESTORE_PATHS` |  | auto-restore: only these paths in the snapshot, separated by commas. |
-| `DRY_RUN` |  | auto-restore: show what would be restored, replaced and deleted, and restore nothing. |
-| `RUN_RESTORE_SERVICE` |  | auto-restore: run the service's post-restore hook after the files are restored. |
+| `DRY_RUN` | `false` | auto-restore: show what would be restored, replaced and deleted, and restore nothing. |
+| `RUN_RESTORE_SERVICE` | `false` | auto-restore: run the service's post-restore hook after the files are restored. |
 | `RESTORE_THREADS` |  | auto-restore: threads for this restore. Default: DUPLICACY_THREADS. |
-| `NO_PREVIEW` |  | restore: skip the preview of what an interactive restore changes. |
+| `NO_PREVIEW` | `false` | restore: skip the preview of what an interactive restore changes. |
 | `RECOVERY_PASSWORD_FILE` |  | recover: a file holding the kit's password, instead of the prompt. |
 
 ## Storage targets

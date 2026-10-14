@@ -1,6 +1,7 @@
 package restore
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -10,7 +11,9 @@ import (
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
+	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/logging"
+	"github.com/SisyphusMD/archiver/internal/runctl"
 	"github.com/SisyphusMD/archiver/internal/runlock"
 )
 
@@ -50,12 +53,13 @@ func hookFixture(t *testing.T, script string, mode os.FileMode, limit string) (*
 	if err := os.Chmod(filepath.Join(service, "drill"), mode); err != nil {
 		t.Fatal(err)
 	}
-	lock, _, err := runlock.Acquire(filepath.Join(root, "lock"), filepath.Join(root, "stop"), "drill", "hook")
+	l := layout.Layout{Lock: root}
+	lock, _, err := runlock.Acquire(l.DrillLock(), l.DrillStopFlag(), "drill", "hook")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { lock.Release() })
-	return &drillRun{e: &Env{cfg: &config.Config{DrillHookLimit: limit}, Environ: []string{"PATH=" + os.Getenv("PATH"), "STORAGE_PASSWORD=secret", "RSA_PASSPHRASE=secret", "DUPLICACY_LOCAL_PASSWORD=secret", "STORAGE_TARGET_1_S3_SECRET=secret", "ARCHIVER_DRILL_DIR=wrong"}}, log: &logging.Log{Dir: root, Basename: "drill"}, lock: lock, dirs: map[string]string{"app": service}}, work
+	return &drillRun{e: &Env{Layout: l, cfg: &config.Config{DrillHookLimit: limit}, Environ: []string{"PATH=" + os.Getenv("PATH"), "STORAGE_PASSWORD=secret", "RSA_PASSPHRASE=secret", "DUPLICACY_LOCAL_PASSWORD=secret", "STORAGE_TARGET_1_S3_SECRET=secret", "ARCHIVER_DRILL_DIR=wrong"}}, log: &logging.Log{Dir: root, Basename: "drill"}, lock: lock, dirs: map[string]string{"app": service}}, work
 }
 
 func TestDrillHookStop(t *testing.T) {
@@ -245,4 +249,126 @@ func hookGroupAlive(t *testing.T, group int) bool {
 		}
 	}
 	return false
+}
+
+func TestDrillHookTermCleanup(t *testing.T) {
+	for _, stop := range []bool{false, true} {
+		t.Run(strconv.FormatBool(stop), func(t *testing.T) {
+			d, work := hookFixture(t, "trap 'sleep 0.15; test -d \"$ARCHIVER_DRILL_DIR\" && touch cleaned; exit 0' TERM\necho $$ > group\nsleep 30 & wait", 0o700, "200ms")
+			done := make(chan string, 1)
+			go func() { done <- d.hook(config.Target{Name: "local"}, "app", "h-app", 7, work) }()
+			group := hookPID(t, filepath.Join(work, "group"))
+			t.Cleanup(func() { _ = syscall.Kill(-group, syscall.SIGKILL) })
+			if stop {
+				if err := os.WriteFile(d.lock.StopFlag, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			select {
+			case got := <-done:
+				want := "did not finish"
+				if stop {
+					want = "stop requested"
+				}
+				if !strings.Contains(got, want) {
+					t.Fatalf("got %q, want %q", got, want)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("hook did not stop")
+			}
+			if _, err := os.Stat(filepath.Join(work, "cleaned")); err != nil {
+				t.Fatalf("TERM cleanup did not finish before hook returned: %v", err)
+			}
+		})
+	}
+}
+
+func TestDrillHookGraceKillsSurvivors(t *testing.T) {
+	for _, leaderExits := range []bool{false, true} {
+		t.Run(strconv.FormatBool(leaderExits), func(t *testing.T) {
+			trap := "trap '' TERM"
+			if leaderExits {
+				trap = "trap 'exit 0' TERM"
+			}
+			d, work := hookFixture(t, trap+"\n(sh -c 'trap \"\" TERM; echo ready > child-ready; while :; do sleep 1; done') >/dev/null 2>&1 &\nwhile [ ! -f child-ready ]; do sleep 0.01; done\necho $$ > group\nwait", 0o700, "150ms")
+			d.e.cfg.DrillHookGrace = "150ms"
+			started := time.Now()
+			got := d.hook(config.Target{Name: "local"}, "app", "h-app", 7, work)
+			group := hookPID(t, filepath.Join(work, "group"))
+			t.Cleanup(func() { _ = syscall.Kill(-group, syscall.SIGKILL) })
+			if !strings.Contains(got, "did not finish") {
+				t.Fatalf("got %q", got)
+			}
+			elapsed := time.Since(started)
+			if elapsed < 300*time.Millisecond || elapsed > 3*time.Second {
+				t.Fatalf("cleanup did not respect grace: %s", elapsed)
+			}
+			deadline := time.Now().Add(time.Second)
+			for hookGroupAlive(t, group) {
+				if time.Now().After(deadline) {
+					t.Fatal("TERM-ignoring descendant survived KILL")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		})
+	}
+}
+
+func TestDrillHookCleanupCannotBePaused(t *testing.T) {
+	for _, stopPaused := range []bool{false, true} {
+		t.Run(strconv.FormatBool(stopPaused), func(t *testing.T) {
+			limit := "200ms"
+			if stopPaused {
+				limit = "5s"
+			}
+			d, work := hookFixture(t, "trap 'touch cleaning; sleep 0.6; touch cleaned; exit 0' TERM\necho $$ > group\nsleep 30 & wait", 0o700, limit)
+			d.e.cfg.DrillHookGrace = "2s"
+			done := make(chan string, 1)
+			go func() { done <- d.hook(config.Target{Name: "local"}, "app", "h-app", 7, work) }()
+			group := hookPID(t, filepath.Join(work, "group"))
+			t.Cleanup(func() { _ = syscall.Kill(-group, syscall.SIGKILL) })
+			e := runctl.Env{Layout: d.e.Layout, Out: io.Discard, Log: d.log, Now: time.Now,
+				Workers: func(string) bool { return false }, Notify: func(string, string) {}}
+			if stopPaused {
+				if runctl.Pause(e) != 0 || !d.lock.State().Paused() {
+					t.Fatal("drill was not paused")
+				}
+				if runctl.Stop(e, "drill", false) != 0 {
+					t.Fatal("stop failed")
+				}
+			}
+			deadline := time.Now().Add(3 * time.Second)
+			for {
+				if _, err := os.Stat(filepath.Join(work, "cleaning")); err == nil {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("TERM cleanup did not start")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if !stopPaused {
+				for range 2 {
+					if runctl.Pause(e) != 0 || d.lock.State().Paused() {
+						t.Fatal("pause froze hook cleanup")
+					}
+				}
+			}
+			select {
+			case got := <-done:
+				want := "did not finish"
+				if stopPaused {
+					want = "stop requested"
+				}
+				if !strings.Contains(got, want) {
+					t.Fatalf("got %q, want %q", got, want)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("hook did not stop")
+			}
+			if _, err := os.Stat(filepath.Join(work, "cleaned")); err != nil {
+				t.Fatalf("TERM cleanup did not finish: %v", err)
+			}
+		})
+	}
 }

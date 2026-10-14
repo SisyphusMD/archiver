@@ -15,7 +15,7 @@ type Var struct {
 	Secret  bool     // a file in the secrets directory (or <NAME>_FILE), never the environment
 	Default string   // "" when unset means off or none
 	Values  []string // the accepted values, when there is a fixed set
-	Kind    string   // string, integer, boolean (true or false), flag (on when set), interval, cron, url, port, path, list
+	Kind    string   // string, integer, boolean (true/1/yes/on or false/0/no/off/empty), interval, cron, url, port, path, list
 	Desc    string
 	// CaseFold: the loader takes Values in any letter case.
 	CaseFold bool
@@ -70,7 +70,7 @@ var Reference = []Var{
 	{Name: "WEB_ALLOWED_HOSTS", Group: "Monitoring", Kind: "list", Desc: "Names the status page and `/metrics` answer to besides addresses, `localhost` and the container's hostname, separated by commas (such as the name your proxy or Prometheus uses). Any other name is refused, so a web page cannot rebind its own name to Archiver and read them."},
 	{Name: "LOG_FORMAT", Group: "Monitoring", Kind: "string", Default: "text", Values: []string{"text", "json"}, Desc: "`json` writes the container's output as one JSON object per line."},
 
-	{Name: "RESTORE_DRILL_<NAME>_SCHEDULE", Group: "Restore drills", Kind: "cron", Desc: "Defines a named drill. NAME matches `[A-Z0-9_]+`; reserved names: SERVICES, STORAGES, DIR, EXCLUDE, TIMEOUT, HOOK, HOOK_TIMEOUT, SCHEDULE. Each named drill has its own schedule, results and pending selection; `archiver drill --named NAME` runs it now."},
+	{Name: "RESTORE_DRILL_<NAME>_SCHEDULE", Group: "Restore drills", Kind: "cron", Desc: "Defines a named drill. NAME matches `[A-Z0-9_]+`; reserved names: SERVICES, STORAGES, DIR, EXCLUDE, TIMEOUT, HOOK, HOOK_TIMEOUT, HOOK_GRACE, SCHEDULE. Each named drill has its own schedule, results and pending selection; `archiver drill --named NAME` runs it now."},
 	{Name: "RESTORE_DRILL_<NAME>_SERVICES", Group: "Restore drills", Kind: "list", Desc: "Required comma-separated configured service names; every listed service runs, ignoring RESTORE_DRILL_EXCLUDE."},
 	{Name: "RESTORE_DRILL_<NAME>_STORAGES", Group: "Restore drills", Kind: "string", Default: "all", Desc: "Storage selection: all, primary, comma-separated names, alternate, or alternate:NAME,NAME. Alternate selects one storage per run in configuration order, or the listed order for a subset, persisted across restarts; changing the list resets the cursor to the first storage, while a pending storage still in the list retries first; failed or interrupted runs retry the same storage until every service passes or genuinely skips."},
 	{Name: "RESTORE_DRILL_<NAME>_TIMEOUT", Group: "Restore drills", Kind: "interval", Default: "24h", Desc: "Maximum named drill duration including waits and hooks; independent of RESTORE_DRILL_TIMEOUT's configured value."},
@@ -78,6 +78,7 @@ var Reference = []Var{
 	{Name: "RESTORE_DRILL_STORAGES", Group: "Restore drills", Kind: "string", Default: "all", Desc: "Which storages drills restore from: `all`, `primary`, or storage names separated by commas."},
 	{Name: "RESTORE_DRILL_DIR", Group: "Restore drills", Kind: "path", Default: "/tmp/archiver-drill", Desc: "Scratch space a drill restores into and deletes afterwards; never a service directory."},
 	{Name: "RESTORE_DRILL_TIMEOUT", Group: "Restore drills", Kind: "interval", Default: "24h", Desc: "Maximum time of an entire restore drill, including waits and hooks; ends like a stop and remains due until it passes."},
+	{Name: "RESTORE_DRILL_HOOK_GRACE", Group: "Restore drills", Kind: "interval", Default: "60s", Desc: "Cleanup time after TERM on hook timeout or drill stop, before KILL ends remaining hook processes. The scratch copy stays until cleanup ends."},
 	{Name: "RESTORE_DRILL_HOOK_TIMEOUT", Group: "Restore drills", Kind: "interval", Default: "6h", Desc: "Maximum time a service's drill hook may run; a timeout fails the drill and ends the hook and its children."},
 	{Name: "RESTORE_DRILL_EXCLUDE", Group: "Restore drills", Kind: "list", Desc: "Services drills leave out, separated by commas."},
 
@@ -97,15 +98,15 @@ var Reference = []Var{
 	{Name: "LOCAL_DIR", Group: "Restore commands", Kind: "path", Desc: "auto-restore: where to restore."},
 	{Name: "REVISION", Group: "Restore commands", Kind: "string", Default: "latest", Desc: "auto-restore: a revision number or `latest`."},
 	{Name: "STORAGE_TARGET", Group: "Restore commands", Kind: "string", Desc: "auto-restore: restore from this storage (name or number) only."},
-	{Name: "OVERWRITE", Group: "Restore commands", Kind: "flag", Desc: "auto-restore: replace files that differ."},
-	{Name: "DELETE_EXTRA", Group: "Restore commands", Kind: "flag", Desc: "auto-restore: delete files the revision does not have."},
-	{Name: "HASH_COMPARE", Group: "Restore commands", Kind: "flag", Desc: "auto-restore: compare files by content, not size and time."},
-	{Name: "IGNORE_OWNERSHIP", Group: "Restore commands", Kind: "flag", Desc: "auto-restore: leave ownership alone (without CHOWN and FOWNER it is left anyway, with a warning)."},
+	{Name: "OVERWRITE", Group: "Restore commands", Kind: "boolean", Default: "false", Desc: "auto-restore: replace files that differ."},
+	{Name: "DELETE_EXTRA", Group: "Restore commands", Kind: "boolean", Default: "false", Desc: "auto-restore: delete files the revision does not have."},
+	{Name: "HASH_COMPARE", Group: "Restore commands", Kind: "boolean", Default: "false", Desc: "auto-restore: compare files by content, not size and time."},
+	{Name: "IGNORE_OWNERSHIP", Group: "Restore commands", Kind: "boolean", Default: "false", Desc: "auto-restore: leave ownership alone (without CHOWN and FOWNER it is left anyway, with a warning)."},
 	{Name: "RESTORE_PATHS", Group: "Restore commands", Kind: "list", Desc: "auto-restore: only these paths in the snapshot, separated by commas."},
-	{Name: "DRY_RUN", Group: "Restore commands", Kind: "flag", Desc: "auto-restore: show what would be restored, replaced and deleted, and restore nothing."},
-	{Name: "RUN_RESTORE_SERVICE", Group: "Restore commands", Kind: "flag", Desc: "auto-restore: run the service's post-restore hook after the files are restored."},
+	{Name: "DRY_RUN", Group: "Restore commands", Kind: "boolean", Default: "false", Desc: "auto-restore: show what would be restored, replaced and deleted, and restore nothing."},
+	{Name: "RUN_RESTORE_SERVICE", Group: "Restore commands", Kind: "boolean", Default: "false", Desc: "auto-restore: run the service's post-restore hook after the files are restored."},
 	{Name: "RESTORE_THREADS", Group: "Restore commands", Kind: "integer", Desc: "auto-restore: threads for this restore. Default: DUPLICACY_THREADS."},
-	{Name: "NO_PREVIEW", Group: "Restore commands", Kind: "flag", Desc: "restore: skip the preview of what an interactive restore changes."},
+	{Name: "NO_PREVIEW", Group: "Restore commands", Kind: "boolean", Default: "false", Desc: "restore: skip the preview of what an interactive restore changes."},
 	{Name: "RECOVERY_PASSWORD_FILE", Group: "Restore commands", Kind: "path", Desc: "recover: a file holding the kit's password, instead of the prompt."},
 }
 

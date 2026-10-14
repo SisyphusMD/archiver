@@ -103,6 +103,7 @@ type Config struct {
 	DrillStorages  string // RESTORE_DRILL_STORAGES: "all", "primary" or storage names
 	DrillDir       string // RESTORE_DRILL_DIR
 	DrillLimit     string // RESTORE_DRILL_TIMEOUT: maximum run duration
+	DrillHookGrace string // RESTORE_DRILL_HOOK_GRACE: cleanup time before killing the hook
 	DrillHookLimit string // RESTORE_DRILL_HOOK_TIMEOUT: maximum drill hook duration
 	DrillExclude   string // RESTORE_DRILL_EXCLUDE: service names never drilled
 }
@@ -228,16 +229,18 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		DrillDir:                 src.Getenv("RESTORE_DRILL_DIR"),
 		DrillExclude:             src.Getenv("RESTORE_DRILL_EXCLUDE"),
 		DrillLimit:               src.Getenv("RESTORE_DRILL_TIMEOUT"),
+		DrillHookGrace:           src.Getenv("RESTORE_DRILL_HOOK_GRACE"),
 		DrillHookLimit:           src.Getenv("RESTORE_DRILL_HOOK_TIMEOUT"),
 		DeepCheckTimeout:         src.Getenv("DEEP_CHECK_TIMEOUT"),
 	}
 
-	prune := src.Getenv("PRUNE_BACKUPS")
-	if prune == "" {
-		prune = src.Getenv("ROTATE_BACKUPS")
+	if err != nil {
+		return nil, warnings, err
 	}
-	c.PruneBackups = boolSetting(prune)
-	c.CheckBackups = boolSetting(src.Getenv("CHECK_BACKUPS"))
+	c.CheckBackups, c.PruneBackups, err = MaintenanceBooleans(src.Getenv)
+	if err != nil {
+		return nil, warnings, err
+	}
 	if c.PruneKeep == "" {
 		c.PruneKeep = "-keep 0:180 -keep 30:30 -keep 7:7 -keep 1:1"
 	}
@@ -292,11 +295,6 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 		return nil, warnings, err
 	}
 	return c, warnings, nil
-}
-
-// boolSetting is "true" in any case, with true as the default; anything else is false.
-func boolSetting(v string) bool {
-	return v == "" || strings.ToLower(v) == "true"
 }
 
 // secretPath is where a secret is read from: <NAME>_FILE if set, else <secrets dir>/<name>.
@@ -411,6 +409,9 @@ func (c *Config) Validate(secretsDir string) error {
 		return err
 	}
 	if _, err := c.DrillTimeout(); err != nil {
+		return err
+	}
+	if _, err := c.DrillHookGracePeriod(); err != nil {
 		return err
 	}
 	if _, err := c.DrillHookTimeout(); err != nil {
@@ -820,6 +821,18 @@ func (c *Config) DrillTimeout() (time.Duration, error) {
 	d, err := ParseInterval(c.DrillLimit)
 	if err != nil || d <= 0 {
 		return 0, fmt.Errorf("RESTORE_DRILL_TIMEOUT must be a positive interval (got %q)", c.DrillLimit)
+	}
+	return d, nil
+}
+
+// DrillHookGracePeriod bounds cleanup after TERM, independently of the run timeout.
+func (c *Config) DrillHookGracePeriod() (time.Duration, error) {
+	if c.DrillHookGrace == "" {
+		return time.Minute, nil
+	}
+	d, err := ParseInterval(c.DrillHookGrace)
+	if err != nil {
+		return 0, fmt.Errorf("RESTORE_DRILL_HOOK_GRACE: %w", err)
 	}
 	return d, nil
 }

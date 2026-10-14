@@ -237,10 +237,9 @@ func (e Env) stopDrill(target string, _ bool) {
 	}
 	fmt.Fprintf(e.Out, "Stopping restore drill (PID: %d, %s)...\n", d.PID, d.Stage)
 	touch(e.Layout.DrillStopFlag())
-	if d.Paused() {
+	_, _ = runlock.Resume(e.Layout.DrillLock(), e.Now(), func() {
 		signalTree(d.PID, syscall.SIGCONT)
-		_ = runlock.Append(e.Layout.DrillLock(), "running", e.Now())
-	}
+	})
 	signalTree(d.PID, syscall.SIGTERM)
 }
 
@@ -250,12 +249,14 @@ func (e Env) pauseDrill() {
 	if !ok || d.Paused() {
 		return
 	}
-	if runlock.Append(e.Layout.DrillLock(), "paused", e.Now()) != nil {
+	paused, err := runlock.Pause(e.Layout.DrillLock(), e.Now(), func() {
+		signalTree(d.PID, syscall.SIGSTOP)
+		time.Sleep(300 * time.Millisecond)
+		signalTree(d.PID, syscall.SIGSTOP)
+	})
+	if err != nil || !paused {
 		return
 	}
-	signalTree(d.PID, syscall.SIGSTOP)
-	time.Sleep(300 * time.Millisecond)
-	signalTree(d.PID, syscall.SIGSTOP)
 	fmt.Fprintln(e.Out, "Restore drill paused.")
 }
 
@@ -264,9 +265,12 @@ func (e Env) resumeDrill() {
 	if !ok || !d.Paused() {
 		return
 	}
-	signalTree(d.PID, syscall.SIGCONT)
-	_ = runlock.Append(e.Layout.DrillLock(), "running", e.Now())
-	fmt.Fprintln(e.Out, "Restore drill resumed.")
+	resumed, err := runlock.Resume(e.Layout.DrillLock(), e.Now(), func() {
+		signalTree(d.PID, syscall.SIGCONT)
+	})
+	if err == nil && resumed {
+		fmt.Fprintln(e.Out, "Restore drill resumed.")
+	}
 }
 
 // signalTree sends sig to everything pid started: a child that leads its own process group

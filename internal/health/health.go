@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/envelope"
@@ -124,7 +125,10 @@ func Run(w io.Writer, l layout.Layout, env Env, now time.Time) int {
 		}
 	}
 
-	checkOn, pruneOn := maintenanceToggles(l, env)
+	checkOn, pruneOn, toggleErr := config.MaintenanceBooleans(env)
+	if toggleErr != nil {
+		r.fail("%v", toggleErr)
+	}
 	if checkOn || pruneOn {
 		storages, _ := lockstate.ReadMaintenance(l.MaintenanceState())
 		// Secondaries kept by copy workers are not in maintenance's record; how overdue their
@@ -179,18 +183,6 @@ func Run(w io.Writer, l layout.Layout, env Env, now time.Time) int {
 		fmt.Fprintln(w, "Status:   HEALTHY")
 	}
 	return 0
-}
-
-// maintenanceToggles resolves CHECK_BACKUPS and PRUNE_BACKUPS (formerly ROTATE_BACKUPS)
-// from the environment, defaulting to true.
-func maintenanceToggles(l layout.Layout, env Env) (check, prune bool) {
-	get := func(name string) string { return env(name) }
-	on := func(v string) bool { return v == "" || strings.EqualFold(v, "true") }
-	pruneVal := get("PRUNE_BACKUPS")
-	if pruneVal == "" {
-		pruneVal = get("ROTATE_BACKUPS")
-	}
-	return on(get("CHECK_BACKUPS")), on(pruneVal)
 }
 
 func exists(path string) bool {

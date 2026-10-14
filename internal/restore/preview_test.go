@@ -105,3 +105,26 @@ func TestAutoRestorePathsEmpty(t *testing.T) {
 		t.Fatalf("exit %d, want %d", code, Unreachable)
 	}
 }
+
+func TestAutoAllDryRun(t *testing.T) {
+	f := newFixture(t)
+	f.revs(1, "1")
+	service := filepath.Join(f.root, "services", "app")
+	if err := os.MkdirAll(service, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	f.vars["DRY_RUN"] = "yes"
+	if code := f.env.AutoAll(); code != OK {
+		t.Fatalf("code %d: %s", code, &f.err)
+	}
+	entries, err := os.ReadDir(service)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("DRY_RUN wrote into service: %v", entries)
+	}
+	if !strings.Contains(f.out.String(), "Dry run: revision 1") {
+		t.Fatalf("missing preview: %s", &f.out)
+	}
+}
