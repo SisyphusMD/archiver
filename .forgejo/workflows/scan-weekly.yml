@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:97772f3c64fd2fba720b2bafaf37239dc44d8b1c625c8383c64044832efe9ed9
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:22ea3c3baf639147b07fb9f2ea28a6308edf7909e919d91a5d296af0121d7ed9
           # renovate: datasource=docker depName=aquasec/trivy
           TRIVY_IMAGE=aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
           repo=forgejo.bryantserver.com/sisyphusmd/archiver
