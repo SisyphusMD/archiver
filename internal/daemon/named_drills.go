@@ -17,7 +17,7 @@ func NamedDrillName(name string) bool {
 		return false
 	}
 	switch name {
-	case "SERVICES", "STORAGES", "DIR", "EXCLUDE", "TIMEOUT", "HOOK", "HOOK_TIMEOUT", "SCHEDULE":
+	case "SERVICES", "STORAGES", "DIR", "EXCLUDE", "TIMEOUT", "HOOK", "HOOK_TIMEOUT", "HOOK_GRACE", "SCHEDULE":
 		return false
 	}
 	return true
@@ -26,7 +26,7 @@ func NamedDrillName(name string) bool {
 // NamedDrillNames discovers definitions from environment keys, including incomplete ones so typos fail early.
 func NamedDrillNames(environ []string) ([]string, error) {
 	names := map[string]bool{}
-	globals := map[string]bool{"RESTORE_DRILL_SCHEDULE": true, "RESTORE_DRILL_SERVICES": true, "RESTORE_DRILL_STORAGES": true, "RESTORE_DRILL_TIMEOUT": true, "RESTORE_DRILL_HOOK_TIMEOUT": true, "RESTORE_DRILL_DIR": true, "RESTORE_DRILL_EXCLUDE": true}
+	globals := map[string]bool{"RESTORE_DRILL_SCHEDULE": true, "RESTORE_DRILL_SERVICES": true, "RESTORE_DRILL_STORAGES": true, "RESTORE_DRILL_TIMEOUT": true, "RESTORE_DRILL_HOOK_TIMEOUT": true, "RESTORE_DRILL_HOOK_GRACE": true, "RESTORE_DRILL_DIR": true, "RESTORE_DRILL_EXCLUDE": true}
 	for _, kv := range environ {
 		key, _, _ := strings.Cut(kv, "=")
 		if !strings.HasPrefix(key, "RESTORE_DRILL_") || globals[key] {

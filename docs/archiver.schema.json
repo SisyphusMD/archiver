@@ -3,19 +3,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Archiver's settings as environment variables (an env file or compose environment). Generated from internal/config/reference.go.",
   "patternProperties": {
-    "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|SCHEDULE)_SCHEDULE$)[A-Z0-9_]+_SCHEDULE$": {
-      "description": "Defines a named drill. NAME matches `[A-Z0-9_]+`; reserved names: SERVICES, STORAGES, DIR, EXCLUDE, TIMEOUT, HOOK, HOOK_TIMEOUT, SCHEDULE. Each named drill has its own schedule, results and pending selection; `archiver drill --named NAME` runs it now.",
+    "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|HOOK_GRACE|SCHEDULE)_SCHEDULE$)[A-Z0-9_]+_SCHEDULE$": {
+      "description": "Defines a named drill. NAME matches `[A-Z0-9_]+`; reserved names: SERVICES, STORAGES, DIR, EXCLUDE, TIMEOUT, HOOK, HOOK_TIMEOUT, HOOK_GRACE, SCHEDULE. Each named drill has its own schedule, results and pending selection; `archiver drill --named NAME` runs it now.",
       "type": "string"
     },
-    "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|SCHEDULE)_SERVICES$)[A-Z0-9_]+_SERVICES$": {
+    "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|HOOK_GRACE|SCHEDULE)_SERVICES$)[A-Z0-9_]+_SERVICES$": {
       "description": "Required comma-separated configured service names; every listed service runs, ignoring RESTORE_DRILL_EXCLUDE.",
       "type": "string"
     },
-    "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|SCHEDULE)_STORAGES$)[A-Z0-9_]+_STORAGES$": {
+    "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|HOOK_GRACE|SCHEDULE)_STORAGES$)[A-Z0-9_]+_STORAGES$": {
       "description": "Storage selection: all, primary, comma-separated names, alternate, or alternate:NAME,NAME. Alternate selects one storage per run in configuration order, or the listed order for a subset, persisted across restarts; changing the list resets the cursor to the first storage, while a pending storage still in the list retries first; failed or interrupted runs retry the same storage until every service passes or genuinely skips.",
       "type": "string"
     },
-    "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|SCHEDULE)_TIMEOUT$)[A-Z0-9_]+_TIMEOUT$": {
+    "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|HOOK_GRACE|SCHEDULE)_TIMEOUT$)[A-Z0-9_]+_TIMEOUT$": {
       "description": "Maximum named drill duration including waits and hooks; independent of RESTORE_DRILL_TIMEOUT's configured value.",
       "pattern": "^$|^\\+?(?![0.]+(ns|us|µs|μs|ms|s|m|h|d)([0.]+(ns|us|µs|μs|ms|s|m|h))*$)([0-9]+d|(([0-9]+\\.?[0-9]*|\\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+)$",
       "type": "string"
@@ -545,7 +545,7 @@
     "CHECK_BACKUPS": {
       "default": "true",
       "description": "Whether maintenance checks the storages. Turn off on a deployment sharing a storage another one maintains.",
-      "pattern": "^$|^([Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee])$",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "CHECK_INTERVAL": {
@@ -560,11 +560,15 @@
       "type": "string"
     },
     "DELETE_EXTRA": {
+      "default": "false",
       "description": "auto-restore: delete files the revision does not have.",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "DRY_RUN": {
+      "default": "false",
       "description": "auto-restore: show what would be restored, replaced and deleted, and restore nothing.",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "DUPLICACY_THREADS": {
@@ -574,7 +578,9 @@
       "type": "string"
     },
     "HASH_COMPARE": {
+      "default": "false",
       "description": "auto-restore: compare files by content, not size and time.",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "HOOKS_DIR": {
@@ -586,7 +592,9 @@
       "type": "string"
     },
     "IGNORE_OWNERSHIP": {
+      "default": "false",
       "description": "auto-restore: leave ownership alone (without CHOWN and FOWNER it is left anyway, with a warning).",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "KIT_DRILL_SCHEDULE": {
@@ -660,7 +668,9 @@
       "type": "string"
     },
     "NO_PREVIEW": {
+      "default": "false",
       "description": "restore: skip the preview of what an interactive restore changes.",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "NTFY_NOTIFY_ON": {
@@ -697,13 +707,15 @@
       "type": "string"
     },
     "OVERWRITE": {
+      "default": "false",
       "description": "auto-restore: replace files that differ.",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "PRUNE_BACKUPS": {
       "default": "true",
       "description": "Whether maintenance prunes by PRUNE_KEEP. Turn off on a deployment sharing a storage another one maintains.",
-      "pattern": "^$|^([Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee])$",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "PRUNE_EXHAUSTIVE_FREQUENCY": {
@@ -787,6 +799,12 @@
       "description": "Services drills leave out, separated by commas.",
       "type": "string"
     },
+    "RESTORE_DRILL_HOOK_GRACE": {
+      "default": "60s",
+      "description": "Cleanup time after TERM on hook timeout or drill stop, before KILL ends remaining hook processes. The scratch copy stays until cleanup ends.",
+      "pattern": "^$|^\\+?(?![0.]+(ns|us|µs|μs|ms|s|m|h|d)([0.]+(ns|us|µs|μs|ms|s|m|h))*$)([0-9]+d|(([0-9]+\\.?[0-9]*|\\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+)$",
+      "type": "string"
+    },
     "RESTORE_DRILL_HOOK_TIMEOUT": {
       "default": "6h",
       "description": "Maximum time a service's drill hook may run; a timeout fails the drill and ends the hook and its children.",
@@ -830,7 +848,7 @@
     },
     "ROTATE_BACKUPS": {
       "description": "Old name of PRUNE_BACKUPS, still read when PRUNE_BACKUPS is unset.",
-      "pattern": "^$|^([Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee])$",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "RSA_PASSPHRASE": {
@@ -852,7 +870,9 @@
       "type": "string"
     },
     "RUN_RESTORE_SERVICE": {
+      "default": "false",
       "description": "auto-restore: run the service's post-restore hook after the files are restored.",
+      "pattern": "^$|^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$",
       "type": "string"
     },
     "SECRETS_DIR": {

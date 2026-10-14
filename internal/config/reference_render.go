@@ -17,6 +17,8 @@ func ReferenceMarkdown() string {
 	w("<!-- Generated from internal/config/reference.go by `UPDATE_REFERENCE=1 go test ./internal/config`. Do not edit. -->")
 	w("")
 	w("Settings are environment variables. **Secrets** are files, never environment variables: `<secrets dir>/<name in lower case>` (`/run/secrets/storage_password`), or the file `<NAME>_FILE` names. An editor can validate an env file against [archiver.schema.json](archiver.schema.json).")
+	w("")
+	w("Boolean settings accept true/1/yes/on and false/0/no/off/empty, case-insensitively; other values are errors. Restore flags default to off. CHECK_BACKUPS and PRUNE_BACKUPS retain their enabled defaults when empty; ROTATE_BACKUPS is the fallback for PRUNE_BACKUPS.")
 	for _, g := range Groups {
 		w("")
 		w("## %s", g)
@@ -77,7 +79,7 @@ const intervalPattern = `^\+?(?![0.]+(ns|us|µs|μs|ms|s|m|h|d)([0.]+(ns|us|µs|
 // expressions, as JSON Schema uses).
 var kindPattern = map[string]string{
 	"integer":  `^[1-9][0-9]*$`,
-	"boolean":  `^([Tt][Rr][Uu][Ee]|[Ff][Aa][Ll][Ss][Ee])$`,
+	"boolean":  `^([Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]|[Ff][Aa][Ll][Ss][Ee]|0|[Nn][Oo]|[Oo][Ff][Ff]|)$`,
 	"port":     `^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$`,
 	"interval": intervalPattern,
 	"url":      `^https?://`,
@@ -104,7 +106,7 @@ func ReferenceSchema() string {
 	for _, s := range Reference {
 		if strings.Contains(s.Name, "<NAME>") {
 			suffix := strings.TrimPrefix(s.Name, "RESTORE_DRILL_<NAME>_")
-			key := "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|SCHEDULE)_" + suffix + "$)[A-Z0-9_]+_" + suffix + "$"
+			key := "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|HOOK_GRACE|SCHEDULE)_" + suffix + "$)[A-Z0-9_]+_" + suffix + "$"
 			patterns[key] = valueSchema(s)
 			continue
 		}

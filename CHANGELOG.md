@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `auto-restore-all` honors `DRY_RUN` instead of restoring files during a requested preview.
+- Restore boolean settings now parse true/1/yes/on and false/0/no/off/empty case-insensitively, rejecting unknown values instead of enabling destructive options for `false`. Maintenance uses the same parser and keeps its enabled defaults.
+- Drill hooks receive TERM and a configurable `RESTORE_DRILL_HOOK_GRACE` cleanup interval (default 60s) before remaining processes are killed and the scratch copy is removed, allowing hooks to clean up containers they started.
+
 ### Added
 
 - Named restore drill schedules with independent service selections, timeouts, persisted alternate-storage rotation, status, incidents and drill-labelled metrics.

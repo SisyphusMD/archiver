@@ -41,6 +41,18 @@ func (e *Env) Interactive() int {
 }
 
 func (e *Env) interactive(in *bufio.Reader) (int, error) {
+	ignoreOwner, err := config.ParseBool("IGNORE_OWNERSHIP", e.getenv("IGNORE_OWNERSHIP"))
+	if err != nil {
+		return 1, err
+	}
+	noPreview, err := config.ParseBool("NO_PREVIEW", e.getenv("NO_PREVIEW"))
+	if err != nil {
+		return 1, err
+	}
+	runHook, err := config.ParseBool("RUN_RESTORE_SERVICE", e.getenv("RUN_RESTORE_SERVICE"))
+	if err != nil {
+		return 1, err
+	}
 	out := e.Stdout
 	ask := func(prompt string) (string, error) {
 		fmt.Fprint(out, prompt)
@@ -143,7 +155,7 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 	}
 	fmt.Fprintf(out, "Chosen revision: %d\n", rev)
 
-	o := Options{IgnoreOwner: e.getenv("IGNORE_OWNERSHIP") != "", Threads: e.cfg.Threads}
+	o := Options{IgnoreOwner: ignoreOwner, Threads: e.cfg.Threads}
 	fmt.Fprint(out, "\nCustomize restore options (advanced)? (y/N): ")
 	if yes(in) {
 		for _, q := range []struct {
@@ -191,7 +203,7 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 	}
 	// NO_PREVIEW=1 skips the preview; only a person at a terminal is asked to confirm, so
 	// piped answers keep their order.
-	if e.getenv("NO_PREVIEW") == "" {
+	if !noPreview {
 		files, err := e.listFiles(scratch, id, rev)
 		if err != nil {
 			return 1, err
@@ -242,7 +254,7 @@ func (e *Env) interactive(in *bufio.Reader) (int, error) {
 		return 0, nil
 	}
 	// RUN_RESTORE_SERVICE answers the question, so a scripted restore matches auto-restore.
-	if e.getenv("RUN_RESTORE_SERVICE") == "" {
+	if !runHook {
 		fmt.Fprint(out, "\nThis directory has a restore hook. Run it now? (y/N): ")
 		if !yes(in) {
 			fmt.Fprintln(out, "Did not run the restore hook.")

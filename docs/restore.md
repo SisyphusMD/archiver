@@ -68,19 +68,22 @@ Exit codes:
 
 Iterates storage targets in configured order and restores from the first target that has the requested snapshot. Once a restore begins, it does not fall through to another target — a failure at that point exits `1`.
 
+All restore on/off settings, including `NO_PREVIEW`, accept `true`, `1`, `yes`, or `on` to enable and `false`, `0`, `no`, `off`, or empty to disable, case-insensitively. Other values are configuration errors; restore flags default to off.
+
+
 | Env Var | Required | Description |
 |---------|----------|-------------|
 | `SNAPSHOT_ID` | Yes | Snapshot ID to restore |
 | `LOCAL_DIR` | Yes | Destination directory inside the container |
 | `REVISION` | No | Specific revision number, or `latest` (default) |
 | `STORAGE_TARGET` | No | Pin to a single target by name or numeric id |
-| `OVERWRITE` | No | Non-empty enables `-overwrite` |
-| `DELETE_EXTRA` | No | Non-empty enables `-delete` |
-| `HASH_COMPARE` | No | Non-empty enables `-hash` |
-| `IGNORE_OWNERSHIP` | No | Non-empty enables `-ignore-owner` |
+| `OVERWRITE` | No | True enables `-overwrite` |
+| `DELETE_EXTRA` | No | True enables `-delete` |
+| `HASH_COMPARE` | No | True enables `-hash` |
+| `IGNORE_OWNERSHIP` | No | True enables `-ignore-owner` |
 | `RESTORE_PATHS` | No | Restore only these paths in the snapshot (comma-separated; a directory brings everything under it), for example `config/,data/app.db` |
-| `DRY_RUN` | No | Non-empty shows what the restore would add, replace and delete, and restores nothing (the destination is not created or changed) |
-| `RUN_RESTORE_SERVICE` | No | Non-empty runs the restored directory's restore hook (`post-restore`, or `restore-service.sh`) after a successful file restore (DB reload, stack restart); its failure fails the restore |
+| `DRY_RUN` | No | True shows what the restore would add, replace and delete, and restores nothing (the destination is not created or changed) |
+| `RUN_RESTORE_SERVICE` | No | True runs the restored directory's restore hook (`post-restore`, or `restore-service.sh`) after a successful file restore (DB reload, stack restart); its failure fails the restore |
 | `RESTORE_THREADS` | No | Override download thread count (default matches `DUPLICACY_THREADS`) |
 
 Exit codes:

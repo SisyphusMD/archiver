@@ -512,3 +512,67 @@ func TestLinkedDirs(t *testing.T) {
 		t.Fatalf("through a linked destination: %v", got)
 	}
 }
+
+func TestAutoBooleanSettings(t *testing.T) {
+	for _, value := range []string{"false", "0", "NO", "off", "nonsense"} {
+		t.Run(value, func(t *testing.T) {
+			f := newFixture(t)
+			f.revs(1, "1")
+			dest := filepath.Join(f.root, "destination")
+			f.vars["SNAPSHOT_ID"], f.vars["LOCAL_DIR"] = "h-app", dest
+			for _, name := range []string{"DRY_RUN", "RUN_RESTORE_SERVICE", "OVERWRITE", "DELETE_EXTRA", "HASH_COMPARE", "IGNORE_OWNERSHIP"} {
+				f.vars[name] = value
+			}
+			code := f.env.Auto()
+			if value == "nonsense" {
+				if code != Unreachable || !strings.Contains(f.err.String(), "boolean") {
+					t.Fatalf("invalid booleans: code %d, stderr %s", code, &f.err)
+				}
+				if _, err := os.Stat(dest); !os.IsNotExist(err) {
+					t.Fatal("invalid boolean touched the destination")
+				}
+				return
+			}
+			if code != OK {
+				t.Fatalf("restore: %d: %s", code, &f.err)
+			}
+			flags, err := os.ReadFile(filepath.Join(dest, "flags.txt"))
+			if err != nil {
+				t.Fatalf("false DRY_RUN prevented restore: %v", err)
+			}
+			for _, flag := range []string{"-overwrite", "-delete", "-hash"} {
+				if strings.Contains(string(flags), flag) {
+					t.Errorf("false setting enabled %s: %s", flag, flags)
+				}
+			}
+		})
+	}
+}
+
+func TestRequestBooleanSettings(t *testing.T) {
+	for _, name := range []string{"DRY_RUN", "RUN_RESTORE_SERVICE", "OVERWRITE", "DELETE_EXTRA", "HASH_COMPARE", "IGNORE_OWNERSHIP"} {
+		for _, value := range []string{"", "false", "0", "NO", "Off", "true", "1", "YES", "On", "invalid"} {
+			t.Run(name+"/"+value, func(t *testing.T) {
+				var stderr bytes.Buffer
+				e := &Env{cfg: &config.Config{}, Source: config.Source{Getenv: func(key string) string {
+					if key == name {
+						return value
+					}
+					return ""
+				}}, Stderr: &stderr}
+				req, code := e.request("h-app", "/unused")
+				if value == "invalid" {
+					if code != Unreachable || !strings.Contains(stderr.String(), name+": invalid boolean") {
+						t.Fatalf("code %d, stderr %s", code, &stderr)
+					}
+					return
+				}
+				got := map[string]bool{"DRY_RUN": req.dry, "RUN_RESTORE_SERVICE": req.hook, "OVERWRITE": req.opts.Overwrite, "DELETE_EXTRA": req.opts.Delete, "HASH_COMPARE": req.opts.Hash, "IGNORE_OWNERSHIP": req.opts.IgnoreOwner}[name]
+				want := value == "true" || value == "1" || value == "YES" || value == "On"
+				if code != OK || got != want {
+					t.Fatalf("code %d, got %v, want %v", code, got, want)
+				}
+			})
+		}
+	}
+}

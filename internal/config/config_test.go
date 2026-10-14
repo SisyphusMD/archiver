@@ -161,7 +161,7 @@ func TestTargetsAndDefaults(t *testing.T) {
 	}
 	c, _ = mustLoad(t, map[string]string{"PRUNE_BACKUPS": "True", "ROTATE_BACKUPS": "false", "CHECK_BACKUPS": "no"}, nil)
 	if !c.PruneBackups || c.CheckBackups {
-		t.Errorf("PRUNE_BACKUPS must win over ROTATE_BACKUPS, and only 'true' is true: %v %v", c.PruneBackups, c.CheckBackups)
+		t.Errorf("PRUNE_BACKUPS must win over ROTATE_BACKUPS, and CHECK_BACKUPS=no disables checks: %v %v", c.PruneBackups, c.CheckBackups)
 	}
 }
 

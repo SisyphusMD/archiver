@@ -67,7 +67,7 @@ An executable `drill` in the service directory, or `HOOKS_DIR/<service>/drill` w
 
 It receives `ARCHIVER_SERVICE`, `ARCHIVER_SERVICE_DIR` (the live service directory), `ARCHIVER_SNAPSHOT_ID`, `ARCHIVER_RESTORE_REVISION`, `ARCHIVER_RESTORE_STORAGE`, and `ARCHIVER_DRILL_DIR` (the restored scratch directory). Storage credentials and the RSA passphrase are removed from its environment. Use the scratch directory for checks, keeping the live service untouched. Ordinary `post-restore` hooks do not run during drills.
 
-Exit 0 passes; any other exit fails the drill and is reported in its result. `RESTORE_DRILL_HOOK_TIMEOUT` limits the hook to six hours by default. A timeout or drill stop ends the hook and its process group, including its children. A paused drill waits before starting its hook. Output goes to the drill log, with the same `[ERROR]` and `[WARNING]` prefixes as other hooks.
+Exit 0 passes; any other exit fails the drill and is reported in its result. `RESTORE_DRILL_HOOK_TIMEOUT` limits the hook to six hours by default. A timeout or drill stop sends TERM to the hook process group, including its children, and allows `RESTORE_DRILL_HOOK_GRACE` (an interval, default `60s`) for cleanup before KILL ends remaining processes. The scratch directory is removed only after cleanup ends. A drill hook should trap TERM and clean up any containers it started; those containers run outside the hook process group. A paused drill waits before starting its hook. Output goes to the drill log, with the same `[ERROR]` and `[WARNING]` prefixes as other hooks.
 
 ```sh
 #!/bin/sh
