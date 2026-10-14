@@ -55,6 +55,9 @@ func Write(w io.Writer, l layout.Layout, getenv func(string) string, now time.Ti
 			state = "paused"
 		}
 		kind := "Restore drill"
+		if strings.HasPrefix(d.Context, "drill:") {
+			kind += " " + strings.TrimPrefix(d.Context, "drill:")
+		}
 		if d.Context == "kit-drill" || strings.HasPrefix(d.Context, "kit-drill:") {
 			kind = "Kit drill"
 		}
@@ -77,29 +80,16 @@ func Write(w io.Writer, l layout.Layout, getenv func(string) string, now time.Ti
 		fmt.Fprintln(w, line)
 	}
 
-	if ds, err := lockstate.ReadDrillState(l.DrillState()); err == nil && len(ds.Results) > 0 {
-		fmt.Fprintln(w, "Restore drills (last per service):")
-		storagesDrilled := make([]string, 0, len(ds.Results))
-		for s := range ds.Results {
-			storagesDrilled = append(storagesDrilled, s)
+	if ds, err := lockstate.ReadDrillState(l.DrillState()); err == nil {
+		writeDrillResults(w, "default", ds, now)
+		names := make([]string, 0, len(ds.Named))
+		for name := range ds.Named {
+			names = append(names, name)
 		}
-		sort.Strings(storagesDrilled)
-		for _, s := range storagesDrilled {
-			services := make([]string, 0, len(ds.Results[s]))
-			for n := range ds.Results[s] {
-				services = append(services, n)
-			}
-			sort.Strings(services)
-			for _, n := range services {
-				r := ds.Results[s][n]
-				what := "passed"
-				switch {
-				case r.Skipped:
-					what = "skipped (" + r.Message + ")"
-				case !r.OK:
-					what = "FAILED (" + r.Message + ")"
-				}
-				fmt.Fprintf(w, "  %s on %s: revision %d %s %s\n", n, s, r.Revision, what, Age(r.At, now))
+		sort.Strings(names)
+		for _, name := range names {
+			if ds.Named[name] != nil {
+				writeDrillResults(w, name, *ds.Named[name], now)
 			}
 		}
 	}
@@ -265,6 +255,7 @@ type Snapshot struct {
 	Services     map[string]lockstate.ServiceResult          `json:"services"`
 	Copies       map[string]copier.State                     `json:"copies"`
 	KitDrills    map[string]lockstate.KitDrillResult         `json:"kit_drills"`
+	NamedDrills  map[string]*lockstate.DrillState            `json:"named_drills,omitempty"`
 	Drills       map[string]map[string]lockstate.DrillResult `json:"drills"`
 	Storages     []lockstate.Storage                         `json:"storages"`
 	Incidents    map[string]string                           `json:"incidents"`
@@ -288,6 +279,7 @@ func Take(l layout.Layout, getenv func(string) string, now time.Time) Snapshot {
 	s.Copies = (&copier.Store{Path: l.CopyWorkersState()}).Load()
 	if ds, err := lockstate.ReadDrillState(l.DrillState()); err == nil {
 		s.Drills = ds.Results
+		s.NamedDrills = ds.Named
 	}
 	s.KitDrills, _ = lockstate.ReadKitDrills(l.KitDrillState())
 	s.Storages, _ = lockstate.ReadMaintenance(l.MaintenanceState())
@@ -310,4 +302,35 @@ func deepCheckNames(results map[string]deepcheck.Result) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func writeDrillResults(w io.Writer, name string, ds lockstate.DrillState, now time.Time) {
+	if len(ds.Results) == 0 {
+		return
+	}
+
+	fmt.Fprintf(w, "Restore drills %s (last per service):\n", name)
+	storagesDrilled := make([]string, 0, len(ds.Results))
+	for s := range ds.Results {
+		storagesDrilled = append(storagesDrilled, s)
+	}
+	sort.Strings(storagesDrilled)
+	for _, s := range storagesDrilled {
+		services := make([]string, 0, len(ds.Results[s]))
+		for n := range ds.Results[s] {
+			services = append(services, n)
+		}
+		sort.Strings(services)
+		for _, n := range services {
+			r := ds.Results[s][n]
+			what := "passed"
+			switch {
+			case r.Skipped:
+				what = "skipped (" + r.Message + ")"
+			case !r.OK:
+				what = "FAILED (" + r.Message + ")"
+			}
+			fmt.Fprintf(w, "  %s on %s: revision %d %s %s\n", n, s, r.Revision, what, Age(r.At, now))
+		}
+	}
 }

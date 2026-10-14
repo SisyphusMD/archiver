@@ -112,3 +112,19 @@ func TestKitDrillStatus(t *testing.T) {
 		t.Fatal("JSON lost human sign-in note")
 	}
 }
+
+func TestNamedRestoreDrillStatus(t *testing.T) {
+	l := testLayout(t)
+	s := lockstate.DrillState{Named: map[string]*lockstate.DrillState{"GARAGE": {Results: map[string]map[string]lockstate.DrillResult{"local": {"garage": {At: 100, OK: true, Revision: 1}}}}}}
+	if err := lockstate.WriteDrillState(l.DrillState(), s); err != nil {
+		t.Fatal(err)
+	}
+	got := report(t, l, time.Unix(200, 0))
+	if !strings.Contains(got, "Restore drills GARAGE") || !strings.Contains(got, "garage on local: revision 1 passed") {
+		t.Fatal(got)
+	}
+	snapshot := Take(l, func(string) string { return "" }, time.Unix(200, 0))
+	if !snapshot.NamedDrills["GARAGE"].Results["local"]["garage"].OK {
+		t.Fatal("named JSON status missing")
+	}
+}

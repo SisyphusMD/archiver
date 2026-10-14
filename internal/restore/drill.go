@@ -28,19 +28,21 @@ import (
 // DrillOptions narrow a drill to one service and/or one storage (`archiver drill [service]
 // [storage]`); empty means the configured selection.
 type DrillOptions struct {
-	Service, Storage string
-	Now              func() time.Time
+	Service, Storage, Named string
+	Now                     func() time.Time
 }
 
 // drillRun is one drill in progress.
 type drillRun struct {
-	e     *Env
-	log   *logging.Log
-	lock  *runlock.Lock
-	state lockstate.DrillState
-	now   func() time.Time
-	root  string
-	run   *resume.Run // this drill's record and the directories it restores into (ADR 46)
+	e        *Env
+	log      *logging.Log
+	lock     *runlock.Lock
+	state    lockstate.DrillState
+	allState lockstate.DrillState
+	named    config.NamedDrill
+	now      func() time.Time
+	root     string
+	run      *resume.Run // this drill's record and the directories it restores into (ADR 46)
 	// restored: the drill got as far as restoring, so its errors are its restores' own
 	// incidents.
 	restored bool
@@ -107,6 +109,18 @@ func (e *Env) Drill(o DrillOptions) int {
 	}
 	e.cfg = cfg
 	d := &drillRun{}
+	if o.Named != "" {
+		var ok bool
+		d.named, ok = cfg.NamedDrill(o.Named)
+		if !ok {
+			log.Message(logging.Error, "", "Unknown named restore drill: "+o.Named)
+			return 1
+		}
+		if o.Service != "" || o.Storage != "" {
+			log.Message(logging.Error, "", "A named drill cannot override its services or storages.")
+			return 1
+		}
+	}
 	n := notify.FromConfig(cfg, e.Hostname, func(failed bool, msg string) {
 		level := logging.Info
 		if failed {
@@ -120,11 +134,11 @@ func (e *Env) Drill(o DrillOptions) int {
 	// incident; each restore's is its service's on its storage.
 	defer func() {
 		if log.Reportable() > 0 && !d.restored {
-			n.Raise("drill", notify.Failure, "Restore Drill Failed", log.Summary())
+			n.Raise(d.incident("", ""), notify.Failure, "Restore Drill Failed", d.message(log.Summary()))
 		}
 	}()
 
-	lock, stale, err := runlock.Acquire(e.Layout.DrillLock(), e.Layout.DrillStopFlag(), "drill", "starting")
+	lock, stale, err := runlock.Acquire(e.Layout.DrillLock(), e.Layout.DrillStopFlag(), d.incident("", ""), "starting")
 	if busy, ok := err.(*runlock.Busy); ok {
 		fmt.Fprintf(e.Stderr, "A restore drill is already running (PID %d). Not starting another.\n", busy.Holder.PID)
 		return 1
@@ -165,7 +179,7 @@ func (e *Env) Drill(o DrillOptions) int {
 			}
 		}
 	}
-	d.run, _ = resume.Begin(e.Layout.RunRecord("drill"), resume.Record{})
+	d.run, _ = resume.Begin(e.Layout.RunRecord("drill"), resume.Record{Drill: o.Named})
 	defer func() {
 		if lock.StopRequested() && resume.ShuttingDown(e.Layout.ShutdownFlag()) {
 			log.Message(logging.Info, "", "The restore drill stopped for a container shutdown; it runs again when the container starts.")
@@ -177,6 +191,9 @@ func (e *Env) Drill(o DrillOptions) int {
 	// pause holds back every program it would start: with nothing running yet, there would
 	// be no process for the stop or pause to reach.
 	limit, _ := cfg.DrillTimeout()
+	if o.Named != "" {
+		limit = d.named.Timeout
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	go func() {
@@ -198,6 +215,13 @@ func (e *Env) Drill(o DrillOptions) int {
 	d.state, err = lockstate.ReadDrillState(e.Layout.DrillState())
 	if err != nil {
 		log.Message(logging.Warning, "", "Unreadable drill state, starting afresh: "+err.Error())
+	}
+	if o.Named != "" {
+		d.allState = d.state
+		d.state = lockstate.DrillState{}
+		if saved := d.allState.Named[o.Named]; saved != nil {
+			d.state = *saved
+		}
 	}
 	if d.state.Pending == nil {
 		d.state.Pending = map[string][]string{}
@@ -227,16 +251,22 @@ func (e *Env) Drill(o DrillOptions) int {
 		d.failedEarly()
 		return 1
 	}
-	log.Message(logging.Info, "", fmt.Sprintf("Restore drill started: %d storage(s), drill directory %s.", len(targets), d.root))
+	log.Message(logging.Info, "", fmt.Sprintf("Restore drill started (%s): %d storage(s), drill directory %s.", drillName(o.Named), len(targets), d.root))
 	d.restored = true
-	n.Clear("drill", "Restore Drills Running Again", "Restore drills start again.")
+	n.Clear(d.incident("", ""), "Restore Drills Running Again", d.message("Restore drills start again."))
 
 	count, _ := cfg.DrillCount()
+	if o.Named != "" {
+		count = 0
+	}
 	tried, failed, stopped := 0, 0, false
 	started := now()
 	for _, t := range targets {
-		picked := d.pick(t, services, count, o.Service != "")
-		if err := lockstate.WriteDrillState(e.Layout.DrillState(), d.state); err != nil {
+		if o.Named != "" {
+			d.state.Pending[t.StorageName()] = slices.DeleteFunc(d.state.Pending[t.StorageName()], func(name string) bool { return !slices.Contains(services, name) })
+		}
+		picked := d.pick(t, services, count, o.Service != "" || o.Named != "")
+		if err := d.save(); err != nil {
 			d.log.Message(logging.Error, "", "Could not record pending drill selections: "+err.Error())
 			return 1
 		}
@@ -250,24 +280,24 @@ func (e *Env) Drill(o DrillOptions) int {
 				d.state.Results[t.StorageName()] = map[string]lockstate.DrillResult{}
 			}
 			d.state.Results[t.StorageName()][name] = lockstate.DrillResult{At: now().Unix(), LastSuccess: prior.LastSuccess, Interrupted: true, Message: "interrupted; remains due"}
-			if err := lockstate.WriteDrillState(e.Layout.DrillState(), d.state); err != nil {
+			if err := d.save(); err != nil {
 				d.log.Message(logging.Error, "", "Could not record pending drill result: "+err.Error())
 				return 1
 			}
 			r := d.one(t, name)
 			d.state.Results[t.StorageName()][name] = r
-			key := "drill:" + t.StorageName() + ":" + name
+			key := d.incident(t.StorageName(), name)
 			if !r.Interrupted && (r.OK || (r.Skipped && !n.IsOpen(key))) {
 				d.state.Pending[t.StorageName()] = slices.DeleteFunc(d.state.Pending[t.StorageName()], func(p string) bool { return p == name })
 			}
-			writeErr := lockstate.WriteDrillState(e.Layout.DrillState(), d.state)
+			writeErr := d.save()
 			if !r.Skipped && !r.Interrupted {
 				tried++
 				if !r.OK {
 					failed++
-					n.Raise(key, notify.Failure, "Restore Drill Failed", fmt.Sprintf("Restore drill of %s-%s from '%s' failed: %s", e.Hostname, name, t.Name, r.Message))
+					n.Raise(key, notify.Failure, "Restore Drill Failed", d.message(fmt.Sprintf("Restore drill of %s-%s from '%s' failed: %s", e.Hostname, name, t.Name, r.Message)))
 				} else {
-					n.Clear(key, "Restore Drill Passing", fmt.Sprintf("A restore drill of %s-%s from '%s' passes again.", e.Hostname, name, t.Name))
+					n.Clear(key, "Restore Drill Passing", d.message(fmt.Sprintf("A restore drill of %s-%s from '%s' passes again.", e.Hostname, name, t.Name)))
 				}
 			}
 			if writeErr != nil {
@@ -291,38 +321,56 @@ func (e *Env) Drill(o DrillOptions) int {
 		open := notify.OpenIncidents(n.Incidents)
 		for _, t := range targets {
 			for _, name := range services {
-				key := "drill:" + t.StorageName() + ":" + name
+				key := d.incident(t.StorageName(), name)
 				r := d.state.Results[t.StorageName()][name]
 				if _, ok := open[key]; ok && (r.At < started.Unix() || r.Skipped) {
 					n.Raise(key, notify.Failure, "Restore Drill Failed",
-						fmt.Sprintf("No restore drill of %s-%s from '%s' has passed since one failed (the last: %s).", e.Hostname, name, t.Name, r.Message))
+						d.message(fmt.Sprintf("No restore drill of %s-%s from '%s' has passed since one failed (the last: %s).", e.Hostname, name, t.Name, r.Message)))
 				}
 			}
 		}
 	}
 
+	if d.named.Alternating() && !stopped && failed == 0 && len(targets) > 0 && len(d.state.Pending[targets[0].StorageName()]) == 0 {
+		d.state.NextStorage = (d.state.NextStorage + 1) % len(d.state.StorageOrder)
+		d.state.Storage = ""
+	}
+
+	unresolved := false
+	if d.named.Name != "" {
+		for _, t := range targets {
+			if len(d.state.Pending[t.StorageName()]) > 0 {
+				unresolved = true
+			}
+		}
+	}
 	end := now().Unix()
-	d.state.LastRun, d.state.LastFailed = end, failed > 0 || stopped
-	if failed == 0 && tried > 0 && !stopped {
+	d.state.LastRun, d.state.LastFailed = end, failed > 0 || stopped || unresolved
+	if !d.state.LastFailed && tried > 0 {
 		d.state.LastPass = end
 	}
-	if err := lockstate.WriteDrillState(e.Layout.DrillState(), d.state); err != nil {
-		log.Message(logging.Warning, "", "Could not record the drill: "+err.Error())
+	if err := d.save(); err != nil {
+		log.Message(logging.Error, "", "Could not record the drill: "+err.Error())
+		return 1
 	}
 	switch {
 	case stopped:
-		log.Message(logging.Info, "", "Restore drill stopped (stop requested or RESTORE_DRILL_TIMEOUT exceeded).")
+		log.Message(logging.Info, "", "Restore drill stopped (stop requested or "+d.timeoutVariable()+" exceeded).")
 		_ = lock.Record("stopped")
 		return 1
 	case failed > 0:
 		log.Unnotified(logging.Error, "", fmt.Sprintf("Restore drill finished: %d of %d restore(s) failed.", failed, tried))
 		_ = lock.Record("failed")
 		return 1
+	case unresolved:
+		log.Unnotified(logging.Error, "", "Named restore drill remains due: a previously failed service has not passed.")
+		_ = lock.Record("failed")
+		return 1
 	case tried == 0:
 		log.Message(logging.Warning, "", "Restore drill finished without restoring anything (every service skipped).")
 	default:
 		log.Message(logging.Info, "", fmt.Sprintf("Restore drill finished: %d restore(s) verified.", tried))
-		n.Send("Restore Drill Complete", fmt.Sprintf("%d restore(s) verified.", tried))
+		n.Send("Restore Drill Complete", d.message(fmt.Sprintf("%d restore(s) verified.", tried)))
 	}
 	_ = lock.Record("completed")
 	return 0
@@ -332,7 +380,7 @@ func (e *Env) Drill(o DrillOptions) int {
 // sees the failure rather than a drill that never ran.
 func (d *drillRun) failedEarly() {
 	d.state.LastRun, d.state.LastFailed = d.now().Unix(), true
-	_ = lockstate.WriteDrillState(d.e.Layout.DrillState(), d.state)
+	_ = d.save()
 	_ = d.lock.Record("failed")
 }
 
@@ -353,7 +401,7 @@ func (d *drillRun) selection(o DrillOptions) ([]string, []config.Target, error) 
 			}
 			continue
 		}
-		if !cfg.DrillExcluded(name) {
+		if (o.Named != "" && slices.Contains(d.named.Services, name)) || (o.Named == "" && !cfg.DrillExcluded(name)) {
 			services = append(services, name)
 		}
 	}
@@ -362,6 +410,9 @@ func (d *drillRun) selection(o DrillOptions) ([]string, []config.Target, error) 
 		return nil, nil, fmt.Errorf("'%s' is not a configured service (SERVICE_DIRECTORIES).", o.Service)
 	}
 	targets, err := cfg.DrillTargets()
+	if o.Named != "" {
+		targets, err = d.named.Targets(cfg)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -376,6 +427,31 @@ func (d *drillRun) selection(o DrillOptions) ([]string, []config.Target, error) 
 			return nil, nil, fmt.Errorf("'%s' is not a configured storage (STORAGE_TARGET_N_NAME).", o.Storage)
 		}
 		targets = only
+	}
+	if d.named.Alternating() && len(targets) > 0 {
+		var order []string
+		for _, target := range targets {
+			order = append(order, target.StorageName())
+		}
+		if !slices.Equal(d.state.StorageOrder, order) {
+			d.state.NextStorage = 0
+			d.state.StorageOrder = order
+		}
+		index := d.state.NextStorage % len(targets)
+		if index < 0 {
+			index = 0
+		}
+		if targets[index].StorageName() != d.state.Storage {
+			for i, t := range targets {
+				if t.StorageName() == d.state.Storage {
+					index = i
+					break
+				}
+			}
+		}
+		d.state.NextStorage = index
+		targets = targets[index : index+1]
+		d.state.Storage = targets[0].StorageName()
 	}
 	return services, targets, nil
 }
@@ -437,7 +513,7 @@ func (d *drillRun) one(t config.Target, name string) (r lockstate.DrillResult) {
 	out := d.log.Writer(logging.Info, name)
 	defer out.Close()
 	interrupt := func() lockstate.DrillResult {
-		r.Interrupted, r.Message = true, "stop requested or RESTORE_DRILL_TIMEOUT exceeded"
+		r.Interrupted, r.Message = true, "stop requested or "+d.timeoutVariable()+" exceeded"
 		return r
 	}
 	fail := func(msg string) lockstate.DrillResult {
@@ -469,7 +545,7 @@ func (d *drillRun) one(t config.Target, name string) (r lockstate.DrillResult) {
 			d.run.Forget(work)
 		}
 	}()
-	_ = d.lock.SetStage("drill", t.StorageName()+"/"+name)
+	_ = d.lock.SetStage(d.incident("", ""), t.StorageName()+"/"+name)
 
 	repo, err := workRepo()
 	if err != nil {
@@ -702,4 +778,47 @@ func skipToJSON(r io.Reader) io.Reader {
 			return br
 		}
 	}
+}
+
+func (d *drillRun) incident(storage, service string) string {
+	key := "drill"
+	if d.named.Name != "" {
+		key += ":" + d.named.Name
+	}
+	if storage != "" {
+		key += ":" + storage + ":" + service
+	}
+	return key
+}
+
+func (d *drillRun) save() error {
+	if d.named.Name == "" {
+		return lockstate.WriteDrillState(d.e.Layout.DrillState(), d.state)
+	}
+	if d.allState.Named == nil {
+		d.allState.Named = map[string]*lockstate.DrillState{}
+	}
+	d.allState.Named[d.named.Name] = &d.state
+	return lockstate.WriteDrillState(d.e.Layout.DrillState(), d.allState)
+}
+
+func drillName(name string) string {
+	if name == "" {
+		return "default"
+	}
+	return name
+}
+
+func (d *drillRun) timeoutVariable() string {
+	if d.named.Name != "" {
+		return "RESTORE_DRILL_" + d.named.Name + "_TIMEOUT"
+	}
+	return "RESTORE_DRILL_TIMEOUT"
+}
+
+func (d *drillRun) message(message string) string {
+	if d.named.Name != "" {
+		return "Named drill " + d.named.Name + ": " + message
+	}
+	return message
 }

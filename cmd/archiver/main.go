@@ -27,6 +27,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/metrics"
 	"github.com/SisyphusMD/archiver/internal/restore"
 	"github.com/SisyphusMD/archiver/internal/resume"
+	"github.com/SisyphusMD/archiver/internal/runlock"
 	"github.com/SisyphusMD/archiver/internal/setup"
 	"github.com/SisyphusMD/archiver/internal/status"
 	"github.com/SisyphusMD/archiver/internal/web"
@@ -113,10 +114,16 @@ func main() {
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "drill" && len(os.Args) <= 4 {
 		o := restore.DrillOptions{}
-		if len(os.Args) >= 3 {
+		if len(os.Args) >= 3 && os.Args[2] == "--named" && (len(os.Args) != 4 || os.Args[3] == "") {
+			fmt.Fprintln(os.Stderr, "usage: archiver drill --named NAME")
+			os.Exit(2)
+		}
+		if len(os.Args) == 4 && os.Args[2] == "--named" {
+			o.Named = os.Args[3]
+		} else if len(os.Args) >= 3 {
 			o.Service = os.Args[2]
 		}
-		if len(os.Args) == 4 {
+		if len(os.Args) == 4 && o.Named == "" {
 			o.Storage = os.Args[3]
 		}
 		os.Exit(restoreEnv().Drill(o))
@@ -201,9 +208,17 @@ func runDaemon(args []string) int {
 		return 1
 	}
 	if check {
+		cfg, _, err := config.Load(config.FromEnvironment(), os.Environ())
+		if err == nil {
+			err = cfg.ValidateNamedDrills()
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
 		return 0
 	}
-	noteDrillSchedule(jobs)
+	noteDrillSchedule(layout.Default(), jobs)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	l := layout.Default()
@@ -223,6 +238,10 @@ func runDaemon(args []string) int {
 	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, interruptedRuns(l), func(j daemon.Job) int {
 		// A fresh process per run, as under cron: each run starts clean.
 		command := j.Command
+		if command == "" && strings.HasPrefix(j.Name, "drill:") {
+			command = "drill"
+			j.Args = []string{"--named", strings.TrimPrefix(j.Name, "drill:")}
+		}
 		if command == "" {
 			command = j.Name
 		}
@@ -245,7 +264,10 @@ func runDaemon(args []string) int {
 func interruptedRuns(l layout.Layout) []string {
 	var kinds []string
 	for _, k := range []string{"backup", "maintenance", "drill", "kit-drill"} {
-		if _, ok := resume.Read(l.RunRecord(k)); ok {
+		if rec, ok := resume.Read(l.RunRecord(k)); ok {
+			if k == "drill" && rec.Drill != "" {
+				k = "drill:" + rec.Drill
+			}
 			kinds = append(kinds, k)
 		}
 	}
@@ -305,18 +327,47 @@ func mirrorCommand(args []string) int {
 
 // noteDrillSchedule records when drills were first scheduled, so the healthcheck can tell
 // drills that never run (each failing before it records anything) from ones not yet due.
-func noteDrillSchedule(jobs []daemon.Job) {
+func noteDrillSchedule(l layout.Layout, jobs []daemon.Job) {
+	scheduled := false
 	for _, j := range jobs {
-		if j.Name != "drill" {
-			continue
-		}
-		l := layout.Default()
-		s, err := lockstate.ReadDrillState(l.DrillState())
-		if err == nil && s.Scheduled == 0 {
-			s.Scheduled = time.Now().Unix()
-			_ = lockstate.WriteDrillState(l.DrillState(), s)
+		if j.Name == "drill" || strings.HasPrefix(j.Name, "drill:") {
+			scheduled = true
+			break
 		}
 	}
+	if !scheduled {
+		return
+	}
+	// Scheduling metadata shares the result file, so it must not overwrite a live drill's updates.
+	lock, _, err := runlock.Acquire(l.DrillLock(), "", "drill", "scheduling")
+	if err != nil {
+		return
+	}
+	defer lock.Release()
+	s, err := lockstate.ReadDrillState(l.DrillState())
+	if err != nil {
+		return
+	}
+	for _, j := range jobs {
+		if j.Name != "drill" && !strings.HasPrefix(j.Name, "drill:") {
+			continue
+		}
+		target := &s
+		if strings.HasPrefix(j.Name, "drill:") {
+			name := strings.TrimPrefix(j.Name, "drill:")
+			if s.Named == nil {
+				s.Named = map[string]*lockstate.DrillState{}
+			}
+			if s.Named[name] == nil {
+				s.Named[name] = &lockstate.DrillState{}
+			}
+			target = s.Named[name]
+		}
+		if target.Scheduled == 0 {
+			target.Scheduled = time.Now().Unix()
+		}
+	}
+	_ = lockstate.WriteDrillState(l.DrillState(), s)
 }
 
 // doctorCommand runs `archiver doctor` (ADR 30); notify also sends a test notification.

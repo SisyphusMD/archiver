@@ -487,14 +487,14 @@ func TestDrillOptOutKeepsIncidents(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent++ }))
 			defer srv.Close()
 			n := &Notifier{Destinations: []Destination{{&Ntfy{URL: srv.URL}, "everything,-drills"}}, Incidents: t.TempDir() + "/incidents", Repeat: time.Nanosecond}
-			n.Raise("drill", Failure, title, "failed")
-			n.Raise("drill", Failure, title, "still failed")
-			if !n.IsOpen("drill") || sent != 0 {
-				t.Fatalf("open=%v sent=%d", n.IsOpen("drill"), sent)
+			n.Raise("drill:GARAGE:local:app", Failure, title, "failed")
+			n.Raise("drill:GARAGE:local:app", Failure, title, "still failed")
+			if !n.IsOpen("drill:GARAGE:local:app") || sent != 0 {
+				t.Fatalf("open=%v sent=%d", n.IsOpen("drill:GARAGE:local:app"), sent)
 			}
-			n.Clear("drill", strings.TrimSuffix(title, "Failed")+"Passing", "passed")
-			if n.IsOpen("drill") || sent != 0 {
-				t.Fatalf("recovery: open=%v sent=%d", n.IsOpen("drill"), sent)
+			n.Clear("drill:GARAGE:local:app", strings.TrimSuffix(title, "Failed")+"Passing", "passed")
+			if n.IsOpen("drill:GARAGE:local:app") || sent != 0 {
+				t.Fatalf("recovery: open=%v sent=%d", n.IsOpen("drill:GARAGE:local:app"), sent)
 			}
 			n.Raise("backup", Failure, "Backup Failed", "failed")
 			if sent != 1 {

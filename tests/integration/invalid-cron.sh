@@ -89,7 +89,7 @@ MAINT_EXIT=$(wait_exit "$NAME_MAINT")
 grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" <<<"$(docker logs "$NAME_MAINT" 2>&1)" \
   || die "no clear invalid-schedule message for MAINTENANCE_SCHEDULE"
 
-for schedule in RESTORE_DRILL_SCHEDULE STORAGE_TARGET_1_DEEP_CHECK; do
+for schedule in RESTORE_DRILL_SCHEDULE RESTORE_DRILL_GARAGE_SCHEDULE STORAGE_TARGET_1_DEEP_CHECK; do
   log "a malformed $schedule must print both schedule diagnostics and fail fast"
   docker run -d --name "$NAME_EXTRA" \
     --cap-drop ALL --cap-add DAC_OVERRIDE \
@@ -108,6 +108,31 @@ for schedule in RESTORE_DRILL_SCHEDULE STORAGE_TARGET_1_DEEP_CHECK; do
   grep -q 'STORAGE_TARGET_N_DEEP_CHECK' <<<"$EXTRA_LOGS" || die "invalid-schedule message omits deep-check setting"
   grep -q "invalid $schedule \"not a cron line\":" <<<"$EXTRA_LOGS" || die "no specific error for $schedule"
   docker rm "$NAME_EXTRA" >/dev/null || die "$schedule container cleanup failed"
+done
+
+for bad_setting in RESTORE_DRILL_GARAGE_SERVICES=missing RESTORE_DRILL_GARAGE_STORAGES=missing RESTORE_DRILL_GARAGE_TIMEOUT=0s RESTORE_DRILL_DIR_SCHEDULE=bad RESTORE_DRILL_lower_SCHEDULE=bad; do
+  log "invalid named drill setting $bad_setting fails startup and doctor"
+  docker run -d --name "$NAME_EXTRA" \
+    --cap-drop ALL --cap-add DAC_OVERRIDE -v "$VOL":/run/secrets \
+    -e RESTORE_DRILL_GARAGE_SCHEDULE="0 8 * * 6#1" \
+    -e RESTORE_DRILL_GARAGE_SERVICES=logs \
+    -e "$bad_setting" \
+    -e SERVICE_DIRECTORIES=/opt/archiver/logs/ \
+    -e STORAGE_TARGET_1_NAME=local -e STORAGE_TARGET_1_TYPE=local \
+    -e STORAGE_TARGET_1_LOCAL_PATH=/backup-store \
+    "$IMAGE" >/dev/null || die "named container failed to launch"
+  EXTRA_EXIT=$(wait_exit "$NAME_EXTRA")
+  [ "$EXTRA_EXIT" != running ] && [ "$EXTRA_EXIT" -ne 0 ] || die "invalid named setting did not fail startup"
+  grep -q "BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid" <<<"$(docker logs "$NAME_EXTRA" 2>&1)" || die "named invalid-schedule message missing"
+  docker rm "$NAME_EXTRA" >/dev/null || die "named container cleanup"
+  DOCTOR_OUTPUT=$(docker run --rm --entrypoint archiver -v "$VOL":/run/secrets \
+    -e RESTORE_DRILL_GARAGE_SCHEDULE="0 8 * * 6#1" \
+    -e RESTORE_DRILL_GARAGE_SERVICES=logs -e "$bad_setting" \
+    -e SERVICE_DIRECTORIES=/opt/archiver/logs/ \
+    -e STORAGE_TARGET_1_NAME=local -e STORAGE_TARGET_1_TYPE=local \
+    -e STORAGE_TARGET_1_LOCAL_PATH=/backup-store \
+    "$IMAGE" doctor 2>&1) && die "doctor accepted invalid named setting"
+  grep -q 'invalid ' <<<"$DOCTOR_OUTPUT" || die "doctor omitted named diagnostic"
 done
 
 log "a legacy CRON_SCHEDULE (valid cron) must fail fast with the rename message"

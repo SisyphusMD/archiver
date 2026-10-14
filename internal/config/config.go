@@ -98,6 +98,7 @@ type Config struct {
 	// Kit drills (ADR 51); schedules are managed by the daemon.
 	KitDrillLimit string // KIT_DRILL_TIMEOUT
 	// Restore drills (ADR 28); their schedule, RESTORE_DRILL_SCHEDULE, is the daemon's.
+	NamedDrills    []NamedDrill
 	DrillServices  string // RESTORE_DRILL_SERVICES: how many services per storage per run, or "all"
 	DrillStorages  string // RESTORE_DRILL_STORAGES: "all", "primary" or storage names
 	DrillDir       string // RESTORE_DRILL_DIR
@@ -283,6 +284,13 @@ func Load(src Source, environ []string) (*Config, []string, error) {
 	if err != nil {
 		return nil, warnings, err
 	}
+	if environ == nil {
+		environ = os.Environ()
+	}
+	c.NamedDrills, err = c.loadNamedDrills(src, environ)
+	if err != nil {
+		return nil, warnings, err
+	}
 	return c, warnings, nil
 }
 
@@ -410,6 +418,9 @@ func (c *Config) Validate(secretsDir string) error {
 	}
 	if _, err := ParseInterval(c.DeepCheckTimeout); err != nil {
 		return fmt.Errorf("DEEP_CHECK_TIMEOUT: %v", err)
+	}
+	if err := c.ValidateNamedDrills(); err != nil {
+		return err
 	}
 	if _, err := c.DrillCount(); err != nil {
 		return err

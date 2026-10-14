@@ -21,6 +21,7 @@ import (
 
 	"github.com/SisyphusMD/archiver/internal/hostguard"
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
 
@@ -167,13 +168,48 @@ func keys[V any](m map[string]V) []string {
 	return out
 }
 
+type drillRow struct {
+	Name, Storage, Service string
+	Result                 lockstate.DrillResult
+}
+
+func drillRows(s status.Snapshot) []drillRow {
+	var rows []drillRow
+	appendResults := func(name string, results map[string]map[string]lockstate.DrillResult) {
+		for _, storage := range keys(results) {
+			for _, service := range keys(results[storage]) {
+				rows = append(rows, drillRow{Name: name, Storage: storage, Service: service, Result: results[storage][service]})
+			}
+		}
+	}
+	appendResults("default", s.Drills)
+	for _, name := range keys(s.NamedDrills) {
+		if d := s.NamedDrills[name]; d != nil {
+			appendResults(name, d.Results)
+		}
+	}
+	return rows
+}
+
+func drillLabel(r status.Run) string {
+	if r.Context == "kit-drill" || strings.HasPrefix(r.Context, "kit-drill:") {
+		return "Kit drill"
+	}
+	if strings.HasPrefix(r.Context, "drill:") {
+		return "Restore drill " + strings.TrimPrefix(r.Context, "drill:")
+	}
+	return "Restore drill"
+}
+
 var page = template.Must(template.New("page").Funcs(template.FuncMap{
 	"ago":           ago,
 	"base":          filepath.Base,
 	"servicekeys":   func(s status.Snapshot) []string { return keys(s.Services) },
 	"copykeys":      func(s status.Snapshot) []string { return keys(s.Copies) },
-	"drillstorages": func(s status.Snapshot) []string { return keys(s.Drills) },
-	"drillservices": func(s status.Snapshot, storage string) []string { return keys(s.Drills[storage]) },
+	"drillrows":     drillRows,
+	"drilllabel":    drillLabel,
+	"deepcheckkeys": func(s status.Snapshot) []string { return keys(s.DeepChecks) },
+	"kitdrillkeys":  func(s status.Snapshot) []string { return keys(s.KitDrills) },
 	"incidentkeys":  func(s status.Snapshot) []string { return keys(s.Incidents) },
 	"lower":         strings.ToLower,
 }).Parse(`<!doctype html>
@@ -196,7 +232,7 @@ nav a{margin-right:.8rem}
 {{with .S.BackupHealth.Reasons}}<ul>{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}
 <p>Backup: {{if .S.Backup.Running}}running{{if .S.Backup.Paused}}, paused{{end}} ({{.S.Backup.Stage}}){{else}}not running{{end}}.
 Maintenance: {{if .S.Maintenance.Running}}running{{if .S.Maintenance.Paused}}, paused{{end}} ({{.S.Maintenance.Stage}}){{else}}not running{{end}}.
-Restore drill: {{if .S.Drill.Running}}running{{if .S.Drill.Paused}}, paused{{end}}{{else}}not running{{end}}.</p>
+{{drilllabel .S.Drill}}: {{if .S.Drill.Running}}running{{if .S.Drill.Paused}}, paused{{end}}{{else}}not running{{end}}.</p>
 <h2>Services</h2>
 {{$s := .S}}{{$now := .Now}}
 {{if servicekeys $s}}<table><tr><th>Service</th><th>Directory</th><th>Last backup</th><th>Result</th><th>Last good</th><th>Revision</th><th>Took</th></tr>
@@ -213,10 +249,19 @@ Restore drill: {{if .S.Drill.Running}}running{{if .S.Drill.Paused}}, paused{{end
 {{range $s.Storages}}<tr><td>{{.Name}}</td><td>{{ago .Check $now}}</td><td>{{ago .Prune $now}}</td><td>{{ago .Exhaustive $now}}</td></tr>{{end}}</table>
 {{else}}<p class="muted">Maintenance has not run yet.</p>{{end}}
 <h2>Restore drills</h2>
-{{if drillstorages $s}}<table><tr><th>Storage</th><th>Service</th><th>When</th><th>Result</th></tr>
-{{range $st := drillstorages $s}}{{range drillservices $s $st}}{{$d := index (index $s.Drills $st) .}}<tr><td>{{$st}}</td><td>{{.}}</td><td>{{ago $d.At $now}}</td>
-<td class="{{if $d.OK}}ok{{else if $d.Skipped}}muted{{else}}bad{{end}}">{{if $d.OK}}passed, revision {{$d.Revision}}{{else if $d.Skipped}}skipped: {{$d.Message}}{{else}}FAILED: {{$d.Message}}{{end}}</td></tr>{{end}}{{end}}</table>
-{{else}}<p class="muted">No drills (RESTORE_DRILL_SCHEDULE unset, or none run yet).</p>{{end}}
+{{$drills := drillrows $s}}
+{{if $drills}}<table><tr><th>Name</th><th>Storage</th><th>Service</th><th>When</th><th>Result</th></tr>
+{{range $drills}}{{$d := .Result}}<tr><td>{{.Name}}</td><td>{{.Storage}}</td><td>{{.Service}}</td><td>{{ago $d.At $now}}</td>
+<td class="{{if $d.OK}}ok{{else if $d.Skipped}}muted{{else}}bad{{end}}">{{if $d.OK}}passed, revision {{$d.Revision}}{{else if $d.Skipped}}skipped: {{$d.Message}}{{else}}FAILED: {{$d.Message}}{{end}}</td></tr>{{end}}</table>
+{{else}}<p class="muted">No drills (none run yet).</p>{{end}}
+<h2>Deep checks</h2>
+{{if deepcheckkeys $s}}<table><tr><th>Storage</th><th>When</th><th>Result</th><th>Last good</th><th>Took</th></tr>
+{{range deepcheckkeys $s}}{{$d := index $s.DeepChecks .}}<tr><td>{{.}}</td><td>{{ago $d.At $now}}</td><td class="{{if $d.OK}}ok{{else}}bad{{end}}">{{if $d.OK}}passed{{else}}FAILED: {{$d.Message}}{{end}}</td><td>{{ago $d.LastSuccess $now}}</td><td>{{$d.Seconds}}s</td></tr>{{end}}</table>
+{{else}}<p class="muted">No deep checks have run yet.</p>{{end}}
+<h2>Kit drills</h2>
+{{if kitdrillkeys $s}}<table><tr><th>Storage</th><th>When</th><th>Result</th><th>Last good</th><th>Took</th><th>Details</th></tr>
+{{range kitdrillkeys $s}}{{$d := index $s.KitDrills .}}<tr><td>{{if .}}{{.}}{{else}}run{{end}}</td><td>{{ago $d.At $now}}</td><td class="{{if $d.OK}}ok{{else}}bad{{end}}">{{if $d.OK}}passed{{else}}FAILED: {{$d.Message}}{{end}}</td><td>{{ago $d.LastSuccess $now}}</td><td>{{$d.Seconds}}s</td><td>{{if $d.OK}}{{$d.Message}} {{end}}{{if $d.SignInRequired}}Provider sign-in is left to a person.{{end}}</td></tr>{{end}}</table>
+{{else}}<p class="muted">No kit drills have run yet.</p>{{end}}
 <h2>Open incidents</h2>
 {{if incidentkeys $s}}<ul>{{range incidentkeys $s}}<li>{{index $s.Incidents .}} <span class="muted">({{.}})</span></li>{{end}}</ul>{{else}}<p class="muted">None.</p>{{end}}
 {{with $s.Envelope}}<p>{{.}}</p>{{end}}

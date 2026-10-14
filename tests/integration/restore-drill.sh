@@ -95,6 +95,26 @@ printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
 archiver drill >/tmp/drill-limit-retry.out 2>&1 || { cat /tmp/drill-limit-retry.out; die "timeout retry failed"; }
 state 'r["local"]["db"]["ok"] and not s.get("pending", {}).get("local")' || die "timeout selection did not retry"
 
+log "named drills alternate storages, persist the cursor, and retry a failure"
+export RESTORE_DRILL_GARAGE_SCHEDULE="0 8 * * 6#1"
+export RESTORE_DRILL_GARAGE_SERVICES=app,db
+export RESTORE_DRILL_GARAGE_STORAGES=alternate:local,offsite
+export RESTORE_DRILL_EXCLUDE=app,db
+archiver drill --named GARAGE >/tmp/named1.out 2>&1 || { cat /tmp/named1.out; die "first named drill"; }
+state 's["named"]["GARAGE"]["results"]["local"]["app"]["ok"] and "offsite" not in s["named"]["GARAGE"]["results"] and s["named"]["GARAGE"]["next_storage"] == 1' || die "first named storage"
+archiver drill --named GARAGE >/tmp/named2.out 2>&1 || { cat /tmp/named2.out; die "second named drill"; }
+state 's["named"]["GARAGE"]["results"]["offsite"]["app"]["ok"] and s["named"]["GARAGE"].get("next_storage", 0) == 0' || die "second named storage"
+printf '#!/bin/sh\nexit 1\n' >"$SERVICES/db/drill"
+for attempt in 1 2; do
+  archiver drill --named GARAGE >/tmp/named-fail.out 2>&1 && die "named failed hook passed"
+  state 's["named"]["GARAGE"]["storage"] == "local" and s["named"]["GARAGE"].get("next_storage", 0) == 0 and s["named"]["GARAGE"]["last_failed"]' || die "named failed run advanced"
+done
+printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
+archiver drill --named GARAGE >/tmp/named-retry.out 2>&1 || { cat /tmp/named-retry.out; die "named retry"; }
+state 's["named"]["GARAGE"]["results"]["local"]["db"]["ok"] and s["named"]["GARAGE"]["next_storage"] == 1' || die "named retry did not advance"
+archiver status | grep -q 'Restore drills GARAGE' || die "named status missing"
+unset RESTORE_DRILL_EXCLUDE
+
 log "a damaged chunk on the primary fails the drill; the offsite copy still passes"
 [ -n "$(find "$STORE1/chunks" -type f)" ] || die "no chunk found to damage"
 for c in $(find "$STORE1/chunks" -type f); do printf 'garbage' | dd of="$c" bs=1 seek=100 conv=notrunc 2>/dev/null; done

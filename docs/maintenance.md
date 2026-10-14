@@ -127,3 +127,43 @@ The metrics endpoint and textfile export `archiver_deep_check_last_timestamp_sec
 `archiver kit-drill [STORAGE]` fetches and decrypts the recovery kit from each offsite storage with the envelope's credentials, checking its entries and secrets against the current local payload. `KIT_DRILL_SCHEDULE` enables cron runs (unset: off), and `KIT_DRILL_TIMEOUT` defaults to six hours of active time. Failures notify per storage; a pass clears the incident. Kit drills share restore drills' lock and stop/pause/resume controls. See recovery.md, "Kit drills", for OneDrive's human sign-in step and the per-storage metrics.
 
 Each kind has its own cron schedule: `RESTORE_DRILL_SCHEDULE`, each target's `STORAGE_TARGET_N_DEEP_CHECK`, and `KIT_DRILL_SCHEDULE`. Failures and interruptions retry at the next scheduled slot until a pass, with no monthly caps. Deep checks use `DEEP_CHECK_TIMEOUT` (default seven days); kit drills use `KIT_DRILL_TIMEOUT` (default six hours of active time). To alert through metrics instead, append `,-drills` to `NOTIFY_ON`; results and incidents remain recorded.
+
+### Named restore drills
+
+For a large service such as a whole object store, use a separate monthly drill:
+
+```sh
+RESTORE_DRILL_GARAGE_SCHEDULE="0 8 * * 6#1"
+RESTORE_DRILL_GARAGE_SERVICES=garage
+RESTORE_DRILL_GARAGE_STORAGES=alternate:backblaze,cowanserver
+RESTORE_DRILL_GARAGE_TIMEOUT=7d
+RESTORE_DRILL_EXCLUDE=garage
+```
+
+This drills `garage` on the first Saturday of each month at 08:00 in the container's
+configured time zone. `archiver drill --named GARAGE` runs it immediately. Plain
+`archiver drill` keeps the regular rotation. Named drills always cover every listed
+service, regardless of regular exclusions, and run the same drill hooks.
+
+Names match `[A-Z0-9_]+` and cannot be SERVICES, STORAGES, DIR, EXCLUDE,
+TIMEOUT, HOOK, HOOK_TIMEOUT or SCHEDULE. A schedule and a nonempty comma-separated list
+of configured services are required. Storages default to `all`; `primary` and
+comma-separated storage names also work. The timeout defaults to 24h independently
+of the regular drill's configured timeout.
+
+`alternate` visits one configured storage per run in configuration order.
+`alternate:backblaze,cowanserver` visits only those configured storages, in the listed
+order, so the Garage example rotates through offsite copies only. Empty or unknown
+names are rejected. Changing the ordered list resets the cursor to its first storage;
+a failed or interrupted storage still in the list retries first. Its cursor
+and pending storage survive restarts in the logs volume. It advances only when all
+selected services pass or genuinely skip; a failure or interruption keeps the same
+storage due. A skip following an unresolved failure does not advance it. Drills share
+one lock, so overlapping schedules refuse a second run and retry at its next slot.
+
+All `archiver_restore_drill_*` metrics now include `drill="default"` for the regular
+drill and `drill="GARAGE"` for this example. Existing selectors without a drill label
+still match, but Prometheus sees new series identities; dashboards should filter or
+group by `drill` to avoid combining schedules. The legacy `archiver_drill_*` aliases
+retain their existing default-only series. Status and incidents distinguish named
+drills, and `NOTIFY_ON=-drills` suppresses their messages while retaining incidents.

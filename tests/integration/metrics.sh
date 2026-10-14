@@ -36,6 +36,9 @@ python3 -c "import sys; sys.exit(0 if float('$up') > 150000 else 1)" || die "upl
 
 log "a restore drill records consistent metrics and compatibility aliases"
 archiver drill >/tmp/drill.out 2>&1 || { cat /tmp/drill.out; die "drill failed"; }
+RESTORE_DRILL_GARAGE_SCHEDULE="0 8 * * 6#1" RESTORE_DRILL_GARAGE_SERVICES=app \
+  archiver drill --named GARAGE >/tmp/named-drill.out 2>&1 || { cat /tmp/named-drill.out; die "named drill failed"; }
+
 
 log "METRICS_PORT unset: the daemon keeps the file and listens nowhere"
 BACKUP_SCHEDULE="0 3 1 1 *" archiver daemon >/tmp/d1.out 2>&1 &
@@ -50,12 +53,14 @@ METRICS_PORT=9469 BACKUP_SCHEDULE="0 3 1 1 *" archiver daemon >/tmp/d2.out 2>&1 
 d=$!
 wait_for 'curl -sf --max-time 3 http://127.0.0.1:9469/metrics >/tmp/m.txt' 30 || { cat /tmp/d2.out; die "no /metrics on METRICS_PORT"; }
 grep -q '^archiver_service_last_ok{service="app",directory="/data/services/app"} 1$' /tmp/m.txt || { cat /tmp/m.txt; die "/metrics lacks the service"; }
-for name in last_timestamp_seconds last_ok last_duration_seconds last_success_timestamp_seconds; do
-  grep -q "^archiver_restore_drill_${name}{storage=\"local\",service=\"app\"} " /tmp/m.txt || die "missing restore drill $name on endpoint"
+for drill_name in default GARAGE; do
+  for name in last_timestamp_seconds last_ok last_duration_seconds last_success_timestamp_seconds; do
+    grep -q "^archiver_restore_drill_${name}{storage=\"local\",service=\"app\",drill=\"${drill_name}\"} " /tmp/m.txt || die "missing restore drill $drill_name $name on endpoint"
+  done
 done
 for name in last_ok last_timestamp_seconds; do
   old=$(sed -n "s/^archiver_drill_${name}{storage=\"local\",service=\"app\"} //p" /tmp/m.txt)
-  new=$(sed -n "s/^archiver_restore_drill_${name}{storage=\"local\",service=\"app\"} //p" /tmp/m.txt)
+  new=$(sed -n "s/^archiver_restore_drill_${name}{storage=\"local\",service=\"app\",drill=\"default\"} //p" /tmp/m.txt)
   [ -n "$old" ] && [ "$old" = "$new" ] || die "drill alias $name differs"
 done
 wait_for "[ -f $PROM ]" 10 || die "the daemon did not write the textfile"

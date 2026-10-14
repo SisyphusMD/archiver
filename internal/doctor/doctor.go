@@ -82,7 +82,7 @@ func Run(e Env) int {
 	} else {
 		r.ok("Settings and required secrets are valid (%d storage(s))", len(cfg.Targets))
 	}
-	if jobs, err := daemon.Jobs(e.Source.Getenv, now); err != nil {
+	if jobs, err := daemon.Jobs(e.Source.Getenv, now, e.Environ); err != nil {
 		r.bad("%v: the container refuses to start", err)
 	} else if len(jobs) > 0 {
 		var names []string
@@ -431,6 +431,25 @@ func (e Env) drills(r *report, now time.Time) {
 		r.wrn("The restore drill state is unreadable: %v", err)
 		return
 	}
+	for name, named := range ds.Named {
+		if named == nil {
+			continue
+		}
+		if named.LastFailed {
+			r.wrn("The last named restore drill %s failed (%s); see 'archiver status'", name, status.Age(named.LastRun, now))
+		}
+		since := named.LastPass
+		if since == 0 {
+			since = named.Scheduled
+		}
+		if since == 0 {
+			since = named.LastRun
+		}
+		if every, ok := daemon.Interval(e.Source.Getenv("RESTORE_DRILL_"+name+"_SCHEDULE"), now); ok && since > 0 && now.Sub(time.Unix(since, 0)) > 2*every {
+			r.wrn("No named restore drill %s has passed since %s (more than twice its schedule interval)", name, status.Age(since, now))
+		}
+	}
+
 	if ds.LastFailed {
 		r.wrn("The last restore drill failed (%s); see 'archiver status'", status.Age(ds.LastRun, now))
 	}
