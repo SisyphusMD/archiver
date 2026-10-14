@@ -98,17 +98,26 @@ export NOTIFY_ON=everything,-drills ALERT_REPEAT_INTERVAL=1s
 archiver drill >/tmp/drill-muted.out 2>&1 && die "failed drill passed"
 sleep 2
 archiver drill >/tmp/drill-muted-repeat.out 2>&1 && die "repeated failed drill passed"
+export RESTORE_DRILL_GARAGE_SCHEDULE="0 8 * * 6#1" RESTORE_DRILL_GARAGE_SERVICES=app
+archiver drill --named GARAGE >/tmp/named-muted.out 2>&1 && die "failed named drill passed"
+sleep 2
+archiver drill --named GARAGE >/tmp/named-muted-repeat.out 2>&1 && die "repeated failed named drill passed"
+
 [ ! -s "$NOTES" ] || die "opted-out drill sent a notification"
-python3 -c 'import json; s=json.load(open("/opt/archiver/logs/.incidents.json")); assert "drill:local:app" in s' || die "opt-out lost the incident"
+python3 -c 'import json; s=json.load(open("/opt/archiver/logs/.incidents.json")); assert "drill:local:app" in s and "drill:GARAGE:local:app" in s' || die "opt-out lost the incident"
 METRICS_PORT=9469 BACKUP_SCHEDULE="0 3 1 1 *" archiver daemon >/tmp/muted-daemon.out 2>&1 &
 d=$!
 for _ in $(seq 1 20); do curl -sf http://127.0.0.1:9469/metrics >/tmp/muted-metrics && break; sleep 1; done
-grep -q '^archiver_restore_drill_last_ok{storage="local",service="app"} 0$' /tmp/muted-metrics || die "opt-out lost failure metrics"
+for drill_name in default GARAGE; do
+  grep -q "^archiver_restore_drill_last_ok{storage=\"local\",service=\"app\",drill=\"$drill_name\"} 0$" /tmp/muted-metrics || die "opt-out lost $drill_name failure metrics"
+done
 grep -q 'archiver_incident_open{key="drill:local:app"' /tmp/muted-metrics || die "opt-out lost incident metrics"
+grep -q 'archiver_incident_open{key="drill:GARAGE:local:app"' /tmp/muted-metrics || die "opt-out lost named incident metrics"
 kill "$d"; wait "$d" 2>/dev/null
 rm "$SERVICES/app/drill"
 archiver drill >/tmp/drill-muted-recovery.out 2>&1 || die "muted recovery failed"
+archiver drill --named GARAGE >/tmp/named-muted-recovery.out 2>&1 || die "muted named recovery failed"
 [ ! -s "$NOTES" ] || die "muted recovery or completion sent"
-python3 -c 'import json; s=json.load(open("/opt/archiver/logs/.incidents.json")); assert "drill:local:app" not in s' || die "muted recovery did not clear incident"
+python3 -c 'import json; s=json.load(open("/opt/archiver/logs/.incidents.json")); assert "drill:local:app" not in s and "drill:GARAGE:local:app" not in s' || die "muted recovery did not clear incident"
 
 echo "PASS: incidents"

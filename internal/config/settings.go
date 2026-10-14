@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/SisyphusMD/archiver/internal/daemon"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,7 +17,7 @@ var globalSetting = regexp.MustCompile(`^(SERVICE_DIRECTORIES|ROTATE_BACKUPS|PRU
 // storage target's name, type, check interval, check-in URL, upload limit, copy window,
 // break-glass SFTP user, or any storage type's non-secret field.
 func IsSetting(name string) bool {
-	if globalSetting.MatchString(name) {
+	if globalSetting.MatchString(name) || daemon.IsNamedDrillSetting(name) {
 		return true
 	}
 	m := targetVar.FindStringSubmatch(name)

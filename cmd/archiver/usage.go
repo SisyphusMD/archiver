@@ -19,6 +19,7 @@ Note:
   notify test sends one message to every notification destination, saying which events it receives.
   deep-check [STORAGE] reads and verifies every chunk; no argument selects storages with STORAGE_TARGET_N_DEEP_CHECK schedules.
   kit-drill [STORAGE] fetches and decrypts offsite kits with envelope credentials (KIT_DRILL_SCHEDULE, unset: off); stop drill, pause and resume also control it.
+  drill --named NAME runs a configured named restore drill now.
   drill [SERVICE] [STORAGE] restores newest revisions into RESTORE_DRILL_DIR, checks them and deletes them (normally scheduled via RESTORE_DRILL_SCHEDULE).
   stop takes an optional target (backup|maintenance|drill|deep-check|all, default all) and --immediate.
   resume may be used in combination with logs.

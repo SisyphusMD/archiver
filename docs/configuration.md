@@ -72,6 +72,10 @@ Settings are environment variables. **Secrets** are files, never environment var
 
 | Variable | Default | Description |
 |---|---|---|
+| `RESTORE_DRILL_<NAME>_SCHEDULE` |  | Defines a named drill. NAME matches `[A-Z0-9_]+`; reserved names: SERVICES, STORAGES, DIR, EXCLUDE, TIMEOUT, HOOK, HOOK_TIMEOUT, SCHEDULE. Each named drill has its own schedule, results and pending selection; `archiver drill --named NAME` runs it now. |
+| `RESTORE_DRILL_<NAME>_SERVICES` |  | Required comma-separated configured service names; every listed service runs, ignoring RESTORE_DRILL_EXCLUDE. |
+| `RESTORE_DRILL_<NAME>_STORAGES` | `all` | Storage selection: all, primary, comma-separated names, alternate, or alternate:NAME,NAME. Alternate selects one storage per run in configuration order, or the listed order for a subset, persisted across restarts; changing the list resets the cursor to the first storage, while a pending storage still in the list retries first; failed or interrupted runs retry the same storage until every service passes or genuinely skips. |
+| `RESTORE_DRILL_<NAME>_TIMEOUT` | `24h` | Maximum named drill duration including waits and hooks; independent of RESTORE_DRILL_TIMEOUT's configured value. |
 | `RESTORE_DRILL_SERVICES` | `1` | How many services each drill restores from each storage, rotating; `all` restores every one. |
 | `RESTORE_DRILL_STORAGES` | `all` | Which storages drills restore from: `all`, `primary`, or storage names separated by commas. |
 | `RESTORE_DRILL_DIR` | `/tmp/archiver-drill` | Scratch space a drill restores into and deletes afterwards; never a service directory. |

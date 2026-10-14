@@ -23,7 +23,8 @@ const (
 
 // Record is one run in progress.
 type Record struct {
-	Started int64 `json:"started"`
+	Drill   string `json:"drill,omitempty"`
+	Started int64  `json:"started"`
 	// Services are a backup's service directories and their stages, or the directories a
 	// drill restored into.
 	Services map[string]string `json:"services,omitempty"`

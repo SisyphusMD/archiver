@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strconv"
 	"sync"
@@ -28,13 +29,28 @@ type Job struct {
 
 // Jobs reads the schedules from the environment. A malformed schedule, or one that can
 // never fire, is an error: the container must refuse to start rather than never back up.
-func Jobs(getenv func(string) string, now time.Time) ([]Job, error) {
+func Jobs(getenv func(string) string, now time.Time, environments ...[]string) ([]Job, error) {
 	var jobs []Job
 	definitions := []Job{
 		{Name: "backup", Env: "BACKUP_SCHEDULE"},
 		{Name: "maintenance", Env: "MAINTENANCE_SCHEDULE"},
 		{Name: "kit-drill", Env: "KIT_DRILL_SCHEDULE"},
 		{Name: "drill", Env: "RESTORE_DRILL_SCHEDULE"},
+	}
+	environ := os.Environ()
+	if len(environments) > 0 {
+		environ = environments[0]
+	}
+	names, err := NamedDrillNames(environ)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range names {
+		key := "RESTORE_DRILL_" + name + "_SCHEDULE"
+		if getenv(key) == "" {
+			return nil, fmt.Errorf("invalid %s: a named drill requires a schedule", key)
+		}
+		definitions = append(definitions, Job{Name: "drill:" + name, Command: "drill", Args: []string{"--named", name}, Env: key})
 	}
 	for n := 1; getenv("STORAGE_TARGET_"+strconv.Itoa(n)+"_NAME") != ""; n++ {
 		p := "STORAGE_TARGET_" + strconv.Itoa(n) + "_"

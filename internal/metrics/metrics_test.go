@@ -68,15 +68,28 @@ func TestRestoreDrillMetricsAndAliases(t *testing.T) {
 	s := status.Snapshot{Drills: map[string]map[string]lockstate.DrillResult{"local": {"app": {At: 100, Seconds: 2.5, LastSuccess: 90}}}}
 	got := Render(s)
 	for _, sample := range []string{
-		`archiver_restore_drill_last_timestamp_seconds{storage="local",service="app"} 100`,
-		`archiver_restore_drill_last_ok{storage="local",service="app"} 0`,
-		`archiver_restore_drill_last_duration_seconds{storage="local",service="app"} 2.5`,
-		`archiver_restore_drill_last_success_timestamp_seconds{storage="local",service="app"} 90`,
+		`archiver_restore_drill_last_timestamp_seconds{storage="local",service="app",drill="default"} 100`,
+		`archiver_restore_drill_last_ok{storage="local",service="app",drill="default"} 0`,
+		`archiver_restore_drill_last_duration_seconds{storage="local",service="app",drill="default"} 2.5`,
+		`archiver_restore_drill_last_success_timestamp_seconds{storage="local",service="app",drill="default"} 90`,
 		`archiver_drill_last_ok{storage="local",service="app"} 0`,
 		`archiver_drill_last_timestamp_seconds{storage="local",service="app"} 100`,
 	} {
 		if !strings.Contains(got, sample) {
 			t.Errorf("missing %s in %s", sample, got)
 		}
+	}
+}
+
+func TestNamedRestoreDrillMetrics(t *testing.T) {
+	s := status.Snapshot{NamedDrills: map[string]*lockstate.DrillState{"GARAGE": {Results: map[string]map[string]lockstate.DrillResult{"local": {"garage": {At: 100, OK: true, Seconds: 2, LastSuccess: 100}}}}}}
+	got := Render(s)
+	for _, want := range []string{`archiver_restore_drill_last_ok{storage="local",service="garage",drill="GARAGE"} 1`, `archiver_restore_drill_last_duration_seconds{storage="local",service="garage",drill="GARAGE"} 2`, `archiver_restore_drill_last_success_timestamp_seconds{storage="local",service="garage",drill="GARAGE"} 100`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in %s", want, got)
+		}
+	}
+	if strings.Contains(got, "archiver_drill_last_ok{") {
+		t.Fatal("named drill emitted a default alias")
 	}
 }

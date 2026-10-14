@@ -18,6 +18,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/hostguard"
 	"github.com/SisyphusMD/archiver/internal/layout"
+	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/status"
 )
 
@@ -113,21 +114,10 @@ func Render(s status.Snapshot) string {
 			w.gauge("archiver_storage_last_prune_timestamp_seconds", "When maintenance last pruned the storage successfully.", float64(st.Prune), l...)
 		}
 	}
-	for _, storage := range sortedKeys(s.Drills) {
-		for _, svc := range sortedKeys(s.Drills[storage]) {
-			d := s.Drills[storage][svc]
-			if d.Skipped {
-				continue
-			}
-			l := []string{"storage", storage, "service", svc}
-			w.gauge("archiver_restore_drill_last_timestamp_seconds", "When the last restore drill started.", float64(d.At), l...)
-			w.gauge("archiver_restore_drill_last_ok", "Whether the last restore drill passed.", b2f(d.OK), l...)
-			w.gauge("archiver_restore_drill_last_duration_seconds", "How long the last restore drill took.", d.Seconds, l...)
-			if d.LastSuccess != 0 {
-				w.gauge("archiver_restore_drill_last_success_timestamp_seconds", "When the last restore drill passed.", float64(d.LastSuccess), l...)
-			}
-			w.gauge("archiver_drill_last_ok", "Whether the last restore drill of the service on the storage passed.", b2f(d.OK), l...)
-			w.gauge("archiver_drill_last_timestamp_seconds", "When the last restore drill of the service on the storage ran.", float64(d.At), l...)
+	writeRestoreDrills(w, "default", s.Drills)
+	for _, name := range sortedKeys(s.NamedDrills) {
+		if s.NamedDrills[name] != nil {
+			writeRestoreDrills(w, name, s.NamedDrills[name].Results)
 		}
 	}
 
@@ -212,4 +202,28 @@ func Serve(ctx context.Context, port string, l layout.Layout, getenv func(string
 		return err
 	}
 	return nil
+}
+
+func writeRestoreDrills(w *writer, name string, results map[string]map[string]lockstate.DrillResult) {
+	for _, storage := range sortedKeys(results) {
+		for _, svc := range sortedKeys(results[storage]) {
+			d := results[storage][svc]
+			if d.Skipped {
+				continue
+			}
+			l := []string{"storage", storage, "service", svc, "drill", name}
+			w.gauge("archiver_restore_drill_last_timestamp_seconds", "When the last restore drill started.", float64(d.At), l...)
+			w.gauge("archiver_restore_drill_last_ok", "Whether the last restore drill passed.", b2f(d.OK), l...)
+			w.gauge("archiver_restore_drill_last_duration_seconds", "How long the last restore drill took.", d.Seconds, l...)
+			if d.LastSuccess != 0 {
+				w.gauge("archiver_restore_drill_last_success_timestamp_seconds", "When the last restore drill passed.", float64(d.LastSuccess), l...)
+			}
+			if name == "default" {
+				l = l[:4]
+				w.gauge("archiver_drill_last_ok", "Whether the last restore drill of the service on the storage passed.", b2f(d.OK), l...)
+				w.gauge("archiver_drill_last_timestamp_seconds", "When the last restore drill of the service on the storage ran.", float64(d.At), l...)
+			}
+		}
+	}
+
 }

@@ -22,6 +22,12 @@ type DrillResult struct {
 
 // DrillState is what drills remember between runs (logs/.drill-state.json).
 type DrillState struct {
+	Named map[string]*DrillState `json:"named,omitempty"`
+	// NextStorage advances only after every pending selection passes or genuinely skips.
+	NextStorage  int      `json:"next_storage,omitempty"`
+	Storage      string   `json:"storage,omitempty"`
+	StorageOrder []string `json:"storage_order,omitempty"`
+
 	// Pending is saved before restoring so a killed run cannot advance past its selection.
 	Pending map[string][]string `json:"pending,omitempty"`
 	// Rotation is, per storage, where the next drill's services start in the sorted list.

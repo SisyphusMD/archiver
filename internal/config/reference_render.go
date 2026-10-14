@@ -88,6 +88,7 @@ var kindPattern = map[string]string{
 // it belongs in a file.
 func ReferenceSchema() string {
 	props := map[string]any{}
+	patterns := map[string]any{}
 	add := func(name string, s Var) {
 		if s.Secret {
 			props[name] = map[string]any{"description": "Secret: put it in a file (" + strings.ToLower(name) + " in the secrets directory, or name the file in " + name + "_FILE), never an environment variable.", "not": map[string]any{}}
@@ -101,9 +102,14 @@ func ReferenceSchema() string {
 		props[name] = p
 	}
 	for _, s := range Reference {
+		if strings.Contains(s.Name, "<NAME>") {
+			suffix := strings.TrimPrefix(s.Name, "RESTORE_DRILL_<NAME>_")
+			key := "^RESTORE_DRILL_(?!(?:SERVICES|STORAGES|DIR|EXCLUDE|TIMEOUT|HOOK|HOOK_TIMEOUT|SCHEDULE)_" + suffix + "$)[A-Z0-9_]+_" + suffix + "$"
+			patterns[key] = valueSchema(s)
+			continue
+		}
 		add(s.Name, s)
 	}
-	patterns := map[string]any{}
 	for _, s := range TargetReference() {
 		key := "^STORAGE_TARGET_[0-9]+_" + regexp.QuoteMeta(s.Name) + "$"
 		if s.Secret {

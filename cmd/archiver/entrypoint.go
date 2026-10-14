@@ -151,7 +151,7 @@ func entrypointCommand(args []string) int {
 	backup, maint, drill := os.Getenv("BACKUP_SCHEDULE"), os.Getenv("MAINTENANCE_SCHEDULE"), os.Getenv("RESTORE_DRILL_SCHEDULE")
 	kitDrill := os.Getenv("KIT_DRILL_SCHEDULE")
 	jobs, scheduleErr := daemonpkg.Jobs(os.Getenv, time.Now())
-	const invalidSchedule = "ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid (or RESTORE_DRILL_SCHEDULE or KIT_DRILL_SCHEDULE or STORAGE_TARGET_N_DEEP_CHECK)."
+	const invalidSchedule = "ERROR: BACKUP_SCHEDULE or MAINTENANCE_SCHEDULE is invalid (or RESTORE_DRILL_SCHEDULE or RESTORE_DRILL_<NAME>_* or KIT_DRILL_SCHEDULE or STORAGE_TARGET_N_DEEP_CHECK)."
 	if scheduleErr != nil {
 		fmt.Fprintln(os.Stderr, scheduleErr)
 		fmt.Fprintln(os.Stderr, invalidSchedule)
@@ -166,6 +166,11 @@ func entrypointCommand(args []string) int {
 		}
 		if drill != "" {
 			fmt.Println("Restore drills scheduled: " + drill)
+		}
+		for _, j := range jobs {
+			if strings.HasPrefix(j.Name, "drill:") {
+				fmt.Println("Named restore drill " + strings.TrimPrefix(j.Name, "drill:") + " scheduled: " + j.Spec)
+			}
 		}
 		if kitDrill != "" {
 			fmt.Println("Kit drills scheduled: " + kitDrill)
