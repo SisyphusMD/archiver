@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] - 2026-10-14
+
 ### Fixed
 
 - `auto-restore-all` honors `DRY_RUN` instead of restoring files during a requested preview.
@@ -117,6 +119,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `archiver pause` now freezes everything a backup runs, including a hook's own programs (a dump, a `docker exec`), and nothing new starts until `archiver resume`. It used to stop only the programs running at that instant, so a pause landing between two steps let the next one run unpaused. `archiver stop` on the Go pipeline lets the backup stop itself, running its post-backup hooks and reporting its real error count; it used to end it from outside during copies and report no errors.
 - `archiver restore`, `migrate`, `bundle export`/`import`, `stop`, `pause`, `resume` and `logs` now exit with their command's status. A failure, such as a restore that could not run, used to exit 0.
 - Ctrl+C now ends `archiver logs` at once. It used to leave the viewer running when attached with `docker exec -it`.
+
+### Dependencies
+
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 97772f3
+- chore(deps): update golang:1.27.2-trixie docker digest to 4766793
+- chore(deps): every pinned image, action and download at its newest version or digest (postgres 18 keeps its data at /var/lib/postgresql)
+- chore(deps): base image Debian trixie-20261005-slim (13.7; 72 fixable HIGH/CRITICAL vulnerabilities in 13.3), and a Renovate rule so dated Debian tags get proposed
+- chore(deps): update ghcr.io/sigstore/cosign/cosign docker tag to v3.0.6
+- chore(deps): update aquasec/trivy docker tag to v0.69.3
+- chore(deps): update dependency rclone/rclone to v1.75.2
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to e5d5d28
+- chore(deps): update golang docker tag to v1.27.2
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 92e2b4f
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 35f65ee
+- chore(deps): update golang:1.27.1-trixie docker digest to 8f58fd6
+- chore(deps): update golang:1.27.1-trixie docker digest to 0982f93
+- chore(deps): update golang:1.27.1-trixie docker digest to 9d41bc0
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 966b7d7
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to dcb4735
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 249b92d
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 8482f70
+- chore(deps): update golang:1.27.1-trixie docker digest to 3b77fc6
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 3a14eeb
 
 ## [0.11.2] - 2026-09-29
 
