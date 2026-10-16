@@ -201,7 +201,7 @@ func entrypointCommand(args []string) int {
 			shutdown(e, stopTailers)
 			_ = daemon.Process.Signal(syscall.SIGTERM)
 			select {
-			case <-exited:
+			case <-exited: //nolint:errcheck // shutting down: how the scheduler exits after SIGTERM changes nothing
 			case <-time.After(20 * time.Second):
 				_ = daemon.Process.Kill()
 			}
