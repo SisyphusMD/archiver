@@ -74,7 +74,7 @@ func (r *Run) remote(ctx context.Context, t config.Target) (map[string]string, s
 func (r *Run) obscure(pass string) (string, error) {
 	cmd := drillCommand(r.context(), r.rclone(), "obscure", "-")
 	cmd.Stdin = strings.NewReader(pass)
-	out, err := cmd.Output()
+	out, err := r.output(cmd)
 	if err != nil {
 		return "", fmt.Errorf("rclone obscure: %v", err)
 	}
@@ -246,14 +246,14 @@ func (r *Run) knownHosts(ctx context.Context, t config.Target) (path, algorithms
 	if t.Get("SFTP_PORT") != "" && t.Get("SFTP_PORT") != "22" {
 		host = "[" + t.Get("SFTP_URL") + "]:" + t.Get("SFTP_PORT")
 	}
-	if algorithms = trustedContext(ctx, path, host); algorithms != "" {
+	if algorithms = trustedContext(ctx, r.output, path, host); algorithms != "" {
 		return path, algorithms, nil
 	}
 	port := t.Get("SFTP_PORT")
 	if port == "" {
 		port = "22"
 	}
-	keys, err := drillCommand(ctx, "ssh-keyscan", "-T", "15", "-p", port, t.Get("SFTP_URL")).Output()
+	keys, err := r.output(drillCommand(ctx, "ssh-keyscan", "-T", "15", "-p", port, t.Get("SFTP_URL")))
 	if err != nil || len(bytes.TrimSpace(keys)) == 0 {
 		return "", "", fmt.Errorf("no host key from %s:%s", t.Get("SFTP_URL"), port)
 	}
@@ -268,7 +268,7 @@ func (r *Run) knownHosts(ctx context.Context, t config.Target) (path, algorithms
 	if err != nil {
 		return "", "", err
 	}
-	if algorithms = trustedContext(ctx, path, host); algorithms == "" {
+	if algorithms = trustedContext(ctx, r.output, path, host); algorithms == "" {
 		return "", "", fmt.Errorf("no usable host key recorded for %s", host)
 	}
 	return path, algorithms, nil
@@ -277,11 +277,11 @@ func (r *Run) knownHosts(ctx context.Context, t config.Target) (path, algorithms
 // trusted lists, space-separated, the host-key algorithms the known-hosts file trusts for
 // host; an RSA key allows its SHA-2 signatures too.
 func trusted(path, host string) string {
-	return trustedContext(context.Background(), path, host)
+	return trustedContext(context.Background(), (*exec.Cmd).Output, path, host)
 }
 
-func trustedContext(ctx context.Context, path, host string) string {
-	out, err := drillCommand(ctx, "ssh-keygen", "-F", host, "-f", path).Output() //nolint:gosec // G702: argv, never a shell
+func trustedContext(ctx context.Context, output func(*exec.Cmd) ([]byte, error), path, host string) string {
+	out, err := output(drillCommand(ctx, "ssh-keygen", "-F", host, "-f", path)) //nolint:gosec // G702: argv, never a shell
 	if err != nil {
 		return ""
 	}

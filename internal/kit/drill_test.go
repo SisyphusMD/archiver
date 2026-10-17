@@ -181,7 +181,7 @@ func TestExpectedEntriesAndUnsafeArchive(t *testing.T) {
 		t.Fatal("entries not derived from payload")
 	}
 	plain := filepath.Join(t.TempDir(), "kit.tar")
-	if err := decryptDrill(context.Background(), archive, plain, f.run.cfg.RecoveryPassword); err != nil {
+	if err := decryptDrill(context.Background(), (*exec.Cmd).Start, archive, plain, f.run.cfg.RecoveryPassword); err != nil {
 		t.Fatal(err)
 	}
 	if err := compareDrill(context.Background(), plain, expected); err != nil {
@@ -210,7 +210,7 @@ case "$*" in *sentinel-recovery-password*) exit 1 ;; esac
 [ "$(cat <&3)" = sentinel-recovery-password ] || exit 2
 `), 0o700)
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
-	if err := decryptDrill(context.Background(), filepath.Join(dir, "input"), filepath.Join(dir, "output"), "sentinel-recovery-password"); err != nil {
+	if err := decryptDrill(context.Background(), (*exec.Cmd).Start, filepath.Join(dir, "input"), filepath.Join(dir, "output"), "sentinel-recovery-password"); err != nil {
 		t.Fatal("password must arrive only on fd 3:", err)
 	}
 }

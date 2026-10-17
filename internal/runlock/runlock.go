@@ -172,6 +172,25 @@ func (l *Lock) Unpaused(start func()) (started bool, err error) {
 	return started, err
 }
 
+// StartUnpaused starts a program through Unpaused, after wait has held it back while the run
+// is paused. wait reports whether the run is ending; the program then starts regardless,
+// since a stop resumes and ends whatever runs. An unreadable lock file starts it anyway.
+func (l *Lock) StartUnpaused(wait func() (ending bool), start func() error) error {
+	for {
+		if wait() {
+			return start()
+		}
+		var err error
+		started, lockErr := l.Unpaused(func() { err = start() })
+		if lockErr != nil {
+			return start()
+		}
+		if started {
+			return err
+		}
+	}
+}
+
 // Resume resumes only a paused run, preserving a concurrent cleanup transition.
 func Resume(path string, at time.Time, signal func()) (resumed bool, err error) {
 	err = edit(path, func() error {

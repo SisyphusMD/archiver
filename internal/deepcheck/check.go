@@ -168,17 +168,26 @@ func (r *Run) one(cfg *config.Config, t config.Target) bool {
 			}
 		}
 	}
-	for err == nil && ctx.Err() == nil && lock.State().Paused() {
-		select {
-		case <-ctx.Done():
-		case <-time.After(100 * time.Millisecond):
-		}
-	}
 	if err == nil && ctx.Err() == nil {
 		lw := log.Writer(logging.Info, name)
 		var p *proc.Proc
-		p, err = proc.Start(proc.Spec{Path: r.Duplicacy, Dir: repo, Env: cfg.DuplicacyEnviron(r.Environ, r.Layout.SSHPrivateKey()), Output: io.MultiWriter(lw, &output), Interrupt: true, ExtraFiles: []*os.File{held.File(), lock.File()},
-			Args: proc.NoScript("check", "-all", "-chunks", "-fossils", "-persist", "-storage", name, "-key", r.Layout.RSAPrivateKey(), "-threads", cfg.Threads)})
+		err = lock.StartUnpaused(func() bool {
+			for ctx.Err() == nil && lock.State().Paused() {
+				select {
+				case <-ctx.Done():
+				case <-time.After(100 * time.Millisecond):
+				}
+			}
+			return ctx.Err() != nil
+		}, func() error {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			var err error
+			p, err = proc.Start(proc.Spec{Path: r.Duplicacy, Dir: repo, Env: cfg.DuplicacyEnviron(r.Environ, r.Layout.SSHPrivateKey()), Output: io.MultiWriter(lw, &output), Interrupt: true, ExtraFiles: []*os.File{held.File(), lock.File()},
+				Args: proc.NoScript("check", "-all", "-chunks", "-fossils", "-persist", "-storage", name, "-key", r.Layout.RSAPrivateKey(), "-threads", cfg.Threads)})
+			return err
+		})
 		if err == nil {
 			select {
 			case <-p.Done():

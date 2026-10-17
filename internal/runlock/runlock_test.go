@@ -186,3 +186,37 @@ func TestUnpausedExcludesPause(t *testing.T) {
 		t.Fatalf("a start after the pause ran (ok %v, ran %v, err %v)", ok, ran, err)
 	}
 }
+
+func TestStartUnpausedWaitsOutAPause(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "drill.lock")
+	l, _, err := Acquire(path, path+".stop", "drill", "restore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Release()
+	if err := l.Record("paused"); err != nil {
+		t.Fatal(err)
+	}
+	// The first wait returns while the run is still paused (a pause that won the race):
+	// the start must not happen then, only after the resume.
+	waits, ran := 0, 0
+	err = l.StartUnpaused(func() bool {
+		waits++
+		if waits == 2 {
+			if err := l.Record("running"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return false
+	}, func() error { ran = waits; return nil })
+	if err != nil || ran != 2 {
+		t.Fatalf("started after wait %d (err %v), want after the resume in wait 2", ran, err)
+	}
+	if err := l.Record("paused"); err != nil {
+		t.Fatal(err)
+	}
+	ran = 0
+	if err := l.StartUnpaused(func() bool { return true }, func() error { ran++; return nil }); err != nil || ran != 1 {
+		t.Fatalf("an ending run's program should start regardless (ran %d, err %v)", ran, err)
+	}
+}

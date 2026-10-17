@@ -244,15 +244,14 @@ func (e Env) stopDrill(target string, _ bool) {
 	signalTree(d.PID, syscall.SIGTERM)
 }
 
-// pauseDrill freezes a running drill's programs; the drill starts nothing more while paused.
+// pauseDrill freezes a running drill's programs. Recorded and signalled under the lock the
+// drill starts its programs under (runlock.StartUnpaused), so it starts nothing more.
 func (e Env) pauseDrill() {
 	d, ok := e.drill()
 	if !ok || d.Paused() {
 		return
 	}
 	paused, err := runlock.Pause(e.Layout.DrillLock(), e.Now(), func() {
-		signalTree(d.PID, syscall.SIGSTOP)
-		time.Sleep(300 * time.Millisecond)
 		signalTree(d.PID, syscall.SIGSTOP)
 	})
 	if err != nil || !paused {
@@ -347,12 +346,10 @@ func (e Env) deepChecks(action string) {
 			if l.Paused() {
 				continue
 			}
-			if runlock.Append(path, "paused", e.Now()) != nil {
+			// Under the lock the check starts duplicacy under, as for the drill.
+			if paused, err := runlock.Pause(path, e.Now(), func() { signalTree(l.PID, syscall.SIGSTOP) }); err != nil || !paused {
 				continue
 			}
-			signalTree(l.PID, syscall.SIGSTOP)
-			time.Sleep(300 * time.Millisecond)
-			signalTree(l.PID, syscall.SIGSTOP)
 		case "resume":
 			if !l.Paused() {
 				continue

@@ -64,6 +64,8 @@ type Run struct {
 
 	ctx context.Context
 	cfg *config.Config
+	// gate, when set, starts each program (the kit drill's pause gate).
+	gate func(start func() error) error
 }
 
 func (r *Run) getenv(name string) string { return r.Source.Getenv(name) }
@@ -338,6 +340,30 @@ func (r *Run) encrypt(work, out string) error {
 		return fmt.Errorf("openssl: %v: %s", errEnc, strings.TrimSpace(encErr.String()))
 	}
 	return nil
+}
+
+func (r *Run) start(cmd *exec.Cmd) error {
+	if r.gate == nil {
+		return cmd.Start()
+	}
+	return r.gate(cmd.Start)
+}
+
+func (r *Run) run(cmd *exec.Cmd) error {
+	if err := r.start(cmd); err != nil {
+		return err
+	}
+	return cmd.Wait()
+}
+
+func (r *Run) output(cmd *exec.Cmd) ([]byte, error) {
+	if r.gate == nil {
+		return cmd.Output()
+	}
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := r.run(cmd)
+	return out.Bytes(), err
 }
 
 func (r *Run) context() context.Context {
