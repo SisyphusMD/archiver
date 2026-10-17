@@ -157,4 +157,33 @@ for c in /proc/[0-9]*/cmdline; do
   tr '\0' ' ' <"$c" 2>/dev/null | grep -q /restore/hooked/post-restore && die "the restore hook outlived the killed restore"
 done
 
+log "a restore into a service directory killed mid-hook keeps the restore lock until what its hook runs in the foreground has ended"
+# alive: a process still writing for the hook (its cmdline names the file it appends to).
+alive() {
+  for c in /proc/[0-9]*/cmdline; do
+    tr '\0' ' ' <"$c" 2>/dev/null | grep -q 'fg-writes' && [ "$(awk '{print $3}' "${c%cmdline}stat" 2>/dev/null)" != Z ] && return 0
+  done
+  return 1
+}
+mkdir -p /data/services/fg && echo data >/data/services/fg/file
+printf '#!/bin/sh\ntouch /tmp/fg-started\nsh -c '\''trap "" TERM; while :; do echo x >>/tmp/fg-writes; sleep 0.2; done'\''\n' >/data/services/fg/post-restore
+chmod 755 /data/services/fg/post-restore
+archiver backup >/tmp/b6 2>&1 || { cat /tmp/b6; die "the backup with the foreground-child hook failed"; }
+rm -rf /data/services/fg && mkdir /data/services/fg
+SNAPSHOT_ID="$HOST-fg" LOCAL_DIR=/data/services/fg RUN_RESTORE_SERVICE=1 archiver auto-restore >/tmp/h2 2>&1 &
+pid=$!
+for _ in $(seq 1 60); do [ -e /tmp/fg-started ] && break; sleep 0.5; done
+[ -e /tmp/fg-started ] && alive || { cat /tmp/h2; die "the restore hook's foreground child never started"; }
+kill -9 "$pid"; wait "$pid" 2>/dev/null
+for _ in $(seq 1 60); do
+  alive || break
+  flock -n /var/lock/archiver-restore.lock true && die "the restore lock was free while the killed restore's hook still wrote to its service directory"
+  sleep 0.5
+done
+alive && die "what the killed restore's hook ran in the foreground was still running 30s later"
+n=$(wc -l </tmp/fg-writes); sleep 1
+[ "$(wc -l </tmp/fg-writes)" = "$n" ] || die "the hook's writes went on"
+for _ in $(seq 1 10); do flock -n /var/lock/archiver-restore.lock true && break; sleep 0.5; done
+flock -n /var/lock/archiver-restore.lock true || die "the restore lock stayed held after the hook's processes had ended"
+
 echo "=== RESTORE-COMMANDS OK: snapshot-exists answers and codes; auto-restore fallback, pinning, errors, hook; auto-restore-all; busy refusal; post-restore and migration of restored settings ==="

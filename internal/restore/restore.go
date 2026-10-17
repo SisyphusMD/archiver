@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
@@ -431,7 +430,6 @@ func (e *Env) restore(repo, dir string, t config.Target, id string, rev int, o O
 func (e *Env) postRestore(dir, id string, rev int, t config.Target, stdin io.Reader, out io.Writer) (int, error) {
 	s := hooks.Service{Name: filepath.Base(dir), Dir: dir, SnapshotID: id}
 	env := hooks.RestoreEnviron(e.Environ, s, rev, t.Name)
-	var cmd *exec.Cmd
 	hookDir := e.hookDir(dir)
 	ok, err := hooks.Exists(hookDir, hooks.PostRestore)
 	if err != nil {
@@ -443,17 +441,19 @@ func (e *Env) postRestore(dir, id string, rev int, t config.Target, stdin io.Rea
 			return 0, err
 		}
 	}
+	var prog string
+	var args []string
 	switch {
 	case ok:
 		fmt.Fprintf(out, "Running %s...\n", hooks.PostRestore)
-		cmd = exec.Command(filepath.Join(hookDir, hooks.PostRestore))
+		prog = filepath.Join(hookDir, hooks.PostRestore)
 	case legacy:
 		fmt.Fprintf(out, "Running %s...\n", hooks.LegacyRestore)
 		script := hooks.LegacyRestore // what it always ran as, its $0, when in the directory
 		if hookDir != dir {
 			script = filepath.Join(hookDir, hooks.LegacyRestore)
 		}
-		cmd = exec.Command("bash", script)
+		prog, args = "bash", []string{script}
 		// What it always saw: the restore's variables, for this service (auto-restore-all
 		// runs one restore per service), last so they override any the caller set.
 		env = append(env, "SNAPSHOT_ID="+id, "LOCAL_DIR="+dir)
@@ -461,19 +461,22 @@ func (e *Env) postRestore(dir, id string, rev int, t config.Target, stdin io.Rea
 		fmt.Fprintf(out, "No %s or %s in '%s'; nothing to run.\n", hooks.PostRestore, hooks.LegacyRestore, hookDir)
 		return 0, nil
 	}
+	// If Archiver dies mid-hook, the guard ends the hook's process group and holds the
+	// restore lock until it has, rather than leave what the hook runs in the foreground
+	// changing the directory while backups are free to start over it. The hook itself does
+	// not inherit the lock: a service it starts in the background would keep backups out.
+	self, err := os.Executable()
+	if err != nil {
+		return 0, err
+	}
+	cmd := hooks.Guarded(self, e.held, prog, args...)
 	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, out, out
-	// The hook does not inherit the restore lock: a service it starts in the background
-	// would hold it, and keep backups out, for as long as that service runs.
 	// A reader stdin is copied by a goroutine that may sit blocked on a terminal after the
 	// hook exits; don't wait for it long.
 	cmd.WaitDelay = time.Second
-	// If Archiver dies mid-hook, the kernel kills the hook (SIGKILL: it cannot be ignored),
-	// rather than leave it running without the restore lock while backups are free to start
-	// over what it changes. What it started in the background runs on, as it would anyway.
-	// The signal follows the thread that started the hook, so the goroutine keeps to it.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGKILL}
+	// The guard's death signal follows the thread that started it, so the goroutine keeps to it.
 	runtime.LockOSThread()
 	err = cmd.Run()
 	runtime.UnlockOSThread()
