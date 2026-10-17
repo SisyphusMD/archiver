@@ -5,5 +5,7 @@ resume-point.patch
 restore-links.patch
 gcd-drive-id.patch
 host-keys-append.patch
+filefabric-upload-error.patch
+onedrive-move-retry.patch
 dependencies.patch
 highwayhash-arm64.patch

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- File Fabric: an upload the server refuses, or that cannot be sent, fails with an error once Duplicacy's retries run out instead of crashing the process (Duplicacy patch `filefabric-upload-error.patch`).
+- OneDrive: a move retried after creating its missing destination reports the retry's failure instead of success, so prune never records a chunk as moved when it was not (Duplicacy patch `onedrive-move-retry.patch`).
+
 ## [1.0.0-rc.1] - 2026-10-14
 
 ### Fixed

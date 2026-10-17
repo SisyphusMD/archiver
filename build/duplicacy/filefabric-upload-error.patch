@@ -1,0 +1,68 @@
+File Fabric: a failed upload returns an error instead of crashing
+
+Why: UploadFile used the response without checking sendRequest's error, and sendRequest returned
+no error once its retries ran out on an error status, so a refused or unreachable upload
+dereferenced a nil body and crashed the whole process.
+Test: TestFileFabricUploadFailsAfterRetries
+Upstream: not submitted (upstreaming deferred, 2026-10-11).
+
+--- a/src/duplicacy_filefabricstorage.go
++++ b/src/duplicacy_filefabricstorage.go
+@@ -245,7 +245,7 @@
+ 		}
+ 
+ 		if !storage.shouldRetry(retries, "[%d] %s %s returned status: %s, message: %s", threadIndex, method, requestURL, output.Status, output.Message) {
+-			return nil, nil, 0, err
++			return nil, nil, 0, fmt.Errorf("%s %s returned status: %s, message: %s", method, requestURL, output.Status, output.Message)
+ 		}
+ 	}
+ 
+@@ -582,6 +582,9 @@
+ 
+ 	rateLimitedReader := CreateRateLimitedReader(requestBody.Bytes(), storage.UploadRateLimit/storage.threads)
+ 	readCloser, _, _, err := storage.sendRequest(threadIndex, http.MethodPost, storage.getAPIURL("doUploadFiles"), headers, rateLimitedReader)
++	if err != nil {
++		return err
++	}
+ 
+ 	defer readCloser.Close()
+ 	defer io.Copy(ioutil.Discard, readCloser)	
+--- /dev/null
++++ b/src/duplicacy_filefabricstorage_upload_test.go
+@@ -0,0 +1,36 @@
++package duplicacy
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++)
++
++// An upload the server keeps refusing, or cannot be sent at all, fails with an error once the retries run out.
++func TestFileFabricUploadFailsAfterRetries(t *testing.T) {
++	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.WriteHeader(http.StatusInternalServerError)
++		w.Write([]byte(`<response><status>error</status><statusmessage>quota exceeded</statusmessage></response>`))
++	}))
++	defer server.Close()
++
++	storage := &FileFabricStorage{
++		endpoint:       strings.TrimPrefix(server.URL, "https://"),
++		accessToken:    "token",
++		storageDirID:   "root",
++		client:         server.Client(),
++		threads:        1,
++		directoryCache: map[string]string{},
++	}
++
++	err := storage.UploadFile(0, "config", []byte("content"))
++	if err == nil || !strings.Contains(err.Error(), "quota exceeded") {
++		t.Fatalf("refused upload: got %v, want an error naming the server's message", err)
++	}
++
++	server.Close()
++	if err := storage.UploadFile(0, "config", []byte("content")); err == nil {
++		t.Fatal("unreachable server: got nil, want an error")
++	}
++}
