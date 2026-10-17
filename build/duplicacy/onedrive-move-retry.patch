@@ -1,0 +1,74 @@
+OneDrive: a move whose retry fails reports the failure
+
+Why: when a move hit a missing destination, MoveFile created the directory and retried, but
+returned success if that retry failed, so prune could record a chunk as moved to or from the
+fossils when it never moved.
+Test: TestOneDriveMoveFailsWhenTheRetryFails
+Upstream: not submitted (upstreaming deferred, 2026-10-11).
+
+--- a/src/duplicacy_oneclient.go
++++ b/src/duplicacy_oneclient.go
+@@ -472,9 +472,10 @@
+ 			client.CreateDirectory(dir, filepath.Base(parent))
+ 			readCloser, _, err = client.call(url, "PATCH", parameters, "application/json")
+ 			if err != nil {
+-				return nil
++				return err
+ 			}
+-
++			readCloser.Close()
++			return nil
+ 		}
+ 
+ 		return err
+--- /dev/null
++++ b/src/duplicacy_oneclient_move_test.go
+@@ -0,0 +1,48 @@
++package duplicacy
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"sync"
++	"testing"
++
++	"golang.org/x/oauth2"
++)
++
++// A move retried after creating its missing destination fails if the retry fails.
++func TestOneDriveMoveFailsWhenTheRetryFails(t *testing.T) {
++	patches := 0
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		w.Header().Set("Content-Type", "application/json")
++		switch r.Method {
++		case http.MethodPatch:
++			patches++
++			if patches == 1 {
++				w.WriteHeader(http.StatusBadRequest)
++				w.Write([]byte(`{"error":{"code":"invalidRequest","message":"parent missing"}}`))
++				return
++			}
++			w.WriteHeader(http.StatusNotFound)
++			w.Write([]byte(`{"error":{"code":"itemNotFound","message":"item gone"}}`))
++		case http.MethodPost:
++			w.WriteHeader(http.StatusCreated)
++			w.Write([]byte(`{"id":"dir","name":"fossils","folder":{}}`))
++		default:
++			w.WriteHeader(http.StatusMethodNotAllowed)
++		}
++	}))
++	defer server.Close()
++
++	client := &OneDriveClient{
++		HTTPClient: server.Client(),
++		Token:      &oauth2.Token{AccessToken: "token"},
++		TokenLock:  &sync.Mutex{},
++		APIURL:     server.URL,
++	}
++	if err := client.MoveFile("chunks/abcd", "fossils"); err == nil {
++		t.Fatal("got nil, want the failed retry's error")
++	}
++	if patches != 2 {
++		t.Fatalf("got %d PATCH requests, want 2", patches)
++	}
++}
