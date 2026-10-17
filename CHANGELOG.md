@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- File Fabric: an upload the server refuses, or that cannot be sent, fails with an error once Duplicacy's retries run out instead of crashing the process (Duplicacy patch `filefabric-upload-error.patch`).
+
 ## [1.0.0-rc.1] - 2026-10-14
 
 ### Fixed
