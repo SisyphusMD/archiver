@@ -119,6 +119,12 @@ func (r *Run) Drill(storage string) int {
 		}
 		return ctx.Err()
 	}
+	// Each program starts under the lock `archiver pause` records and signals under, so a
+	// pause either finds it or holds it back.
+	r.gate = func(start func() error) error {
+		return lock.StartUnpaused(func() bool { return gate() != nil }, start)
+	}
+	defer func() { r.gate = nil }()
 	record, err := resume.Begin(r.Layout.RunRecord("kit-drill"), resume.Record{})
 	if err != nil {
 		return fail("Kit drill: cannot record the run.")
@@ -267,7 +273,7 @@ func (r *Run) drillOne(ctx context.Context, gate func() error, t config.Target, 
 			for k, v := range remote {
 				cmd.Env = append(cmd.Env, "RCLONE_CONFIG_KIT_"+k+"="+v)
 			}
-			err = cmd.Run()
+			err = r.run(cmd)
 		}
 	}
 	if err != nil {
@@ -277,7 +283,7 @@ func (r *Run) drillOne(ctx context.Context, gate func() error, t config.Target, 
 		return rotates, err
 	}
 	plain := filepath.Join(work, "payload.tar")
-	if err := decryptDrill(ctx, fetched, plain, r.cfg.RecoveryPassword); err != nil {
+	if err := decryptDrill(ctx, r.start, fetched, plain, r.cfg.RecoveryPassword); err != nil {
 		return rotates, errors.New("envelope mismatch: the kit does not decrypt with the current recovery password")
 	}
 	expected := filepath.Join(work, "expected")
@@ -320,14 +326,14 @@ func (r *Run) fetchSSH(ctx context.Context, source envelope.Source, t config.Tar
 	remote := "/" + strings.Trim(t.Get("SFTP_PATH"), "/") + "/" + r.KitName()
 	cmd.Stdin = strings.NewReader("get " + sftpQuote(remote) + " " + sftpQuote(out) + "\n")
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + work}
-	return cmd.Run()
+	return r.run(cmd)
 }
 
 func sftpQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", "", "\r", "").Replace(s) + `"`
 }
 
-func decryptDrill(ctx context.Context, in, out, password string) error {
+func decryptDrill(ctx context.Context, start func(*exec.Cmd) error, in, out, password string) error {
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return err
@@ -339,7 +345,7 @@ func decryptDrill(ctx context.Context, in, out, password string) error {
 	}
 	cmd := drillCommand(ctx, "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-pass", "fd:3", "-in", in, "-out", out)
 	cmd.ExtraFiles = []*os.File{pr}
-	if err := cmd.Start(); err != nil {
+	if err := start(cmd); err != nil {
 		return err
 	}
 	pr.Close()

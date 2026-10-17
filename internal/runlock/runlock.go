@@ -153,6 +153,44 @@ func Pause(path string, at time.Time, signal func()) (paused bool, err error) {
 	return paused, err
 }
 
+// Unpaused runs start unless the run is paused, holding the edit lock that Pause holds
+// while it records the pause and signals: a program start either completes first, so the
+// pause finds it and stops it, or sees the pause and does not happen.
+func (l *Lock) Unpaused(start func()) (started bool, err error) {
+	err = edit(l.Path, func() error {
+		state, _, err := lockstate.ReadLock(l.Path)
+		if err != nil {
+			return err
+		}
+		if state.Paused() {
+			return nil
+		}
+		start()
+		started = true
+		return nil
+	})
+	return started, err
+}
+
+// StartUnpaused starts a program through Unpaused, after wait has held it back while the run
+// is paused. wait reports whether the run is ending; the program then starts regardless,
+// since a stop resumes and ends whatever runs. An unreadable lock file starts it anyway.
+func (l *Lock) StartUnpaused(wait func() (ending bool), start func() error) error {
+	for {
+		if wait() {
+			return start()
+		}
+		var err error
+		started, lockErr := l.Unpaused(func() { err = start() })
+		if lockErr != nil {
+			return start()
+		}
+		if started {
+			return err
+		}
+	}
+}
+
 // Resume resumes only a paused run, preserving a concurrent cleanup transition.
 func Resume(path string, at time.Time, signal func()) (resumed bool, err error) {
 	err = edit(path, func() error {

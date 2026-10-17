@@ -89,12 +89,13 @@ func TestDrillHookStop(t *testing.T) {
 	}
 }
 
-func TestDrillHookBeforeRun(t *testing.T) {
+func TestDrillHookStopWhilePaused(t *testing.T) {
 	d, work := hookFixture(t, "touch ran", 0o700, "")
-	d.e.beforeRun = func() {
-		if err := os.WriteFile(d.lock.StopFlag, nil, 0o600); err != nil {
-			t.Fatal(err)
-		}
+	if err := d.lock.Record("paused"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(d.lock.StopFlag, nil, 0o600); err != nil {
+		t.Fatal(err)
 	}
 	if got := d.hook(config.Target{Name: "local"}, "app", "h-app", 7, work); got != "stop requested" {
 		t.Fatalf("got %q", got)
@@ -370,5 +371,54 @@ func TestDrillHookCleanupCannotBePaused(t *testing.T) {
 				t.Fatalf("TERM cleanup did not finish: %v", err)
 			}
 		})
+	}
+}
+
+// A pause that lands while the hook is about to start must hold it back: the start and the
+// pause share the lock file's edit lock, so the hook cannot slip in after the pause's
+// signals went out.
+func TestDrillHookHeldBackByAPauseAtItsStart(t *testing.T) {
+	d, work := hookFixture(t, "touch ran", 0o700, "")
+	edit, err := os.OpenFile(d.lock.Path+".edit", os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer edit.Close()
+	if err := syscall.Flock(int(edit.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan string, 1)
+	go func() { done <- d.hook(config.Target{Name: "local"}, "app", "h-app", 7, work) }()
+	time.Sleep(500 * time.Millisecond)
+	// What `archiver pause` does under the edit lock: record the pause (its signals find no
+	// hook, so nothing may start after this).
+	f, err := os.OpenFile(d.lock.Path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(strconv.FormatInt(time.Now().Unix(), 10) + " paused\n"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if err := syscall.Flock(int(edit.Fd()), syscall.LOCK_UN); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second)
+	if _, err := os.Stat(filepath.Join(work, "ran")); !os.IsNotExist(err) {
+		t.Fatal("the hook started although the drill was paused")
+	}
+	if err := d.lock.Record("running"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-done:
+		if got != "" {
+			t.Fatalf("hook: %q", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the hook did not run after resume")
+	}
+	if _, err := os.Stat(filepath.Join(work, "ran")); err != nil {
+		t.Fatal("the hook did not run after resume")
 	}
 }

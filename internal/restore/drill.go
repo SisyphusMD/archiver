@@ -3,6 +3,7 @@ package restore
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -206,12 +207,8 @@ func (e *Env) Drill(o DrillOptions) int {
 		}
 	}()
 	e.ctx = ctx
-	e.beforeRun = func() {
-		for lock.State().Paused() && !lock.StopRequested() && ctx.Err() == nil {
-			time.Sleep(time.Second)
-		}
-	}
-	defer func() { e.ctx, e.beforeRun = nil, nil }()
+	e.gate = func(start func() error) error { return lock.StartUnpaused(d.stopRequested, start) }
+	defer func() { e.ctx, e.gate = nil, nil }()
 	d.state, err = lockstate.ReadDrillState(e.Layout.DrillState())
 	if err != nil {
 		log.Message(logging.Warning, "", "Unreadable drill state, starting afresh: "+err.Error())
@@ -638,6 +635,8 @@ func freeBytes(dir string) (int64, bool) {
 	return int64(st.Bavail) * int64(st.Bsize), true //nolint:gosec // G115: filesystem sizes and byte values fit
 }
 
+var errDrillStopped = errors.New("stop requested")
+
 // hook runs the service's drill hook, if it has one, in the restored copy (ADR 48), and
 // returns why the drill fails, or "" when it passes or there is no hook.
 func (d *drillRun) hook(t config.Target, name, id string, rev int, work string) string {
@@ -668,14 +667,19 @@ func (d *drillRun) hook(t config.Target, name, id string, rev int, work string) 
 	svc := hooks.Service{Name: name, Dir: dir, SnapshotID: id, HookDir: hookDir}
 	env := append(hooks.RestoreEnviron(d.e.Environ, svc, rev, t.Name), "ARCHIVER_DRILL_DIR="+work)
 	d.log.Message(logging.Info, name, fmt.Sprintf("Running the drill hook on revision %d from '%s'.", rev, t.Name))
-	if d.e.beforeRun != nil {
-		d.e.beforeRun()
-	}
-	if d.lock.StopRequested() || d.e.context().Err() != nil {
+	var p *proc.Proc
+	err = d.lock.StartUnpaused(d.stopRequested, func() error {
+		if d.lock.StopRequested() || d.e.context().Err() != nil {
+			return errDrillStopped
+		}
+		var err error
+		p, err = proc.Start(proc.Spec{Path: filepath.Join(hookDir, hooks.Drill), Dir: work, Env: env,
+			Log: d.log, Service: name, Hook: true, Group: true})
+		return err
+	})
+	if errors.Is(err, errDrillStopped) {
 		return "stop requested"
 	}
-	p, err := proc.Start(proc.Spec{Path: filepath.Join(hookDir, hooks.Drill), Dir: work, Env: env,
-		Log: d.log, Service: name, Hook: true, Group: true})
 	if err != nil {
 		return "its drill hook cannot run: " + err.Error()
 	}
@@ -741,7 +745,7 @@ func (e *Env) catRevision(repo, path, id string, rev int) error {
 	var stderr strings.Builder
 	cmd := e.duplicacy(repo, f, "cat", "-r", strconv.Itoa(rev), "-id", id)
 	cmd.Stderr = &stderr
-	err = cmd.Run()
+	err = e.runGated(cmd)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}

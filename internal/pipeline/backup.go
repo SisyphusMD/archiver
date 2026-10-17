@@ -259,7 +259,7 @@ func (b *Backup) finishInterrupted() resume.Record {
 		} else if has {
 			_ = os.MkdirAll(svc.StateDir, 0o700)
 			b.log.Message(logging.Info, name, "Running the post-backup hook the interrupted backup did not reach.")
-			if code, err := hooks.Run(b.log, b.Environ, svc, hooks.PostBackup, hooks.Interrupted); err != nil || code != 0 {
+			if code, _, err := b.runHook(svc, hooks.PostBackup, hooks.Interrupted, false); err != nil || code != 0 {
 				b.log.Message(logging.Error, name, fmt.Sprintf("Post-backup hook failed for %s service (%s); check that whatever its pre hook stopped is running again.", name, exitText(code, err)))
 			}
 		}
@@ -631,8 +631,10 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 		if err := b.inProgress.Set(svc.Dir, resume.Hooked); err != nil {
 			log(logging.Warning, "Cannot record that the pre-backup hook runs, so a crash before the post-backup hook would not run it on the next start: "+err.Error())
 		}
-		code, err := hooks.Run(b.log, b.Environ, svc, hooks.PreBackup, "")
-		if err != nil || code != 0 {
+		code, ran, err := b.runHook(svc, hooks.PreBackup, "", true)
+		if !ran {
+			preRan, result = false, hooks.Stopped
+		} else if err != nil || code != 0 {
 			// The service's files are in an unknown state (a half-written or stale dump).
 			// Backing them up would make that the newest revision, the one auto-restore picks.
 			log(logging.Error, fmt.Sprintf("Pre-backup hook failed for %s service (%s); skipping its backup so the newest revision stays the last good one.", svc.Name, exitText(code, err)))
@@ -661,7 +663,7 @@ func (b *Backup) backupService(svc hooks.Service, filters []string, hasPre, hasP
 	_ = b.lock.SetStage(ctx, "post-backup")
 	if hasPost && (preRan || !hasPre) {
 		b.waitWhilePaused()
-		code, err := hooks.Run(b.log, b.Environ, svc, hooks.PostBackup, result)
+		code, _, err := b.runHook(svc, hooks.PostBackup, result, false)
 		if err != nil || code != 0 {
 			log(logging.Error, fmt.Sprintf("Post-backup hook failed for %s service (%s); check that whatever its pre hook stopped is running again.", svc.Name, exitText(code, err)))
 		}
@@ -789,17 +791,63 @@ func (b *Backup) waitWhilePaused() {
 }
 
 func (b *Backup) start(s proc.Spec) (*proc.Proc, error) {
-	b.waitWhilePaused()
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.signaled {
-		return nil, fmt.Errorf("the run is stopping")
+	for {
+		b.waitWhilePaused()
+		stopping := b.stopped() // before b.mu, which stopped takes
+		b.mu.Lock()
+		if b.signaled {
+			b.mu.Unlock()
+			return nil, fmt.Errorf("the run is stopping")
+		}
+		p, started, err := b.launch(s, stopping)
+		if started && err == nil {
+			b.running = append(b.running, p)
+		}
+		b.mu.Unlock()
+		if started {
+			return p, err
+		}
 	}
-	p, err := proc.Start(s)
-	if err == nil {
-		b.running = append(b.running, p)
+}
+
+// launch starts s unless a pause got in after waitWhilePaused returned (started false: wait
+// again). A stop ends the wait for a pause, so a stopping run starts what it must even then.
+func (b *Backup) launch(s proc.Spec, stopping bool) (p *proc.Proc, started bool, err error) {
+	if stopping {
+		p, err = proc.Start(s)
+		return p, true, err
 	}
-	return p, err
+	started, lerr := b.lock.Unpaused(func() { p, err = proc.Start(s) })
+	if lerr != nil {
+		// The lock file unreadable must not stop the backup; the pause is then best effort.
+		p, err = proc.Start(s)
+		return p, true, err
+	}
+	return p, started, err
+}
+
+// runHook runs one of the service's hooks, started like any other program. With
+// skipOnStop (a pre-backup hook) a stop that comes while it waits for a pause means it does
+// not start (ran false): it would stop something for a backup that will not happen. Other
+// hooks undo a pre hook, so they start even then.
+func (b *Backup) runHook(svc hooks.Service, name, result string, skipOnStop bool) (code int, ran bool, err error) {
+	s := hooks.Spec(b.log, b.Environ, svc, name, result)
+	for {
+		b.waitWhilePaused()
+		stopping := b.stopped()
+		if stopping && skipOnStop {
+			return 0, false, nil
+		}
+		p, started, err := b.launch(s, stopping)
+		if !started {
+			continue
+		}
+		if err != nil {
+			return -1, true, err
+		}
+		code, err := p.Wait()
+		return code, true, err
+	}
 }
 
 func (b *Backup) forget(p *proc.Proc) {

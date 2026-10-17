@@ -215,7 +215,7 @@ func mb(n int64) string {
 // listFiles reads a revision's file listing from a repository connected to its storage.
 func (e *Env) listFiles(repo, id string, rev int) ([]entry, error) {
 	var out strings.Builder
-	if err := e.duplicacy(repo, &out, "list", "-files", "-r", strconv.Itoa(rev), "-id", id).Run(); err != nil {
+	if err := e.runGated(e.duplicacy(repo, &out, "list", "-files", "-r", strconv.Itoa(rev), "-id", id)); err != nil {
 		return nil, fmt.Errorf("cannot list revision %d of %s: %s", rev, id, lastLine(out.String()))
 	}
 	return parseListing(out.String()), nil

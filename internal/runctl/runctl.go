@@ -71,16 +71,17 @@ func Pause(e Env) int {
 	}
 	fmt.Fprintln(e.Out, "Pausing backup...")
 	e.Log.Message(logging.Info, "", fmt.Sprintf("Pausing backup process (PID: %d).", l.PID))
-	// Recorded first: a Go pipeline starts no program once it reads "paused", and what it
-	// already started is stopped below.
-	if err := runlock.Append(e.Layout.BackupLock(), "paused", e.Now()); err != nil {
+	// Recorded and signalled under the lock the pipeline starts its programs under
+	// (runlock.Unpaused): whatever it started is stopped here, and it starts nothing more.
+	paused, err := runlock.Pause(e.Layout.BackupLock(), e.Now(), func() { signalTree(l.PID, syscall.SIGSTOP) })
+	if err != nil {
 		fmt.Fprintln(e.Out, "Could not record the pause:", err)
 		return 1
 	}
-	signalTree(l.PID, syscall.SIGSTOP)
-	// A program the pipeline started just before it read the pause is caught here.
-	time.Sleep(300 * time.Millisecond)
-	signalTree(l.PID, syscall.SIGSTOP)
+	if !paused {
+		fmt.Fprintln(e.Out, "The backup ended or was paused meanwhile; nothing to pause.")
+		return 0
+	}
 	active := logging.Duration(runlock.Summarize(e.reread(l)).Active)
 	fmt.Fprintf(e.Out, "Backup paused. Active runtime: %s.\n", active)
 	e.Log.Message(logging.Info, "", "Backup paused. Active runtime: "+active+".")
@@ -243,15 +244,14 @@ func (e Env) stopDrill(target string, _ bool) {
 	signalTree(d.PID, syscall.SIGTERM)
 }
 
-// pauseDrill freezes a running drill's programs; the drill starts nothing more while paused.
+// pauseDrill freezes a running drill's programs. Recorded and signalled under the lock the
+// drill starts its programs under (runlock.StartUnpaused), so it starts nothing more.
 func (e Env) pauseDrill() {
 	d, ok := e.drill()
 	if !ok || d.Paused() {
 		return
 	}
 	paused, err := runlock.Pause(e.Layout.DrillLock(), e.Now(), func() {
-		signalTree(d.PID, syscall.SIGSTOP)
-		time.Sleep(300 * time.Millisecond)
 		signalTree(d.PID, syscall.SIGSTOP)
 	})
 	if err != nil || !paused {
@@ -346,12 +346,10 @@ func (e Env) deepChecks(action string) {
 			if l.Paused() {
 				continue
 			}
-			if runlock.Append(path, "paused", e.Now()) != nil {
+			// Under the lock the check starts duplicacy under, as for the drill.
+			if paused, err := runlock.Pause(path, e.Now(), func() { signalTree(l.PID, syscall.SIGSTOP) }); err != nil || !paused {
 				continue
 			}
-			signalTree(l.PID, syscall.SIGSTOP)
-			time.Sleep(300 * time.Millisecond)
-			signalTree(l.PID, syscall.SIGSTOP)
 		case "resume":
 			if !l.Paused() {
 				continue

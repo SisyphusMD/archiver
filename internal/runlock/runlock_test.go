@@ -140,3 +140,83 @@ func TestPauseSerializesCleanup(t *testing.T) {
 		t.Fatalf("pause after cleanup: paused=%v err=%v", ok, err)
 	}
 }
+
+// A program start and a pause never interleave: a pause waits for a start in progress (so
+// its signal finds the program), and once recorded no start happens.
+func TestUnpausedExcludesPause(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "backup.lock")
+	l, _, err := Acquire(path, path+".stop", "duplicacy", "backup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Release()
+	starting, finish := make(chan struct{}), make(chan struct{})
+	started := make(chan bool, 1)
+	go func() {
+		ok, err := l.Unpaused(func() {
+			close(starting)
+			<-finish
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		started <- ok
+	}()
+	<-starting
+	paused := make(chan bool, 1)
+	go func() {
+		ok, err := Pause(path, time.Now(), func() {})
+		if err != nil {
+			t.Error(err)
+		}
+		paused <- ok
+	}()
+	select {
+	case <-paused:
+		t.Fatal("pause was recorded while a program was starting")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(finish)
+	if !<-started || !<-paused {
+		t.Fatal("the start and then the pause should both have happened")
+	}
+	ran := false
+	ok, err := l.Unpaused(func() { ran = true })
+	if err != nil || ok || ran {
+		t.Fatalf("a start after the pause ran (ok %v, ran %v, err %v)", ok, ran, err)
+	}
+}
+
+func TestStartUnpausedWaitsOutAPause(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "drill.lock")
+	l, _, err := Acquire(path, path+".stop", "drill", "restore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Release()
+	if err := l.Record("paused"); err != nil {
+		t.Fatal(err)
+	}
+	// The first wait returns while the run is still paused (a pause that won the race):
+	// the start must not happen then, only after the resume.
+	waits, ran := 0, 0
+	err = l.StartUnpaused(func() bool {
+		waits++
+		if waits == 2 {
+			if err := l.Record("running"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return false
+	}, func() error { ran = waits; return nil })
+	if err != nil || ran != 2 {
+		t.Fatalf("started after wait %d (err %v), want after the resume in wait 2", ran, err)
+	}
+	if err := l.Record("paused"); err != nil {
+		t.Fatal(err)
+	}
+	ran = 0
+	if err := l.StartUnpaused(func() bool { return true }, func() error { ran++; return nil }); err != nil || ran != 1 {
+		t.Fatalf("an ending run's program should start regardless (ran %d, err %v)", ran, err)
+	}
+}

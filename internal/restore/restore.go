@@ -61,10 +61,9 @@ type Env struct {
 	cfg  *config.Config
 	held *os.File // the restore lock, while a restore into a service directory runs
 	// ctx ends every lock wait and duplicacy run when cancelled (a drill's stop); nil is
-	// never cancelled. beforeRun, when set, runs before each duplicacy program starts (a
-	// drill's pause gate).
-	ctx       context.Context
-	beforeRun func()
+	// never cancelled. gate, when set, starts each duplicacy program (a drill's pause gate).
+	ctx  context.Context
+	gate func(start func() error) error
 }
 
 func (e *Env) context() context.Context {
@@ -245,15 +244,23 @@ func (e *Env) pinnedTarget(v string) (config.Target, bool) {
 }
 
 func (e *Env) duplicacy(dir string, out io.Writer, args ...string) *exec.Cmd {
-	if e.beforeRun != nil {
-		e.beforeRun()
-	}
 	cmd := exec.CommandContext(e.context(), e.Duplicacy, proc.NoScript(args...)...)
 	cmd.Dir = dir
 	cmd.Env = e.cfg.DuplicacyEnviron(e.Environ, e.Layout.SSHPrivateKey())
 	cmd.Stdout, cmd.Stderr = out, out
 	e.inherit(cmd)
 	return cmd
+}
+
+// runGated runs a program from duplicacy through the gate, when one is set.
+func (e *Env) runGated(cmd *exec.Cmd) error {
+	if e.gate == nil {
+		return cmd.Run()
+	}
+	if err := e.gate(cmd.Start); err != nil {
+		return err
+	}
+	return cmd.Wait()
 }
 
 // inherit passes the restore lock to a duplicacy child, so one that outlives a killed
@@ -317,7 +324,7 @@ func (e *Env) connect(repo, dest string, t config.Target, id string, out io.Writ
 		return err
 	}
 	defer release()
-	if err := e.duplicacy(repo, out, append(args, id, url)...).Run(); err != nil {
+	if err := e.runGated(e.duplicacy(repo, out, append(args, id, url)...)); err != nil {
 		if why := kit.Diagnose(e.Layout, "", t); why != "" {
 			return fmt.Errorf("duplicacy %s storage initialization failed for '%s': %s", t.Type, t.StorageName(), why)
 		}
@@ -329,7 +336,7 @@ func (e *Env) connect(repo, dest string, t config.Target, id string, out io.Writ
 // revisions lists id's revisions on the repository's storage, newest first.
 func (e *Env) revisions(dir, id string) ([]int, error) {
 	var out strings.Builder
-	if err := e.duplicacy(dir, &out, "list", "-id", id).Run(); err != nil {
+	if err := e.runGated(e.duplicacy(dir, &out, "list", "-id", id)); err != nil {
 		fmt.Fprint(e.Stderr, out.String())
 		return nil, err
 	}
@@ -423,7 +430,7 @@ func (e *Env) restore(repo, dir string, t config.Target, id string, rev int, o O
 	// duplicacy shares the registration's lock, so a restore that outlives this process
 	// (killed mid-restore) still keeps its revision from being pruned.
 	cmd.ExtraFiles = append(cmd.ExtraFiles, h.File())
-	return cmd.Run()
+	return e.runGated(cmd)
 }
 
 // postRestore runs dir's restore hook, if it has one, and returns its exit code.
@@ -604,7 +611,7 @@ func (e *Env) Snapshots(t config.Target) (map[string]SnapshotInfo, error) {
 		return nil, err
 	}
 	out.Reset()
-	if err := e.duplicacy(dir, &out, "list", "-a").Run(); err != nil {
+	if err := e.runGated(e.duplicacy(dir, &out, "list", "-a")); err != nil {
 		release()
 		return nil, fmt.Errorf("listing its snapshots failed: %s", lastLine(out.String()))
 	}
@@ -666,7 +673,7 @@ func (e *Env) decrypts(dir string, found map[string]SnapshotInfo, hold *os.File)
 		var listing strings.Builder
 		list := e.duplicacy(dir, &listing, "list", "-files", "-r", rev, "-id", id)
 		list.ExtraFiles = append(list.ExtraFiles, hold)
-		if err := list.Run(); err != nil {
+		if err := e.runGated(list); err != nil {
 			return &KeyError{fmt.Sprintf("listing %s revision %s: %s", id, rev, lastLine(listing.String()))}
 		}
 		for _, m := range listedWithHash.FindAllStringSubmatch(listing.String(), -1) {
@@ -694,7 +701,7 @@ func (e *Env) decrypts(dir string, found map[string]SnapshotInfo, hold *os.File)
 		out := &tail{}
 		cmd := e.duplicacy(dir, out, "cat", "-r", c.rev, "-id", c.id, "-key", e.Layout.RSAPrivateKey(), "--", c.path)
 		cmd.ExtraFiles = append(cmd.ExtraFiles, hold)
-		err := cmd.Run()
+		err := e.runGated(cmd)
 		if err == nil {
 			return nil
 		}
