@@ -21,6 +21,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/doctor"
 	"github.com/SisyphusMD/archiver/internal/health"
+	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logview"
@@ -141,6 +142,9 @@ func main() {
 		if code, ok := recoveryKitCommand(os.Args[2:]); ok {
 			os.Exit(code)
 		}
+	}
+	if len(os.Args) >= 2 && os.Args[1] == hooks.GuardCommand {
+		os.Exit(hooks.Guard(os.Args[2:]))
 	}
 	if len(os.Args) == 2 && os.Args[1] == "recovery-kit-step" {
 		os.Exit(recoveryKitStep())
