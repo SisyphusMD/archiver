@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Copy workers (ADR 11): under the daemon, a backup ends after the local backup and hands
 # the copies to one worker per secondary, which catches its target up, retries a failed
-# copy on its backoff instead of failing the backup, and follows stop/pause/resume.
+# copy on its backoff instead of failing the backup, and follows stop/pause/resume. A
+# secondary added later is registered by its worker, never by a backup (which would wait on
+# it), and fails no maintenance.
 #
 #   docker run -i --rm --hostname cw-host --cap-drop ALL --cap-add DAC_OVERRIDE \
 #     --entrypoint bash archiver:dev -s < tests/integration/copy-workers.sh
@@ -103,4 +105,20 @@ log "stop reaches the workers"
 grep -q "Copies to the secondary storages stopped" <<<"$(archiver stop)" || die "stop did not reach the workers"
 
 kill -TERM "$DAEMON"; wait "$DAEMON"
-echo "=== COPY-WORKERS OK: inline without a daemon, handed off with one, retried without failing the backup, checked, mirrored, maintenance local-only, pause/resume/stop reach the workers ==="
+
+log "a secondary added later is registered by its worker alone, never in a backup's repository, and maintenance passes"
+FOURTH=/fourth-store
+mkdir -p "$FOURTH"
+export STORAGE_TARGET_4_NAME=fourth STORAGE_TARGET_4_TYPE=local STORAGE_TARGET_4_LOCAL_PATH="$FOURTH"
+BACKUP_SCHEDULE="0 3 1 1 *" archiver daemon >/tmp/daemon2.out 2>&1 &
+DAEMON=$!
+wait_for 'grep -q "fourth: caught up" <<<"$(archiver status)"' 60 || die "the new secondary's worker did not catch it up"
+archiver maintenance >/dev/null 2>&1 || { tail -20 /opt/archiver/logs/maintenance.log; die "maintenance failed once a worker had registered a new secondary"; }
+sleep 1.1; echo "five" >"$SVC/file.txt"
+archiver backup >/dev/null 2>&1 || die "backup failed with a new secondary"
+PREFS="$(repo_of "$SVC")/.duplicacy/preferences"
+grep -q '"name": "local"' "$PREFS" || die "no service repository preferences at $PREFS"
+grep -q '"name": "fourth"' "$PREFS" && die "the backup registered the new secondary itself"
+wait_for '[ -e "$FOURTH/snapshots/${HOST}-app/5" ]' 60 || die "the worker did not copy the backup to the new secondary"
+kill -TERM "$DAEMON"; wait "$DAEMON"
+echo "=== COPY-WORKERS OK: inline without a daemon, handed off with one, retried without failing the backup, checked, mirrored, maintenance local-only, pause/resume/stop reach the workers, a new secondary is registered by its worker alone and fails no maintenance ==="

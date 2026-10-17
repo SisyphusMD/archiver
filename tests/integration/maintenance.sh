@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Maintenance pipeline, end to end (env-native, two local targets so the copy path is
-# exercised too). Proves: maintenance refuses to run before any backup exists; check+prune
-# run per storage and record last-success state; exhaustive prune fires when due
-# (never-run -> due) and NOT when fresh; CHECK_BACKUPS/PRUNE_BACKUPS toggles skip their
-# phases; healthcheck warns on stale maintenance; removed rotation args hard-error;
-# `archiver stop maintenance` ends a running maintenance gracefully.
+# exercised too). Proves: maintenance runs before any backup exists; check+prune run per
+# storage and record last-success state; exhaustive prune fires when due (never-run -> due)
+# and NOT when fresh; a newly added secondary is maintained from its first run;
+# CHECK_BACKUPS/PRUNE_BACKUPS toggles skip their phases; healthcheck warns on stale
+# maintenance; removed rotation args hard-error; `archiver stop maintenance` ends a running
+# maintenance gracefully.
 #
 #   docker run -i --rm --hostname mt-host --cap-drop ALL --cap-add DAC_OVERRIDE \
 #     --entrypoint bash archiver:dev -s < tests/integration/maintenance.sh
@@ -70,6 +71,15 @@ log "maintenance run 2: exhaustive NOT due (daily frequency, just ran)"
 archiver maintenance || die "maintenance run 2 exited non-zero"
 grep -q "Exhaustive prune due" "$MLOG" && die "exhaustive ran again although fresh"
 grep -q "Prune completed for local" "$MLOG" || die "plain prune did not run"
+
+log "a secondary added to the configuration is maintained from its first run: maintenance registers (and creates) it itself"
+STORE3=/backup-store3
+STORAGE_TARGET_3_NAME=third STORAGE_TARGET_3_TYPE=local STORAGE_TARGET_3_LOCAL_PATH="$STORE3" archiver maintenance \
+  || { tail -20 "$MLOG"; die "maintenance failed its first run with a newly added secondary"; }
+grep -q "\[ERROR\]" "$MLOG" && { tail -20 "$MLOG"; die "a newly added secondary logged an error"; }
+grep -q "Storage check completed for third" "$MLOG" || die "no check on the new secondary"
+grep -q "Prune completed for third" "$MLOG" || die "no prune on the new secondary"
+[ -f "$STORE3/config" ] || die "maintenance did not create the new secondary"
 
 log "toggles: CHECK_BACKUPS=false PRUNE_BACKUPS=false -> nothing to do"
 CHECK_BACKUPS=false PRUNE_BACKUPS=false archiver maintenance || die "toggled-off maintenance exited non-zero"
