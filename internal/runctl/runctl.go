@@ -71,16 +71,17 @@ func Pause(e Env) int {
 	}
 	fmt.Fprintln(e.Out, "Pausing backup...")
 	e.Log.Message(logging.Info, "", fmt.Sprintf("Pausing backup process (PID: %d).", l.PID))
-	// Recorded first: a Go pipeline starts no program once it reads "paused", and what it
-	// already started is stopped below.
-	if err := runlock.Append(e.Layout.BackupLock(), "paused", e.Now()); err != nil {
+	// Recorded and signalled under the lock the pipeline starts its programs under
+	// (runlock.Unpaused): whatever it started is stopped here, and it starts nothing more.
+	paused, err := runlock.Pause(e.Layout.BackupLock(), e.Now(), func() { signalTree(l.PID, syscall.SIGSTOP) })
+	if err != nil {
 		fmt.Fprintln(e.Out, "Could not record the pause:", err)
 		return 1
 	}
-	signalTree(l.PID, syscall.SIGSTOP)
-	// A program the pipeline started just before it read the pause is caught here.
-	time.Sleep(300 * time.Millisecond)
-	signalTree(l.PID, syscall.SIGSTOP)
+	if !paused {
+		fmt.Fprintln(e.Out, "The backup ended or was paused meanwhile; nothing to pause.")
+		return 0
+	}
 	active := logging.Duration(runlock.Summarize(e.reread(l)).Active)
 	fmt.Fprintf(e.Out, "Backup paused. Active runtime: %s.\n", active)
 	e.Log.Message(logging.Info, "", "Backup paused. Active runtime: "+active+".")

@@ -140,3 +140,49 @@ func TestPauseSerializesCleanup(t *testing.T) {
 		t.Fatalf("pause after cleanup: paused=%v err=%v", ok, err)
 	}
 }
+
+// A program start and a pause never interleave: a pause waits for a start in progress (so
+// its signal finds the program), and once recorded no start happens.
+func TestUnpausedExcludesPause(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "backup.lock")
+	l, _, err := Acquire(path, path+".stop", "duplicacy", "backup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Release()
+	starting, finish := make(chan struct{}), make(chan struct{})
+	started := make(chan bool, 1)
+	go func() {
+		ok, err := l.Unpaused(func() {
+			close(starting)
+			<-finish
+		})
+		if err != nil {
+			t.Error(err)
+		}
+		started <- ok
+	}()
+	<-starting
+	paused := make(chan bool, 1)
+	go func() {
+		ok, err := Pause(path, time.Now(), func() {})
+		if err != nil {
+			t.Error(err)
+		}
+		paused <- ok
+	}()
+	select {
+	case <-paused:
+		t.Fatal("pause was recorded while a program was starting")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(finish)
+	if !<-started || !<-paused {
+		t.Fatal("the start and then the pause should both have happened")
+	}
+	ran := false
+	ok, err := l.Unpaused(func() { ran = true })
+	if err != nil || ok || ran {
+		t.Fatalf("a start after the pause ran (ok %v, ran %v, err %v)", ok, ran, err)
+	}
+}

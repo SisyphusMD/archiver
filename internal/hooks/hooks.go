@@ -235,14 +235,19 @@ func (s Service) hookDir() string {
 
 // Run runs one hook and returns its exit code.
 func Run(log *logging.Log, base []string, s Service, name, result string) (int, error) {
-	return proc.Run(proc.Spec{
+	return proc.Run(Spec(log, base, s, name, result))
+}
+
+// Spec is the program Run runs, for a caller that starts it itself.
+func Spec(log *logging.Log, base []string, s Service, name, result string) proc.Spec {
+	return proc.Spec{
 		Path:    filepath.Join(s.hookDir(), name),
 		Dir:     s.Dir,
 		Env:     Environ(base, s, result),
 		Log:     log,
 		Service: s.Name,
 		Hook:    true,
-	})
+	}
 }
 
 // ReadFilters returns the service's filter lines, or the default of backing up everything.
