@@ -32,6 +32,32 @@ Note:
   completion bash|zsh|fish prints shell completions for these commands.
 `
 
+// flagGuard answers --help/-h after any command with the usage, and refuses an unknown option where
+// a command takes a service or storage name, before that command runs: 'drill --help' once ran a
+// drill of a service called "--help" and raised a failed-drill incident.
+func flagGuard(args []string) (int, bool) {
+	if len(args) < 2 {
+		return 0, false
+	}
+	for _, a := range args[1:] {
+		if a == "--help" || a == "-h" {
+			fmt.Print(usageText)
+			return 0, true
+		}
+	}
+	switch args[0] {
+	case "drill", "kit-drill", "deep-check":
+		for i, a := range args[1:] {
+			if strings.HasPrefix(a, "-") && !(args[0] == "drill" && i == 0 && a == "--named") {
+				fmt.Fprintf(os.Stderr, "archiver %s: unknown option %q\n", args[0], a)
+				fmt.Print(usageText)
+				return 2, true
+			}
+		}
+	}
+	return 0, false
+}
+
 // usage handles every command line no command took: help, or a mistake, which it names
 // before the usage (exit 1). A removed command says what replaced it.
 func usage(args []string) int {

@@ -66,6 +66,9 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "daemon" {
 		os.Exit(runDaemon(os.Args[2:]))
 	}
+	if code, ok := flagGuard(os.Args[1:]); ok {
+		os.Exit(code)
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "backup" {
 		if code, ok := backupCommand(os.Args[2:]); ok {
 			os.Exit(code)
