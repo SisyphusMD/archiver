@@ -48,7 +48,7 @@ func flagGuard(args []string) (int, bool) {
 	switch args[0] {
 	case "drill", "kit-drill", "deep-check":
 		for i, a := range args[1:] {
-			if strings.HasPrefix(a, "-") && !(args[0] == "drill" && i == 0 && a == "--named") {
+			if strings.HasPrefix(a, "-") && (args[0] != "drill" || i != 0 || a != "--named") {
 				fmt.Fprintf(os.Stderr, "archiver %s: unknown option %q\n", args[0], a)
 				fmt.Print(usageText)
 				return 2, true
