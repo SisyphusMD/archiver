@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+- The recovery kit no longer lands unreadable to a mirror/backup user on a Synology share (it still did on 1.0.0-rc.1). Inside the container a Synology ACL file shows a mode that depends on its owner, so the kit, read before its chown, never matched config's mode and was chmod'ed, which discards the inherited ACL and leaves a plain owner-only file; and the check passed, since config itself reads owner-only there. On a share whose `config` carries a Synology ACL the kit is now never chmod'ed, and a kit that ends up without an ACL is reported and re-placed on the next run. The placement-scheme version is bumped, so existing deployments re-place their kit once on the first backup (or `archiver recovery-kit`) run after upgrade.
 - `--help` or `-h` after any command prints the usage, and `drill`, `kit-drill` and `deep-check` refuse an unknown option before running: `archiver drill --help` used to run a drill of a service named `--help` and raise a failed-drill incident.
 - File Fabric: an upload the server refuses, or that cannot be sent, fails with an error once Duplicacy's retries run out instead of crashing the process (Duplicacy patch `filefabric-upload-error.patch`).
 - OneDrive: a move retried after creating its missing destination reports the retry's failure instead of success, so prune never records a chunk as moved when it was not (Duplicacy patch `onedrive-move-retry.patch`).

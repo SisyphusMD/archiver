@@ -188,7 +188,7 @@ func TestExecute(t *testing.T) {
 		t.Errorf("README: %s", b)
 	}
 	state, _ := os.ReadFile(filepath.Join(f.root, "logs", ".recovery-kit-state"))
-	if lines := strings.Split(string(state), "\n"); !strings.HasPrefix(lines[0], "v5:") || lines[1] != "store1" || lines[2] != "store2" {
+	if lines := strings.Split(string(state), "\n"); !strings.HasPrefix(lines[0], "v6:") || lines[1] != "store1" || lines[2] != "store2" {
 		t.Fatalf("state %q", state)
 	}
 
@@ -449,3 +449,36 @@ func TestLocalAccessChangesNoHardLink(t *testing.T) {
 		t.Fatalf("the linked file became %o", fi.Mode().Perm())
 	}
 }
+
+// On an ACL-backed share the kit is never chmod'ed, even when the mode shown differs from
+// config's: the chmod would discard the inherited ACL that lets a mirror user read it.
+func TestLocalAccessKeepsTheShareACL(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "config"), []byte("c"), 0o700)
+	os.WriteFile(filepath.Join(dir, "kit.tar.enc"), []byte("k"), 0o600)
+	synoACL = func(string) bool { return true }
+	chmod = func(*os.File, os.FileMode) error { t.Fatal("the kit was chmod'ed on an ACL-backed share"); return nil }
+	defer func() { synoACL, chmod = synoACLDefault, (*os.File).Chmod }()
+	r := &Run{Log: &logging.Log{Dir: t.TempDir(), Basename: "archiver"}}
+	tgt := config.Target{N: 1, Values: config.Values{"LOCAL_PATH": dir}}
+	if code := r.localAccess(tgt, []string{"kit.tar.enc"}); code != OK {
+		t.Fatalf("exit %d, want OK", code)
+	}
+}
+
+// A kit that lands without the ACL its config carries is Unverified, so it is re-placed.
+func TestLocalAccessCatchesALostACL(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "config")
+	os.WriteFile(cfg, []byte("c"), 0o700)
+	os.WriteFile(filepath.Join(dir, "kit.tar.enc"), []byte("k"), 0o700)
+	synoACL = func(p string) bool { return p == cfg }
+	defer func() { synoACL = synoACLDefault }()
+	r := &Run{Log: &logging.Log{Dir: t.TempDir(), Basename: "archiver"}}
+	tgt := config.Target{N: 1, Values: config.Values{"LOCAL_PATH": dir}}
+	if code := r.localAccess(tgt, []string{"kit.tar.enc"}); code != Unverified {
+		t.Fatalf("exit %d, want Unverified", code)
+	}
+}
+
+var synoACLDefault = synoACL

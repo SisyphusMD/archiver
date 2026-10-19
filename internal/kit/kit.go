@@ -38,7 +38,7 @@ const (
 
 // stateVersion versions the placement scheme inside the recorded fingerprint: bumping it
 // re-places every kit once, content unchanged.
-const stateVersion = "5"
+const stateVersion = "6"
 
 // Run is one kit refresh.
 type Run struct {
