@@ -540,6 +540,8 @@ jobs:
         run: IMAGE=hosttests:local bash tests/integration/fault-disk.sh
       - name: "Fault injection: a slowed and cut storage link mid-backup and mid-copy (ADR 31)"
         run: IMAGE=hosttests:local bash tests/integration/fault-network.sh
+      - name: A kit that missed a secondary reaches it once its copy worker catches up, with no backup
+        run: IMAGE=hosttests:local bash tests/integration/kit-recovers.sh
       - name: Every storage type round-trips against a local stand-in (backup, kit, restore; ADRs 23, 47)
         run: IMAGE=hosttests:local bash tests/integration/backends.sh
       - name: Bundle-era inputs refuse with the 0.11 conversion (ADRs 4, 22)

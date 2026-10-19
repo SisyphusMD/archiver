@@ -14,6 +14,7 @@ package kit
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
@@ -34,6 +36,7 @@ const (
 	Failed          = 1 // the primary failed, or the kit could not be built
 	Unverified      = 2 // placed everywhere, but a placement is less readable than the storage's own files
 	SecondaryFailed = 3 // on the primary, but a secondary upload failed
+	Busy            = 4 // with TryLock: another placement holds the kit lock, so nothing ran
 )
 
 // stateVersion versions the placement scheme inside the recorded fingerprint: bumping it
@@ -53,6 +56,8 @@ type Run struct {
 	// Held is set by Execute: the secondaries left alone because their copy window was
 	// closed (ADR 44). They too get the kit on a later run.
 	Held []string
+	// TryLock gives up with Busy, instead of waiting, while another placement runs.
+	TryLock bool
 	// PrimaryMarker, when set, is created once the primary holds the current kit, so the
 	// backup can tell a later failure or timeout is a secondary's.
 	PrimaryMarker string
@@ -75,7 +80,7 @@ func (r *Run) getenv(name string) string { return r.Source.Getenv(name) }
 func (r *Run) KitName() string    { return "archiver-recovery-kit-" + r.Hostname + ".tar.enc" }
 func (r *Run) readmeName() string { return "archiver-recovery-kit-" + r.Hostname + ".README.txt" }
 
-func (r *Run) statePath() string { return filepath.Join(r.Layout.LogDir(), ".recovery-kit-state") }
+func (r *Run) statePath() string { return r.Layout.KitState() }
 
 func (r *Run) info(msg string)    { r.Log.Message(logging.Info, "", msg) }
 func (r *Run) warning(msg string) { r.Log.Message(logging.Warning, "", msg) }
@@ -106,6 +111,11 @@ func (r *Run) Execute() int {
 		r.info("Recovery kit not configured (no recovery_password secret); skipping.")
 		return OK
 	}
+	unlock, held := r.lock()
+	if !held {
+		return Busy
+	}
+	defer unlock()
 	if err := ValidatePassword(cfg.RecoveryPassword, cfg.StoragePassword); err != nil {
 		r.error(err.Error())
 		return Failed
@@ -160,7 +170,11 @@ func (r *Run) Execute() int {
 		r.primaryHasKit()
 	}
 	if len(pending) == 0 {
-		r.info("Recovery kit is up to date on all storage targets.")
+		if len(r.Skip) > 0 || len(r.Held) > 0 {
+			r.info("Recovery kit is up to date on every storage target it can reach now.")
+		} else {
+			r.info("Recovery kit is up to date on all storage targets.")
+		}
 		return OK
 	}
 
@@ -208,6 +222,50 @@ func (r *Run) Execute() int {
 		return Unverified
 	}
 	return OK
+}
+
+// lock takes the kit lock for one placement. held is false only with TryLock, when another
+// placement has it. Without a lock directory it places unlocked.
+func (r *Run) lock() (unlock func(), held bool) {
+	if r.Layout.Lock == "" {
+		return func() {}, true
+	}
+	f, err := os.OpenFile(r.Layout.KitLock(), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return func() {}, true
+	}
+	how := syscall.LOCK_EX
+	if r.TryLock {
+		how |= syscall.LOCK_NB
+	}
+	for {
+		err = syscall.Flock(int(f.Fd()), how)
+		if !errors.Is(err, syscall.EINTR) {
+			break
+		}
+	}
+	if err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, false
+		}
+		return func() {}, true
+	}
+	return func() { f.Close() }, true
+}
+
+// Placed lists the storages recorded as holding the kit, for whichever configuration placed
+// it last.
+func Placed(l layout.Layout) []string {
+	b, err := os.ReadFile(l.KitState())
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	if len(lines) < 2 {
+		return nil
+	}
+	return lines[1:]
 }
 
 // outsideWindow reports whether t is a secondary whose copy window is closed now, noting it

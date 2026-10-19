@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/layout"
@@ -482,3 +483,47 @@ func TestLocalAccessCatchesALostACL(t *testing.T) {
 }
 
 var synoACLDefault = synoACL
+
+// A placement started while another holds the kit lock: one that waits gets it once the
+// other ends; one with TryLock gives way at once.
+func TestKitLock(t *testing.T) {
+	l := layout.Layout{Root: t.TempDir(), Lock: t.TempDir()}
+	held := &Run{Layout: l}
+	unlock, ok := held.lock()
+	if !ok {
+		t.Fatal("a free lock was not taken")
+	}
+	if _, ok := (&Run{Layout: l, TryLock: true}).lock(); ok {
+		t.Fatal("TryLock took a lock another placement holds")
+	}
+	got := make(chan bool)
+	go func() { u, ok := (&Run{Layout: l}).lock(); u(); got <- ok }()
+	select {
+	case <-got:
+		t.Fatal("a waiting placement ran while the lock was held")
+	case <-time.After(200 * time.Millisecond):
+	}
+	unlock()
+	if !<-got {
+		t.Fatal("a waiting placement never got the lock")
+	}
+}
+
+func TestPlaced(t *testing.T) {
+	l := layout.Layout{Root: t.TempDir()}
+	if got := Placed(l); got != nil {
+		t.Fatalf("no state: %q", got)
+	}
+	if err := os.MkdirAll(l.LogDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r := &Run{Layout: l}
+	r.writeState("v6:abc", []string{"local", "backblaze"})
+	if got := strings.Join(Placed(l), ","); got != "local,backblaze" {
+		t.Fatalf("placed %q", got)
+	}
+	r.writeState("v6:abc", nil)
+	if got := Placed(l); len(got) != 0 {
+		t.Fatalf("placed nowhere, read %q", got)
+	}
+}

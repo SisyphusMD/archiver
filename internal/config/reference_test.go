@@ -70,7 +70,7 @@ func TestGeneratedReferenceCurrent(t *testing.T) {
 // notSettings are variables the code reads that a person does not configure: the process's
 // own, the recovery kit step's from its parent, and old names read only to refuse them.
 var notSettings = map[string]bool{
-	"HOME": true, "PATH": true, "ARCHIVER_KIT_PRIMARY_MARKER": true, "ARCHIVER_KIT_SKIP_TARGETS": true,
+	"HOME": true, "PATH": true, "ARCHIVER_KIT_PRIMARY_MARKER": true, "ARCHIVER_KIT_SKIP_TARGETS": true, "ARCHIVER_KIT_TRY_LOCK": true,
 	"CRON_SCHEDULE": true, "BUNDLE_PASSWORD": true,
 }
 

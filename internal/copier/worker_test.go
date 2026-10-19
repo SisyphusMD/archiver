@@ -523,3 +523,24 @@ func TestProbeFailsFast(t *testing.T) {
 		t.Fatalf("state %+v, copies %d", s, r.copies)
 	}
 }
+
+// What waits on a target being reachable (the recovery kit) hears of every caught-up pass,
+// and of no failed one.
+func TestCaughtUpEventFollowsRecovery(t *testing.T) {
+	r := &fakeRunner{local: revs("a:1"), target: revs(), fail: errors.New("connection refused")}
+	w, _ := newWorker(r, &recorder{}, State{})
+	calls := 0
+	w.Events.CaughtUp = func() { calls++ }
+	w.pass(w.stops, nil)
+	if calls != 0 {
+		t.Fatal("a failed pass reported caught up")
+	}
+	r.mu.Lock()
+	r.fail = nil
+	r.mu.Unlock()
+	w.pass(w.stops, nil)
+	w.pass(w.stops, nil)
+	if calls != 2 {
+		t.Fatalf("%d caught-up events for two caught-up passes", calls)
+	}
+}

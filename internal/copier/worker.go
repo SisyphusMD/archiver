@@ -103,6 +103,9 @@ type Events struct {
 	// Checkin tells the target's check-in URL it is caught up, or that it is failing (ADR 37).
 	Checkin func(ok bool, msg string)
 	Save    func(State)
+	// CaughtUp follows every pass that leaves the target caught up, so what waited on the
+	// target being reachable (the recovery kit) can go there now.
+	CaughtUp func()
 }
 
 // Upkeep is a worker's maintenance of its target (ADRs 12, 17, 18). Shared storages are
@@ -664,6 +667,9 @@ func (w *Worker) caughtUp(stops int) {
 		w.checkin(false, checkFailed)
 	} else {
 		w.checkin(true, "caught up")
+	}
+	if w.Events.CaughtUp != nil {
+		w.Events.CaughtUp()
 	}
 }
 

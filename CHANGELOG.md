@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A recovery kit that missed a secondary (its upload failed, or the storage was down when a backup placed it) now reaches it as soon as that storage's copy worker catches up again, instead of at the next backup, and the "Recovery Kit Failed" incident clears then. Two placements never run at once: they share a lock, and the one started on recovery gives way to a backup's. The kit no longer reports itself "up to date on all storage targets" when it skipped a storage that was down.
+
 ## [1.0.0-rc.2] - 2026-10-19
 
 ### Fixed
