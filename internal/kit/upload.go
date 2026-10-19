@@ -151,8 +151,9 @@ var chmod = (*os.File).Chmod
 // localAccess gives the placed files the owner and mode of the storage's 'config' (the
 // storage's own access model; the kit is encrypted already) and reports Unverified when one
 // ends up less readable. rclone's rename leaves a fresh inode, which inherits the directory's
-// ACLs; a chmod is made only when it changes the mode, because on an ACL-backed share
-// (Synology's) any chmod discards the inherited ACL, even one to the mode already shown.
+// ACLs. On an ACL-backed share (Synology's, known by the ACL its config carries) that ACL is
+// the access model: any chmod discards it, so the kit is never chmod'ed there and must end up
+// carrying an ACL like config. Elsewhere a chmod is made only when it changes the mode.
 //
 // Whoever owns the storage directory can swap entries in it, so nothing here follows a
 // link, and only the file rclone just wrote is changed: a symlink, or a hard link, put where
@@ -164,9 +165,10 @@ func (r *Run) localAccess(t config.Target, names []string) int {
 	if err != nil || !ref.Mode().IsRegular() {
 		return OK
 	}
+	acl := synoACL(filepath.Join(t.Get("LOCAL_PATH"), "config"))
 	status := OK
 	for _, n := range names {
-		if !r.adjust(filepath.Join(t.Get("LOCAL_PATH"), n), ref) {
+		if !r.adjust(filepath.Join(t.Get("LOCAL_PATH"), n), ref, acl) {
 			status = Unverified
 		}
 	}
@@ -176,9 +178,21 @@ func (r *Run) localAccess(t config.Target, names []string) int {
 	return status
 }
 
+// synoACL reports whether p carries a Synology ACL; a plain-mode file has neither attribute.
+// Tests stand in an ACL-backed share.
+var synoACL = func(p string) bool {
+	for _, a := range []string{"system.syno_acl_inherit", "system.syno_acl_self"} {
+		if _, err := syscall.Getxattr(p, a, nil); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // adjust sets one placed file's owner and mode through a descriptor opened without
-// following links, and reports whether it is as readable as ref.
-func (r *Run) adjust(p string, ref os.FileInfo) bool {
+// following links, and reports whether it is as readable as ref (with acl, whether it still
+// carries an ACL).
+func (r *Run) adjust(p string, ref os.FileInfo, acl bool) bool {
 	f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return false
@@ -195,6 +209,13 @@ func (r *Run) adjust(p string, ref os.FileInfo) bool {
 	}
 	if st, ok := ref.Sys().(*syscall.Stat_t); ok {
 		_ = f.Chown(int(st.Uid), int(st.Gid))
+	}
+	// An ACL-backed share shows a mode that depends on the owner, so it is read after the chown.
+	if fi, err = f.Stat(); err != nil {
+		return false
+	}
+	if acl {
+		return synoACL(fmt.Sprintf("/proc/self/fd/%d", f.Fd()))
 	}
 	if fi.Mode().Perm() != ref.Mode().Perm() {
 		_ = chmod(f, ref.Mode().Perm())
