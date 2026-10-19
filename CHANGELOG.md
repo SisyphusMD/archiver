@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-10-19
+
 ### Fixed
 
 - The recovery kit no longer lands unreadable to a mirror/backup user on a Synology share (it still did on 1.0.0-rc.1). Inside the container a Synology ACL file shows a mode that depends on its owner, so the kit, read before its chown, never matched config's mode and was chmod'ed, which discards the inherited ACL and leaves a plain owner-only file; and the check passed, since config itself reads owner-only there. On a share whose `config` carries a Synology ACL the kit is now never chmod'ed, and a kit that ends up without an ACL is reported and re-placed on the next run. The placement-scheme version is bumped, so existing deployments re-place their kit once on the first backup (or `archiver recovery-kit`) run after upgrade.
@@ -14,6 +16,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - OneDrive: a move retried after creating its missing destination reports the retry's failure instead of success, so prune never records a chunk as moved when it was not (Duplicacy patch `onedrive-move-retry.patch`).
 - A restore into a service directory that dies while its `post-restore` (or `restore-service.sh`) hook runs keeps the restore lock until everything the hook ran in the foreground has been killed, so no backup starts while the hook's children still write to the directory. The hook runs in its own process group under a small guard; a daemon it starts in a session of its own is left running, as before.
 - `archiver pause` no longer misses a program a backup, restore drill, kit drill or deep check starts at the same moment: the pause and each program start (duplicacy, hooks and the kit drill's programs) now take the same lock, replacing a 300 ms grace that a busy host could outrun, leaving that program running while the run reported paused.
+
+### Dependencies
+
+- chore(deps): docker CLI 29.9.1 archive checksums (Renovate cannot bump them)
+- chore(deps): update dependency moby/moby to v29.9.1
+- chore(deps): update golangci/golangci-lint docker tag to v2.15.0
+- fix(deps): update module github.com/aptible/supercronic to v0.2.50
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 7e73552
+- chore(deps): update aquasec/trivy docker tag to v0.76.0
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to edad588
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 22ea3c3
 
 ## [1.0.0-rc.1] - 2026-10-14
 
