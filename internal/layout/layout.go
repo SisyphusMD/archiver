@@ -92,3 +92,9 @@ func (l Layout) DeepCheckStopFlag(storage string) string {
 	return filepath.Join(l.Lock, "archiver-deep-check-"+storage+"-stop-requested")
 }
 func (l Layout) KitDrillState() string { return filepath.Join(l.LogDir(), ".kit-drill-state.json") }
+
+// KitState records which storages hold the current recovery kit.
+func (l Layout) KitState() string { return filepath.Join(l.LogDir(), ".recovery-kit-state") }
+
+// KitLock is held while the recovery kit is placed, so two placements never interleave.
+func (l Layout) KitLock() string { return filepath.Join(l.Lock, "archiver-kit.lock") }

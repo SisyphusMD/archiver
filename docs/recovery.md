@@ -34,7 +34,7 @@ openssl enc -d -aes-256-cbc -pbkdf2 -in archiver-recovery-kit-<hostname>.tar.enc
 
 It prompts for the password and yields `archiver.env` + `secrets/` + `RECREATE.txt` (+ `deployment/` with your manifests) — everything needed to recreate the deployment (the recovery password itself is included, so the recreated deployment maintains its kit immediately). From there, restore your data with `archiver restore` as usual.
 
-`archiver recovery-kit` uploads on demand (useful right after setup); `archiver recovery-kit force` re-uploads everywhere even if unchanged. An upload failure is logged and notified but never fails the backup; the failed target is retried on the next run. Kit placement is never a boot dependency; optional kit drills read it back to prove the recovery path.
+`archiver recovery-kit` uploads on demand (useful right after setup); `archiver recovery-kit force` re-uploads everywhere even if unchanged. An upload failure is logged and notified but never fails the backup. Under the daemon, a secondary that missed the kit (its upload failed, or it was down) gets it as soon as its copy worker catches up again, and the notification clears then; without the daemon it is retried on the next run. Kit placement is never a boot dependency; optional kit drills read it back to prove the recovery path.
 
 On B2, each update creates a new file version; old versions age out per your bucket lifecycle rules (they are ciphertext, so lingering versions are harmless).
 

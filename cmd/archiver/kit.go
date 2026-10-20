@@ -40,6 +40,7 @@ func kitRun(src config.Source) (*kit.Run, *notify.Notifier) {
 func kitExecute(r *kit.Run, n *notify.Notifier) int {
 	code := r.Execute()
 	switch {
+	case code == kit.Busy:
 	case r.Log.Reportable() > 0:
 		n.Raise("kit", notify.Failure, "Recovery Kit Failed", r.Log.Summary())
 	// A kit still missing from a storage skipped as down stays an incident, so it repeats
@@ -107,10 +108,13 @@ func recoveryKitCommand(args []string) (code int, ok bool) {
 
 // recoveryKitStep is the backup pipeline's kit step, run as its own process so the backup can
 // bound and end it: exit 0, 1 (errors, each logged and notified), 2 (placed but not verified
-// readable everywhere) or 3 (only secondary uploads failed).
+// readable everywhere) or 3 (only secondary uploads failed). The daemon runs it too, with
+// ARCHIVER_KIT_TRY_LOCK set, when a storage missing the kit is reachable again: then it exits
+// 4 without placing anything while another placement runs.
 func recoveryKitStep() int {
 	r, n := kitRun(config.FromEnvironment())
 	r.Skip = strings.Fields(os.Getenv("ARCHIVER_KIT_SKIP_TARGETS"))
 	r.PrimaryMarker = os.Getenv("ARCHIVER_KIT_PRIMARY_MARKER")
+	r.TryLock = os.Getenv("ARCHIVER_KIT_TRY_LOCK") != ""
 	return kitExecute(r, n)
 }

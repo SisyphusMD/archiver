@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/notify"
 	"github.com/SisyphusMD/archiver/internal/pipeline"
+	"github.com/SisyphusMD/archiver/internal/proc"
 )
 
 // copyWorkers runs one worker per secondary storage (ADR 11).
@@ -32,6 +35,11 @@ type copyWorkers struct {
 	store       *copier.Store
 	workers     []*copier.Worker
 	running     sync.WaitGroup
+	// The recovery kit is placed on a storage that comes back (kitWhenBack): kitLayout is
+	// set when the kit is configured, and kitCancel ends the placement running.
+	kitLayout *layout.Layout
+	kitCancel context.CancelFunc
+	closing   bool // shutdown began: no placement starts
 }
 
 // handle answers the daemon socket.
@@ -63,6 +71,7 @@ func (cw *copyWorkers) handle(cmd string) string {
 		each((*copier.Worker).Wake)
 	case daemon.CmdStop:
 		each((*copier.Worker).Stop)
+		cw.stopKit()
 	case daemon.CmdPause:
 		each((*copier.Worker).Pause)
 	case daemon.CmdResume:
@@ -100,6 +109,10 @@ func (cw *copyWorkers) shutdown() {
 	cw.mu.Lock()
 	for _, x := range cw.workers {
 		x.Stop()
+	}
+	cw.closing = true
+	if cw.kitCancel != nil {
+		cw.kitCancel()
 	}
 	cw.mu.Unlock()
 	cw.running.Wait()
@@ -163,7 +176,8 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 					}
 				})
 			},
-			Save: func(s copier.State) { _ = store.Save(s) },
+			Save:     func(s copier.State) { _ = store.Save(s) },
+			CaughtUp: func() { cw.kitWhenBack(name) },
 		}, saved[name])
 		w.CopyLock = l.CopyLock
 		// The primary too: every copy reads it.
@@ -190,9 +204,83 @@ func (cw *copyWorkers) decide(l layout.Layout) {
 		cw.workers = append(cw.workers, w)
 	}
 	cw.owns, cw.log, cw.store, cw.fingerprint = true, log, store, cfg.StorageFingerprint()
+	if cfg.RecoveryPassword != "" {
+		cw.kitLayout = &l
+	}
 	cw.logDir = l.LogDir()
 	for _, t := range cfg.Targets[1:] {
 		cw.repos = append(cw.repos, copier.RepoDir(l.LogDir(), cfg.Targets[0], t))
+	}
+}
+
+// kitRetryLimit bounds a placement started on recovery well inside the backup's own kit
+// deadline (pipeline.KitDeadline), so a backup waiting on the kit lock behind a stalled one
+// still places its kit in time.
+const kitRetryLimit = 10 * time.Minute
+
+// kitWhenBack places the recovery kit on target, caught up again, when the last placement
+// left it without one: a kit upload that failed or was skipped while the storage was down
+// would otherwise wait for the next backup. The kit step runs as it does in a backup, but
+// leaves out the storages whose workers are failing, and gives way to a placement already
+// running (a backup's, which covers this storage too).
+func (cw *copyWorkers) kitWhenBack(target string) {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+	if cw.kitLayout == nil || cw.closing || cw.kitCancel != nil || slices.Contains(kit.Placed(*cw.kitLayout), target) {
+		return
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return
+	}
+	var skip []string
+	for _, x := range cw.workers {
+		switch x.State().Status {
+		case copier.Retrying, copier.Down:
+			skip = append(skip, x.Target)
+		case copier.Stopped:
+			// A stop that came as this worker caught up: nothing starts after it.
+			if x.Target == target {
+				return
+			}
+		}
+	}
+	sort.Strings(skip)
+	env := append(os.Environ(), "ARCHIVER_KIT_TRY_LOCK=1")
+	if len(skip) > 0 {
+		env = append(env, "ARCHIVER_KIT_SKIP_TARGETS="+strings.Join(skip, " "))
+	}
+	cw.log.Message(logging.Info, target, fmt.Sprintf("%s is caught up and lacks the current recovery kit; placing it now.", target))
+	// Its own process group, so ending it ends the uploads it runs too.
+	p, err := proc.Start(proc.Spec{Path: self, Args: []string{"recovery-kit-step"}, Env: env, Output: os.Stdout, Group: true})
+	if err != nil {
+		cw.log.Message(logging.Warning, target, fmt.Sprintf("Could not start the recovery kit placement: %v", err))
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), kitRetryLimit)
+	cw.kitCancel = cancel
+	cw.running.Add(1)
+	go func() {
+		defer cw.running.Done()
+		select {
+		case <-p.Done():
+		case <-ctx.Done():
+			p.TerminateGroupGrace(10 * time.Second)
+		}
+		_, _ = p.Wait()
+		cw.mu.Lock()
+		cw.kitCancel = nil
+		cw.mu.Unlock()
+		cancel()
+	}()
+}
+
+// stopKit ends a kit placement kitWhenBack started.
+func (cw *copyWorkers) stopKit() {
+	cw.mu.Lock()
+	defer cw.mu.Unlock()
+	if cw.kitCancel != nil {
+		cw.kitCancel()
 	}
 }
 
