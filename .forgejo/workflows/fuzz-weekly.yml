@@ -22,6 +22,6 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=golang
-          GO_IMAGE=golang:1.27.2-trixie@sha256:47667934874913a449b96faa7ef4777fa285d9ec29126ee80ed61c45b7cccf0e
+          GO_IMAGE=golang:1.27.3-trixie@sha256:1896654cfc5c2b5ad74c07f29cb36f5d2d1cbed42e3054070fbfe444e521e83c
           tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct -e FUZZTIME=10m --entrypoint sh "$GO_IMAGE" -c \
             'mkdir /w && cd /w && tar -x && sh tests/fuzz.sh'
