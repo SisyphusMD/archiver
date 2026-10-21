@@ -1,0 +1,154 @@
+Retry a chunk download the network cut off
+
+Why: a restore retried a chunk only on io.ErrUnexpectedEOF, so one "connection reset by peer"
+from B2 aborted a restore 22 hours and 98% into its download (the NAS GARAGE drill, 2026-10-21).
+A reset, an aborted connection, a broken pipe or a timeout says nothing about the chunk, so those
+now retry up to 8 times with a 2s doubling backoff capped at a minute.
+Test: TestChunkDownloadRetriesNetworkErrors
+Upstream: not submitted (upstreaming deferred, 2026-10-11).
+
+--- a/src/duplicacy_chunkoperator.go
++++ b/src/duplicacy_chunkoperator.go
+@@ -5,7 +5,10 @@
+ package duplicacy
+ 
+ import (
++	"errors"
+ 	"io"
++	"net"
++	"syscall"
+ 	"sync"
+ 	"sync/atomic"
+ 	"time"
+@@ -410,6 +413,14 @@
+ 				chunk.Reset(false)
+ 				chunk.isMetadata = task.isMetadata
+ 				continue
++			}
++			if isTransientNetworkError(err) && downloadAttempt < MaxNetworkDownloadAttempts {
++				delay := networkRetryDelay(downloadAttempt)
++				LOG_WARN("DOWNLOAD_RETRY", "Failed to download the chunk %s: %v; retrying in %s", chunkID, err, delay)
++				time.Sleep(delay)
++				chunk.Reset(false)
++				chunk.isMetadata = task.isMetadata
++				continue
+ 			} else {
+ 				completeFailedChunk()
+ 				LOG_WERROR(operator.allowFailures, "DOWNLOAD_CHUNK", "Failed to download the chunk %s: %v", chunkID, err)
+@@ -576,4 +587,31 @@
+ 
+ 	operator.UploadCompletionFunc(chunk, task.chunkIndex, false, chunkSize, chunk.GetLength())
+ 	return true
+-}
+\ No newline at end of file
++}
++
++// A connection reset or timed out mid-download says nothing about the chunk, so it is retried with
++// a backoff instead of failing a restore that may be a day into its download.
++const MaxNetworkDownloadAttempts = 8
++
++func isTransientNetworkError(err error) bool {
++	if err == nil {
++		return false
++	}
++	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) ||
++		errors.Is(err, syscall.ECONNABORTED) || errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ETIMEDOUT) {
++		return true
++	}
++	var netErr net.Error
++	return errors.As(err, &netErr) && netErr.Timeout()
++}
++
++var networkRetryBase = 2 * time.Second
++
++// networkRetryDelay is 2s, 4s, 8s ... capped at a minute: about four minutes over all attempts.
++func networkRetryDelay(attempt int) time.Duration {
++	delay := networkRetryBase << uint(attempt)
++	if delay > time.Minute || delay <= 0 {
++		return time.Minute
++	}
++	return delay
++}
+--- /dev/null
++++ b/src/duplicacy_chunkoperator_retry_test.go
+@@ -0,0 +1,80 @@
++package duplicacy
++
++import (
++	"bytes"
++	"errors"
++	"io"
++	"net"
++	"os"
++	"syscall"
++	"testing"
++	"time"
++)
++
++// cutOffStorage fails the first `failures` downloads the way a dropped connection does.
++type cutOffStorage struct {
++	Storage
++	failures int
++	err      error
++	calls    int
++}
++
++func (storage *cutOffStorage) DownloadFile(threadIndex int, filePath string, chunk *Chunk) error {
++	storage.calls++
++	if storage.calls <= storage.failures {
++		return storage.err
++	}
++	return storage.Storage.DownloadFile(threadIndex, filePath, chunk)
++}
++
++// A chunk download cut off by the network is retried until it arrives, a bounded number of times;
++// an error that says something about the chunk is not retried.
++func TestChunkDownloadRetriesNetworkErrors(t *testing.T) {
++	defer func(base time.Duration) { networkRetryBase = base }(networkRetryBase)
++	networkRetryBase = time.Millisecond
++	setTestingT(t)
++
++	dir := t.TempDir()
++	fileStorage, err := CreateFileStorage(dir, false, 1)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := fileStorage.CreateDirectory(0, "chunks"); err != nil {
++		t.Fatal(err)
++	}
++	config := CreateConfig()
++	config.chunkPool = make(chan *Chunk, 16)
++	content := bytes.Repeat([]byte("archiver"), 4096)
++	chunk := CreateChunk(config, true)
++	chunk.Reset(true)
++	chunk.Write(content)
++	uploader := CreateChunkOperator(config, fileStorage, nil, false, false, 1, false)
++	uploader.UploadCompletionFunc = func(*Chunk, int, bool, int, int) {}
++	uploader.Upload(chunk, 0, false)
++	uploader.WaitForCompletion()
++	uploader.Stop()
++
++	reset := &net.OpError{Op: "read", Net: "tcp", Err: os.NewSyscallError("read", syscall.ECONNRESET)}
++	for _, c := range []struct {
++		name      string
++		err       error
++		failures  int
++		delivered bool
++		calls     int
++	}{
++		{"reset by peer", reset, 4, true, 5},
++		{"timeout", &net.OpError{Op: "read", Net: "tcp", Err: os.NewSyscallError("read", syscall.ETIMEDOUT)}, 1, true, 2},
++		{"unexpected EOF", io.ErrUnexpectedEOF, 2, true, 3},
++		{"never comes back", reset, 1000, false, MaxNetworkDownloadAttempts + 1},
++		{"not a network error", errors.New("403 forbidden"), 1, false, 1},
++	} {
++		storage := &cutOffStorage{Storage: fileStorage, failures: c.failures, err: c.err}
++		operator := CreateChunkOperator(config, storage, nil, false, false, 1, true)
++		downloaded := operator.Download(chunk.GetHash(), 0, false)
++		operator.Stop()
++		delivered := !downloaded.isBroken && bytes.Equal(downloaded.GetBytes(), content)
++		if delivered != c.delivered || storage.calls != c.calls {
++			t.Errorf("%s: delivered %v after %d downloads, want %v after %d", c.name, delivered, storage.calls, c.delivered, c.calls)
++		}
++	}
++}
