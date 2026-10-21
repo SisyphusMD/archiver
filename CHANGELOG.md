@@ -6,10 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0-rc.3] - 2026-10-21
+
 ### Fixed
 
 - A restore, drill or copy no longer fails on one dropped connection: Duplicacy retried a chunk download only on an unexpected end of data, so a single "connection reset by peer" ended a restore from B2 a day and 98% into its download. A reset, an aborted connection, a broken pipe or a timeout is now retried up to 8 times, waiting 2 seconds and doubling up to a minute (Duplicacy patch `download-retry-network.patch`).
 - A recovery kit that missed a secondary (its upload failed, or the storage was down when a backup placed it) now reaches it as soon as that storage's copy worker catches up again, instead of at the next backup, and the "Recovery Kit Failed" incident clears then. Two placements never run at once: they share a lock, and the one started on recovery gives way to a backup's. The kit no longer reports itself "up to date on all storage targets" when it skipped a storage that was down.
+
+### Dependencies
+
+- chore(deps): update golang:1.27.3-trixie docker digest to fbb7ae4
+- chore(deps): update aquasec/trivy docker tag to v0.76.1
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to b4d0cd2
+- chore(deps): update golang:1.27.3-trixie docker digest to 6041061
+- chore(deps): update golang:1.27.3-trixie docker digest to 290a54a
+- chore(deps): update debian docker tag to trixie-20261020-slim
+- chore(deps): update ghcr.io/sigstore/cosign/cosign docker tag to v3.1.4
+- chore(deps): update golang docker tag to v1.27.3
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 3cee4b4
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 6ca79dc
 
 ## [1.0.0-rc.2] - 2026-10-19
 
