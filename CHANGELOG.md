@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+- A restore, drill or copy no longer fails on one dropped connection: Duplicacy retried a chunk download only on an unexpected end of data, so a single "connection reset by peer" ended a restore from B2 a day and 98% into its download. A reset, an aborted connection, a broken pipe or a timeout is now retried up to 8 times, waiting 2 seconds and doubling up to a minute (Duplicacy patch `download-retry-network.patch`).
 - A recovery kit that missed a secondary (its upload failed, or the storage was down when a backup placed it) now reaches it as soon as that storage's copy worker catches up again, instead of at the next backup, and the "Recovery Kit Failed" incident clears then. Two placements never run at once: they share a lock, and the one started on recovery gives way to a backup's. The kit no longer reports itself "up to date on all storage targets" when it skipped a storage that was down.
 
 ## [1.0.0-rc.2] - 2026-10-19
