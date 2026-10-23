@@ -757,7 +757,7 @@ jobs:
           # served (nas services/image-mirror retention). quay garbage-collects a tag's old
           # digest when it re-pushes the tag, so a direct pin 404s before Renovate bumps it.
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:fb3933825a29be3664abbe5634feb68d1686e8a47460fdcfa3a73bd72455e1d7
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:24940638e4abb0edfedc78a680554f316069d0212a00159276759421a059e611
 
           VOL=skopeo-stage-${{ github.run_id }}-${{ matrix.variant }}
           AUTH=skopeo-auth-push-${{ github.run_id }}-${{ matrix.variant }}
@@ -801,7 +801,7 @@ jobs:
           set -euo pipefail
           [ -n "$COSIGN_PRIVATE_KEY" ] && [ -n "$COSIGN_PASSWORD" ] || { echo "::error::COSIGN_PRIVATE_KEY or COSIGN_PASSWORD is not set; not releasing unsigned"; exit 1; }
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:fb3933825a29be3664abbe5634feb68d1686e8a47460fdcfa3a73bd72455e1d7
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:24940638e4abb0edfedc78a680554f316069d0212a00159276759421a059e611
           # renovate: datasource=docker depName=ghcr.io/sigstore/cosign/cosign
           COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d
           repo="${CANDIDATE%:*}"
@@ -830,7 +830,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:fb3933825a29be3664abbe5634feb68d1686e8a47460fdcfa3a73bd72455e1d7
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:24940638e4abb0edfedc78a680554f316069d0212a00159276759421a059e611
           AUTH=skopeo-auth-tag-${{ github.run_id }}-${{ matrix.variant }}
           trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
           bash .forgejo/scripts/registry-auth.sh "$AUTH" "$SKOPEO_IMAGE" forgejo.bryantserver.com=cody:REGISTRY_PAT
@@ -873,7 +873,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:fb3933825a29be3664abbe5634feb68d1686e8a47460fdcfa3a73bd72455e1d7
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:24940638e4abb0edfedc78a680554f316069d0212a00159276759421a059e611
           AUTH=skopeo-auth-nas-${{ github.run_id }}-${{ matrix.variant }}
           trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
           bash .forgejo/scripts/registry-auth.sh "$AUTH" "$SKOPEO_IMAGE" forgejo.bryantserver.com=cody:SRC_PAT "${DST_NAMESPACE%%/*}=cody:DST_PAT"
@@ -902,7 +902,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=quay.io/skopeo/stable
-          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:fb3933825a29be3664abbe5634feb68d1686e8a47460fdcfa3a73bd72455e1d7
+          SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:24940638e4abb0edfedc78a680554f316069d0212a00159276759421a059e611
           AUTH=skopeo-auth-ghcr-${{ github.run_id }}-${{ matrix.variant }}
           trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
           bash .forgejo/scripts/registry-auth.sh "$AUTH" "$SKOPEO_IMAGE" forgejo.bryantserver.com=cody:SRC_PAT "ghcr.io=${{ github.repository_owner }}:DST_PAT"
