@@ -69,6 +69,14 @@ jobs:
       - name: Every download is checksum-verified
         run: bash tests/lint/dockerfile-downloads.sh
 
+  test-pipelines:
+    name: Test pipelines never end in grep -q
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: No piped grep -q under tests/
+        run: bash tests/lint/piped-grep-q.sh
+
   bats:
     name: Bats unit tests
     runs-on: ubuntu-latest
@@ -125,7 +133,7 @@ jobs:
   pr-validate:
     name: PR build & smoke test
     if: github.event_name == 'pull_request'
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -222,7 +230,7 @@ jobs:
 
   integration:
     name: Round-trip + scheduler smoke
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -447,7 +455,7 @@ jobs:
 
   slim:
     name: Slim image (ADR 41)
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -488,7 +496,7 @@ jobs:
 
   integration-host:
     name: Host-driven integration (entrypoint + storage sidecars)
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -551,7 +559,7 @@ jobs:
 
   e2e:
     name: Black-box suite (never-break across versions)
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -597,7 +605,7 @@ jobs:
       max-parallel: 1
       matrix:
         variant: [full, slim]
-    needs: [shellcheck, validate-changelog, dockerfile-downloads, bats, go, fuzz, integration, slim, integration-host, e2e]
+    needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats, go, fuzz, integration, slim, integration-host, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Matrix legs share these outputs and the last one to set an output wins, so each is set

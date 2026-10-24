@@ -154,14 +154,14 @@ kill -9 "$pid"; wait "$pid" 2>/dev/null
 sleep 2
 # Through /proc, not pgrep: the slim image has no procps.
 for c in /proc/[0-9]*/cmdline; do
-  tr '\0' ' ' <"$c" 2>/dev/null | grep -q /restore/hooked/post-restore && die "the restore hook outlived the killed restore"
+  tr '\0' ' ' <"$c" 2>/dev/null | grep /restore/hooked/post-restore >/dev/null && die "the restore hook outlived the killed restore"
 done
 
 log "a restore into a service directory killed mid-hook keeps the restore lock until what its hook runs in the foreground has ended"
 # alive: a process still writing for the hook (its cmdline names the file it appends to).
 alive() {
   for c in /proc/[0-9]*/cmdline; do
-    tr '\0' ' ' <"$c" 2>/dev/null | grep -q 'fg-writes' && [ "$(awk '{print $3}' "${c%cmdline}stat" 2>/dev/null)" != Z ] && return 0
+    tr '\0' ' ' <"$c" 2>/dev/null | grep 'fg-writes' >/dev/null && [ "$(awk '{print $3}' "${c%cmdline}stat" 2>/dev/null)" != Z ] && return 0
   done
   return 1
 }

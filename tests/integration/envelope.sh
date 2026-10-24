@@ -59,8 +59,8 @@ grep -q 'RW-APP-KEY\|RW-KEY-ID' "$HTML" && die "the b2 backup key is on the page
 [ "$(grep -c '<svg' "$HTML")" -ge 3 ] || die "expected a QR code for the password, the sftp key and the b2 key"
 
 log "the PDF is well-formed: every cross-reference offset points at its object"
-head -c 8 "$PDF" | grep -q '^%PDF-1.4' || die "no PDF header"
-tail -c 6 "$PDF" | grep -q '%%EOF' || die "no %%EOF"
+head -c 8 "$PDF" | grep '^%PDF-1.4' >/dev/null || die "no PDF header"
+tail -c 6 "$PDF" | grep '%%EOF' >/dev/null || die "no %%EOF"
 startxref=$(tail -n 2 "$PDF" | head -1)
 [ "$(tail -c +$((startxref + 1)) "$PDF" | head -c 4)" = xref ] || die "startxref does not point at the xref table"
 n=0

@@ -267,7 +267,7 @@ roundtrip() {
       install -m 600 /opt/archiver/keys/id_ed25519 ssh_private_key
     fi
     bash -c "$cmd" >/dev/null
-    openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:$1" -in "archiver-recovery-kit-be-$2.tar.enc" | tar -tf - | grep -q archiver.env
+    openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:$1" -in "archiver-recovery-kit-be-$2.tar.enc" | tar -tf - | grep archiver.env >/dev/null
   ' _ "$RECOVERY" "$name" || die "$name: the envelope's fetch command did not download a decryptable kit"
   log "$name: restore"
   docker exec -e SNAPSHOT_ID="be-$name-fixtures" -e LOCAL_DIR=/data/restore -e OVERWRITE=1 -e HASH_COMPARE=1 -e IGNORE_OWNERSHIP=1 \
@@ -298,7 +298,7 @@ copy_lifecycle() {
 
   log "$name: its copy worker takes a backup's copy and checks it"
   docker exec -d "$P-$name" sh -c 'BACKUP_SCHEDULE="0 3 1 1 *" archiver daemon >/tmp/daemon.out 2>&1'
-  until_in "$name" 60 'archiver status | grep -q "offsite: caught up"' || fail "$name" "worker never caught up"
+  until_in "$name" 60 'archiver status | grep "offsite: caught up" >/dev/null' || fail "$name" "worker never caught up"
   docker exec "$P-$name" bash -c 'sleep 1.1; echo two > /data/fixtures/file.txt; archiver backup >/dev/null 2>&1' || fail "$name" "second backup failed"
   docker exec "$P-$name" grep -q "run in the background" "$lg/archiver.log" || fail "$name" "backup did not hand its copy to the worker"
   until_in "$name" 120 "grep -q 'Copy to offsite storage completed' $lg/copies.log" || { docker exec "$P-$name" tail -n 30 "$lg/copies.log" >&2; die "$name: worker did not copy"; }
@@ -307,10 +307,10 @@ copy_lifecycle() {
   log "$name: a revision local prunes is mirrored off it"
   docker exec -w "$lg/.service-repos/$id-$(printf %s /data/fixtures | sha256sum | cut -c1-12)" -e DUPLICACY_LOCAL_PASSWORD=testpassword -e DUPLICACY_LOCAL_RSA_PASSPHRASE=testpassphrase "$P-$name" \
     duplicacy prune -storage local -id "$id" -r 1 >/dev/null || die "$name: local prune of revision 1 failed"
-  docker exec "$P-$name" bash -c "archiver mirror --dry-run | grep -q 'offsite: delete $id revisions 1\$'" || die "$name: mirroring does not plan the deletion"
+  docker exec "$P-$name" bash -c "archiver mirror --dry-run | grep 'offsite: delete $id revisions 1\$' >/dev/null" || die "$name: mirroring does not plan the deletion"
   docker exec "$P-$name" archiver daemon ctl local-changed >/dev/null || die "$name: could not wake the worker"
   until_in "$name" 120 "grep -q 'Mirror: deleting revisions 1 of $id from offsite storage' $lg/copies.log" || die "$name: revision 1 not mirrored"
-  until_in "$name" 60 "! archiver mirror --dry-run | grep -q 'offsite: delete'" || die "$name: revision 1 still on it after mirroring"
+  until_in "$name" 60 "! archiver mirror --dry-run | grep 'offsite: delete' >/dev/null" || die "$name: revision 1 still on it after mirroring"
 
   log "$name: exhaustive prune, pause, resume and stop reach its worker"
   # The worker may have pruned exhaustively while catching up; wait for the one asked for here.
@@ -318,9 +318,9 @@ copy_lifecycle() {
   before=$(docker exec "$P-$name" grep -c 'Exhaustive prune of offsite storage completed' "$lg/copies.log")
   docker exec "$P-$name" archiver maintenance exhaustive >/dev/null || die "$name: exhaustive maintenance failed"
   until_in "$name" 120 "[ \$(grep -c 'Exhaustive prune of offsite storage completed' $lg/copies.log) -gt $before ]" || die "$name: worker did not prune exhaustively"
-  docker exec "$P-$name" bash -c 'archiver pause | grep -q "Copies to the secondary storages paused"' || die "$name: pause did not reach the worker"
-  docker exec "$P-$name" bash -c 'archiver resume | grep -q "Copies to the secondary storages resumed"' || die "$name: resume did not reach the worker"
-  docker exec "$P-$name" bash -c 'archiver stop | grep -q "Copies to the secondary storages stopped"' || die "$name: stop did not reach the worker"
+  docker exec "$P-$name" bash -c 'archiver pause | grep "Copies to the secondary storages paused" >/dev/null' || die "$name: pause did not reach the worker"
+  docker exec "$P-$name" bash -c 'archiver resume | grep "Copies to the secondary storages resumed" >/dev/null' || die "$name: resume did not reach the worker"
+  docker exec "$P-$name" bash -c 'archiver stop | grep "Copies to the secondary storages stopped" >/dev/null' || die "$name: stop did not reach the worker"
 
   log "$name: restore from it"
   docker exec -e SNAPSHOT_ID="$id" -e STORAGE_TARGET=offsite -e LOCAL_DIR=/data/restore -e OVERWRITE=1 -e HASH_COMPARE=1 -e IGNORE_OWNERSHIP=1 \

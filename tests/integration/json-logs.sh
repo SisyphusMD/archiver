@@ -39,12 +39,12 @@ docker run -d --name "$NAME" --hostname json-host \
   -e SERVICE_DIRECTORIES=/data/app/ \
   -e STORAGE_TARGET_1_NAME=local -e STORAGE_TARGET_1_TYPE=local -e STORAGE_TARGET_1_LOCAL_PATH=/backup-store \
   "$IMAGE" >/dev/null || die "container failed to start"
-for _ in $(seq 1 60); do docker logs "$NAME" 2>&1 | grep -q 'Container is ready' && break; sleep 1; done
+for _ in $(seq 1 60); do docker logs "$NAME" 2>&1 | grep 'Container is ready' >/dev/null && break; sleep 1; done
 docker exec "$NAME" sh -c 'mkdir -p /data/app /backup-store && echo hi > /data/app/f.txt' || die "fixture"
 
 log "a backup's output reaches docker logs as JSON"
 docker exec "$NAME" archiver backup >/dev/null 2>&1 || die "backup failed"
-for _ in $(seq 1 20); do docker logs "$NAME" 2>&1 | grep -q 'session summary' && break; sleep 1; done
+for _ in $(seq 1 20); do docker logs "$NAME" 2>&1 | grep 'session summary' >/dev/null && break; sleep 1; done
 
 LOGS=$(docker logs "$NAME" 2>&1)
 [ -n "$LOGS" ] || die "no logs"

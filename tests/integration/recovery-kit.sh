@@ -91,7 +91,7 @@ archiver backup || die "backup (changed) exited non-zero"
 sum3="$(sha256sum "$KIT" | cut -d' ' -f1)"
 [ "$sum3" != "$sum2" ] || die "kit NOT rewritten after a config change"
 openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:${KIT_PW}" -in "$KIT" | tar -xOf - archiver.env \
-  | grep -q "^DUPLICACY_THREADS=5$" || die "updated kit does not carry the new value"
+  | grep "^DUPLICACY_THREADS=5$" >/dev/null || die "updated kit does not carry the new value"
 
 log "changed MANIFEST: the kit must update too"
 printf '# revised\nservices:\n  archiver:\n    image: archiver:test2\n' >"$DEPLOY_DIR/compose.yaml"
@@ -99,7 +99,7 @@ archiver recovery-kit || die "manual recovery-kit (manifest change) exited non-z
 sum4="$(sha256sum "$KIT" | cut -d' ' -f1)"
 [ "$sum4" != "$sum3" ] || die "kit NOT rewritten after a manifest change"
 openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:${KIT_PW}" -in "$KIT" | tar -xOf - deployment/compose.yaml \
-  | grep -q "archiver:test2" || die "updated kit does not carry the new manifest"
+  | grep "archiver:test2" >/dev/null || die "updated kit does not carry the new manifest"
 
 log "manual 'archiver recovery-kit' with no change: up to date; 'force' re-pushes"
 archiver recovery-kit || die "manual recovery-kit exited non-zero"

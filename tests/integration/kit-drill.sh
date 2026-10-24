@@ -123,7 +123,7 @@ log "backup builds and places kits on the remote primary and SFTP secondary"
 docker exec "$ARCH" archiver backup
 log "both break-glass paths pass"
 docker exec "$ARCH" archiver kit-drill
-docker exec "$ARCH" archiver status --json | grep -q '"kit_drills"' || die "kit drills absent from status"
+docker exec "$ARCH" archiver status --json | grep '"kit_drills"' >/dev/null || die "kit drills absent from status"
 log "save the old kit, refresh after a secret changes, then replace only the SFTP kit with the stale one"
 docker exec "$SFTP" cp /home/backup/upload/archiver-recovery-kit-kd-host.tar.enc /tmp/stale.enc
 docker exec "$ARCH" bash -c 'printf changed-storage-password > /run/secrets/storage_password'
