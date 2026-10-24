@@ -23,6 +23,7 @@
     ".forgejo/workflows/scan-weekly.yml",
     "tests/integration/podman.sh"
   ],
+  "ignorePaths": ["**/node_modules/**", "**/bower_components/**", "**/vendor/**", "**/examples/**"],
   "github-actions": {
     "managerFilePatterns": ["/\\.forgejo/workflows/.+\\.ya?ml$/"]
   },
