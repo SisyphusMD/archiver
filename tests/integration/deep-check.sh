@@ -28,7 +28,7 @@ archiver backup >/tmp/backup.out 2>&1 || { cat /tmp/backup.out; die 'backup fail
 log 'a clean secondary passes without a schedule, and clears progress'
 archiver deep-check offsite >/tmp/deep-check.out 2>&1 || die 'clean offsite failed'
 [ -z "$(find /opt/archiver/logs/.deep-check-repos -name verified_chunks)" ] || die 'completed check kept progress'
-archiver status | grep -q 'Deep check of offsite: passed' || die 'status omitted result'
+archiver status | grep 'Deep check of offsite: passed' >/dev/null || die 'status omitted result'
 
 log 'pause a real check after verification starts; timeout sends SIGINT and saves progress'
 DEEP_CHECK_TIMEOUT=8s archiver deep-check local >/tmp/deep-check.out 2>&1 &

@@ -47,7 +47,7 @@ docker run -d --name "$SFTP" --network "$NET" --network-alias sftp-server \
   -v "$KEYVOL":/home/backup/.ssh/keys:ro "$SFTP_IMAGE" backup::1001::upload >/dev/null || die "sftp server failed to start"
 docker run -d --name "$TOXI" --network "$NET" --network-alias storage-link "$TOXI_IMAGE" >/dev/null || die "toxiproxy failed to start"
 for _ in $(seq 1 30); do toxi create -l 0.0.0.0:2222 -u sftp-server:22 link && break; sleep 1; done
-docker exec "$TOXI" /toxiproxy-cli list 2>/dev/null | grep -q link || die "toxiproxy proxy not created"
+docker exec "$TOXI" /toxiproxy-cli list 2>/dev/null | grep link >/dev/null || die "toxiproxy proxy not created"
 for _ in $(seq 1 30); do docker exec "$SFTP" test -d /home/backup/upload && break; sleep 1; done
 docker exec "$SFTP" sh -c "mkdir -p /home/backup/upload/copy && chown 1001 /home/backup/upload/copy"
 
@@ -85,8 +85,8 @@ log "the kit upload fails while copies work: the kit is on the primary only, and
 docker exec "$SFTP" sh -c "mkdir /home/backup/upload/copy/$KIT && chown 1001 /home/backup/upload/copy/$KIT"
 docker exec "$ARCH" archiver backup >/tmp/kitr-b1.out 2>&1 && { cat /tmp/kitr-b1.out; die "a backup whose kit upload failed exited 0"; }
 docker exec "$ARCH" test -s "/backup-store/$KIT" || die "the kit is not on the primary"
-docker exec "$SFTP" sh -c "ls /home/backup/upload/copy/snapshots/kr-host-app | grep -q ." || die "the copy did not reach the secondary"
-status | grep -q "Recovery Kit Failed" || { status; die "no kit incident for a failed kit upload"; }
+docker exec "$SFTP" sh -c "ls /home/backup/upload/copy/snapshots/kr-host-app | grep . >/dev/null" || die "the copy did not reach the secondary"
+status | grep "Recovery Kit Failed" >/dev/null || { status; die "no kit incident for a failed kit upload"; }
 ran=$(backups)
 
 log "the upload can work again: the daemon's worker catches up and places the kit, the incident clears, no backup runs"
@@ -94,8 +94,8 @@ docker exec "$SFTP" rm -rf "/home/backup/upload/copy/$KIT" || die "could not cle
 docker exec -d "$ARCH" sh -c 'archiver daemon > /tmp/daemon.out 2>&1'
 for _ in $(seq 1 120); do kit_on_secondary && break; sleep 1; done
 kit_on_secondary || { status; die "the kit never reached the secondary"; }
-for _ in $(seq 1 60); do status | grep -q "Recovery Kit Failed" || break; sleep 1; done
-status | grep -q "Recovery Kit Failed" && { status; die "the kit incident stayed open after the kit was placed"; }
+for _ in $(seq 1 60); do status | grep "Recovery Kit Failed" >/dev/null || break; sleep 1; done
+status | grep "Recovery Kit Failed" >/dev/null && { status; die "the kit incident stayed open after the kit was placed"; }
 docker exec "$ARCH" grep -qx "offsite" /opt/archiver/logs/.recovery-kit-state || die "the kit state does not record the secondary"
 [ "$(placements)" -eq 1 ] || die "expected one placement after recovery, logged $(placements)"
 [ "$(backups)" = "$ran" ] || die "a backup ran to place the kit"
@@ -111,8 +111,8 @@ docker exec "$ARCH" sed -i '/^offsite$/d' /opt/archiver/logs/.recovery-kit-state
 toxi toggle link
 docker exec "$ARCH" sh -c 'head -c 100000 /dev/urandom > /data/services/app/second.bin'
 docker exec "$ARCH" archiver daemon ctl local-changed >/dev/null
-for _ in $(seq 1 120); do status | grep -qE "offsite: (retrying|down)" && break; sleep 1; done
-status | grep -qE "offsite: (retrying|down)" || { status; die "the worker never reported its failing copy"; }
+for _ in $(seq 1 120); do status | grep -E "offsite: (retrying|down)" >/dev/null && break; sleep 1; done
+status | grep -E "offsite: (retrying|down)" >/dev/null || { status; die "the worker never reported its failing copy"; }
 docker exec "$ARCH" archiver backup >/tmp/kitr-b2.out 2>&1
 ran=$(backups)
 docker exec "$ARCH" grep -q "Recovery kit: skipping offsite" /opt/archiver/logs/archiver.log || die "the kit step did not skip the down storage"

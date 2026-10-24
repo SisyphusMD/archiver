@@ -169,8 +169,8 @@ done
 OK_LOGS=$(docker logs "$NAME_OK" 2>&1)
 grep -q "Backups scheduled: 0 3 \* \* \*" <<<"$OK_LOGS" || die "backup schedule not announced"
 grep -q "Maintenance scheduled: 0 13 \* \* \*" <<<"$OK_LOGS" || die "maintenance schedule not announced"
-echo "$OK_LOGS" | grep -Eq "archiver daemon: next backup at [0-9-]+T03:00:00" || { echo "$OK_LOGS" | tail -5; die "daemon did not schedule the backup for 03:00"; }
-echo "$OK_LOGS" | grep -Eq "archiver daemon: next maintenance at [0-9-]+T13:00:00" || die "daemon did not schedule maintenance for 13:00"
+echo "$OK_LOGS" | grep -E "archiver daemon: next backup at [0-9-]+T03:00:00" >/dev/null || { echo "$OK_LOGS" | tail -5; die "daemon did not schedule the backup for 03:00"; }
+echo "$OK_LOGS" | grep -E "archiver daemon: next maintenance at [0-9-]+T13:00:00" >/dev/null || die "daemon did not schedule maintenance for 13:00"
 [ "$(docker inspect -f '{{.State.Running}}' "$NAME_OK")" = "true" ] || die "valid-schedule container is not running"
 
 echo "=== INVALID-CRON OK: fail-fast on bad backup/maintenance schedule + CRON_SCHEDULE rename; valid pair registers both jobs ==="

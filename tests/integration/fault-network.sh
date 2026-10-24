@@ -42,7 +42,7 @@ docker run -d --name "$SFTP" --network "$NET" --network-alias sftp-server \
   -v "$KEYVOL":/home/backup/.ssh/keys:ro "$SFTP_IMAGE" backup::1001::upload >/dev/null || die "sftp server failed to start"
 docker run -d --name "$TOXI" --network "$NET" --network-alias storage-link "$TOXI_IMAGE" >/dev/null || die "toxiproxy failed to start"
 for _ in $(seq 1 30); do toxi create -l 0.0.0.0:2222 -u sftp-server:22 link && break; sleep 1; done
-docker exec "$TOXI" /toxiproxy-cli list 2>/dev/null | grep -q link || die "toxiproxy proxy not created"
+docker exec "$TOXI" /toxiproxy-cli list 2>/dev/null | grep link >/dev/null || die "toxiproxy proxy not created"
 
 docker run -d --name "$ARCH" --network "$NET" --hostname fn-host --cap-drop ALL --cap-add DAC_OVERRIDE \
   -v "$KEYVOL":/client-keys:ro \
@@ -87,7 +87,7 @@ docker exec "$ARCH" grep -q '\[ERROR\]' /opt/archiver/logs/archiver.log || die "
 toxi toggle link
 toxi toxic remove -n narrow link
 [ "$(revisions)" -eq 1 ] || die "a backup over a cut link added a revision"
-docker exec "$ARCH" archiver status | grep -q "Backup: not running" || die "the lock was not released after a cut link"
+docker exec "$ARCH" archiver status | grep "Backup: not running" >/dev/null || die "the lock was not released after a cut link"
 
 log "the link back: the next backup completes and restores byte for byte"
 docker exec "$ARCH" archiver backup >/tmp/fnet-b3.out 2>&1 || { cat /tmp/fnet-b3.out; die "the backup after the link returned failed"; }
@@ -108,8 +108,8 @@ docker exec "${COPYENV[@]}" "$ARCH" archiver backup >/tmp/fnet-b4.out 2>&1 || { 
 [ "$(copies)" -eq 1 ] || die "the inline copy did not reach the secondary"
 # Under the daemon a backup hands its copy to the worker, whose retry is what this tests.
 docker exec -d "${COPYENV[@]}" -e BACKUP_SCHEDULE="0 3 1 1 *" "$ARCH" sh -c 'archiver daemon > /tmp/daemon.out 2>&1'
-for _ in $(seq 1 60); do docker exec "${COPYENV[@]}" "$ARCH" archiver status | grep -q "offsite: caught up" && break; sleep 1; done
-docker exec "${COPYENV[@]}" "$ARCH" archiver status | grep -q "offsite: caught up" || die "the worker never reported caught up"
+for _ in $(seq 1 60); do docker exec "${COPYENV[@]}" "$ARCH" archiver status | grep "offsite: caught up" >/dev/null && break; sleep 1; done
+docker exec "${COPYENV[@]}" "$ARCH" archiver status | grep "offsite: caught up" >/dev/null || die "the worker never reported caught up"
 docker exec "$ARCH" sh -c 'head -c 4000000 /dev/urandom > /data/services/app/third.bin'
 toxi toxic add -t bandwidth --upstream -a rate=64 -n narrow link
 docker exec "${COPYENV[@]}" "$ARCH" archiver backup >/tmp/fnet-b5.out 2>&1 || { cat /tmp/fnet-b5.out; die "the local backup handing off its copy failed"; }
@@ -120,7 +120,7 @@ toxi toggle link
 # Duplicacy retries the connection itself (1, 2, 4 ... 128 s), then the worker retries the
 # copy: either way, nothing is reported done while the link is down.
 sleep 20
-docker exec "${COPYENV[@]}" "$ARCH" archiver status | grep -q "offsite: caught up" && die "status reports caught up while the copy's link is cut"
+docker exec "${COPYENV[@]}" "$ARCH" archiver status | grep "offsite: caught up" >/dev/null && die "status reports caught up while the copy's link is cut"
 [ "$(copies)" -eq 1 ] || die "a cut copy added a revision"
 toxi toggle link
 toxi toxic remove -n narrow link
