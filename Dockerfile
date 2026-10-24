@@ -155,9 +155,9 @@ ARG GITHUB_MIRROR=https://github.com
 # is published shortly after each engine release, without checksums; these are the
 # digests of the reviewed archives.
 # renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.+)$
-ENV DOCKER_CLI_VERSION=29.9.1
-ARG DOCKER_CLI_SHA256_AMD64=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57
-ARG DOCKER_CLI_SHA256_ARM64=3e93cc6d1a686456a3b18eefdde26467a837a7a2b257af22e27cba1dbc1b2018
+ENV DOCKER_CLI_VERSION=29.9.2
+ARG DOCKER_CLI_SHA256_AMD64=9ac225999fd5e863f7694c728ef23d480616b1e5639328fa309befd4243d69eb
+ARG DOCKER_CLI_SHA256_ARM64=873b3e0207857c3b2f28392fb922f3ea6efe37620c16d4d4aaf2fef409c90b73
 
 # Pull the docker CLI binary directly from Docker's static archive
 # instead of installing the docker-ce-cli debian package. The apt path
