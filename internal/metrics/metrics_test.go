@@ -30,7 +30,7 @@ func TestRender(t *testing.T) {
 		`archiver_service_last_ok{service="db",directory="/srv/db"} 0`,
 		`archiver_copy_behind_revisions{target="offsite"} 2`,
 		`archiver_copy_failing{target="offsite"} 1`,
-		`archiver_drill_last_ok{storage="local",service="app"} 1`,
+		`archiver_restore_drill_last_ok{storage="local",service="app",drill="default"} 1`,
 		`archiver_incident_open{key="copy:offsite",title="Storage \"Down\""} 1`,
 		"archiver_incidents_open 1\n",
 	} {
@@ -39,7 +39,7 @@ func TestRender(t *testing.T) {
 		}
 	}
 	// A time never reached is left out, a skipped drill too; HELP and TYPE once per name.
-	for _, absent := range []string{`archiver_service_last_success_timestamp_seconds{service="db"`, `service="db"} 0` + "\narchiver_drill", `archiver_drill_last_ok{storage="local",service="db"}`} {
+	for _, absent := range []string{`archiver_service_last_success_timestamp_seconds{service="db"`, `service="db"} 0` + "\narchiver_drill", `archiver_restore_drill_last_ok{storage="local",service="db"`} {
 		if strings.Contains(got, absent) {
 			t.Errorf("unexpected %q", absent)
 		}
@@ -64,7 +64,7 @@ func TestKitDrillMetrics(t *testing.T) {
 	}
 }
 
-func TestRestoreDrillMetricsAndAliases(t *testing.T) {
+func TestRestoreDrillMetrics(t *testing.T) {
 	s := status.Snapshot{Drills: map[string]map[string]lockstate.DrillResult{"local": {"app": {At: 100, Seconds: 2.5, LastSuccess: 90}}}}
 	got := Render(s)
 	for _, sample := range []string{
@@ -72,12 +72,13 @@ func TestRestoreDrillMetricsAndAliases(t *testing.T) {
 		`archiver_restore_drill_last_ok{storage="local",service="app",drill="default"} 0`,
 		`archiver_restore_drill_last_duration_seconds{storage="local",service="app",drill="default"} 2.5`,
 		`archiver_restore_drill_last_success_timestamp_seconds{storage="local",service="app",drill="default"} 90`,
-		`archiver_drill_last_ok{storage="local",service="app"} 0`,
-		`archiver_drill_last_timestamp_seconds{storage="local",service="app"} 100`,
 	} {
 		if !strings.Contains(got, sample) {
 			t.Errorf("missing %s in %s", sample, got)
 		}
+	}
+	if strings.Contains(got, "archiver_drill_last_") {
+		t.Errorf("removed drill metric alias still emitted:\n%s", got)
 	}
 }
 

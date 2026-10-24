@@ -218,11 +218,6 @@ func writeRestoreDrills(w *writer, name string, results map[string]map[string]lo
 			if d.LastSuccess != 0 {
 				w.gauge("archiver_restore_drill_last_success_timestamp_seconds", "When the last restore drill passed.", float64(d.LastSuccess), l...)
 			}
-			if name == "default" {
-				l = l[:4]
-				w.gauge("archiver_drill_last_ok", "Whether the last restore drill of the service on the storage passed.", b2f(d.OK), l...)
-				w.gauge("archiver_drill_last_timestamp_seconds", "When the last restore drill of the service on the storage ran.", float64(d.At), l...)
-			}
 		}
 	}
 

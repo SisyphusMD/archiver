@@ -34,7 +34,7 @@ grep -q '^archiver_service_last_revision{service="app",directory="/data/services
 up=$(sed -n 's/^archiver_service_last_uploaded_bytes{service="app",directory="\/data\/services\/app"} //p' "$PROM")
 python3 -c "import sys; sys.exit(0 if float('$up') > 150000 else 1)" || die "uploaded bytes $up do not reflect the 200 KB backed up"
 
-log "a restore drill records consistent metrics and compatibility aliases"
+log "a restore drill records its metrics"
 archiver drill >/tmp/drill.out 2>&1 || { cat /tmp/drill.out; die "drill failed"; }
 RESTORE_DRILL_GARAGE_SCHEDULE="0 8 * * 6#1" RESTORE_DRILL_GARAGE_SERVICES=app \
   archiver drill --named GARAGE >/tmp/named-drill.out 2>&1 || { cat /tmp/named-drill.out; die "named drill failed"; }
@@ -58,11 +58,7 @@ for drill_name in default GARAGE; do
     grep -q "^archiver_restore_drill_${name}{storage=\"local\",service=\"app\",drill=\"${drill_name}\"} " /tmp/m.txt || die "missing restore drill $drill_name $name on endpoint"
   done
 done
-for name in last_ok last_timestamp_seconds; do
-  old=$(sed -n "s/^archiver_drill_${name}{storage=\"local\",service=\"app\"} //p" /tmp/m.txt)
-  new=$(sed -n "s/^archiver_restore_drill_${name}{storage=\"local\",service=\"app\",drill=\"default\"} //p" /tmp/m.txt)
-  [ -n "$old" ] && [ "$old" = "$new" ] || die "drill alias $name differs"
-done
+grep -q '^archiver_drill_' /tmp/m.txt && die "the removed archiver_drill_* aliases are still served"
 wait_for "[ -f $PROM ]" 10 || die "the daemon did not write the textfile"
 kill $d; wait $d 2>/dev/null
 
