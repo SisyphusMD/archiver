@@ -85,7 +85,7 @@ log "recovery kit is on by default from init: the first backup must place a decr
 EKIT="$STORE/archiver-recovery-kit-$(hostname).tar.enc"
 [ -f "$EKIT" ] || die "no recovery kit on the storage after the first backup"
 openssl enc -d -aes-256-cbc -pbkdf2 -pass "pass:$(cat "$SECRETS_DIR/recovery_password")" -in "$EKIT" \
-  | tar -xOf - archiver.env | grep -q "^STORAGE_TARGET_1_NAME=local$" \
+  | tar -xOf - archiver.env | grep "^STORAGE_TARGET_1_NAME=local$" >/dev/null \
   || die "recovery kit does not decrypt with the init-generated password"
 
 echo "=== INIT-ENVNATIVE OK: decoys ignored, both dirs kept, no bundle written, backup from env-native materials, recovery kit on by default ==="

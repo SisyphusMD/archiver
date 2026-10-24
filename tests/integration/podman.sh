@@ -51,7 +51,7 @@ on_host podman run -d --name archiver --uts private --hostname pd-host \
   -v /run/podman/podman.sock:/var/run/docker.sock \
   -e SERVICE_DIRECTORIES=/data/app -e STORAGE_TARGET_1_NAME=local -e STORAGE_TARGET_1_TYPE=local -e STORAGE_TARGET_1_LOCAL_PATH=/store \
   archiver:test >/dev/null || die "podman run failed"
-wait_for 'on_host podman logs archiver 2>&1 | grep -q "Container is ready"' 60 || die "the container never became ready"
+wait_for 'on_host podman logs archiver 2>&1 | grep "Container is ready" >/dev/null' 60 || die "the container never became ready"
 
 log "the host-side archiver command, through podman"
 on_host podman cp archiver:/opt/archiver/host/archiver /usr/local/bin/archiver || die "podman cp of the host command failed"

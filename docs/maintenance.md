@@ -164,6 +164,5 @@ one lock, so overlapping schedules refuse a second run and retry at its next slo
 All `archiver_restore_drill_*` metrics now include `drill="default"` for the regular
 drill and `drill="GARAGE"` for this example. Existing selectors without a drill label
 still match, but Prometheus sees new series identities; dashboards should filter or
-group by `drill` to avoid combining schedules. The legacy `archiver_drill_*` aliases
-retain their existing default-only series. Status and incidents distinguish named
+group by `drill` to avoid combining schedules. Status and incidents distinguish named
 drills, and `NOTIFY_ON=-drills` suppresses their messages while retaining incidents.

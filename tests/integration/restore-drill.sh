@@ -139,7 +139,7 @@ done
 printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
 archiver drill --named GARAGE >/tmp/named-retry.out 2>&1 || { cat /tmp/named-retry.out; die "named retry"; }
 state 's["named"]["GARAGE"]["results"]["local"]["db"]["ok"] and s["named"]["GARAGE"]["next_storage"] == 1' || die "named retry did not advance"
-archiver status | grep -q 'Restore drills GARAGE' || die "named status missing"
+archiver status | grep 'Restore drills GARAGE' >/dev/null || die "named status missing"
 unset RESTORE_DRILL_EXCLUDE
 
 log "a damaged chunk on the primary fails the drill; the offsite copy still passes"

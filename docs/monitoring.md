@@ -47,7 +47,6 @@ Archiver keeps Prometheus metrics in `logs/archiver.prom`, rewritten after every
 | `archiver_restore_drill_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage`, `service` | Last restore drill: start time, result, duration, and last success |
 | `archiver_deep_check_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage` | Last deep check: start time, result, duration, and last success |
 | `archiver_kit_drill_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage` | Last kit drill: start time, result, duration, and last success |
-| `archiver_drill_last_ok`, `archiver_drill_last_timestamp_seconds` | `storage`, `service` | Deprecated aliases of the corresponding restore drill metrics, retained this release |
 | `archiver_incidents_open`, `archiver_incident_open` | `key`, `title` | Open incidents |
 
 For example, alert when `time() - archiver_service_last_success_timestamp_seconds > 2 * 86400` or `archiver_backup_health > 0`.
