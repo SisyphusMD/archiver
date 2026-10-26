@@ -12,7 +12,7 @@ set -uo pipefail
 
 IMAGE="${IMAGE:?set IMAGE to the archiver image under test}"
 # renovate: datasource=docker depName=quay.io/podman/stable
-PODMAN_IMAGE=image-mirror.lan.bryantserver.com/quay.io/podman/stable:v5.8.9@sha256:55d98815a34b8f796d9bc3130e7ea5eb070ec388c64124d12e876d07df8b7834
+PODMAN_IMAGE=image-mirror.lan.bryantserver.com/quay.io/podman/stable:v5.8.9@sha256:2a53680d80c91a1c7ffd648202846dd78c265a568aa08ef5c815f1ed4cc41a82
 HOST="archiver-podman-$$"
 
 log() { printf '>>> %s\n' "$*"; }
