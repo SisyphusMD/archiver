@@ -2,7 +2,7 @@
 # Docker socket, so the images under test run as siblings, never nested.
 FROM docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb AS dockercli
 
-FROM golang:1.27.3-trixie@sha256:80a86f24490f252511a683a1e1ee4c915b4a96e1f5519530f9ba1fdc9862b7c5
+FROM golang:1.27.3-trixie@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
 WORKDIR /src
 # CI points this at the NAS artifact cache; the default keeps the runner buildable anywhere.

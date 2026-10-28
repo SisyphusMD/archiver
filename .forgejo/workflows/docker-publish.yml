@@ -102,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=golang
-          GO_IMAGE=golang:1.27.3-trixie@sha256:80a86f24490f252511a683a1e1ee4c915b4a96e1f5519530f9ba1fdc9862b7c5
+          GO_IMAGE=golang:1.27.3-trixie@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385
           tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct --entrypoint sh "$GO_IMAGE" -c \
             'mkdir /w && cd /w && tar -x && test -z "$(gofmt -l cmd internal tests/e2e)" && go vet ./... && go test -race -cover ./cmd/... ./internal/...'
       - name: golangci-lint (ADR 39)
@@ -126,7 +126,7 @@ jobs:
         run: |
           set -euo pipefail
           # renovate: datasource=docker depName=golang
-          GO_IMAGE=golang:1.27.3-trixie@sha256:80a86f24490f252511a683a1e1ee4c915b4a96e1f5519530f9ba1fdc9862b7c5
+          GO_IMAGE=golang:1.27.3-trixie@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385
           tar -c . | docker run --rm -i -e GOPROXY=https://artifacts.lan.bryantserver.com/proxy.golang.org,direct -e FUZZTIME=30s --entrypoint sh "$GO_IMAGE" -c \
             'mkdir /w && cd /w && tar -x && sh tests/fuzz.sh'
 
