@@ -1,6 +1,6 @@
 # The cloud storage fakes for tests/integration/backends.sh (ADR 47). Stdlib only, so the
 # build needs no module downloads.
-FROM golang:1.27.3-trixie@sha256:f0778846091f55d452c0aafb693f919e79bfa349d59dc5664d5ccd8924af6d17 AS build
+FROM golang:1.27.3-trixie@sha256:7b072c590a326b9d2a43b165ae247f6e8eafff32e1ad154ab97139e89f053be9 AS build
 WORKDIR /src
 COPY . .
 RUN CGO_ENABLED=0 go vet ./... && CGO_ENABLED=0 go test ./... && CGO_ENABLED=0 go build -o /fakes .
