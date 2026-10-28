@@ -5,6 +5,6 @@ WORKDIR /src
 COPY . .
 RUN CGO_ENABLED=0 go vet ./... && CGO_ENABLED=0 go test ./... && CGO_ENABLED=0 go build -o /fakes .
 
-FROM debian:trixie-20261027-slim@sha256:26c37952d274874448dd4f0943fc79bfb7c3d9cc8c8004ac4dc987489ca931be
+FROM debian:trixie-20261027-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 COPY --from=build /fakes /usr/local/bin/fakes
 ENTRYPOINT ["/usr/local/bin/fakes"]
