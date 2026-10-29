@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 )
@@ -126,5 +127,19 @@ func TestNamedRestoreDrillStatus(t *testing.T) {
 	snapshot := Take(l, func(string) string { return "" }, time.Unix(200, 0))
 	if !snapshot.NamedDrills["GARAGE"].Results["local"]["garage"].OK {
 		t.Fatal("named JSON status missing")
+	}
+}
+
+func TestCheckWaitsForCatchUp(t *testing.T) {
+	now := time.Unix(10*86400, 0)
+	old := now.Unix() - 3*86400
+	copying := copier.State{Status: copier.Copying, Behind: 18, Since: old, CheckEvery: 86400, LastCheck: old}
+	if got := describe(copying, now); !strings.Contains(got, "check waits for the catch-up, last 3d ago") || strings.Contains(got, "OVERDUE") {
+		t.Errorf("copying: %s", got)
+	}
+	idle := copying
+	idle.Status, idle.LastSuccess = copier.Idle, now.Unix()
+	if got := describe(idle, now); !strings.Contains(got, "check OVERDUE") {
+		t.Errorf("idle: %s", got)
 	}
 }
