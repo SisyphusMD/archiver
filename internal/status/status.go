@@ -187,6 +187,9 @@ func describe(s copier.State, now time.Time) string {
 			line += "; LAST CHECK FAILED"
 		case s.LastCheck == 0:
 			line += "; not checked yet"
+		case now.Unix()-s.LastCheck > 2*s.CheckEvery && s.Status == copier.Copying:
+			// A worker checks once idle, so a long catch-up holds its check back by design.
+			line += "; check waits for the catch-up, last " + Age(s.LastCheck, now)
 		case now.Unix()-s.LastCheck > 2*s.CheckEvery:
 			line += "; check OVERDUE, last " + Age(s.LastCheck, now)
 		default:
