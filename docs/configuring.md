@@ -59,7 +59,7 @@ Archiver sends to any combination of Pushover, an [Apprise API](https://github.c
 | `NOTIFY_ON` | Sent |
 |---|---|
 | `failures` (default) | A backup, copy, restore or drill that failed; a refused backup; a storage down or a failed storage check, and its recovery |
-| `problems` | Also warning signs, such as a mirror pass refused for deleting too much |
+| `problems` | Also warning signs, such as a mirror pass refused for deleting too much, or a backup that uploaded far more than usual (at least four times the median of the service's last seven, and over 20 GiB more), which usually means its files moved to other paths and stopped deduplicating |
 | `everything` | Also routine news: backup and maintenance completed, a run paused, resumed or stopped |
 
 `NOTIFY_ON` sets every destination; `PUSHOVER_NOTIFY_ON`, `APPRISE_NOTIFY_ON` and `NTFY_NOTIFY_ON` override it for one (for example `failures` to your phone, `everything` to ntfy). Log levels (INFO, WARNING, ERROR) are about log lines and do not decide notifications.

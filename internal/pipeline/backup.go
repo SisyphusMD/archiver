@@ -1420,12 +1420,17 @@ func (b *Backup) record(dir, result string, began time.Time) {
 		s.Services = map[string]lockstate.ServiceResult{}
 	}
 	r := s.Services[dir]
+	var noted func()
 	now := time.Now()
 	r.LastAttempt, r.Result, r.Seconds = now.Unix(), result, int64(now.Sub(began).Seconds())
 	if result == hooks.Success {
 		r.LastSuccess = now.Unix()
 		st := b.stats[dir]
 		r.Revision, r.Uploaded = st.revision, st.uploaded
+		spike, median := uploadSpike(r.Recent, st.uploaded)
+		r.Recent = append(r.Recent, st.uploaded)
+		r.Recent = r.Recent[max(0, len(r.Recent)-uploadHistory):]
+		noted = func() { b.noteUpload(dir, spike, st.uploaded, median) }
 		if url, err := b.cfg.Targets[0].URL(); err == nil {
 			s.Primary = url
 		}
@@ -1434,6 +1439,9 @@ func (b *Backup) record(dir, result string, began time.Time) {
 	err = lockstate.WriteBackupState(path, s)
 	// Notifying can take a minute; a stop or another service must not wait on it.
 	b.mu.Unlock()
+	if noted != nil {
+		noted()
+	}
 	// Unrecorded, an old success would stand in for this outcome: its own incident, failing.
 	if err != nil {
 		b.log.Message(logging.Warning, filepath.Base(dir), "Could not record the backup for backup health: "+err.Error())
@@ -1441,6 +1449,55 @@ func (b *Backup) record(dir, result string, began time.Time) {
 		return
 	}
 	b.notify.Clear("backup-state:"+dir, "Backup Health Recorded", "Backup results for "+dir+" are recorded again.")
+}
+
+// uploadHistory is how many successful backups' uploads a service keeps, and
+// uploadHistoryMin how many it needs before a jump counts.
+const (
+	uploadHistory    = 7
+	uploadHistoryMin = 3
+	// spikeFactor and spikeFloor make a jump: several times the usual upload, and enough
+	// bytes that a small service's noise never counts.
+	spikeFactor = 4
+	spikeFloor  = 20 << 30
+)
+
+// uploadSpike reports whether uploaded is far above the median of recent, the uploads
+// before it. A service's files moving to other paths (a changed filter or mount) stops
+// deduplication: every file is new, the whole service uploads again, and every copy then
+// carries it too, silently, because the backup still succeeds.
+func uploadSpike(recent []int64, uploaded int64) (bool, int64) {
+	if len(recent) < uploadHistoryMin {
+		return false, 0
+	}
+	sorted := slices.Clone(recent)
+	slices.Sort(sorted)
+	median := (sorted[(len(sorted)-1)/2] + sorted[len(sorted)/2]) / 2
+	return uploaded >= spikeFactor*median && uploaded-median > spikeFloor, median
+}
+
+// noteUpload logs and notifies an upload spike, and clears it once uploads are normal.
+func (b *Backup) noteUpload(dir string, spike bool, uploaded, median int64) {
+	name := filepath.Base(dir)
+	if !spike {
+		b.notify.Clear("upload-spike:"+dir, "Backup Size Normal", fmt.Sprintf("The %s backup uploaded %s, a usual amount again.", name, humanBytes(uploaded)))
+		return
+	}
+	msg := fmt.Sprintf("The %s backup uploaded %s, against a usual %s. If its files moved to other paths (a changed filter, mount or hook), nothing deduplicated and every copy will carry the whole service again.", name, humanBytes(uploaded), humanBytes(median))
+	b.log.Message(logging.Warning, name, msg)
+	b.notify.Raise("upload-spike:"+dir, notify.Problem, "Unusually Large Backup", msg)
+}
+
+// humanBytes is n in binary units, as duplicacy prints them.
+func humanBytes(n int64) string {
+	f, unit := float64(n), "B"
+	for _, u := range []string{"KiB", "MiB", "GiB", "TiB"} {
+		if f < 1024 {
+			break
+		}
+		f, unit = f/1024, u
+	}
+	return strconv.FormatFloat(f, 'f', 1, 64) + " " + unit
 }
 
 // startPlain runs a program with its output passed through, not logged: the recovery-kit

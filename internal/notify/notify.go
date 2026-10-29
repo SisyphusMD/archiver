@@ -40,9 +40,9 @@ func (k Kind) String() string {
 func KindOf(title string) Kind {
 	switch title {
 	case "Backup Complete", "Maintenance Complete", "Restore Drill Complete", "Backup Paused", "Backup Resumed",
-		"Backup Stopped", "Maintenance Stopped":
+		"Backup Stopped", "Maintenance Stopped", "Backup Size Normal":
 		return Routine
-	case "Mirror Refused", "Envelope Out of Date", "Envelope Check Due":
+	case "Mirror Refused", "Envelope Out of Date", "Envelope Check Due", "Unusually Large Backup":
 		return Problem
 	}
 	return Failure
