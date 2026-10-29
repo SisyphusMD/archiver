@@ -15,6 +15,9 @@ type ServiceResult struct {
 	Seconds     int64  `json:"seconds,omitempty"`
 	Revision    int    `json:"revision,omitempty"` // the last successful backup's
 	Uploaded    int64  `json:"uploaded,omitempty"` // bytes the last successful backup uploaded
+	// Recent is what the last few successful backups uploaded, oldest first, which a
+	// sudden jump is measured against.
+	Recent []int64 `json:"recent_uploaded,omitempty"`
 }
 
 // BackupState is each service's last backup (logs/.backup-state.json), by its absolute

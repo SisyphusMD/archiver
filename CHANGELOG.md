@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- An "Unusually Large Backup" problem notification and log warning when a service's backup uploads at least four times the median of its last seven and over 20 GiB more, the sign of files that moved to other paths and stopped deduplicating; it clears with a recovery notice once uploads are normal again.
+
 ### Removed
 
 - The deprecated restore drill metric aliases `archiver_drill_last_ok` and `archiver_drill_last_timestamp_seconds`. Use `archiver_restore_drill_last_ok` and `archiver_restore_drill_last_timestamp_seconds` with `drill="default"`.

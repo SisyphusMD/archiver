@@ -159,13 +159,13 @@ func TestKindsReachDestinations(t *testing.T) {
 		{&Pushover{URL: srv.URL + "/problems"}, "problems"},
 		{&Pushover{URL: srv.URL + "/everything"}, "everything"},
 	}}
-	for _, title := range []string{"Backup Complete", "Mirror Refused", "Storage Down", "Something New"} {
+	for _, title := range []string{"Backup Complete", "Mirror Refused", "Unusually Large Backup", "Storage Down", "Something New"} {
 		n.Send(title, "m")
 	}
 	want := map[string][]string{
 		"/failures":   {"Storage Down", "Something New"},
-		"/problems":   {"Mirror Refused", "Storage Down", "Something New"},
-		"/everything": {"Backup Complete", "Mirror Refused", "Storage Down", "Something New"},
+		"/problems":   {"Mirror Refused", "Unusually Large Backup", "Storage Down", "Something New"},
+		"/everything": {"Backup Complete", "Mirror Refused", "Unusually Large Backup", "Storage Down", "Something New"},
 	}
 	for path, titles := range want {
 		if strings.Join(got[path], ",") != strings.Join(titles, ",") {
