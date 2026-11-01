@@ -321,6 +321,10 @@ jobs:
         run: |
           docker run -i --rm --hostname rc-host --cap-drop ALL --cap-add DAC_OVERRIDE \
             --entrypoint bash roundtrip:local -s < tests/integration/restore-commands.sh
+      - name: archiver forget removes a retired service's snapshots everywhere, never a configured one's
+        run: |
+          docker run -i --rm --hostname fg-host --cap-drop ALL --cap-add DAC_OVERRIDE \
+            --entrypoint bash roundtrip:local -s < tests/integration/forget.sh
       - name: Restore drills restore, verify and rotate; a damaged chunk fails one (ADR 28)
         run: |
           docker run -i --rm --hostname rd-host --cap-drop ALL --cap-add DAC_OVERRIDE \

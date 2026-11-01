@@ -542,7 +542,7 @@ func (b *Backup) processService(dir string) (ok, stop bool) {
 	if abs, err := filepath.Abs(dir); err == nil {
 		dir = abs
 	}
-	name := filepath.Base(dir)
+	name := config.ServiceName(dir)
 	log := func(level, msg string) { b.log.Message(level, name, msg) }
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		log(logging.Error, fmt.Sprintf("Failed to change to %s. Continuing.", dir))

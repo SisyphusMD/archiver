@@ -26,6 +26,7 @@ var completions = map[string][]string{
 	"health":           {"--backups"},
 	"migrate":          {"hooks"},
 	"mirror":           {"--dry-run", "--allow-large"},
+	"forget":           {"--yes"},
 	"recovery-kit":     {"force"},
 	"envelope":         {"confirm"},
 	"restore":          nil,

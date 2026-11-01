@@ -66,6 +66,7 @@ archiver restore           # Restore data from backup (interactive)
 archiver auto-restore      # Restore one snapshot from backup (non-interactive, env-driven)
 archiver auto-restore-all  # Restore every service in one pass (non-interactive)
 archiver snapshot-exists   # Check if a snapshot exists on any storage target
+archiver forget NAME... [--yes]  # Delete a retired service's snapshots from every storage (maintenance.md, "Retiring a service")
 archiver migrate hooks [DIR...]  # Convert service-backup-settings.sh into executable hooks
 archiver recovery-kit [force]  # Upload the encrypted recovery kit to every storage target now
 archiver envelope [DIR]    # Write the printable break-glass envelope (PDF + HTML; default /opt/archiver/envelope)
