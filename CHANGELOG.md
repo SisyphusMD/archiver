@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The break-glass envelope PDF stays on one sheet when it runs a few lines over: with three storages (local, B2 and an SFTP key with the full-access warning) its last line spilled onto a second page. Its spacing tightens just enough to fit; the text, and so the fingerprint of a confirmed envelope, is unchanged.
+
 ## [1.0.0-rc.4] - 2026-11-01
 
 ### Fixed

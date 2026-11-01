@@ -64,9 +64,8 @@ func (p *Page) PDF() ([]byte, error) {
 			return nil, ErrUnprintable
 		}
 	}
-	r := &renderer{}
-	r.newPage()
-	for _, e := range p.Elements {
+	kinds, texts := make([]string, len(p.Elements)), make([]string, len(p.Elements))
+	for i, e := range p.Elements {
 		text := e.Text
 		if e.Kind == "qr" {
 			m, err := qrModules(text)
@@ -79,9 +78,24 @@ func (p *Page) PDF() ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		r.element(e.Kind, t)
+		kinds[i], texts[i] = e.Kind, t
 	}
-	return r.document(), nil
+	layout := func(k float64) *renderer {
+		r := &renderer{k: k}
+		r.newPage()
+		for i := range kinds {
+			r.element(kinds[i], texts[i])
+		}
+		return r
+	}
+	// A page that runs a few lines over is laid out again with its spacing tightened, so the
+	// envelope stays one sheet; one that needs more than that keeps its spacing.
+	for _, k := range []float64{1, 0.95, 0.9, 0.85} {
+		if r := layout(k); len(r.pages) == 1 {
+			return r.document(), nil
+		}
+	}
+	return layout(1).document(), nil
 }
 
 func isControl(r rune) bool { return r < 0x20 || r == 0x7F || (r >= 0x80 && r < 0xA0) }
@@ -93,6 +107,7 @@ const (
 // renderer lays out elements top to bottom. A qr floats at the right of its block: the lines
 // after it wrap beside it until they pass its bottom, and the next block starts below it.
 type renderer struct {
+	k       float64 // vertical spacing scale: every advance down the page is multiplied by it
 	pages   []*bytes.Buffer
 	y       float64
 	fbottom float64 // the float's bottom; top+1 when there is none
@@ -109,10 +124,13 @@ func (r *renderer) newPage() {
 
 // need starts a new page unless h points fit above the bottom margin.
 func (r *renderer) need(h float64) {
-	if r.y-h < bottom {
+	if r.y-h*r.k < bottom {
 		r.newPage()
 	}
 }
+
+// down moves h points (scaled) down the page.
+func (r *renderer) down(h float64) { r.y -= h * r.k }
 
 // right is the right edge for a line at the current y, short of a float beside it.
 func (r *renderer) right() float64 {
@@ -164,7 +182,7 @@ func (r *renderer) lines(font string, size, lead, charw float64, s string) {
 	i := 0
 	for {
 		r.need(lead)
-		r.y -= lead
+		r.down(lead)
 		width := int((r.right() - left) / charw)
 		line := ""
 		for i < len(ws) {
@@ -195,7 +213,7 @@ func (r *renderer) lines(font string, size, lead, charw float64, s string) {
 func (r *renderer) exact(font string, size, lead, charw float64, s string) {
 	for {
 		r.need(lead)
-		r.y -= lead
+		r.down(lead)
 		width := int((r.right() - left) / charw)
 		n := min(width, len(s))
 		r.text(font, size, left, s[:n])
@@ -238,33 +256,33 @@ func (r *renderer) element(kind, s string) {
 	switch kind {
 	case "title":
 		r.lines("F1", 16, 20, 9.2, s)
-		r.y -= 2
+		r.down(2)
 	case "sub":
 		r.lines("F3", 8.5, 11, 4.5, s)
-		r.y -= 4
+		r.down(4)
 	case "h":
 		r.clear()
 		r.need(30)
-		r.y -= 6
+		r.down(6)
 		r.lines("F1", 11, 14, 6.4, s)
 	case "p":
 		r.lines("F3", 9.5, 12, 4.95, s)
-		r.y -= 2
+		r.down(2)
 	case "m", "cmd":
 		r.exact("F2", 8.5, 10.5, 5.1, s)
 	case "warn":
 		edge := r.right()
 		ls := wrap(s, int((edge-left-8)/5.6))
 		r.need(float64(len(ls))*12 + 8)
-		r.y -= 4
+		r.down(4)
 		boxTop := r.y
 		for _, l := range ls {
-			r.y -= 12
+			r.down(12)
 			r.text("F1", 9.5, left+4, l)
 		}
-		r.y -= 4
+		r.down(4)
 		fmt.Fprintf(r.out(), "1.2 w %.1f %.1f %.1f %.1f re S\n", left, r.y, edge-left, boxTop-r.y)
-		r.y -= 2
+		r.down(2)
 	case "qr":
 		rows := strings.Split(s, "|")
 		cols := len(rows[0])
@@ -273,7 +291,9 @@ func (r *renderer) element(kind, s string) {
 			mod = 150 / float64(len(rows))
 		}
 		size := float64(len(rows)) * mod
-		r.need(size + 4)
+		if r.y-size-4 < bottom { // a QR code keeps its size
+			r.newPage()
+		}
 		r.fleft = rightEdge - float64(cols)*mod
 		var b strings.Builder
 		b.WriteString("0 g\n")
@@ -301,15 +321,15 @@ func (r *renderer) element(kind, s string) {
 		_, _ = fmt.Sscanf(count, "%d", &n)
 		for range n {
 			r.need(18)
-			r.y -= 18
+			r.down(18)
 			fmt.Fprintf(r.out(), "0.6 w %.1f %.1f m %.1f %.1f l S\n", left, r.y, rightEdge, r.y)
 		}
 	case "rule":
 		r.clear()
 		r.need(14)
-		r.y -= 8
+		r.down(8)
 		fmt.Fprintf(r.out(), "0.8 w %.1f %.1f m %.1f %.1f l S\n", left, r.y, rightEdge, r.y)
-		r.y -= 2
+		r.down(2)
 	}
 }
 
