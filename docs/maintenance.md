@@ -52,6 +52,17 @@ When copy workers run (a schedule and at least one secondary), maintenance keeps
 
 Each worker keeps a small repository in `logs/.copy-repos/` whose cache holds Duplicacy's pending fossil collections; mount the logs directory so they survive container restarts (otherwise their chunks wait for the next exhaustive prune).
 
+### Retiring a service
+
+Removing a service from `SERVICE_DIRECTORIES` stops its backups but keeps its snapshots on every storage for good: prune never deletes a snapshot ID's newest revision, and passes over an ID with no new revision in seven days, and mirroring leaves alone an ID the primary has none of. `archiver doctor` lists such snapshot IDs. To delete one everywhere:
+
+```bash
+docker exec -it archiver archiver forget oldservice   # or the whole ID, <hostname>-oldservice
+docker exec archiver archiver maintenance exhaustive  # frees its chunks
+```
+
+`forget` lists what each storage holds of those IDs and asks before deleting (`--yes` skips the question). It deletes their snapshot files, primary first, and refuses a name still in `SERVICE_DIRECTORIES` (a directory not mounted right now included). A revision a copy or restore is reading at that moment is left alone; run it again once that ends. The chunks only those snapshots used go in the next exhaustive prunes, in Duplicacy's two steps, so a backup running meanwhile is never harmed; on secondaries, each copy worker runs its exhaustive prune once caught up. The deletion cannot be undone.
+
 ## Checking a deployment (`archiver doctor`)
 
 `docker exec archiver archiver doctor` checks the whole deployment in one pass and prints a line per check, `OK`, `WARN` or `FAIL`, saying what to do about anything wrong (exit 1 on any failure). It never creates a storage or writes data to one (it reads one small file to prove the RSA key decrypts it):
@@ -59,7 +70,7 @@ Each worker keeps a small repository in `logs/.copy-repos/` whose cache holds Du
 - **Configuration and secrets:** every setting and required secret, the RSA private key decrypting with `rsa_passphrase` and matching `public.pem`, the recovery kit password, and the notification destinations (`--notify` sends each a test).
 - **Storages:** each reachable with its credentials and holding a Duplicacy storage that opens with the storage password, whose data decrypts with the mounted RSA key (checked on the smallest file up to 64 MB). A storage that does not exist yet is reported, never created.
 - **Container:** the capabilities, the logs directory being a mounted volume (its state survives a recreate only then), free space for logs and the drill directory, the service directories, and the hooks (executable, and safe to run).
-- **Freshness:** each service's newest revision on every storage (flagged when older than twice `BACKUP_SCHEDULE`'s interval), the copy workers, the recovery kit on every storage, the envelope, and the last restore drill.
+- **Freshness:** each service's newest revision on every storage (flagged when older than twice `BACKUP_SCHEDULE`'s interval), snapshots of services no longer configured (see [Retiring a service](#retiring-a-service)), the copy workers, the recovery kit on every storage, the envelope, and the last restore drill.
 
 Run it after setting up or changing a deployment, and after restoring one.
 

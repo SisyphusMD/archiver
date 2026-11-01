@@ -21,6 +21,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/copier"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/envelope"
+	"github.com/SisyphusMD/archiver/internal/forget"
 	"github.com/SisyphusMD/archiver/internal/hooks"
 	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
@@ -286,7 +287,7 @@ func (e Env) container(r *report, cfg *config.Config) []string {
 	}
 	var names []string
 	for _, d := range dirs {
-		name := filepath.Base(d)
+		name := config.ServiceName(d)
 		names = append(names, name)
 		if id := e.Hostname + "-" + name; !config.ValidSnapshotID(id) {
 			r.bad("%s: its snapshot ID '%s' may contain only letters, digits, '_' and '-' (a Duplicacy rule), so it is never backed up; rename the directory or the host", name, id)
@@ -340,6 +341,17 @@ func (e Env) freshness(r *report, cfg *config.Config, services []string, snaps m
 					r.wrn("%s on '%s' is at revision %d, behind the primary's %d: its copies have not caught up", id, t.Name, info.Revision, p.Revision)
 				}
 			}
+		}
+	}
+
+	configured := forget.Configured(cfg)
+	for _, t := range cfg.Targets {
+		ids := make([]string, 0, len(snaps[t.StorageName()]))
+		for id := range snaps[t.StorageName()] {
+			ids = append(ids, id)
+		}
+		if gone := forget.Orphans(ids, e.Hostname, configured); len(gone) > 0 {
+			r.wrn("'%s' keeps snapshots no configured service backs up, which no prune ever removes: %s. If they are this host's old services, 'archiver forget %s' removes them", t.Name, strings.Join(gone, ", "), strings.Join(gone, " "))
 		}
 	}
 

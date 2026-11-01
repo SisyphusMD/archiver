@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -262,3 +263,12 @@ func HasMeta(s string) bool { return hasMeta(s) }
 // Unescape removes a pattern's backslash escapes, as expansion does to a path it uses
 // literally (tenant\-one is the directory tenant-one).
 func Unescape(s string) string { return unescape(s) }
+
+// ServiceName is the name a service directory backs up under (its snapshot ID is the host
+// and this): the base name of its absolute path, so "." is the working directory's name.
+func ServiceName(dir string) string {
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	return filepath.Base(dir)
+}

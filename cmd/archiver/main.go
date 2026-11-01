@@ -20,12 +20,15 @@ import (
 	"github.com/SisyphusMD/archiver/internal/config"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/doctor"
+	"github.com/SisyphusMD/archiver/internal/forget"
 	"github.com/SisyphusMD/archiver/internal/health"
 	"github.com/SisyphusMD/archiver/internal/hooks"
+	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logview"
 	"github.com/SisyphusMD/archiver/internal/metrics"
+	"github.com/SisyphusMD/archiver/internal/pipeline"
 	"github.com/SisyphusMD/archiver/internal/restore"
 	"github.com/SisyphusMD/archiver/internal/resume"
 	"github.com/SisyphusMD/archiver/internal/runlock"
@@ -151,6 +154,9 @@ func main() {
 	}
 	if len(os.Args) == 2 && os.Args[1] == "recovery-kit-step" {
 		os.Exit(recoveryKitStep())
+	}
+	if len(os.Args) >= 2 && os.Args[1] == "forget" {
+		os.Exit(forgetCommand(os.Args[2:]))
 	}
 	if len(os.Args) >= 2 && os.Args[1] == "mirror" {
 		os.Exit(mirrorCommand(os.Args[2:]))
@@ -330,6 +336,57 @@ func mirrorCommand(args []string) int {
 		}
 	}
 	return rc
+}
+
+// forgetCommand runs `archiver forget NAME... [--yes]`: it deletes the snapshots of services
+// this host no longer backs up from every storage.
+func forgetCommand(args []string) int {
+	yes := false
+	var names []string
+	bad := false
+	for _, a := range args {
+		switch {
+		case a == "--yes":
+			yes = true
+		case strings.HasPrefix(a, "-"):
+			bad = true
+		default:
+			names = append(names, a)
+		}
+	}
+	if bad || len(names) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: archiver forget NAME... [--yes]")
+		return 2
+	}
+	cfg, _, err := config.Load(config.FromEnvironment(), os.Environ())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "archiver:", err)
+		return 1
+	}
+	l := layout.Default()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return forget.Run(forget.Env{
+		Ctx:      ctx,
+		Cfg:      cfg,
+		Hostname: pipeline.Hostname(os.Getenv),
+		InUseDir: l.InUseDir(),
+		Out:      os.Stdout,
+		In:       os.Stdin,
+		Terminal: interactive(),
+		List: func(t config.Target, path string) ([]string, error) {
+			return kit.ListDir(ctx, l, "", t, path)
+		},
+		Remove: func(t config.Target, path string) error {
+			return kit.RemoveDir(ctx, l, "", t, path)
+		},
+	}, names, yes)
+}
+
+// interactive says whether stdin is a terminal a person can answer at.
+func interactive() bool {
+	fi, err := os.Stdin.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
 // noteDrillSchedule records when drills were first scheduled, so the healthcheck can tell

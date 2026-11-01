@@ -105,6 +105,26 @@ func TestDoctorFindsProblems(t *testing.T) {
 	}
 }
 
+// Snapshots of a service no longer configured are named, with the command that removes them;
+// a healthy deployment has none (TestDoctorHealthy) and another host's IDs are not this one's.
+func TestDoctorFindsForgottenServices(t *testing.T) {
+	f := newFixture(t)
+	f.env.Probe = func(config.Target) (map[string]restore.SnapshotInfo, error) {
+		now := f.env.Now()
+		return map[string]restore.SnapshotInfo{"h-app": {Revision: 7, Created: now}, "h-old": {Revision: 3, Created: now}, "vps-web": {Revision: 9, Created: now}}, nil
+	}
+	if code := Run(f.env); code != 0 {
+		t.Fatalf("exit %d:\n%s", code, f.out.String())
+	}
+	out := f.out.String()
+	if !strings.Contains(out, "configured service backs up, which no prune ever removes: h-old.") || !strings.Contains(out, "'archiver forget h-old'") {
+		t.Errorf("h-old not reported:\n%s", out)
+	}
+	if strings.Contains(out, "vps-web") {
+		t.Errorf("another host's ID reported:\n%s", out)
+	}
+}
+
 func TestUnderMount(t *testing.T) {
 	info := "22 1 0:21 / / rw - overlay overlay rw\n30 22 8:1 /srv/archiver /opt/archiver rw - ext4 /dev/sda1 rw\n31 22 8:1 /x /data/my\\040dir rw - ext4 /dev/sda1 rw\n"
 	for dir, want := range map[string]bool{"/opt/archiver/logs": true, "/opt/archiverx": false, "/var/log": false, "/data/my dir/logs": true} {

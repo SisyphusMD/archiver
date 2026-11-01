@@ -8,7 +8,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/entrypoint"
 )
 
-const usageText = `Usage: archiver {backup|maintenance|drill|deep-check|kit-drill|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|completion|help}
+const usageText = `Usage: archiver {backup|maintenance|drill|deep-check|kit-drill|doctor|notify test|recover|stop|pause|resume|logs|status [--json]|health --backups|migrate hooks|mirror|forget|recovery-kit|envelope|restore|auto-restore|auto-restore-all|snapshot-exists|init|healthcheck|completion|help}
 Note:
   backup runs the backup pipeline (hooks -> backup -> copies); add --detach to run it in the background.
   maintenance runs per-storage check + prune now (normally scheduled via MAINTENANCE_SCHEDULE); 'maintenance exhaustive' forces the full-listing prune.
@@ -24,6 +24,7 @@ Note:
   stop takes an optional target (backup|maintenance|drill|deep-check|all, default all) and --immediate.
   resume may be used in combination with logs.
   mirror --dry-run shows what the copy workers' next mirror pass would delete on each secondary; mirror --allow-large lets that pass exceed the cap.
+  forget NAME... [--yes] deletes the snapshots of services this host no longer backs up from every storage (a service name or a whole snapshot ID); 'maintenance exhaustive' then frees their chunks.
   migrate hooks [DIR...] converts each service's service-backup-settings.sh into executable pre-backup/post-backup hooks and a filters file.
   recovery-kit uploads the encrypted recovery kit to every storage target; 'recovery-kit force' re-uploads even if unchanged.
   envelope [DIR] writes the printable break-glass envelope (default /opt/archiver/envelope); 'envelope confirm' records it as printed.

@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- `archiver forget NAME...` deletes a retired service's snapshots from every storage, and `archiver doctor` warns about snapshot IDs of this host that no configured service backs up. Nothing removed them before: prune never deletes an ID's newest revision and ignores IDs with no new revision in seven days, so a removed service's backups stayed on every storage for good.
+
 - An "Unusually Large Backup" problem notification and log warning when a service's backup uploads at least four times the median of its last seven and over 20 GiB more, the sign of files that moved to other paths and stopped deduplicating; it clears with a recovery notice once uploads are normal again.
 
 ### Changed

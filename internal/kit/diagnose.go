@@ -19,18 +19,12 @@ import (
 // It returns "" when it finds nothing wrong.
 func Diagnose(l layout.Layout, rclone string, t config.Target) string {
 	r := &Run{Layout: l, Rclone: rclone}
-	settings, dir, err := r.remote(context.Background(), t)
+	env, dir, err := r.remoteEnv(context.Background(), t)
 	if err != nil {
 		return fmt.Sprintf("Storage '%s' (%s) cannot be reached: %v.", t.Name, t.Type, err)
 	}
-	env := append(os.Environ(), "RCLONE_CONFIG_KIT_TYPE="+settings["TYPE"])
-	for k, v := range settings {
-		if k != "TYPE" {
-			env = append(env, "RCLONE_CONFIG_KIT_"+k+"="+v)
-		}
-	}
 	stat := exec.Command(r.rclone(), "--config", os.DevNull, "lsjson", "--stat", "--contimeout", "15s", "--timeout", "1m", "--retries", "1",
-		"KIT:"+strings.TrimSuffix(dir, "/"))
+		"KIT:"+dir)
 	stat.Env = env
 	out, err := stat.CombinedOutput()
 	if err == nil {
@@ -101,6 +95,21 @@ func HasFile(l layout.Layout, rclone string, t config.Target, name string) error
 // statDeadline bounds a look at a storage, both requests together.
 const statDeadline = 2 * time.Minute
 
+// remoteEnv is rclone's environment reaching t as the remote KIT:, and t's directory on it.
+func (r *Run) remoteEnv(ctx context.Context, t config.Target) ([]string, string, error) {
+	settings, dir, err := r.remote(ctx, t)
+	if err != nil {
+		return nil, "", err
+	}
+	env := append(os.Environ(), "RCLONE_CONFIG_KIT_TYPE="+settings["TYPE"])
+	for k, v := range settings {
+		if k != "TYPE" {
+			env = append(env, "RCLONE_CONFIG_KIT_"+k+"="+v)
+		}
+	}
+	return env, strings.TrimSuffix(dir, "/"), nil
+}
+
 func statOn(ctx context.Context, l layout.Layout, rclone string, t config.Target, name string) error {
 	// An overall deadline, setting up the remote included (an SFTP host key scan, OneDrive's
 	// token), and one low-level retry: --timeout is only an idle timeout, and a storage
@@ -108,15 +117,9 @@ func statOn(ctx context.Context, l layout.Layout, rclone string, t config.Target
 	ctx, cancel := context.WithTimeout(ctx, statDeadline)
 	defer cancel()
 	r := &Run{Layout: l, Rclone: rclone}
-	settings, dir, err := r.remote(ctx, t)
+	env, dir, err := r.remoteEnv(ctx, t)
 	if err != nil {
 		return err
-	}
-	env := append(os.Environ(), "RCLONE_CONFIG_KIT_TYPE="+settings["TYPE"])
-	for k, v := range settings {
-		if k != "TYPE" {
-			env = append(env, "RCLONE_CONFIG_KIT_"+k+"="+v)
-		}
 	}
 	stat := func(path string) (string, error) {
 		c := exec.CommandContext(ctx, r.rclone(), "--config", os.DevNull, "lsjson", "--stat", "--contimeout", "15s", "--timeout", "1m",
