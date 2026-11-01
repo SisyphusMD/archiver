@@ -59,7 +59,7 @@ archiver doctor >/tmp/doc 2>&1
 
 log "the exhaustive prune collects its chunks, and the rest still restores"
 archiver maintenance exhaustive >/tmp/m 2>&1 || { cat /tmp/m; die "exhaustive maintenance failed"; }
-find "$STORE/chunks" -name '*.fsl' | grep -q . || { cat /tmp/m; die "the exhaustive prune turned no chunk into a fossil"; }
+[ -n "$(find "$STORE/chunks" -name '*.fsl' -print -quit)" ] || { cat /tmp/m; die "the exhaustive prune turned no chunk into a fossil"; }
 SNAPSHOT_ID="$HOST-app" LOCAL_DIR=/data/r archiver auto-restore >/tmp/out 2>&1 || { cat /tmp/out; die "restore of app failed"; }
 grep -q "app data" /data/r/file.txt || die "app did not restore"
 archiver forget old --yes >/tmp/out 2>&1 || { cat /tmp/out; die "a second forget failed"; }
