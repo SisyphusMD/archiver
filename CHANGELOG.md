@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0-rc.4] - 2026-11-01
+
 ### Fixed
 
 - `archiver recover` creates each service directory with the owner and mode it had, which the recovery kit now records in `services.json`: a snapshot holds a directory's contents but not the directory itself, so a recovered service directory used to be root's (a vps service needing uid 1000 would not start). The kit is re-uploaded once to add the record; older kits recover as before.
@@ -23,6 +25,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Removed
 
 - The deprecated restore drill metric aliases `archiver_drill_last_ok` and `archiver_drill_last_timestamp_seconds`. Use `archiver_restore_drill_last_ok` and `archiver_restore_drill_last_timestamp_seconds` with `drill="default"`.
+
+### Dependencies
+
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to ad1d2e2
+- chore(deps): update quay.io/podman/stable:v5.8.9 docker digest to 940f7a9
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to e946ec3
+- chore(deps): update quay.io/podman/stable:v5.8.9 docker digest to bda3649
+- chore(deps): update debian:trixie-20261027-slim docker digest to f6b08b0
+- chore(deps): update golang:1.27.3-trixie docker digest to c65ecfe
+- chore(deps): update golang:1.27.3-trixie docker digest to 80a86f2
+- chore(deps): update golang:1.27.3-trixie docker digest to 7b072c5
+- chore(deps): update golang:1.27.3-trixie docker digest to f077884
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 16feeb1
+- chore(deps): update debian docker tag to trixie-20261027-slim
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to f701019
+- chore(deps): update quay.io/podman/stable:v5.8.9 docker digest to 854d173
+- chore(deps): update golang:1.27.3-trixie docker digest to c124b9a
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to e1fcbe2
+- chore(deps): update quay.io/podman/stable:v5.8.9 docker digest to 2a53680
+- fix(deps): update module github.com/aptible/supercronic to v0.2.51
+- chore(deps): update quay.io/podman/stable docker tag to v5.8.9
+- chore(deps): update docker docker tag to v29.9.2
+- chore(deps): update debian docker tag to trixie-20261020-slim
+- chore(deps): docker CLI 29.9.2 archive checksums (Renovate cannot bump them)
+- chore(deps): update docker/login-action action to v4.7.0
+- chore(deps): update dependency moby/moby to v29.9.2
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 2494063
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to fb39338
 
 ## [1.0.0-rc.3] - 2026-10-21
 
