@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `archiver recover` creates each service directory with the owner and mode it had, which the recovery kit now records in `services.json`: a snapshot holds a directory's contents but not the directory itself, so a recovered service directory used to be root's (a vps service needing uid 1000 would not start). The kit is re-uploaded once to add the record; older kits recover as before.
+
 ### Added
 
 - An "Unusually Large Backup" problem notification and log warning when a service's backup uploads at least four times the median of its last seven and over 20 GiB more, the sign of files that moved to other paths and stopped deduplicating; it clears with a recovery notice once uploads are normal again.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -32,6 +33,9 @@ func (r *Run) payload(dir string, s *config.Settings) (string, error) {
 		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "RECREATE.txt"), []byte(r.recreateNotes(s)), 0o644); err != nil { //nolint:gosec // G306: not a secret: state or notes meant to be readable
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(dir, ServicesFile), r.serviceOwners(s), 0o644); err != nil { //nolint:gosec // G306: not a secret: owners and modes
 		return "", err
 	}
 	if err := copyVisibleContext(r.context(), r.deploymentDir(), filepath.Join(dir, "deployment")); err != nil {
@@ -271,33 +275,8 @@ func (r *Run) recreateNotes(s *config.Settings) string {
 	w("")
 	w("Facts this deployment depended on:")
 	w("  - hostname: %s   (keep it: snapshot IDs and this kit's filename derive from it)", r.Hostname)
-	// Each service's directory, so a recovery restores exactly these and to where they
-	// were: a snapshot ID cannot say which host owns it when one host's name prefixes
-	// another's, nor which of two globs a name came from. Only services a backup accepts
-	// (a valid snapshot ID); a literal path is listed even while it is not mounted, so a
-	// service missing for a moment does not drop out of the recovery. One per line, so a
-	// directory may hold spaces.
-	sdirs, _ := s.Get("SERVICE_DIRECTORIES")
-	found, unmatched := config.ExpandServiceDirectories(strings.Split(sdirs, ":"))
-	for _, u := range unmatched {
-		if !config.HasMeta(u) {
-			found = append(found, config.Unescape(u))
-		}
-	}
-	seen := map[string]bool{}
-	var dirs []string
-	for _, d := range found {
-		// Absolute, as backups resolve a relative entry.
-		if abs, err := filepath.Abs(d); err == nil {
-			d = abs
-		}
-		name := filepath.Base(d)
-		if config.ValidSnapshotID(r.Hostname+"-"+name) && !seen[name] {
-			seen[name] = true
-			dirs = append(dirs, d)
-		}
-	}
-	sort.Strings(dirs)
+	// One per line, so a directory may hold spaces.
+	dirs := r.serviceDirs(s)
 	w("%s", ServicesHeader)
 	for _, d := range dirs {
 		w("      %s", d)
@@ -333,6 +312,68 @@ func (r *Run) recreateNotes(s *config.Settings) string {
 	return b.String()
 }
 
+// serviceDirs is each service's directory, absolute and sorted.
+func (r *Run) serviceDirs(s *config.Settings) []string {
+	// Each service's directory, so a recovery restores exactly these and to where they
+	// were: a snapshot ID cannot say which host owns it when one host's name prefixes
+	// another's, nor which of two globs a name came from. Only services a backup accepts
+	// (a valid snapshot ID); a literal path is listed even while it is not mounted, so a
+	// service missing for a moment does not drop out of the recovery.
+	sdirs, _ := s.Get("SERVICE_DIRECTORIES")
+	found, unmatched := config.ExpandServiceDirectories(strings.Split(sdirs, ":"))
+	for _, u := range unmatched {
+		if !config.HasMeta(u) {
+			found = append(found, config.Unescape(u))
+		}
+	}
+	seen := map[string]bool{}
+	var dirs []string
+	for _, d := range found {
+		// Absolute, as backups resolve a relative entry.
+		if abs, err := filepath.Abs(d); err == nil {
+			d = abs
+		}
+		name := filepath.Base(d)
+		if config.ValidSnapshotID(r.Hostname+"-"+name) && !seen[name] {
+			seen[name] = true
+			dirs = append(dirs, d)
+		}
+	}
+	sort.Strings(dirs)
+	return dirs
+}
+
+// ServiceDir is a service directory's owner and mode, which a snapshot does not hold: it
+// records what is inside the directory, not the directory itself.
+type ServiceDir struct {
+	Dir  string `json:"dir"`
+	UID  int    `json:"uid"`
+	GID  int    `json:"gid"`
+	Mode uint32 `json:"mode"` // permission bits with setuid, setgid and sticky, as chmod takes them
+}
+
+// ServicesFile names the kit's record of the service directories' owners and modes.
+const ServicesFile = "services.json"
+
+// serviceOwners records each service directory that exists, so a recovery onto a fresh host
+// recreates it as it was rather than root's.
+func (r *Run) serviceOwners(s *config.Settings) []byte {
+	out := []ServiceDir{}
+	for _, d := range r.serviceDirs(s) {
+		fi, err := os.Stat(d)
+		if err != nil || !fi.IsDir() {
+			continue
+		}
+		st, ok := fi.Sys().(*syscall.Stat_t)
+		if !ok {
+			continue
+		}
+		out = append(out, ServiceDir{Dir: d, UID: int(st.Uid), GID: int(st.Gid), Mode: st.Mode & 0o7777})
+	}
+	b, _ := json.MarshalIndent(out, "", "  ")
+	return append(b, '\n')
+}
+
 // ServicesHeader opens RECREATE.txt's list of service directories, one per following line
 // indented by six spaces.
 const ServicesHeader = "  - services backed up (one directory per line):"
@@ -359,8 +400,8 @@ func (r *Run) readme() string {
 
 %[2]s is an encrypted snapshot of everything needed to recreate the
 deployment: archiver.env (the non-secret settings), secrets/ (every secret and key file),
-RECREATE.txt (recreation notes), and deployment/ (the deployment manifests, if they were
-mounted). It is refreshed automatically whenever any of that changes.
+RECREATE.txt (recreation notes), services.json (each service directory's owner and mode),
+and deployment/ (the deployment manifests, if they were mounted). It is refreshed automatically whenever any of that changes.
 
 To recover: download the .tar.enc file to any machine and run (it prompts for the recovery
 password, which was displayed at setup and belongs in your password manager):
