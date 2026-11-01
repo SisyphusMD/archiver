@@ -1,6 +1,8 @@
 package restore
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -162,5 +164,36 @@ func TestDirForBashGlob(t *testing.T) {
 func TestDirForEscapedParent(t *testing.T) {
 	if got := dirFor("app", []string{`/srv/tenant\-one/*/`}); got != "/srv/tenant-one/app" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRestoreOwner(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "app")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rec := kit.ServiceDir{Dir: dir, UID: os.Getuid(), GID: os.Getgid(), Mode: 0o1710}
+	b, _ := json.Marshal([]kit.ServiceDir{rec})
+	p := filepath.Join(root, kit.ServicesFile)
+	os.WriteFile(p, b, 0o600)
+	owners := recordedOwners(p)
+	if owners[dir] != rec {
+		t.Fatalf("%+v", owners)
+	}
+	var out bytes.Buffer
+	restoreOwner(&out, owners[dir], true)
+	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o710 || fi.Mode()&os.ModeSticky == 0 || out.Len() != 0 {
+		t.Fatalf("mode %v, out %q", fi.Mode(), out.String())
+	}
+	if len(recordedOwners(filepath.Join(root, "missing"))) != 0 {
+		t.Fatal("a kit without the record has owners")
+	}
+	// A link where the directory should be is left alone.
+	link := filepath.Join(root, "link")
+	os.Symlink(dir, link)
+	restoreOwner(&out, kit.ServiceDir{Dir: link, UID: os.Getuid(), GID: os.Getgid(), Mode: 0o700}, true)
+	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o710 {
+		t.Fatal("followed a link")
 	}
 }

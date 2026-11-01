@@ -355,7 +355,7 @@ func (r *Run) writeState(fp string, names []string) {
 // encrypt writes the payload as one tar, encrypted the way stock `openssl enc -d -aes-256-cbc
 // -pbkdf2` reverses with only the password. The password reaches openssl on fd 3, never argv.
 func (r *Run) encrypt(work, out string) error {
-	members := []string{"archiver.env", "secrets", "RECREATE.txt"}
+	members := []string{"archiver.env", "secrets", "RECREATE.txt", ServicesFile}
 	for _, m := range []string{"deployment", "extra"} {
 		if fi, err := os.Stat(filepath.Join(work, m)); err == nil && fi.IsDir() {
 			members = append(members, m)

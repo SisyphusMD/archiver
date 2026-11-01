@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -97,7 +98,7 @@ func (e *Env) Recover(o RecoverOptions) int {
 	if err := writePrivate(mark, 0o600, strings.NewReader(id+"\n")); err != nil {
 		return fail("%v", err)
 	}
-	for _, name := range []string{"archiver.env", "secrets", "RECREATE.txt", "deployment", "extra"} {
+	for _, name := range []string{"archiver.env", "secrets", "RECREATE.txt", kit.ServicesFile, "deployment", "extra"} {
 		if _, err := os.Stat(filepath.Join(stage, name)); err != nil {
 			continue
 		}
@@ -209,10 +210,23 @@ func (e *Env) Recover(o RecoverOptions) int {
 		}
 	}
 	defer e.release()
+	owners := recordedOwners(filepath.Join(o.Out, kit.ServicesFile))
 	var failed []string
 	for _, p := range plan {
 		fmt.Fprintf(out, "\n=== %s -> %s ===\n", p.id, p.dir)
 		req, code := e.request(p.id, p.dir)
+		// Before the restore, so the restore and its hook see the directory as it was.
+		if _, err := os.Lstat(p.dir); code == OK && !req.dry && os.IsNotExist(err) {
+			if rec, ok := owners[p.dir]; ok {
+				// Parents as a restore makes them, traversable by the directory's owner.
+				if err := os.MkdirAll(p.dir, 0o755); err != nil { //nolint:gosec // G301: its own mode is set next
+					fmt.Fprintf(out, "  WARNING: could not create %s: %v\n", p.dir, err)
+				} else {
+					// Like the restore: no owner without CHOWN and FOWNER (the restore warns).
+					restoreOwner(out, rec, !req.opts.IgnoreOwner && len(missingCaps(e.CapEff)) == 0)
+				}
+			}
+		}
 		req.hook = o.Hook
 		// The revision planned, not whatever is newest where it ends up coming from: a
 		// storage lost since the check must fail the service, not restore an older copy.
@@ -445,6 +459,54 @@ func literal(name string, patterns []string) bool {
 
 // recordedServices is the service directories RECREATE.txt lists; ok is false for a kit
 // made before it listed them.
+// recordedOwners reads the kit's service directory owners and modes, by directory; a kit
+// from before they were recorded has none.
+func recordedOwners(path string) map[string]kit.ServiceDir {
+	out := map[string]kit.ServiceDir{}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return out
+	}
+	var dirs []kit.ServiceDir
+	if json.Unmarshal(b, &dirs) != nil {
+		return out
+	}
+	for _, d := range dirs {
+		out[d.Dir] = d
+	}
+	return out
+}
+
+// restoreOwner gives a service directory recover creates the mode it had, and the owner
+// unless IGNORE_OWNERSHIP said not to. Without CHOWN the restore still stands (it is never
+// refused for that); the owner is only warned of.
+func restoreOwner(out io.Writer, d kit.ServiceDir, owner bool) {
+	if fi, err := os.Lstat(d.Dir); err != nil || !fi.IsDir() {
+		return
+	}
+	// Owner first: a chown may clear the setuid and setgid bits the mode then sets.
+	if owner {
+		if err := os.Lchown(d.Dir, d.UID, d.GID); err != nil {
+			fmt.Fprintf(out, "  WARNING: %s is owned by root; it belonged to %d:%d: %v\n", d.Dir, d.UID, d.GID, err)
+		}
+	}
+	mode := os.FileMode(d.Mode & 0o777)
+	for bit, flag := range map[uint32]os.FileMode{0o4000: os.ModeSetuid, 0o2000: os.ModeSetgid, 0o1000: os.ModeSticky} {
+		if d.Mode&bit != 0 {
+			mode |= flag
+		}
+	}
+	if err := os.Chmod(d.Dir, mode); err != nil {
+		fmt.Fprintf(out, "  WARNING: could not set %s to mode %o: %v\n", d.Dir, d.Mode, err)
+		return
+	}
+	// The kernel drops setgid without a word for a group the process is not in, absent
+	// CAP_FSETID, which the container does not have.
+	if fi, err := os.Stat(d.Dir); err == nil && fi.Mode()&(os.ModePerm|os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != mode {
+		fmt.Fprintf(out, "  WARNING: %s has mode %v, not the recorded %o; set it by hand (chmod %o) if its service needs that\n", d.Dir, fi.Mode(), d.Mode, d.Mode)
+	}
+}
+
 func recordedServices(path string) (dirs []string, ok bool) {
 	b, _ := os.ReadFile(path)
 	lines := strings.Split(string(b), "\n")

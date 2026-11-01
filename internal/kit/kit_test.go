@@ -2,6 +2,7 @@ package kit
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -525,5 +526,35 @@ func TestPlaced(t *testing.T) {
 	r.writeState("v6:abc", nil)
 	if got := Placed(l); len(got) != 0 {
 		t.Fatalf("placed nowhere, read %q", got)
+	}
+}
+
+// A snapshot holds what is inside a service directory, not the directory: the kit records
+// its owner and mode for a recovery onto a fresh host.
+func TestServiceOwnersRecorded(t *testing.T) {
+	f := newFixture(t, 1)
+	app := filepath.Join(f.root, "svc", "app")
+	if err := os.MkdirAll(app, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(app, 0o750|os.ModeSetgid); err != nil {
+		t.Fatal(err)
+	}
+	f.vars["SERVICE_DIRECTORIES"] = app + ":" + filepath.Join(f.root, "svc", "gone")
+	if code := f.execute(); code != OK {
+		t.Fatalf("exit %d: %s", code, f.out.String())
+	}
+	out := filepath.Join(f.root, "out")
+	decrypt(t, f.kit(0), out)
+	b, err := os.ReadFile(filepath.Join(out, ServicesFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dirs []ServiceDir
+	if err := json.Unmarshal(b, &dirs); err != nil {
+		t.Fatal(err)
+	}
+	if len(dirs) != 1 || dirs[0].Dir != app || dirs[0].Mode != 0o2750 || dirs[0].UID != os.Getuid() || dirs[0].GID != os.Getgid() {
+		t.Fatalf("%s", b)
 	}
 }
