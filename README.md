@@ -2,7 +2,7 @@
 
 <p>
   <img src="lib/logos/72x72.png" alt="Logo" align="left" style="margin-right: 10px;">
-  Automated, encrypted, deduplicated backups of your services' directories to local disk and every storage <a href="https://github.com/gilbertchen/duplicacy/tree/v3.2.5">Duplicacy 3.2.5</a> supports: SFTP, BackBlaze B2, S3 and its kin, Azure, Google Cloud Storage and Drive, OneDrive, Dropbox, WebDAV, SMB, Storj and more. It follows the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 backup strategy</a> without the manual configuration.
+  Automated, encrypted, deduplicated backups of your services' directories to local disk and every storage <a href="https://github.com/gilbertchen/duplicacy/tree/v3.3.0">Duplicacy 3.3.0</a> supports: SFTP, BackBlaze B2, S3 and its kin, Azure, Google Cloud Storage and Drive, OneDrive, Dropbox, WebDAV, SMB, Storj and more. It follows the <a href="https://www.backblaze.com/blog/the-3-2-1-backup-strategy/">3-2-1 backup strategy</a> without the manual configuration.
 </p>
 
 > **Primary repository**: This project is developed at [forgejo.bryantserver.com/SisyphusMD/archiver](https://forgejo.bryantserver.com/SisyphusMD/archiver). The GitHub copy is a read-only mirror.
@@ -95,7 +95,7 @@ Older guides: [editing the configuration](docs/guides/configuration/editing-conf
 
 Archiver is free and open-source software licensed under [GNU AGPL-3.0](LICENSE).
 
-Archiver uses the [Duplicacy CLI v3.2.5](https://github.com/gilbertchen/duplicacy/tree/v3.2.5) binary as an external tool. Duplicacy is licensed separately under [its own terms](https://github.com/gilbertchen/duplicacy/blob/v3.2.5/LICENSE.md):
+Archiver uses the [Duplicacy CLI v3.3.0](https://github.com/gilbertchen/duplicacy/tree/v3.3.0) binary as an external tool. Duplicacy is licensed separately under [its own terms](https://github.com/gilbertchen/duplicacy/blob/v3.3.0/LICENSE.md):
 
 - **Free for personal use** and **commercial trials**
 - **Requires a CLI license** for non-trial commercial use ($50/computer/year from [duplicacy.com](https://duplicacy.com/buy.html))

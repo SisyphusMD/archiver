@@ -1,6 +1,6 @@
 package main
 
-// Backblaze B2's native API as Duplicacy (b2api v1) and rclone (v4 authorization, v1 for
+// Backblaze B2's native API as Duplicacy (b2api v4 since 3.3.0) and rclone (v4 authorization, v1 for
 // the rest) call it: buckets, file versions with hide markers, uploads through handed-out
 // upload URLs, and downloads by name (on the account's download host or a user's own, such
 // as a CDN in front of B2) or by file ID. Duplicacy fossilizes a chunk by hiding it and

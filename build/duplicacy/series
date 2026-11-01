@@ -8,5 +8,4 @@ host-keys-append.patch
 filefabric-upload-error.patch
 onedrive-move-retry.patch
 download-retry-network.patch
-dependencies.patch
 highwayhash-arm64.patch

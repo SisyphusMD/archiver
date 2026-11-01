@@ -247,7 +247,7 @@ func (r *Run) one(cfg *config.Config, t config.Target) bool {
 	return result.OK
 }
 
-// Only Duplicacy 3.2.5's CheckSnapshots progress file is forgotten. Its other cache
+// Only Duplicacy's CheckSnapshots progress file is forgotten (the same in 3.2.5 and 3.3.0). Its other cache
 // files are unrelated to skipping verified chunks and may hold fossil collections.
 func clearVerified(repo, storage string) error {
 	err := os.Remove(filepath.Join(repo, ".duplicacy", "cache", storage, "verified_chunks"))
