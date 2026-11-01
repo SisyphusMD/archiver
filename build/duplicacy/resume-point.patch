@@ -1,6 +1,6 @@
 Backup: save the resume point every five minutes, and let incremental backups resume
 
-Why: Duplicacy 3.2.5 saves a resume point only on SIGINT and only for a first backup, so a
+Why: Duplicacy (3.2.5 and 3.3.0) saves a resume point only on SIGINT and only for a first backup, so a
 backup killed or cut off by a power loss starts over and reads and sends every file again
 (ADR 46). The resume point is now saved periodically and used by any backup; chunks a prune
 removed since are checked for first, and the resume point is then not used.
@@ -41,7 +41,7 @@ Upstream: not submitted (upstreaming deferred, 2026-10-11).
 +			if chunkCache[chunkID] {
 +				continue
 +			}
-+			_, exist, _, err := manager.storage.FindChunk(0, chunkID, false)
++			_, exist, _, err := manager.storage.FindChunk(0, chunkID, false, false)
 +			if err != nil || !exist {
 +				LOG_WARN("INCOMPLETE_DISCARD", "The incomplete snapshot can't be used as it contains chunks not in the storage")
 +				incompleteSnapshot = nil
@@ -383,7 +383,7 @@ Upstream: not submitted (upstreaming deferred, 2026-10-11).
 +	}
 +	if pruned {
 +		chunkID := manager.config.GetChunkIDFromHash(saved.UploadedChunkHashes[0])
-+		chunkPath, exist, _, err := storage.FindChunk(0, chunkID, false)
++		chunkPath, exist, _, err := storage.FindChunk(0, chunkID, false, false)
 +		if err != nil || !exist {
 +			t.Fatalf("the first uploaded chunk is not on the storage: %v", err)
 +		}
@@ -527,7 +527,7 @@ Upstream: not submitted (upstreaming deferred, 2026-10-11).
 +	if !preserved {
 +		t.Fatal("the second resume point does not preserve the first attempt's chunk")
 +	}
-+	chunkPath, exist, _, err := storage.FindChunk(0, manager.config.GetChunkIDFromHash(firstChunk), false)
++	chunkPath, exist, _, err := storage.FindChunk(0, manager.config.GetChunkIDFromHash(firstChunk), false, false)
 +	if err != nil || !exist {
 +		t.Fatalf("the first attempt's chunk is not on the storage: %v", err)
 +	}

@@ -150,7 +150,7 @@ STORAGE_TARGET_4_S3_SECRET="secret"
 
 ## Storage types
 
-Every storage Duplicacy 3.2.5 supports is a type (ADR 23). Settings are plain `STORAGE_TARGET_N_<NAME>` variables; secrets are files (`/run/secrets/storage_target_n_<name>`, or `STORAGE_TARGET_N_<NAME>_FILE`). Settings in *italics* are optional; a `_PATH` places the storage in a folder inside its bucket, share or drive.
+Every storage Duplicacy 3.3.0 supports is a type (ADR 23). Settings are plain `STORAGE_TARGET_N_<NAME>` variables; secrets are files (`/run/secrets/storage_target_n_<name>`, or `STORAGE_TARGET_N_<NAME>_FILE`). Settings in *italics* are optional; a `_PATH` places the storage in a folder inside its bucket, share or drive.
 
 | Type | Settings | Secrets | Notes |
 |---|---|---|---|
