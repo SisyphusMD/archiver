@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0-rc.5] - 2026-11-01
+
 ### Changed
 
 - **Duplicacy 3.3.0** (from 3.2.5): every chunk's ID is verified before it is uploaded, B2 storages use Backblaze's v4 API (keys restricted to several buckets work), and its dependencies with known vulnerabilities are upgraded upstream, so `build/duplicacy/dependencies.patch` is dropped (3.3.0 pins the same versions it set). The other patches carry over; `resume-point.patch` follows 3.3.0's new chunk lookup. Existing storages, snapshots and keys are unchanged.
