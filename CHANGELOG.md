@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A secondary's "behind" count follows each backup even while its worker is busy.** A backup that finished during a long mirror or exhaustive prune, a copy, or a closed copy window left `archiver_copy_behind_revisions`, status and backup health at the count from before the backup until the prune ended, so a target could fall hours behind without a copy-lag alert. The worker now recounts from a listing of the primary when a backup wakes it. New metric `archiver_copy_busy_since_timestamp_seconds{target,activity}` says when the current copy, mirror, prune or check started, for alerting on one that runs too long.
+
 ## [1.0.0-rc.5] - 2026-11-01
 
 ### Changed

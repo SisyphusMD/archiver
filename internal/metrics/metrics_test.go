@@ -17,7 +17,7 @@ func TestRender(t *testing.T) {
 			"/srv/app": {LastAttempt: 200, LastSuccess: 200, Result: "success", Seconds: 12, Revision: 7, Uploaded: 4096},
 			"/srv/db":  {LastAttempt: 300, Result: "failed"},
 		},
-		Copies:    map[string]copier.State{"offsite": {Target: "offsite", Behind: 2, FailingSince: 100, LastSuccess: 50}},
+		Copies:    map[string]copier.State{"offsite": {Target: "offsite", Status: copier.Pruning, Since: 120, Behind: 2, FailingSince: 100, LastSuccess: 50}},
 		Drills:    map[string]map[string]lockstate.DrillResult{"local": {"app": {At: 400, OK: true}, "db": {Skipped: true}}},
 		Incidents: map[string]string{"copy:offsite": `Storage "Down"`},
 	}
@@ -30,6 +30,7 @@ func TestRender(t *testing.T) {
 		`archiver_service_last_ok{service="db",directory="/srv/db"} 0`,
 		`archiver_copy_behind_revisions{target="offsite"} 2`,
 		`archiver_copy_failing{target="offsite"} 1`,
+		`archiver_copy_busy_since_timestamp_seconds{target="offsite",activity="pruning"} 120`,
 		`archiver_restore_drill_last_ok{storage="local",service="app",drill="default"} 1`,
 		`archiver_incident_open{key="copy:offsite",title="Storage \"Down\""} 1`,
 		"archiver_incidents_open 1\n",

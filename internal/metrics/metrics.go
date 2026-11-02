@@ -98,6 +98,10 @@ func Render(s status.Snapshot) string {
 		w.gauge("archiver_copy_behind_revisions", "Revisions the secondary is behind the primary.", float64(c.Behind), l...)
 		w.gauge("archiver_copy_failing", "Whether copies to the secondary are failing (retrying or down).", b2f(c.FailingSince != 0 || c.Status == copier.Retrying || c.Status == copier.Down), l...)
 		w.gauge("archiver_copy_held", "Whether the secondary's copy worker waits for its copy window.", b2f(c.HeldUntil != 0), l...)
+		switch c.Status {
+		case copier.Copying, copier.Mirroring, copier.Pruning, copier.Checking:
+			w.gauge("archiver_copy_busy_since_timestamp_seconds", "When the secondary's current copy, mirror, prune or check started.", float64(c.Since), append(l, "activity", c.Status)...)
+		}
 		if c.LastSuccess != 0 {
 			w.gauge("archiver_copy_last_success_timestamp_seconds", "When the secondary last caught up.", float64(c.LastSuccess), l...)
 		}

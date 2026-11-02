@@ -166,9 +166,6 @@ func describe(s copier.State, now time.Time) string {
 		line = "stopped; copies again after the next backup"
 	case copier.Held:
 		line = fmt.Sprintf("waiting for its copy window (%s), which opens %s", s.Window, until(s.HeldUntil, now))
-		if s.Behind > 0 {
-			line += fmt.Sprintf("; %d revisions behind", s.Behind)
-		}
 	case copier.Mirroring:
 		line = "deleting revisions local has pruned, started " + Age(s.Since, now)
 	case copier.Pruning:
@@ -177,6 +174,10 @@ func describe(s copier.State, now time.Time) string {
 		line = "checking, started " + Age(s.Since, now)
 	default:
 		line = s.Status
+	}
+	// Recounted while the worker is busy, so a backup during a long prune shows here.
+	if s.Behind > 0 && s.Status != copier.Copying {
+		line += fmt.Sprintf("; %d revisions behind", s.Behind)
 	}
 	if s.HeldUntil != 0 && s.Status != copier.Held {
 		line += fmt.Sprintf("; held until its copy window (%s) opens %s", s.Window, until(s.HeldUntil, now))
