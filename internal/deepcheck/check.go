@@ -66,6 +66,12 @@ func (r *Run) Execute() int {
 		}
 	}
 	if r.Storage != "" && !selected {
+		// A check of a storage since removed from the configuration has nothing left to resume.
+		if rec, ok := resume.Read(r.Layout.RunRecord("deep-check-" + config.Sanitize(r.Storage))); ok {
+			if _, mine := rec.Services[r.Storage]; mine {
+				_ = os.Remove(r.Layout.RunRecord("deep-check-" + config.Sanitize(r.Storage)))
+			}
+		}
 		fmt.Fprintf(r.Stderr, "%q is not a configured storage\n", r.Storage)
 		return 1
 	}
@@ -105,7 +111,7 @@ func (r *Run) one(cfg *config.Config, t config.Target) bool {
 	if prior, pending := resume.Read(r.Layout.RunRecord("deep-check-" + name)); pending {
 		log.Message(logging.Info, name, "Resuming the deep check started "+logging.Timestamp(prior.Started)+" from its saved verified chunks.")
 	}
-	record, err := resume.Begin(r.Layout.RunRecord("deep-check-"+name), resume.Record{Services: map[string]string{name: resume.Pending}})
+	record, err := resume.Begin(r.Layout.RunRecord("deep-check-"+name), resume.Record{Services: map[string]string{t.Name: resume.Pending}})
 	if err != nil {
 		log.Message(logging.Error, name, err.Error())
 		return false
@@ -219,7 +225,19 @@ func (r *Run) one(cfg *config.Config, t config.Target) bool {
 		stopped = true
 	}
 	result.Seconds = time.Since(began).Seconds()
+	// Stopped for a container shutdown, the check keeps its record and resumes when the container starts (ADR 46).
+	// Any other end clears it, a failed check included: its result stays due for the next slot, and rereading
+	// the storage at every restart would not change what it found.
+	shutdown := stopped && resume.ShuttingDown(r.Layout.ShutdownFlag())
+	if !shutdown {
+		record.End()
+	}
 	switch {
+	case shutdown:
+		r.stopped = true
+		result.Message = "stopped for a container shutdown; resumes when the container starts"
+		_ = lock.Record("stopped")
+		log.Message(logging.Info, name, result.Message)
 	case stopped:
 		r.stopped = true
 		result.Message = "interrupted (stop, timeout or backup); remains due until the next scheduled slot"
@@ -237,7 +255,6 @@ func (r *Run) one(cfg *config.Config, t config.Target) bool {
 		result.OK, result.Message, result.LastSuccess = true, "passed", time.Now().Unix()
 		log.Message(logging.Info, name, "Deep check of storage "+name+" passed.")
 		report(n, name, result)
-		record.End()
 		_ = lock.Record("completed")
 	}
 	if err := save(r.Layout, name, result); err != nil {

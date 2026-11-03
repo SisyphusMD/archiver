@@ -119,6 +119,9 @@ with SIGINT, and retries at its next scheduled slot. Backups never wait for deep
 `DEEP_CHECK_TIMEOUT` defaults to `7d`, enough for a slow full offsite read, and includes
 paused time. Timeout and stop preserve Duplicacy's verified-chunk progress. A crash or
 kill retains the last progress Duplicacy saved, which can lag by up to five minutes.
+A check that a container shutdown, crash or kill ended resumes as soon as the container
+starts again (ADR 46), so an image update mid-check costs minutes, not the month until
+the next slot.
 Any check that finishes, including a failed check, clears only
 `.duplicacy/cache/<storage>/verified_chunks`, so its next complete read starts fresh.
 

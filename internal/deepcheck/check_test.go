@@ -21,7 +21,7 @@ import (
 )
 
 func TestProgressAndIncidents(t *testing.T) {
-	for _, kind := range []string{"pass", "fail", "empty", "timeout", "backup", "signal", "stop", "kill"} {
+	for _, kind := range []string{"pass", "fail", "empty", "timeout", "backup", "signal", "stop", "shutdown", "kill"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
 			l := layout.Layout{Root: root, Lock: filepath.Join(root, "locks")}
@@ -58,7 +58,7 @@ sleep 0.1
 				script += "echo 'Failed to decrypt the chunk " + strings.Repeat("a", 64) + ": damaged'\nexit 1\n"
 			case "empty":
 				script += "echo 'Chunk " + strings.Repeat("b", 64) + " has a size of 0'\nexit 1\n"
-			case "timeout", "backup", "signal", "stop", "kill":
+			case "timeout", "backup", "signal", "stop", "shutdown", "kill":
 				script += "trap 'exit 130' INT\nwhile :; do sleep 0.05; done\n"
 			}
 			if err := os.WriteFile(bin, []byte(script), 0o700); err != nil {
@@ -107,6 +107,13 @@ sleep 0.1
 				if err := os.WriteFile(l.DeepCheckStopFlag("local"), nil, 0o600); err != nil {
 					t.Fatal(err)
 				}
+			case "shutdown":
+				if err := os.WriteFile(l.ShutdownFlag(), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(l.DeepCheckStopFlag("local"), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
 			}
 			var ok bool
 			select {
@@ -152,8 +159,9 @@ sleep 0.1
 				t.Fatal("incident was not raised/cleared")
 			}
 			_, pending := resume.Read(l.RunRecord("deep-check-local"))
-			if pending == ok {
-				t.Fatal("due record was not retained/cleared")
+			// Only a container shutdown leaves the check to resume when the container starts.
+			if pending != (kind == "shutdown") {
+				t.Fatal("resume record was not retained/cleared")
 			}
 		})
 	}
@@ -280,5 +288,39 @@ func TestHoldSurvivesControllerDeath(t *testing.T) {
 			t.Fatal("deep-check run lock not released after child exit")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestRemovedStorageForgetsItsResumeRecord(t *testing.T) {
+	root := t.TempDir()
+	l := layout.Layout{Root: root, Lock: filepath.Join(root, "locks")}
+	secrets := filepath.Join(root, "secrets")
+	for _, dir := range []string{l.LogDir(), l.Lock, secrets, filepath.Join(root, "services", "app")} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, value := range map[string]string{"storage_password": "password1", "rsa_passphrase": "rsa-pass"} {
+		if err := os.WriteFile(filepath.Join(secrets, name), []byte(value), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	vars := map[string]string{
+		"SERVICE_DIRECTORIES":         filepath.Join(root, "services") + "/*/",
+		"STORAGE_TARGET_1_NAME":       "local",
+		"STORAGE_TARGET_1_TYPE":       "local",
+		"STORAGE_TARGET_1_LOCAL_PATH": filepath.Join(root, "store"),
+	}
+	gone := l.RunRecord("deep-check-old_offsite")
+	if _, err := resume.Begin(gone, resume.Record{Services: map[string]string{"old-offsite": resume.Pending}}); err != nil {
+		t.Fatal(err)
+	}
+	var stderr strings.Builder
+	run := &Run{Layout: l, Source: config.Source{Getenv: func(k string) string { return vars[k] }, SecretsDir: secrets}, Storage: "old-offsite", Stdout: io.Discard, Stderr: &stderr}
+	if code := run.Execute(); code == 0 || !strings.Contains(stderr.String(), "not a configured storage") {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	if _, pending := resume.Read(gone); pending {
+		t.Fatal("record of a removed storage kept it resuming at every start")
 	}
 }

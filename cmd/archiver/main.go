@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -250,15 +251,11 @@ func runDaemon(args []string) int {
 	startMetrics(ctx, l)
 	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, interruptedRuns(l), func(j daemon.Job) int {
 		// A fresh process per run, as under cron: each run starts clean.
-		command := j.Command
-		if command == "" && strings.HasPrefix(j.Name, "drill:") {
-			command = "drill"
-			j.Args = []string{"--named", strings.TrimPrefix(j.Name, "drill:")}
+		args := append([]string{j.Command}, j.Args...)
+		if j.Command == "" {
+			args = catchUpArgs(j.Name)
 		}
-		if command == "" {
-			command = j.Name
-		}
-		cmd := exec.Command(selfPath, append([]string{command}, j.Args...)...)
+		cmd := exec.Command(selfPath, args...)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
 			if exit, ok := err.(*exec.ExitError); ok {
@@ -272,8 +269,9 @@ func runDaemon(args []string) int {
 	return 0
 }
 
-// interruptedRuns are the kinds of run (backup, maintenance, drill) whose record the last
-// container left: a crash, a kill or a shutdown ended them, and they run again now (ADR 46).
+// interruptedRuns are the kinds of run (backup, maintenance, drill, deep check) whose record
+// the last container left: a crash, a kill or a shutdown ended them, and they run again now
+// (ADR 46). A deep check resumes from the chunks it already verified.
 func interruptedRuns(l layout.Layout) []string {
 	var kinds []string
 	for _, k := range []string{"backup", "maintenance", "drill", "kit-drill"} {
@@ -284,7 +282,35 @@ func interruptedRuns(l layout.Layout) []string {
 			kinds = append(kinds, k)
 		}
 	}
+	prefix := strings.TrimSuffix(l.RunRecord("deep-check-"), ".json")
+	paths, _ := filepath.Glob(prefix + "*.json")
+	sort.Strings(paths)
+	for _, p := range paths {
+		rec, ok := resume.Read(p)
+		if !ok {
+			continue
+		}
+		// The file carries the sanitized storage name; the record carries the configured one,
+		// which is what the schedule and the deep-check command name it by.
+		name := strings.TrimSuffix(strings.TrimPrefix(p, prefix), ".json")
+		for configured := range rec.Services {
+			name = configured
+		}
+		kinds = append(kinds, "deep-check:"+name)
+	}
 	return kinds
+}
+
+// catchUpArgs is the command line that runs again an interrupted run named as interruptedRuns
+// names it.
+func catchUpArgs(kind string) []string {
+	if name, ok := strings.CutPrefix(kind, "drill:"); ok {
+		return []string{"drill", "--named", name}
+	}
+	if name, ok := strings.CutPrefix(kind, "deep-check:"); ok {
+		return []string{"deep-check", name}
+	}
+	return []string{kind}
 }
 
 // daemonCtl sends one command to a running daemon. With no daemon it exits 1 quietly.

@@ -154,7 +154,8 @@ The Pod lives for the duration of one backup and exits. If the backup fails, the
 Read and verify all referenced chunks on an existing storage (ADR 50). A named storage
 runs without a schedule; with no argument, checks storages with
 `STORAGE_TARGET_N_DEEP_CHECK` set. Gives way to backups and resumes interrupted progress
-at the next scheduled slot. `DEEP_CHECK_TIMEOUT` defaults to seven days. A completed check
+at the next scheduled slot; a check that a container shutdown stopped resumes when the
+container starts. `DEEP_CHECK_TIMEOUT` defaults to seven days. A completed check
 forgets its verified chunks so the next run reads them again. Returns nonzero on failure
 or interruption. `archiver stop deep-check`, `pause`, and `resume` control running checks.
 See [maintenance](maintenance.md#scheduled-deep-storage-checks).

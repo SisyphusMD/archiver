@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+- **A deep check that a container restart stopped resumes when the container starts**, from the chunks it already verified, like interrupted backups, maintenance and drills (ADR 46). It used to stay failed and due until its next scheduled slot, so one image update during the monthly local check left it unverified, and its alert firing, for a month. A completed check, failed or passed, no longer leaves a resume record behind, and a record left by a storage since removed from the configuration is dropped instead of retried at every start.
+- Without schedules, an interrupted named restore drill now runs again at container start; it tried to run `archiver drill:<name>`, which is not a command.
 - **A secondary's "behind" count follows each backup even while its worker is busy.** A backup that finished during a long mirror or exhaustive prune, a copy, or a closed copy window left `archiver_copy_behind_revisions`, status and backup health at the count from before the backup until the prune ended, so a target could fall hours behind without a copy-lag alert. The worker now recounts from a listing of the primary when a backup wakes it. New metric `archiver_copy_busy_since_timestamp_seconds{target,activity}` says when the current copy, mirror, prune or check started, for alerting on one that runs too long.
 
 ## [1.0.0-rc.5] - 2026-11-01
