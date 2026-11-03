@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -270,4 +271,67 @@ func TestCopyRegistersRevisionsInUse(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("still registered after the pass")
+}
+
+// A backup that lands while the target is mirroring counts at once, not when the prune
+// ends: a copy-lag alert must not stay quiet for the hours a prune can take.
+func TestBackupDuringPruneRaisesBehind(t *testing.T) {
+	r := &fakeRunner{local: revisions("nas-app", 1), target: revisions("nas-app", 1), holdCmd: "prune", held: make(chan *fakeCopy, 1)}
+	w, c, _ := upkeepWorker(r, Upkeep{Own: ownApp, Mirror: true})
+	var zeroed atomic.Bool
+	w.Events.Save = func(s State) {
+		if s.Behind == 0 && r.lacks("nas-app:3") && s.Since > t0.Unix() {
+			zeroed.Store(true)
+		}
+	}
+	done := make(chan struct{})
+	defer close(done)
+	go w.Run(done)
+	prune := <-r.held
+	waitFor(t, func() bool { return w.State().Status == Mirroring })
+	r.mu.Lock()
+	r.local["nas-app:2"], r.local["nas-app:3"] = true, true
+	r.mu.Unlock()
+	c.Advance(time.Minute)
+	w.Wake()
+	waitFor(t, func() bool { s := w.State(); return s.Behind == 2 && s.BehindSince == c.Now().Unix() })
+	if s := w.State(); s.Status != Mirroring {
+		t.Fatalf("status %q, want still mirroring", s.Status)
+	}
+	close(prune.release)
+	waitFor(t, func() bool {
+		s := w.State()
+		return s.Status == Idle && s.Behind == 0 && s.BehindSince == 0 && !r.lacks("nas-app:3")
+	})
+	if zeroed.Load() {
+		t.Fatal("the count dropped to 0 before the new revisions were copied")
+	}
+}
+
+// Behind is not recounted for an idle worker: the wake's own pass lists at once.
+func TestIdleWakeLeavesCountToPass(t *testing.T) {
+	r := &fakeRunner{local: revisions("nas-app", 1), target: revisions("nas-app", 1)}
+	w, _, _ := upkeepWorker(r, Upkeep{Own: ownApp})
+	w.pass(w.stops, nil)
+	r.mu.Lock()
+	r.local["nas-app:2"] = true
+	r.mu.Unlock()
+	w.recount()
+	if s := w.State(); s.Behind != 0 {
+		t.Fatalf("idle worker recounted to %d", s.Behind)
+	}
+}
+
+// The listing after a copy clears the count, so the upkeep that follows does not report
+// the copied revisions as still behind.
+func TestCopyThenUpkeepNotBehind(t *testing.T) {
+	r := &fakeRunner{local: revisions("nas-app", 1, 2), target: revisions("nas-app", 1), holdCmd: "prune", held: make(chan *fakeCopy, 1)}
+	w, _, _ := upkeepWorker(r, Upkeep{Own: ownApp, Mirror: true})
+	go w.pass(w.stops, nil)
+	prune := <-r.held
+	if s := w.State(); s.Status != Mirroring || s.Behind != 0 || s.BehindSince != 0 {
+		t.Fatalf("mirroring after the copy with %+v", s)
+	}
+	close(prune.release)
+	waitFor(t, func() bool { return w.State().Status == Idle })
 }

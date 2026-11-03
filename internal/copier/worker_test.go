@@ -78,6 +78,8 @@ type fakeRunner struct {
 	block    bool // copies wait for release or Terminate
 	commands [][]string
 	failCmd  map[string]error // by command name (prune, check)
+	holdCmd  string           // the next command by this name waits for release, sent on held
+	held     chan *fakeCopy
 }
 
 func (r *fakeRunner) Start(args ...string) (Copy, error) {
@@ -95,13 +97,27 @@ func (r *fakeRunner) Start(args ...string) (Copy, error) {
 			}
 		}
 	}
+	hold := r.holdCmd != "" && args[0] == r.holdCmd
+	if hold {
+		r.holdCmd = ""
+	}
 	r.mu.Unlock()
 	c := &fakeCopy{r: r, release: make(chan struct{}), result: err, noApply: true}
-	close(c.release)
+	if hold {
+		r.held <- c
+	} else {
+		close(c.release)
+	}
 	return c, nil
 }
 
 func (r *fakeRunner) Prepare(context.Context) error { return nil }
+
+func (r *fakeRunner) lacks(rev string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return !r.target[rev]
+}
 
 func (r *fakeRunner) Revisions(ctx context.Context, storage string) (map[string]bool, error) {
 	r.mu.Lock()

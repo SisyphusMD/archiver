@@ -159,6 +159,11 @@ type Worker struct {
 	held               *inuse.Holding // local revisions this pass's copy still reads; only the Run goroutine touches it
 	listedNewest       map[string]int // the newest revision of each ID at the last local listing, likewise
 	allowLarge         bool           // the next mirror pass may delete more than half of an ID (ADR 12's override)
+	// The last pass listing, for recount: local's revisions, those the target lacked, how
+	// many wakes had come before it, and a count of listings so a stale recount is dropped.
+	lastLocal, lastMissing map[string]bool
+	listWakes, listings    int
+	recounting, recountDue bool
 	// Probe checks the target can be reached before each pass, ended by ctx; nil skips it.
 	Probe func(ctx context.Context) error
 	// Window holds the worker outside the target's copy window (ADR 44); nil never holds.
@@ -208,6 +213,71 @@ func (w *Worker) Wake() {
 	select {
 	case w.wake <- struct{}{}:
 	default:
+	}
+	go w.recount()
+}
+
+// RecountTimeout bounds recount's listing of the primary.
+var RecountTimeout = 10 * time.Minute
+
+// recount refreshes how far behind the target is while the worker is too busy to list it:
+// a mirror or exhaustive prune can run for hours, and a copy or a closed window as long,
+// and until the next pass lists, Behind would stay what it was before the backup. Only the
+// primary is listed. The target gains this deployment's snapshots only from this worker's
+// copies, so it still lacks what the last listing found missing, and everything local has
+// gained since.
+func (w *Worker) recount() {
+	w.mu.Lock()
+	if w.recounting {
+		w.recountDue = true
+		w.mu.Unlock()
+		return
+	}
+	w.recounting = true
+	for {
+		w.recountDue = false
+		listings, last, missing := w.listings, w.lastLocal, w.lastMissing
+		// An idle, retrying or stopped worker lists at once on this wake, and a check ends
+		// for it; paused, nothing starts.
+		busy := w.state.Status == Mirroring || w.state.Status == Pruning || w.state.Status == Copying || w.state.Status == Held
+		if last == nil || !busy || w.paused {
+			w.recounting = false
+			w.mu.Unlock()
+			return
+		}
+		w.mu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), RecountTimeout)
+		local, err := w.Runner.Revisions(ctx, w.Primary)
+		cancel()
+		if err != nil {
+			w.log("WARNING", fmt.Sprintf("Could not recount what %s storage lacks (%v); it is counted at its next pass.", w.Target, err))
+			w.mu.Lock()
+			w.recounting = false
+			w.mu.Unlock()
+			return
+		}
+		behind := 0
+		for r := range local {
+			if missing[r] || !last[r] {
+				behind++
+			}
+		}
+		w.mu.Lock()
+		if w.listings == listings && behind != w.state.Behind {
+			w.state.Behind = behind
+			if behind == 0 {
+				w.state.BehindSince = 0
+			} else if w.state.BehindSince == 0 {
+				w.state.BehindSince = w.Clock.Now().Unix()
+			}
+			w.save()
+		}
+		// Checked and cleared under one lock, so a wake arriving as this ends is not lost.
+		if !w.recountDue {
+			w.recounting = false
+			w.mu.Unlock()
+			return
+		}
 	}
 }
 
@@ -399,6 +469,9 @@ func (w *Worker) save() {
 // missing lists what the target lacks, and registers those revisions as in use on local so
 // no local prune deletes them under the copy (ADR 19).
 func (w *Worker) missing(ctx context.Context) ([]string, error) {
+	w.mu.Lock()
+	wakes := w.wakes
+	w.mu.Unlock()
 	local, err := w.listLocal(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing %s: %w", w.Primary, err)
@@ -414,6 +487,19 @@ func (w *Worker) missing(ctx context.Context) ([]string, error) {
 		}
 	}
 	sort.Strings(out)
+	lacking := make(map[string]bool, len(out))
+	for _, r := range out {
+		lacking[r] = true
+	}
+	w.mu.Lock()
+	w.lastLocal, w.lastMissing, w.listWakes = local, lacking, wakes
+	w.listings++
+	// Upkeep after a catch-up must not carry the count from before its copy.
+	if len(out) == 0 && w.state.Behind != 0 {
+		w.state.Behind, w.state.BehindSince = 0, 0
+		w.save()
+	}
+	w.mu.Unlock()
 	if w.held != nil {
 		if err := w.held.Narrow(w.revisions(w.Primary, out)); err != nil {
 			return nil, fmt.Errorf("registering revisions in use: %w", err)
@@ -623,9 +709,13 @@ func (w *Worker) run(ctx context.Context, stops int, status string, behind int, 
 			return err, false
 		}
 		w.current, w.checking, wakes = c, check, w.passWakes
-		w.state.Status, w.state.Since, w.state.Behind = status, w.Clock.Now().Unix(), behind
-		if behind > 0 && w.state.BehindSince == 0 {
-			w.state.BehindSince = w.state.Since
+		w.state.Status, w.state.Since = status, w.Clock.Now().Unix()
+		// Upkeep leaves the count alone: recount may have raised it meanwhile.
+		if status == Copying {
+			w.state.Behind = behind
+			if behind > 0 && w.state.BehindSince == 0 {
+				w.state.BehindSince = w.state.Since
+			}
 		}
 		w.save()
 		w.mu.Unlock()
@@ -649,7 +739,12 @@ func (w *Worker) caughtUp(stops int) {
 		return
 	}
 	now := w.Clock.Now()
-	w.state.Status, w.state.Since, w.state.Behind, w.state.BehindSince = Idle, now.Unix(), 0, 0
+	w.state.Status, w.state.Since = Idle, now.Unix()
+	// A backup since the listing is not on the target yet: its count stands until the pass
+	// its wake queued lists again.
+	if w.wakes == w.listWakes {
+		w.state.Behind, w.state.BehindSince = 0, 0
+	}
 	w.state.LastSuccess, w.state.FailingSince, w.state.NextRetry, w.state.LastError = now.Unix(), 0, 0, ""
 	w.state.DownSince = 0
 	w.attempt = 0

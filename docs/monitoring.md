@@ -43,12 +43,13 @@ Archiver keeps Prometheus metrics in `logs/archiver.prom`, rewritten after every
 | `archiver_service_last_attempt_timestamp_seconds`, `_last_duration_seconds`, `_last_ok` | `service`, `directory` | Its last backup: when it ended, how long it took, whether it succeeded |
 | `archiver_service_last_revision`, `_last_uploaded_bytes` | `service`, `directory` | The revision and the bytes uploaded by its last successful backup |
 | `archiver_copy_behind_revisions`, `_failing`, `_last_success_timestamp_seconds`, `_last_check_timestamp_seconds` | `target` | Each secondary's copy worker |
+| `archiver_copy_busy_since_timestamp_seconds` | `target`, `activity` | When the worker's current copy, mirror, prune or check started (`copying`, `mirroring`, `pruning`, `checking`); absent while idle |
 | `archiver_storage_last_check_timestamp_seconds`, `_last_prune_timestamp_seconds` | `storage` | Maintenance's last successful check and prune |
 | `archiver_restore_drill_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage`, `service` | Last restore drill: start time, result, duration, and last success |
 | `archiver_deep_check_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage` | Last deep check: start time, result, duration, and last success |
 | `archiver_kit_drill_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage` | Last kit drill: start time, result, duration, and last success |
 | `archiver_incidents_open`, `archiver_incident_open` | `key`, `title` | Open incidents |
 
-For example, alert when `time() - archiver_service_last_success_timestamp_seconds > 2 * 86400` or `archiver_backup_health > 0`.
+For example, alert when `time() - archiver_service_last_success_timestamp_seconds > 2 * 86400` or `archiver_backup_health > 0`. `archiver_copy_behind_revisions` counts a backup at once even while the worker is busy mirroring, pruning or copying, and `time() - archiver_copy_busy_since_timestamp_seconds > 6 * 3600` finds a prune or copy that has run unusually long.
 
 Drill results use 1 for a pass and 0 for failure or interruption. Last success timestamps are omitted until a pass has been recorded. Set `NOTIFY_ON=failures,-drills` when metrics alerts handle restore drills, deep checks and kit drills; incidents, health and metrics remain recorded.
