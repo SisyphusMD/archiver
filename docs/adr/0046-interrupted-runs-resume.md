@@ -31,7 +31,7 @@ Option 3.
 - Runs in progress are recorded on the logs volume. On start, Archiver first runs the
   post-backup hook of each service interrupted between its hooks
   (ARCHIVER_BACKUP_RESULT=interrupted), then re-runs the interrupted backup at once,
-  unfinished services first; interrupted maintenance and drills run again; leftover
-  drill copies are deleted.
+  unfinished services first; interrupted maintenance, drills and deep checks run again
+  (a deep check from the chunks it already verified); leftover drill copies are deleted.
 - Fault-injection tests (ADR 31) kill the container mid-backup, mid-hook and mid-copy and
   prove the run resumes, uploads nothing twice, and cleans up after its hooks.

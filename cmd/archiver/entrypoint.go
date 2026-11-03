@@ -219,7 +219,7 @@ func entrypointCommand(args []string) int {
 	// Without the daemon, the runs the last container left unfinished start here (ADR 46).
 	for _, kind := range interruptedRuns(l) {
 		fmt.Printf("The last %s was interrupted; running it again now.\n", kind)
-		run := exec.Command(selfPath, kind)
+		run := exec.Command(selfPath, catchUpArgs(kind)...)
 		run.Stdout, run.Stderr = os.Stdout, os.Stderr
 		if run.Start() == nil {
 			go func() { _ = run.Wait() }()
