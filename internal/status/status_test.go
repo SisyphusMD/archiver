@@ -143,3 +143,23 @@ func TestCheckWaitsForCatchUp(t *testing.T) {
 		t.Errorf("idle: %s", got)
 	}
 }
+
+// A secondary maintained by its copy worker reports the worker's last check, mirror and
+// exhaustive prune, not the maintenance record from before the workers took over.
+func TestSecondaryMaintenanceFromWorker(t *testing.T) {
+	got := withWorkerUpkeep(
+		[]lockstate.Storage{{Name: "local", Check: 900, Prune: 900, Exhaustive: 800}, {Name: "offsite", Check: 100, Prune: 100, Exhaustive: 50}},
+		map[string]copier.State{
+			"offsite": {LastCheck: 700, LastMirror: 950, LastExhaustive: 40},
+			"cold":    {LastMirror: 600},
+			"new":     {},
+		})
+	want := fmt.Sprint([]lockstate.Storage{
+		{Name: "local", Check: 900, Prune: 900, Exhaustive: 800},
+		{Name: "offsite", Check: 700, Prune: 950, Exhaustive: 50},
+		{Name: "cold", Prune: 600},
+	})
+	if fmt.Sprint(got) != want {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}

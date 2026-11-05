@@ -44,7 +44,7 @@ Archiver keeps Prometheus metrics in `logs/archiver.prom`, rewritten after every
 | `archiver_service_last_revision`, `_last_uploaded_bytes` | `service`, `directory` | The revision and the bytes uploaded by its last successful backup |
 | `archiver_copy_behind_revisions`, `_failing`, `_last_success_timestamp_seconds`, `_last_check_timestamp_seconds` | `target` | Each secondary's copy worker |
 | `archiver_copy_busy_since_timestamp_seconds` | `target`, `activity` | When the worker's current copy, mirror, prune or check started (`copying`, `mirroring`, `pruning`, `checking`); absent while idle |
-| `archiver_storage_last_check_timestamp_seconds`, `_last_prune_timestamp_seconds` | `storage` | Maintenance's last successful check and prune |
+| `archiver_storage_last_check_timestamp_seconds`, `_last_prune_timestamp_seconds` | `storage` | The storage's last successful check and prune: maintenance's for the primary, the copy worker's check and mirror pass for a secondary |
 | `archiver_restore_drill_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage`, `service` | Last restore drill: start time, result, duration, and last success |
 | `archiver_deep_check_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage` | Last deep check: start time, result, duration, and last success |
 | `archiver_kit_drill_last_timestamp_seconds`, `_last_ok`, `_last_duration_seconds`, `_last_success_timestamp_seconds` | `storage` | Last kit drill: start time, result, duration, and last success |
