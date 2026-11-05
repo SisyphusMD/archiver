@@ -3,7 +3,7 @@
 
 # The Go CLI cross-compiles on the build platform, so an arm64 image is not built under
 # emulation. Pure Go with CGO off: the binary needs nothing from the runtime image.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:ce01baa8d47f3917e015fd28dad23b42b7e2332070bf85d8ae3e9c2f035ef2da AS cli
+FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:2336eda24930976591abea806d9b7d99eeae38238f19755c5deec02facdc1594 AS cli
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
@@ -17,7 +17,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 # Duplicacy is built from its pinned source with the patches in build/duplicacy/ (ADR 26), in
 # the order its series file gives; each patch says at its top what it changes, why, and which
 # test proves it, and those tests run here. The CLI still runs as a child process.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:ce01baa8d47f3917e015fd28dad23b42b7e2332070bf85d8ae3e9c2f035ef2da AS duplicacy
+FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:2336eda24930976591abea806d9b7d99eeae38238f19755c5deec02facdc1594 AS duplicacy
 ARG TARGETOS
 ARG TARGETARCH
 ARG GOPROXY=https://proxy.golang.org,direct
