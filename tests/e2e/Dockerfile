@@ -1,6 +1,6 @@
 # Test runner for the black-box suite. It drives archiver containers through the host's
 # Docker socket, so the images under test run as siblings, never nested.
-FROM docker:29.9.3-cli@sha256:4d742ab934c2149b628bf26369ac3ec51cb91e2e28fe6722a0e86a6d6efc4bd5 AS dockercli
+FROM docker:29.9.3-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d AS dockercli
 
 FROM golang:1.27.3-trixie@sha256:2336eda24930976591abea806d9b7d99eeae38238f19755c5deec02facdc1594
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
