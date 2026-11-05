@@ -27,7 +27,7 @@ jobs:
           # renovate: datasource=docker depName=quay.io/skopeo/stable
           SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.22.3@sha256:2681eccb8b02c495b013c2669cbf7f41d5c0b0b0e644e7c69bd3ea9bcb20641f
           # renovate: datasource=docker depName=aquasec/trivy
-          TRIVY_IMAGE=aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+          TRIVY_IMAGE=aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
           repo=forgejo.bryantserver.com/sisyphusmd/archiver
           AUTH=skopeo-auth-scan-${{ github.run_id }}
           trap 'docker volume rm -f "$AUTH" >/dev/null 2>&1' EXIT
