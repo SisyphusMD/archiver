@@ -140,6 +140,7 @@ func Write(w io.Writer, l layout.Layout, getenv func(string) string, now time.Ti
 	if err != nil {
 		return err
 	}
+	storages = withWorkerUpkeep(storages, (&copier.Store{Path: l.CopyWorkersState()}).Load())
 	if len(storages) > 0 {
 		fmt.Fprintln(w, "Storage maintenance (last success):")
 		for _, s := range storages {
@@ -287,9 +288,46 @@ func Take(l layout.Layout, getenv func(string) string, now time.Time) Snapshot {
 	}
 	s.KitDrills, _ = lockstate.ReadKitDrills(l.KitDrillState())
 	s.Storages, _ = lockstate.ReadMaintenance(l.MaintenanceState())
+	s.Storages = withWorkerUpkeep(s.Storages, s.Copies)
 	s.Incidents = notify.OpenIncidents(l.Incidents())
 	s.Envelope, _ = envelope.Status(l, now, Age)
 	return s
+}
+
+// withWorkerUpkeep takes each secondary's last check and prunes from its copy worker as
+// well: maintenance keeps to local while workers own the secondaries (ADRs 12, 17, 18),
+// so its record alone would leave them looking unmaintained since the workers took over.
+// A mirror pass is a secondary's prune.
+func withWorkerUpkeep(storages []lockstate.Storage, copies map[string]copier.State) []lockstate.Storage {
+	out := append([]lockstate.Storage(nil), storages...)
+	seen := map[string]int{}
+	for i, st := range out {
+		seen[st.Name] = i
+	}
+	for _, name := range sortedNames(copies) {
+		c := copies[name]
+		if c.LastCheck == 0 && c.LastMirror == 0 && c.LastExhaustive == 0 {
+			continue
+		}
+		i, ok := seen[name]
+		if !ok {
+			out = append(out, lockstate.Storage{Name: name})
+			i = len(out) - 1
+		}
+		out[i].Check = max(out[i].Check, c.LastCheck)
+		out[i].Prune = max(out[i].Prune, c.LastMirror)
+		out[i].Exhaustive = max(out[i].Exhaustive, c.LastExhaustive)
+	}
+	return out
+}
+
+func sortedNames(copies map[string]copier.State) []string {
+	names := make([]string, 0, len(copies))
+	for n := range copies {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // WriteJSON writes the snapshot as JSON.
