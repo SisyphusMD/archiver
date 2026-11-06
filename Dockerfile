@@ -50,7 +50,7 @@ ARG TARGETARCH
 ARG DEBIAN_MIRROR=http://deb.debian.org
 ARG GITHUB_MIRROR=https://github.com
 # renovate: datasource=github-releases depName=rclone/rclone extractVersion=^v(?<version>.+)$
-ENV RCLONE_VERSION=1.75.2
+ENV RCLONE_VERSION=1.76.0
 ARG RCLONE_SHA256_AMD64=349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702
 ARG RCLONE_SHA256_ARM64=7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10
 RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; } && \
