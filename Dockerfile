@@ -50,9 +50,9 @@ ARG TARGETARCH
 ARG DEBIAN_MIRROR=http://deb.debian.org
 ARG GITHUB_MIRROR=https://github.com
 # renovate: datasource=github-releases depName=rclone/rclone extractVersion=^v(?<version>.+)$
-ENV RCLONE_VERSION=1.75.2
-ARG RCLONE_SHA256_AMD64=349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702
-ARG RCLONE_SHA256_ARM64=7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10
+ENV RCLONE_VERSION=1.76.0
+ARG RCLONE_SHA256_AMD64=b00f00b3266c3764413afe599d3ec316f6f43b3e0ea8a0bc1d186d2133e46df7
+ARG RCLONE_SHA256_ARM64=ee169016675e23a69d77240565133ff7dbc9b33d16fa8f7053d4af39f1eaeb78
 RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; } && \
     apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip && \
     if [ "$TARGETARCH" = "amd64" ]; then SHA256="$RCLONE_SHA256_AMD64"; \
