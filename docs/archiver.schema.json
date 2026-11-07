@@ -598,7 +598,7 @@
       "type": "string"
     },
     "KIT_DRILL_SCHEDULE": {
-      "description": "When kit drills rehearse recovery from each offsite storage (ADR 51). Unset: off.",
+      "description": "When kit drills rehearse recovery from each offsite storage (ADR 51). Unset: off. Set, the first drill also runs at container start or after a scheduled backup, once every offsite storage holds the current kit (ADR 54).",
       "type": "string"
     },
     "KIT_DRILL_TIMEOUT": {

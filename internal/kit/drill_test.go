@@ -79,6 +79,108 @@ func buildDrillKit(t *testing.T, f *fixture, out string) {
 	}
 }
 
+// A local primary and two offsite storages, with the kit placed on the given ones.
+func firstDrillFixture(t *testing.T) (*fixture, func(storages ...string)) {
+	t.Helper()
+	f := newFixture(t, 3)
+	for _, n := range []string{"2", "3"} {
+		p := "STORAGE_TARGET_" + n + "_"
+		f.vars[p+"TYPE"] = "minio"
+		delete(f.vars, p+"LOCAL_PATH")
+		f.vars[p+"S3_ENDPOINT"], f.vars[p+"S3_BUCKETNAME"] = "offsite.invalid", "bucket"
+		for _, name := range []string{"s3_id", "s3_secret"} {
+			os.WriteFile(filepath.Join(f.run.Source.SecretsDir, "storage_target_"+n+"_"+name), []byte("value"), 0o600)
+		}
+	}
+	f.run.Environ = f.environ()
+	return f, func(storages ...string) {
+		t.Helper()
+		f.run.Environ = f.environ()
+		cfg, _, err := config.Load(f.run.Source, f.run.Environ)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.run.cfg = cfg
+		settings, err := config.Snapshot(f.run.Source, f.run.Environ)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fp, err := f.run.payload(t.TempDir(), settings)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state := "v" + stateVersion + ":" + fp + "\n" + strings.Join(storages, "\n") + "\n"
+		if err := os.WriteFile(f.run.Layout.KitState(), []byte(state), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestFirstDrillDue(t *testing.T) {
+	passed := lockstate.KitDrillResult{At: 1, OK: true}
+	failed := lockstate.KitDrillResult{At: 1, Message: "no such file"}
+	everywhere := []string{"store1", "store2", "store3"}
+	for _, tc := range []struct {
+		name    string
+		placed  []string
+		drills  map[string]lockstate.KitDrillResult
+		prepare func(*fixture)
+		want    bool
+	}{
+		{name: "no drill yet", placed: everywhere, want: true},
+		{name: "a fresh deployment has no kit"},
+		{name: "a secondary is still catching up", placed: []string{"store1", "store2"}},
+		{name: "a local primary is never drilled", placed: everywhere,
+			drills: map[string]lockstate.KitDrillResult{"store2": passed, "store3": passed}},
+		{name: "a new storage holding the kit", placed: everywhere,
+			drills: map[string]lockstate.KitDrillResult{"store2": passed}, want: true},
+		{name: "a new storage without the kit", placed: []string{"store1", "store2"},
+			drills: map[string]lockstate.KitDrillResult{"store2": passed}},
+		{name: "a failed drill waits for its schedule", placed: everywhere,
+			drills: map[string]lockstate.KitDrillResult{"store2": failed, "store3": failed}},
+		{name: "a run that failed before any storage", placed: everywhere, prepare: func(f *fixture) {
+			lockstate.WriteKitDrills(f.run.Layout.KitDrillState()+".run", map[string]lockstate.KitDrillResult{"": failed})
+		}},
+		{name: "unreadable results", placed: everywhere, prepare: func(f *fixture) {
+			os.WriteFile(f.run.Layout.KitDrillState(), []byte("invalid JSON"), 0o600)
+		}},
+		{name: "setting the schedule leaves the kit behind", placed: everywhere, prepare: func(f *fixture) {
+			f.vars["KIT_DRILL_SCHEDULE"] = "0 6 1 * *"
+			f.run.Environ = f.environ()
+		}},
+		{name: "no recovery password", placed: everywhere, prepare: func(f *fixture) {
+			os.Remove(filepath.Join(f.run.Source.SecretsDir, "recovery_password"))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, place := firstDrillFixture(t)
+			if tc.placed != nil {
+				place(tc.placed...)
+			}
+			if tc.drills != nil {
+				if err := lockstate.WriteKitDrills(f.run.Layout.KitDrillState(), tc.drills); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.prepare != nil {
+				tc.prepare(f)
+			}
+			if got := f.run.FirstDrillDue(); got != tc.want {
+				t.Fatalf("due = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// With only local storages there is nothing to drill.
+func TestFirstDrillDueNoOffsite(t *testing.T) {
+	f := newFixture(t, 1)
+	f.run.Environ = f.environ()
+	if f.run.FirstDrillDue() {
+		t.Fatal("due with no offsite storage")
+	}
+}
+
 func TestKitDrillPassStaleSecretsAndIncidentRecovery(t *testing.T) {
 	f, archive := drillFixture(t, "minio")
 	t.Setenv("AWS_ACCESS_KEY_ID", "must-not-inherit")

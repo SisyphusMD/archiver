@@ -20,7 +20,7 @@ Boolean settings accept true/1/yes/on and false/0/no/off/empty, case-insensitive
 |---|---|---|
 | `BACKUP_SCHEDULE` |  | When backups run, as a cron expression (`0 3 * * *`). Unset: manual mode, nothing is scheduled. |
 | `MAINTENANCE_SCHEDULE` |  | When storage check and prune run. Unset: they run only on `archiver maintenance`. |
-| `KIT_DRILL_SCHEDULE` |  | When kit drills rehearse recovery from each offsite storage (ADR 51). Unset: off. |
+| `KIT_DRILL_SCHEDULE` |  | When kit drills rehearse recovery from each offsite storage (ADR 51). Unset: off. Set, the first drill also runs at container start or after a scheduled backup, once every offsite storage holds the current kit (ADR 54). |
 | `RESTORE_DRILL_SCHEDULE` |  | When restore drills run (ADR 28). Unset: no drills. |
 | `TZ` | `UTC` | Time zone for schedules and log timestamps, such as `America/New_York`. |
 

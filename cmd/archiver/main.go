@@ -12,8 +12,11 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -27,6 +30,7 @@ import (
 	"github.com/SisyphusMD/archiver/internal/kit"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
+	"github.com/SisyphusMD/archiver/internal/logging"
 	"github.com/SisyphusMD/archiver/internal/logview"
 	"github.com/SisyphusMD/archiver/internal/metrics"
 	"github.com/SisyphusMD/archiver/internal/pipeline"
@@ -249,7 +253,7 @@ func runDaemon(args []string) int {
 		defer workers.shutdown()
 	}
 	startMetrics(ctx, l)
-	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, interruptedRuns(l), func(j daemon.Job) int {
+	run := func(j daemon.Job) int {
 		// A fresh process per run, as under cron: each run starts clean.
 		args := append([]string{j.Command}, j.Args...)
 		if j.Command == "" {
@@ -265,8 +269,75 @@ func runDaemon(args []string) int {
 			return 127
 		}
 		return 0
+	}
+	first := &firstKitDrill{log: os.Stdout, run: run, due: func() bool {
+		r := &kit.Run{Layout: l, Source: config.FromEnvironment(), Environ: os.Environ(), Hostname: pipeline.Hostname(os.Getenv),
+			Log: &logging.Log{Dir: os.TempDir(), Basename: "first-kit-drill", Stdout: io.Discard}}
+		return firstKitDrillDue(l, jobs, r.FirstDrillDue)
+	}}
+	defer first.finished.Wait()
+	interrupted := interruptedRuns(l)
+	if !drillInterrupted(interrupted) {
+		first.try(ctx)
+	}
+	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, interrupted, func(j daemon.Job) int {
+		code := run(j)
+		// A backup is what brings the kit up to date.
+		if j.Name == "backup" && code == 0 {
+			first.try(ctx)
+		}
+		return code
 	})
 	return 0
+}
+
+// firstKitDrill runs the first kit drill as soon as it can pass, whatever its schedule says
+// (ADR 54).
+type firstKitDrill struct {
+	log      io.Writer
+	due      func() bool
+	run      func(daemon.Job) int
+	running  atomic.Bool
+	finished sync.WaitGroup
+}
+
+// try runs the drill if it is due, beside whatever else runs: a stalled or paused drill must
+// never hold up the backup that asked.
+func (f *firstKitDrill) try(ctx context.Context) {
+	if !f.running.CompareAndSwap(false, true) {
+		return
+	}
+	f.finished.Add(1)
+	go func() {
+		defer f.finished.Done()
+		defer f.running.Store(false)
+		// After the check, which can take a while: a shutdown must not start a drill.
+		if !f.due() || ctx.Err() != nil {
+			return
+		}
+		fmt.Fprintln(f.log, "archiver daemon: starting kit-drill now: a storage holding the current kit has never had one")
+		fmt.Fprintf(f.log, "archiver daemon: kit-drill exited %d\n", f.run(daemon.Job{Name: "kit-drill"}))
+	}()
+}
+
+// drillInterrupted says whether one of the interrupted runs starting now wants the lock kit
+// and restore drills share: the first kit drill can wait, where a restore drill would be refused.
+func drillInterrupted(kinds []string) bool {
+	return slices.ContainsFunc(kinds, func(k string) bool {
+		return k == "kit-drill" || k == "drill" || strings.HasPrefix(k, "drill:")
+	})
+}
+
+// firstKitDrillDue is ready's answer for a deployment that schedules kit drills, while no
+// drill holds the lock they share.
+func firstKitDrillDue(l layout.Layout, jobs []daemon.Job, ready func() bool) bool {
+	if !slices.ContainsFunc(jobs, func(j daemon.Job) bool { return j.Name == "kit-drill" }) {
+		return false
+	}
+	if lock, held, err := lockstate.ReadLock(l.DrillLock()); err == nil && held && lock.Alive() {
+		return false
+	}
+	return ready()
 }
 
 // interruptedRuns are the kinds of run (backup, maintenance, drill, deep check) whose record

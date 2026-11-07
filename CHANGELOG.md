@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **The first kit drill no longer waits for its first scheduled time** (ADR 54), which on a monthly schedule could leave the envelope's path unproven for weeks. With `KIT_DRILL_SCHEDULE` set, it runs at container start or when a scheduled backup succeeds, once every offsite storage holds the current kit and one has no drill on record. Failed drills stay on the schedule, and an interrupted restore drill goes first. Restore drills and deep checks still start at their first scheduled time, since they can take hours.
+
 ### Fixed
 
 - **A deep check that a container restart stopped resumes when the container starts**, from the chunks it already verified, like interrupted backups, maintenance and drills (ADR 46). It used to stay failed and due until its next scheduled slot, so one image update during the monthly local check left it unverified, and its alert firing, for a month. A completed check, failed or passed, no longer leaves a resume record behind, and a record left by a storage since removed from the configuration is dropped instead of retried at every start.
