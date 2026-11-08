@@ -801,6 +801,17 @@ func (c *Config) DrillHookTimeout() (time.Duration, error) {
 	return d, nil
 }
 
+// Offsite is the targets a kit drill covers: every one that is not a local path.
+func (c *Config) Offsite() []Target {
+	var targets []Target
+	for _, t := range c.Targets {
+		if t.Type != "local" {
+			targets = append(targets, t)
+		}
+	}
+	return targets
+}
+
 // KitDrillTimeout bounds one run across every selected offsite storage.
 func (c *Config) KitDrillTimeout() (time.Duration, error) {
 	if c.KitDrillLimit == "" {

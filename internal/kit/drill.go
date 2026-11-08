@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -78,8 +79,8 @@ func (r *Run) Drill(storage string) int {
 		return fail("Kit drill: RECOVERY_PASSWORD is not configured.")
 	}
 	var targets []config.Target
-	for _, t := range cfg.Targets {
-		if t.Type != "local" && (storage == "" || storage == t.Name || storage == t.StorageName()) {
+	for _, t := range cfg.Offsite() {
+		if storage == "" || storage == t.Name || storage == t.StorageName() {
 			targets = append(targets, t)
 		}
 	}
@@ -199,6 +200,40 @@ func (r *Run) Drill(storage string) int {
 }
 
 // The layout scopes cleanup to this installation, including a kill between mkdir and recording it.
+// FirstDrillDue reports whether a kit drill can run without waiting for its schedule (ADR 54):
+// an offsite storage has no drill on record, and every offsite storage holds the kit for the
+// configuration as it is now. Short of that the drill would only report a kit still on its
+// way: a secondary catching up, or the settings the kit carries, KIT_DRILL_SCHEDULE among
+// them, having changed since the last backup. Any result counts as a drill, as does a run that
+// failed before reaching a storage: those wait for the schedule (ADR 52).
+func (r *Run) FirstDrillDue() bool {
+	results, err := lockstate.ReadKitDrills(r.Layout.KitDrillState())
+	if err != nil {
+		return false
+	}
+	if _, failed := results[""]; failed {
+		return false
+	}
+	cfg, _, err := config.Load(r.Source, r.Environ)
+	if err != nil {
+		return false
+	}
+	offsite := cfg.Offsite()
+	if !slices.ContainsFunc(offsite, func(t config.Target) bool {
+		_, drilled := results[t.StorageName()]
+		return !drilled
+	}) {
+		return false
+	}
+	current, configured, err := r.CurrentOn()
+	if err != nil || !configured {
+		return false
+	}
+	return !slices.ContainsFunc(offsite, func(t config.Target) bool {
+		return !slices.Contains(current, t.StorageName())
+	})
+}
+
 func (r *Run) drillScratchPrefix() string {
 	path, _ := filepath.Abs(r.Layout.RunRecord("kit-drill"))
 	sum := sha256.Sum256([]byte(path))

@@ -71,6 +71,8 @@ The drill downloads the kit using the same on-the-fly rclone remote or SFTP comm
 
 OneDrive personal and business use Archiver's own rotating token. Status explicitly says that signing in to the provider is left to a person; this drill proves the kit is present, current and decrypts, while the human sign-in step still needs rehearsal.
 
+The first proof does not wait for the first scheduled time (ADR 54). With `KIT_DRILL_SCHEDULE` set, once every offsite storage holds the current kit and one has no drill on record, the drill runs at container start or when a scheduled backup succeeds. Setting the schedule changes the kit's settings, so a new schedule usually drills after the next backup, or the one after that if a secondary is still catching up. A backup run by hand does not trigger it: that deployment gets its first drill at the next start or scheduled time.
+
 Failures name the storage and raise an incident, with notifications on by default. A later pass clears that storage's incident. A failed or interrupted drill is retried at the next scheduled time; a container shutdown resumes an interrupted run at startup. `archiver stop drill`, `pause` and `resume` control kit drills through the lock shared with restore drills. Only one drill can run at a time.
 
 `archiver status` and `status --json` show the last kit drill per storage. `METRICS_PORT` exports `archiver_kit_drill_last_timestamp_seconds`, `archiver_kit_drill_last_ok`, `archiver_kit_drill_last_duration_seconds` and `archiver_kit_drill_last_success_timestamp_seconds`, each labeled by `storage`.

@@ -91,7 +91,7 @@ docker exec "$SFTP" sh -c '
 '
 docker run -d --name "$ARCH" --hostname kd-host --network "$NET" \
  --cap-drop ALL --cap-add DAC_OVERRIDE -v "$CFG":/cfg:ro \
- -e SERVICE_DIRECTORIES=/data/fixtures/ -e PRUNE_BACKUPS=false \
+ -e SERVICE_DIRECTORIES=/data/fixtures/ -e PRUNE_BACKUPS=false -e KIT_DRILL_SCHEDULE='0 6 1 1 *' \
  -e STORAGE_TARGET_1_NAME=cloud -e STORAGE_TARGET_1_TYPE=minio \
  -e STORAGE_TARGET_1_S3_ENDPOINT=garage-api:3900 -e STORAGE_TARGET_1_S3_BUCKETNAME=kits -e STORAGE_TARGET_1_S3_REGION=garage \
  -e STORAGE_TARGET_2_NAME=offsite -e STORAGE_TARGET_2_TYPE=sftp \
@@ -121,8 +121,33 @@ exit 1
 SETUP
 log "backup builds and places kits on the remote primary and SFTP secondary"
 docker exec "$ARCH" archiver backup
-log "both break-glass paths pass"
-docker exec "$ARCH" archiver kit-drill
+start_daemon() {
+ docker exec "$ARCH" rm -f /tmp/daemon.log /tmp/daemon.pid
+ docker exec -d "$@" "$ARCH" bash -c 'echo $$ > /tmp/daemon.pid; exec archiver daemon > /tmp/daemon.log 2>&1'
+ for _ in $(seq 1 60); do docker exec "$ARCH" grep -q 'next kit-drill at' /tmp/daemon.log && return; sleep 1; done
+ die "the daemon never scheduled the kit drill"
+}
+stop_daemon() {
+ docker exec "$ARCH" bash -c 'pid=$(cat /tmp/daemon.pid); kill -TERM "$pid"; for _ in $(seq 1 60); do kill -0 "$pid" 2>/dev/null || exit 0; sleep 1; done; exit 1' || die "the daemon did not stop"
+}
+no_first_drill() {
+ sleep 5
+ if docker exec "$ARCH" grep -q 'starting kit-drill now' /tmp/daemon.log; then die "$1"; fi
+}
+log "a kit behind the configuration waits: a changed schedule is one of the settings it carries"
+start_daemon -e KIT_DRILL_SCHEDULE='0 7 1 1 *'
+no_first_drill "the first kit drill ran against a stale kit"
+stop_daemon
+log "the daemon starts the first kit drill once the kit is current: both break-glass paths pass"
+start_daemon
+for _ in $(seq 1 120); do docker exec "$ARCH" grep -q 'kit-drill exited' /tmp/daemon.log && break; sleep 1; done
+docker exec "$ARCH" grep -q 'starting kit-drill now: a storage holding the current kit has never had one' /tmp/daemon.log || die "no first kit drill at the daemon's start"
+docker exec "$ARCH" grep -q 'kit-drill exited 0' /tmp/daemon.log || die "the first kit drill failed"
+stop_daemon
+log "with every storage drilled, the next start waits for the schedule"
+start_daemon
+no_first_drill "the kit drill ran again at the daemon's start"
+stop_daemon
 docker exec "$ARCH" archiver status --json | grep '"kit_drills"' >/dev/null || die "kit drills absent from status"
 log "save the old kit, refresh after a secret changes, then replace only the SFTP kit with the stale one"
 docker exec "$SFTP" cp /home/backup/upload/archiver-recovery-kit-kd-host.tar.enc /tmp/stale.enc
