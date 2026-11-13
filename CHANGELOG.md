@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0-rc.7] - 2026-11-13
+
 ### Changed
 
 - **The first kit drill no longer waits for its first scheduled time** (ADR 54), which on a monthly schedule could leave the envelope's path unproven for weeks. With `KIT_DRILL_SCHEDULE` set, it runs at container start or when a scheduled backup succeeds, once every offsite storage holds the current kit and one has no drill on record. Failed drills stay on the schedule, and an interrupted restore drill goes first. Restore drills and deep checks still start at their first scheduled time, since they can take hours.
@@ -16,6 +18,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **A deep check that a container restart stopped resumes when the container starts**, from the chunks it already verified, like interrupted backups, maintenance and drills (ADR 46). It used to stay failed and due until its next scheduled slot, so one image update during the monthly local check left it unverified, and its alert firing, for a month. A completed check, failed or passed, no longer leaves a resume record behind, and a record left by a storage since removed from the configuration is dropped instead of retried at every start.
 - Without schedules, an interrupted named restore drill now runs again at container start; it tried to run `archiver drill:<name>`, which is not a command.
 - **Secondaries' last check and prune come from their copy workers.** Since the workers took over checking and mirroring secondaries, status, the web page and `archiver_storage_last_{check,prune}_timestamp_seconds` kept showing maintenance's last run from before then, so a well-kept secondary read as unpruned for weeks. A secondary's check now counts its worker's last check, and its prune its last mirror pass.
+
+### Dependencies
+
+- chore(deps): update quay.io/skopeo/stable:v1.24.1 docker digest to 9fdeeda
+- chore(deps): update docker:29.9.3-cli docker digest to 5a7af0d
+- chore(deps): update quay.io/skopeo/stable:v1.24.1 docker digest to 4c650ae
+- chore(deps): update quay.io/skopeo/stable:v1.24.1 docker digest to ed369b5
+- chore(deps): update quay.io/skopeo/stable docker tag to v1.24.1
+- chore(deps): update golang docker tag to v1.27.4
+- chore(deps): update dependency rclone/rclone to v1.76.0
+- chore(deps): docker CLI 29.9.3 archive checksums (Renovate cannot bump them)
+- chore(deps): update golang:1.27.3-trixie docker digest to af1bfc2
+- chore(deps): update docker/login-action action to v4.8.0
+- chore(deps): update debian docker tag to trixie-20261104-slim
+- chore(deps): update dependency moby/moby to v29.9.3
+- chore(deps): update docker:29.9.3-cli docker digest to 2357639
+- chore(deps): update golang:1.27.3-trixie docker digest to 2336eda
+- chore(deps): update aquasec/trivy docker tag to v0.76.2
+- chore(deps): update golang:1.27.3-trixie docker digest to ce01baa
+- chore(deps): update golang:1.27.3-trixie docker digest to d9fa6e7
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 2681ecc
+- chore(deps): update quay.io/podman/stable:v5.8.9 docker digest to f7a17ef
+- chore(deps): update docker docker tag to v29.9.3
+- chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 62da3f5
 
 ## [1.0.0-rc.6] - 2026-11-03
 
