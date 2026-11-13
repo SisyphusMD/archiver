@@ -163,3 +163,14 @@ func TestSecondaryMaintenanceFromWorker(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
+
+func TestDrillsWaitingTheirTurn(t *testing.T) {
+	l := testLayout(t)
+	put(t, l.DrillsWaiting(), "drill:GARAGE\nkit-drill\n")
+	if got := report(t, l, time.Unix(0, 0)); !strings.Contains(got, "Drills waiting their turn: drill:GARAGE, kit-drill.\n") {
+		t.Errorf("got %q", got)
+	}
+	if got := Take(l, func(string) string { return "" }, time.Unix(0, 0)).DrillsWaiting; len(got) != 2 || got[0] != "drill:GARAGE" {
+		t.Errorf("snapshot: %v", got)
+	}
+}

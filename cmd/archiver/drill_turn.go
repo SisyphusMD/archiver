@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/atomicfile"
 	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
@@ -26,6 +29,9 @@ type drillTurn struct {
 
 	mu      sync.Mutex
 	dropped chan struct{} // closed, and replaced, when the waiting drills are dropped
+	waiting []string
+	// note is told which drills wait, each time that changes, for `archiver status`.
+	note func(waiting []string)
 }
 
 func newDrillTurn(log io.Writer, busy func() bool) *drillTurn {
@@ -45,8 +51,14 @@ func (t *drillTurn) take(ctx context.Context, name string) bool {
 		if !waited {
 			waited = true
 			fmt.Fprintf(t.log, "archiver daemon: %s waits for the drill that is running\n", name)
+			t.noteWaiting(name, true)
 		}
 	}
+	defer func() {
+		if waited {
+			t.noteWaiting(name, false)
+		}
+	}()
 	select {
 	case <-t.free:
 	default:
@@ -86,6 +98,19 @@ func (t *drillTurn) take(ctx context.Context, name string) bool {
 		fmt.Fprintf(t.log, "archiver daemon: %s starts now: the other drill ended\n", name)
 	}
 	return true
+}
+
+func (t *drillTurn) noteWaiting(name string, waits bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if waits {
+		t.waiting = append(t.waiting, name)
+	} else if i := slices.Index(t.waiting, name); i >= 0 {
+		t.waiting = slices.Delete(t.waiting, i, i+1)
+	}
+	if t.note != nil {
+		t.note(slices.Clone(t.waiting))
+	}
 }
 
 func (t *drillTurn) stopped(name string) bool {
@@ -134,6 +159,17 @@ func (t *drillTurn) inTurn(ctx context.Context, run func(daemon.Job) int) func(d
 // isDrill says whether a job wants the lock kit and restore drills share.
 func isDrill(job string) bool {
 	return job == "kit-drill" || job == "drill" || strings.HasPrefix(job, "drill:")
+}
+
+// noteDrillsWaiting keeps the file `archiver status` reads the waiting drills from.
+func noteDrillsWaiting(l layout.Layout) func([]string) {
+	return func(waiting []string) {
+		if len(waiting) == 0 {
+			_ = os.Remove(l.DrillsWaiting())
+			return
+		}
+		_ = atomicfile.Write(l.DrillsWaiting(), []byte(strings.Join(waiting, "\n")+"\n"), 0o644)
+	}
 }
 
 func drillRunning(l layout.Layout) bool {

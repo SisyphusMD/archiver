@@ -28,6 +28,7 @@ func (l Layout) MaintenanceLock() string   { return filepath.Join(l.Lock, "archi
 func (l Layout) RestoreLock() string       { return filepath.Join(l.Lock, "archiver-restore.lock") }
 func (l Layout) DrillLock() string         { return filepath.Join(l.Lock, "archiver-drill.lock") }
 func (l Layout) DrillStopFlag() string     { return filepath.Join(l.Lock, "archiver-drill-stop-requested") }
+func (l Layout) DrillsWaiting() string     { return filepath.Join(l.Lock, "archiver-drills-waiting") }
 func (l Layout) DrillState() string        { return filepath.Join(l.LogDir(), ".drill-state.json") }
 func (l Layout) DaemonSocket() string      { return filepath.Join(l.Lock, "archiver-daemon.sock") }
 func (l Layout) CopyWorkersState() string  { return filepath.Join(l.LogDir(), ".copy-workers.json") }
