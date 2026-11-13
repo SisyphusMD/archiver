@@ -45,7 +45,9 @@ on_host sh -c '
   podman run -d --name db --entrypoint sleep archiver:test infinity >/dev/null' || die "the service setup failed"
 
 log "archiver under Podman with the hardened capabilities"
-on_host podman run -d --name archiver --uts private --hostname pd-host \
+# k8s-file: the Podman 6 image logs to journald unless told otherwise, and this host runs no
+# journal, so `podman logs` would stay empty.
+on_host podman run -d --name archiver --log-driver k8s-file --uts private --hostname pd-host \
   --cap-drop ALL --cap-add DAC_OVERRIDE --cap-add CHOWN --cap-add FOWNER --security-opt no-new-privileges \
   -v /srv/secrets:/run/secrets:ro -v /srv/data:/data -v /srv/store:/store \
   -v /run/podman/podman.sock:/var/run/docker.sock \
