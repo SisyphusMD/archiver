@@ -121,7 +121,17 @@ func runNow(ctx context.Context, log io.Writer, j Job, run func(Job) int) {
 		return
 	}
 	fmt.Fprintf(log, "archiver daemon: starting %s now: the last one was interrupted\n", j.Name)
-	fmt.Fprintf(log, "archiver daemon: %s exited %d\n", j.Name, run(j))
+	exited(log, j, run(j))
+}
+
+// NotStarted is what run returns for a job it did not start, which then has no exit to
+// report. No exit status is negative but the -1 of a run that a signal ended.
+const NotStarted = -2
+
+func exited(log io.Writer, j Job, code int) {
+	if code != NotStarted {
+		fmt.Fprintf(log, "archiver daemon: %s exited %d\n", j.Name, code)
+	}
 }
 
 func schedule(ctx context.Context, clock Clock, log io.Writer, j Job, run func(Job) int) {
@@ -150,8 +160,7 @@ func schedule(ctx context.Context, clock Clock, log io.Writer, j Job, run func(J
 			return
 		}
 		fmt.Fprintf(log, "archiver daemon: starting %s\n", j.Name)
-		code := run(j)
-		fmt.Fprintf(log, "archiver daemon: %s exited %d\n", j.Name, code)
+		exited(log, j, run(j))
 	}
 }
 

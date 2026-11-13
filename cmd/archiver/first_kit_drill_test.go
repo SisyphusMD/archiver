@@ -70,7 +70,7 @@ func TestFirstKitDrillRuns(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var log strings.Builder
 			var runs atomic.Int32
-			f := &firstKitDrill{log: &log, due: func() bool { return tc.due }, run: func(j daemon.Job) int {
+			f := &firstKitDrill{log: &log, turn: newDrillTurn(io.Discard, idle), due: func() bool { return tc.due }, run: func(j daemon.Job) int {
 				if j.Name != "kit-drill" {
 					t.Errorf("ran %s", j.Name)
 				}
@@ -92,7 +92,7 @@ func TestFirstKitDrillRuns(t *testing.T) {
 func TestFirstKitDrillShutdownDuringCheck(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var runs atomic.Int32
-	f := &firstKitDrill{log: io.Discard, due: func() bool {
+	f := &firstKitDrill{log: io.Discard, turn: newDrillTurn(io.Discard, idle), due: func() bool {
 		cancel()
 		return true
 	}, run: func(daemon.Job) int {
@@ -111,7 +111,7 @@ func TestFirstKitDrillShutdownDuringCheck(t *testing.T) {
 func TestFirstKitDrillHoldsNothingUp(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	var runs atomic.Int32
-	f := &firstKitDrill{log: io.Discard, due: func() bool { return true }, run: func(daemon.Job) int {
+	f := &firstKitDrill{log: io.Discard, turn: newDrillTurn(io.Discard, idle), due: func() bool { return true }, run: func(daemon.Job) int {
 		if runs.Add(1) == 1 {
 			close(started)
 		}

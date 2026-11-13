@@ -186,6 +186,29 @@ func TestCatchUp(t *testing.T) {
 	}
 }
 
+// A job its runner did not start has no exit to report, and keeps its schedule.
+func TestNotStartedReportsNoExit(t *testing.T) {
+	clock := &instantClock{now: start}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var log strings.Builder
+	runs := 0
+	Run(ctx, clock, &log, mustJobs(t, map[string]string{"RESTORE_DRILL_SCHEDULE": "0 * * * *"}), []string{"drill"}, func(Job) int {
+		runs++
+		if runs == 3 {
+			cancel()
+			return 0
+		}
+		return NotStarted
+	})
+	if got := strings.Count(log.String(), "exited"); got != 1 || !strings.Contains(log.String(), "drill exited 0") {
+		t.Fatalf("%d exits reported for one run:\n%s", got, log.String())
+	}
+	if got := strings.Count(log.String(), "archiver daemon: starting drill\n"); got != 2 {
+		t.Fatalf("%d scheduled starts, want 2:\n%s", got, log.String())
+	}
+}
+
 func TestKitDrillSchedule(t *testing.T) {
 	jobs := mustJobs(t, map[string]string{"KIT_DRILL_SCHEDULE": "0 4 * * 0"})
 	if len(jobs) != 1 || jobs[0].Name != "kit-drill" {

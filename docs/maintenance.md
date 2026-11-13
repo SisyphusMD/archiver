@@ -172,8 +172,14 @@ names are rejected. Changing the ordered list resets the cursor to its first sto
 a failed or interrupted storage still in the list retries first. Its cursor
 and pending storage survive restarts in the logs volume. It advances only when all
 selected services pass or genuinely skip; a failure or interruption keeps the same
-storage due. A skip following an unresolved failure does not advance it. Drills share
-one lock, so overlapping schedules refuse a second run and retry at its next slot.
+storage due. A skip following an unresolved failure does not advance it.
+
+Restore drills, named drills and kit drills share one lock and take turns. A scheduled
+drill whose time comes while another runs waits for it and starts when it ends, however
+long that takes; if its own next time has passed by then, it runs once. `archiver stop`
+drops a waiting drill along with the running one, and a drill still waiting when the
+container stops runs at its next scheduled time. A drill run by hand while another runs
+is refused.
 
 All `archiver_restore_drill_*` metrics now include `drill="default"` for the regular
 drill and `drill="GARAGE"` for this example. Existing selectors without a drill label
