@@ -242,7 +242,15 @@ func runDaemon(args []string) int {
 	l := layout.Default()
 	workers := &copyWorkers{}
 	workers.decide(l)
-	if ln, err := daemon.Serve(l.DaemonSocket(), workers.handle); errors.Is(err, daemon.ErrRunning) {
+	turn := newDrillTurn(os.Stdout, func() bool { return drillRunning(l) })
+	handle := func(cmd string) string {
+		if cmd == daemon.CmdDropDrills {
+			turn.drop()
+			return daemon.ReplyOK
+		}
+		return workers.handle(cmd)
+	}
+	if ln, err := daemon.Serve(l.DaemonSocket(), handle); errors.Is(err, daemon.ErrRunning) {
 		fmt.Fprintln(os.Stderr, "archiver daemon:", err)
 		return 1
 	} else if err != nil {
@@ -270,7 +278,7 @@ func runDaemon(args []string) int {
 		}
 		return 0
 	}
-	first := &firstKitDrill{log: os.Stdout, run: run, due: func() bool {
+	first := &firstKitDrill{log: os.Stdout, turn: turn, run: run, due: func() bool {
 		r := &kit.Run{Layout: l, Source: config.FromEnvironment(), Environ: os.Environ(), Hostname: pipeline.Hostname(os.Getenv),
 			Log: &logging.Log{Dir: os.TempDir(), Basename: "first-kit-drill", Stdout: io.Discard}}
 		return firstKitDrillDue(l, jobs, r.FirstDrillDue)
@@ -280,8 +288,9 @@ func runDaemon(args []string) int {
 	if !drillInterrupted(interrupted) {
 		first.try(ctx)
 	}
+	inTurn := turn.inTurn(ctx, run)
 	daemon.Run(ctx, daemon.RealClock, os.Stdout, jobs, interrupted, func(j daemon.Job) int {
-		code := run(j)
+		code := inTurn(j)
 		// A backup is what brings the kit up to date.
 		if j.Name == "backup" && code == 0 {
 			first.try(ctx)
@@ -295,6 +304,7 @@ func runDaemon(args []string) int {
 // (ADR 54).
 type firstKitDrill struct {
 	log      io.Writer
+	turn     *drillTurn
 	due      func() bool
 	run      func(daemon.Job) int
 	running  atomic.Bool
@@ -315,17 +325,21 @@ func (f *firstKitDrill) try(ctx context.Context) {
 		if !f.due() || ctx.Err() != nil {
 			return
 		}
+		// Never waited for: by the end of a long drill the kit may have changed.
+		if !f.turn.tryTake() {
+			return
+		}
+		defer f.turn.done()
 		fmt.Fprintln(f.log, "archiver daemon: starting kit-drill now: a storage holding the current kit has never had one")
 		fmt.Fprintf(f.log, "archiver daemon: kit-drill exited %d\n", f.run(daemon.Job{Name: "kit-drill"}))
 	}()
 }
 
-// drillInterrupted says whether one of the interrupted runs starting now wants the lock kit
-// and restore drills share: the first kit drill can wait, where a restore drill would be refused.
+// drillInterrupted says whether one of the interrupted runs starting now is a drill: the
+// first kit drill leaves the start to it, rather than have it wait or follow a kit drill
+// with another.
 func drillInterrupted(kinds []string) bool {
-	return slices.ContainsFunc(kinds, func(k string) bool {
-		return k == "kit-drill" || k == "drill" || strings.HasPrefix(k, "drill:")
-	})
+	return slices.ContainsFunc(kinds, isDrill)
 }
 
 // firstKitDrillDue is ready's answer for a deployment that schedules kit drills, while no
@@ -334,7 +348,7 @@ func firstKitDrillDue(l layout.Layout, jobs []daemon.Job, ready func() bool) boo
 	if !slices.ContainsFunc(jobs, func(j daemon.Job) bool { return j.Name == "kit-drill" }) {
 		return false
 	}
-	if lock, held, err := lockstate.ReadLock(l.DrillLock()); err == nil && held && lock.Alive() {
+	if drillRunning(l) {
 		return false
 	}
 	return ready()

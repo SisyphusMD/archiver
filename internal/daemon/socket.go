@@ -28,6 +28,9 @@ const (
 	// CmdExhaustive has each worker run an exhaustive prune on its next pass, for
 	// `archiver maintenance exhaustive`.
 	CmdExhaustive = "exhaustive"
+	// CmdDropDrills has the drills waiting for the running one give up their turn, for
+	// `archiver stop`: nothing may start once the running drill is stopped.
+	CmdDropDrills = "drop-waiting-drills"
 )
 
 // Replies.

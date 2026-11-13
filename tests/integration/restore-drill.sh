@@ -2,7 +2,8 @@
 # Restore drills (ADR 28) against real duplicacy: a drill restores a service's newest
 # revision into the drill directory, checks it and deletes the copy; the next drill moves to
 # the next service; status and the state record each result; a damaged chunk fails the drill
-# with an error, and an undamaged storage still passes.
+# with an error, and an undamaged storage still passes. Under the daemon, drills due at one
+# moment take turns, and a stop drops the one waiting.
 #
 #   docker run -i --rm --hostname rd-host --cap-drop ALL --cap-add DAC_OVERRIDE \
 #     --entrypoint bash archiver:dev -s < tests/integration/restore-drill.sh
@@ -140,6 +141,51 @@ printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
 archiver drill --named GARAGE >/tmp/named-retry.out 2>&1 || { cat /tmp/named-retry.out; die "named retry"; }
 state 's["named"]["GARAGE"]["results"]["local"]["db"]["ok"] and s["named"]["GARAGE"]["next_storage"] == 1' || die "named retry did not advance"
 archiver status | grep 'Restore drills GARAGE' >/dev/null || die "named status missing"
+
+log "drills due at one moment take turns under the daemon"
+DLOG=/tmp/turn-daemon.log
+# One slot a few seconds off for the regular drill (web) and the named one (app, db).
+turn_daemon() {
+  local at
+  at=$(date -d '+8 seconds' '+%-S %-M %-H * * * *')
+  RESTORE_DRILL_SCHEDULE="$at" RESTORE_DRILL_GARAGE_SCHEDULE="$at" archiver daemon >"$DLOG" 2>&1 &
+  daemon_pid=$!
+}
+end_daemon() {
+  kill -TERM "$daemon_pid" 2>/dev/null
+  for _ in $(seq 1 150); do kill -0 "$daemon_pid" 2>/dev/null || break; sleep 0.2; done
+  kill -0 "$daemon_pid" 2>/dev/null && { cat "$DLOG"; die "the daemon did not exit"; }
+  wait "$daemon_pid" 2>/dev/null
+}
+drills_exited() { grep -c 'archiver daemon: drill.* exited' "$DLOG"; }
+# Each drill outlasts the moment the other would start in.
+for s in web db; do printf '#!/bin/sh\nsleep 1\n' >"$SERVICES/$s/drill"; chmod 755 "$SERVICES/$s/drill"; done
+turn_daemon
+for _ in $(seq 1 300); do [ "$(drills_exited)" -ge 2 ] && break; sleep 0.2; done
+end_daemon
+grep -q 'archiver daemon: drill exited 0' "$DLOG" && grep -q 'archiver daemon: drill:GARAGE exited 0' "$DLOG" \
+  || { cat "$DLOG"; die "two drills due at one moment did not both pass"; }
+grep -q 'waits for the drill that is running' "$DLOG" || { cat "$DLOG"; die "neither drill waited for the other"; }
+grep -q 'A restore drill is already running' "$DLOG" && { cat "$DLOG"; die "a drill was refused"; }
+
+log "archiver stop drops the drill that waits, with the one that runs"
+for s in web db; do printf '#!/bin/sh\necho started >>/tmp/turn-hook-started\nsleep 30 & wait\n' >"$SERVICES/$s/drill"; done
+rm -f /tmp/turn-hook-started
+turn_daemon
+for _ in $(seq 1 300); do
+  grep -qs 'waits for the drill that is running' "$DLOG" && [ -s /tmp/turn-hook-started ] && break
+  sleep 0.2
+done
+[ -s /tmp/turn-hook-started ] || { cat "$DLOG"; die "no drill reached its hook"; }
+archiver stop drill >/tmp/turn-stop.out 2>&1 || { cat /tmp/turn-stop.out; die "stop drill"; }
+for _ in $(seq 1 150); do [ "$(drills_exited)" -ge 1 ] && break; sleep 0.2; done
+sleep 3 # long enough for a drill that kept its turn to reach its hook
+end_daemon
+grep -q 'not started: archiver stop ended its wait' "$DLOG" || { cat "$DLOG"; die "the stop did not drop the waiting drill"; }
+[ "$(drills_exited)" -eq 1 ] || { cat "$DLOG"; die "the waiting drill ran after the stop"; }
+[ "$(wc -l </tmp/turn-hook-started)" -eq 1 ] || { cat "$DLOG"; die "a drill hook ran after the stop"; }
+rm -f "$SERVICES/web/drill"
+printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
 unset RESTORE_DRILL_EXCLUDE
 
 log "a damaged chunk on the primary fails the drill; the offsite copy still passes"

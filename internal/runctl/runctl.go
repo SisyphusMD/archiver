@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SisyphusMD/archiver/internal/daemon"
 	"github.com/SisyphusMD/archiver/internal/layout"
 	"github.com/SisyphusMD/archiver/internal/lockstate"
 	"github.com/SisyphusMD/archiver/internal/logging"
@@ -30,7 +31,7 @@ type Env struct {
 	Log    *logging.Log
 	// Notify sends a notification when a notifier is configured.
 	Notify func(title, msg string)
-	// Workers sends one command to the daemon's copy workers; false means none run.
+	// Workers sends one command to the daemon; false means it runs no copy workers.
 	Workers func(cmd string) bool
 	Now     func() time.Time
 }
@@ -229,6 +230,9 @@ func (e Env) drill() (lockstate.Lock, bool) {
 // stopDrill stops a running drill. Its restore is abandoned at once, immediate or not: a
 // drill's copy is thrown away anyway, and a shutdown should not wait on it.
 func (e Env) stopDrill(target string, _ bool) {
+	// First, and whether or not one runs: a drill waiting for its turn must not start once
+	// the running one is stopped.
+	e.Workers(daemon.CmdDropDrills)
 	d, ok := e.drill()
 	if !ok {
 		if target == "drill" {
