@@ -176,7 +176,7 @@ storage due. A skip following an unresolved failure does not advance it.
 
 Restore drills, named drills and kit drills share one lock and take turns. A scheduled
 drill whose time comes while another runs waits for it and starts when it ends, however
-long that takes; if its own next time has passed by then, it runs once. `archiver stop`
+long that takes (`archiver status` lists the drills waiting); if its own next time has passed by then, it runs once. `archiver stop`
 drops a waiting drill along with the running one, and a drill still waiting when the
 container stops runs at its next scheduled time. A drill run by hand while another runs
 is refused.

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `archiver status` and `status --json` list the scheduled drills waiting their turn behind the running one.
+
 ## [1.0.0-rc.7] - 2026-11-13
 
 ### Changed

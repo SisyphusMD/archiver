@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -62,6 +63,9 @@ func Write(w io.Writer, l layout.Layout, getenv func(string) string, now time.Ti
 			kind = "Kit drill"
 		}
 		fmt.Fprintf(w, "%s: %s (PID: %d, %s).\n", kind, state, d.PID, d.Stage)
+	}
+	if waiting := drillsWaiting(l); len(waiting) > 0 {
+		fmt.Fprintf(w, "Drills waiting their turn: %s.\n", strings.Join(waiting, ", "))
 	}
 
 	if states := (&copier.Store{Path: l.CopyWorkersState()}).Load(); len(states) > 0 {
@@ -251,20 +255,22 @@ type Run struct {
 
 // Snapshot is everything status shows, for monitors and the web page (ADRs 32, 38).
 type Snapshot struct {
-	DeepChecks   map[string]deepcheck.Result                 `json:"deep_checks"`
-	At           int64                                       `json:"at"`
-	BackupHealth backuphealth.Health                         `json:"backup_health"`
-	Backup       Run                                         `json:"backup"`
-	Maintenance  Run                                         `json:"maintenance"`
-	Drill        Run                                         `json:"drill"`
-	Services     map[string]lockstate.ServiceResult          `json:"services"`
-	Copies       map[string]copier.State                     `json:"copies"`
-	KitDrills    map[string]lockstate.KitDrillResult         `json:"kit_drills"`
-	NamedDrills  map[string]*lockstate.DrillState            `json:"named_drills,omitempty"`
-	Drills       map[string]map[string]lockstate.DrillResult `json:"drills"`
-	Storages     []lockstate.Storage                         `json:"storages"`
-	Incidents    map[string]string                           `json:"incidents"`
-	Envelope     string                                      `json:"envelope,omitempty"`
+	DeepChecks   map[string]deepcheck.Result `json:"deep_checks"`
+	At           int64                       `json:"at"`
+	BackupHealth backuphealth.Health         `json:"backup_health"`
+	Backup       Run                         `json:"backup"`
+	Maintenance  Run                         `json:"maintenance"`
+	Drill        Run                         `json:"drill"`
+	// DrillsWaiting are the scheduled drills waiting for the running one to end.
+	DrillsWaiting []string                                    `json:"drills_waiting,omitempty"`
+	Services      map[string]lockstate.ServiceResult          `json:"services"`
+	Copies        map[string]copier.State                     `json:"copies"`
+	KitDrills     map[string]lockstate.KitDrillResult         `json:"kit_drills"`
+	NamedDrills   map[string]*lockstate.DrillState            `json:"named_drills,omitempty"`
+	Drills        map[string]map[string]lockstate.DrillResult `json:"drills"`
+	Storages      []lockstate.Storage                         `json:"storages"`
+	Incidents     map[string]string                           `json:"incidents"`
+	Envelope      string                                      `json:"envelope,omitempty"`
 }
 
 // Take reads the snapshot.
@@ -278,6 +284,7 @@ func Take(l layout.Layout, getenv func(string) string, now time.Time) Snapshot {
 		return Run{Running: true, Paused: lk.Paused(), PID: lk.PID, Stage: lk.Stage, Context: lk.Context}
 	}
 	s.Backup, s.Maintenance, s.Drill = run(l.BackupLock()), run(l.MaintenanceLock()), run(l.DrillLock())
+	s.DrillsWaiting = drillsWaiting(l)
 	bs, _ := lockstate.ReadBackupState(l.BackupState())
 	s.Services = bs.Services
 	s.DeepChecks = deepcheck.Read(l)
@@ -375,4 +382,13 @@ func writeDrillResults(w io.Writer, name string, ds lockstate.DrillState, now ti
 			fmt.Fprintf(w, "  %s on %s: revision %d %s %s\n", n, s, r.Revision, what, Age(r.At, now))
 		}
 	}
+}
+
+// drillsWaiting reads the scheduled drills the daemon holds back until the running one ends.
+func drillsWaiting(l layout.Layout) []string {
+	b, err := os.ReadFile(l.DrillsWaiting())
+	if err != nil {
+		return nil
+	}
+	return strings.Fields(string(b))
 }

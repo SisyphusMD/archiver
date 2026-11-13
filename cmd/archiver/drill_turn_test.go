@@ -234,3 +234,24 @@ func TestFirstKitDrillNeverWaitsItsTurn(t *testing.T) {
 		t.Fatal("the first kit drill kept the turn")
 	}
 }
+
+func TestWaitingDrillsAreOnRecord(t *testing.T) {
+	l := layout.Layout{Root: t.TempDir(), Lock: t.TempDir()}
+	var log syncLog
+	turn := newDrillTurn(&log, idle)
+	turn.note = noteDrillsWaiting(l)
+	turn.tryTake()
+	took := make(chan bool, 1)
+	go func() { took <- turn.take(context.Background(), "drill:GARAGE") }()
+	eventually(t, "the waiting drill is on record", func() bool {
+		b, _ := os.ReadFile(l.DrillsWaiting())
+		return string(b) == "drill:GARAGE\n"
+	})
+	turn.done()
+	if !<-took {
+		t.Fatal("no turn")
+	}
+	if _, err := os.Stat(l.DrillsWaiting()); !os.IsNotExist(err) {
+		t.Fatalf("a drill that started is still on record as waiting: %v", err)
+	}
+}

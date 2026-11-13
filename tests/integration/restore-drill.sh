@@ -177,6 +177,8 @@ for _ in $(seq 1 300); do
   sleep 0.2
 done
 [ -s /tmp/turn-hook-started ] || { cat "$DLOG"; die "no drill reached its hook"; }
+archiver status >/tmp/turn-status.out 2>&1
+grep -q 'Drills waiting their turn: drill' /tmp/turn-status.out || { cat /tmp/turn-status.out; die "status does not show the waiting drill"; }
 archiver stop drill >/tmp/turn-stop.out 2>&1 || { cat /tmp/turn-stop.out; die "stop drill"; }
 for _ in $(seq 1 150); do [ "$(drills_exited)" -ge 1 ] && break; sleep 0.2; done
 sleep 3 # long enough for a drill that kept its turn to reach its hook
@@ -184,6 +186,7 @@ end_daemon
 grep -q 'not started: archiver stop ended its wait' "$DLOG" || { cat "$DLOG"; die "the stop did not drop the waiting drill"; }
 [ "$(drills_exited)" -eq 1 ] || { cat "$DLOG"; die "the waiting drill ran after the stop"; }
 [ "$(wc -l </tmp/turn-hook-started)" -eq 1 ] || { cat "$DLOG"; die "a drill hook ran after the stop"; }
+archiver status | grep 'Drills waiting' >/dev/null && die "status still shows a drill waiting after the stop"
 rm -f "$SERVICES/web/drill"
 printf '#!/bin/sh\nexit 0\n' >"$SERVICES/db/drill"
 unset RESTORE_DRILL_EXCLUDE

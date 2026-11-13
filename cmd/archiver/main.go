@@ -260,6 +260,10 @@ func runDaemon(args []string) int {
 		workers.start(ctx.Done())
 		defer workers.shutdown()
 	}
+	// Past the check for a running daemon, whose record this is. One that died left the
+	// drills it had waiting on it.
+	turn.note = noteDrillsWaiting(l)
+	turn.note(nil)
 	startMetrics(ctx, l)
 	run := func(j daemon.Job) int {
 		// A fresh process per run, as under cron: each run starts clean.
