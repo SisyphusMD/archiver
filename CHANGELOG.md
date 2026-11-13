@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - `archiver status` and `status --json` list the scheduled drills waiting their turn behind the running one.
 
+### Changed
+
+- **`archiver doctor` no longer warns that the recovery kit is not yet placed when only its `RECOVERY_KIT_EXTRA_PATHS` files changed since the last backup.** With extras that change daily (exported configs, git bundles) it warned most of every day; it still warns when settings, keys or notes changed. The next backup records what it needs, so nothing is re-uploaded for this.
+
 ## [1.0.0-rc.7] - 2026-11-13
 
 ### Changed

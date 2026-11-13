@@ -30,6 +30,8 @@ printf 'a-long-recovery-pw' >"${SECRETS_DIR}/recovery_password"
 
 export STORAGE_TARGET_1_NAME="local" STORAGE_TARGET_1_TYPE="local" STORAGE_TARGET_1_LOCAL_PATH="${STORE}"
 export SERVICE_DIRECTORIES="${SERVICES}/*/"
+echo v1 >/tmp/kit-extra.txt
+export RECOVERY_KIT_EXTRA_PATHS=/tmp/kit-extra.txt
 mkdir -p "$SERVICES/app" && echo data >"$SERVICES/app/file.txt"
 chmod 755 "$SERVICES" "$SERVICES/app"
 
@@ -43,6 +45,15 @@ for want in "RSA key pair decrypts" "Storage 'local' (local, primary) is reachab
 done
 after=$(find "$STORE" -type f | sort | xargs sha256sum)
 [ "$before" = "$after" ] || die "doctor changed the storage"
+
+log "an extra file that changed since the backup is not a warning; a changed setting is"
+echo v2 >/tmp/kit-extra.txt
+out=$(archiver doctor) || { echo "$out"; die "doctor failed over a changed extra file"; }
+grep -q '^WARN.*recovery kit' <<<"$out" && { echo "$out"; die "a changed extra file is a kit warning"; }
+grep -qF "on local only its extra files" <<<"$out" || { echo "$out"; die "doctor does not say only the extra files changed"; }
+out=$(PRUNE_KEEP="-keep 0:90" archiver doctor)
+grep -qF "recovery kit for this configuration is not yet on: local" <<<"$out" || { echo "$out"; die "a changed setting is not a kit warning"; }
+echo v1 >/tmp/kit-extra.txt
 
 log "a storage that does not exist is reported, never created"
 export STORAGE_TARGET_2_NAME="missing" STORAGE_TARGET_2_TYPE="local" STORAGE_TARGET_2_LOCAL_PATH="/nonexistent-store"
