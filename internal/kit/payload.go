@@ -44,7 +44,9 @@ func (r *Run) payload(dir string, s *config.Settings) (string, error) {
 	if err := r.copyExtras(dir, s); err != nil {
 		return "", err
 	}
-	return fingerprintContext(r.context(), dir)
+	full, core, err := fingerprintsContext(r.context(), dir)
+	r.core = core
+	return full, err
 }
 
 func (r *Run) deploymentDir() string { return filepath.Join(r.Layout.Root, "deployment") }
@@ -211,8 +213,16 @@ func exists(p string) bool {
 //	find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
 //	find extra -type f -printf '%m %p\n' | LC_ALL=C sort    (when extra/ exists)
 func fingerprintContext(ctx context.Context, dir string) (string, error) {
+	full, _, err := fingerprintsContext(ctx, dir)
+	return full, err
+}
+
+// fingerprintsContext returns that fingerprint and core, the same hash without extra/: what
+// tells a kit whose settings, keys and notes are current from one whose RECOVERY_KIT_EXTRA_PATHS
+// files merely changed since.
+func fingerprintsContext(ctx context.Context, dir string) (full, core string, err error) {
 	var files []string
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -223,22 +233,25 @@ func fingerprintContext(ctx context.Context, dir string) (string, error) {
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	sort.Strings(files)
-	h := sha256.New()
+	h, c := sha256.New(), sha256.New()
 	var modes []string
 	for _, f := range files {
 		// Streamed: an extra may be a large git bundle.
 		sum, err := hashFileContext(ctx, filepath.Join(dir, f))
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		fmt.Fprintf(h, "%s  %s\n", sum, f)
+		if !strings.HasPrefix(f, "./extra/") {
+			fmt.Fprintf(c, "%s  %s\n", sum, f)
+		}
 		if rel := strings.TrimPrefix(f, "./"); strings.HasPrefix(rel, "extra/") {
 			fi, err := os.Stat(filepath.Join(dir, f))
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
 			modes = append(modes, fmt.Sprintf("%o %s\n", fi.Mode().Perm(), rel))
 		}
@@ -247,7 +260,7 @@ func fingerprintContext(ctx context.Context, dir string) (string, error) {
 	for _, m := range modes {
 		_, _ = io.WriteString(h, m)
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return hex.EncodeToString(h.Sum(nil)), hex.EncodeToString(c.Sum(nil)), nil
 }
 
 // recreateNotes are the deterministic recreation notes (no timestamps: they count toward the

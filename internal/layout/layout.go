@@ -97,5 +97,9 @@ func (l Layout) KitDrillState() string { return filepath.Join(l.LogDir(), ".kit-
 // KitState records which storages hold the current recovery kit.
 func (l Layout) KitState() string { return filepath.Join(l.LogDir(), ".recovery-kit-state") }
 
+// KitCoreState records which storages hold a kit whose settings, keys and notes are current,
+// whatever its extra files.
+func (l Layout) KitCoreState() string { return filepath.Join(l.LogDir(), ".recovery-kit-core") }
+
 // KitLock is held while the recovery kit is placed, so two placements never interleave.
 func (l Layout) KitLock() string { return filepath.Join(l.Lock, "archiver-kit.lock") }

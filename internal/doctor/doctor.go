@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -377,21 +378,21 @@ func (e Env) freshness(r *report, cfg *config.Config, services []string, snaps m
 
 	k := &kit.Run{Layout: e.Layout, Source: e.Source, Environ: e.Environ, Hostname: e.Hostname,
 		Log: &logging.Log{Dir: os.TempDir(), Basename: "doctor-kit", Stdout: io.Discard}}
-	if placed, configured, err := k.CurrentOn(); err != nil {
+	if placed, sameCore, configured, err := k.Placement(); err != nil {
 		r.wrn("Could not tell where the current recovery kit is: %v", err)
 	} else if configured {
 		has := e.HasFile
 		if has == nil {
 			has = func(t config.Target, name string) error { return kit.HasFile(e.Layout, e.Rclone, t, name) }
 		}
-		var missing, vanished, unverified []string
+		var missing, vanished, unverified, extrasOnly []string
 		for _, t := range cfg.Targets {
-			recorded := false
-			for _, p := range placed {
-				recorded = recorded || p == t.StorageName()
-			}
+			recorded := slices.Contains(placed, t.StorageName())
+			// Extra files (git bundles, exported configs) can change every day; the next
+			// backup refreshes them, so only changed settings, keys or notes are worth a warning.
+			older := !recorded && slices.Contains(sameCore, t.StorageName())
 			switch {
-			case !recorded:
+			case !recorded && !older:
 				missing = append(missing, t.Name)
 			default:
 				// Recorded is not enough: the file is looked for on the storage itself.
@@ -401,6 +402,8 @@ func (e Env) freshness(r *report, cfg *config.Config, services []string, snaps m
 					vanished = append(vanished, t.Name)
 				case err != nil:
 					unverified = append(unverified, fmt.Sprintf("%s (%v)", t.Name, err))
+				case older:
+					extrasOnly = append(extrasOnly, t.Name)
 				}
 			}
 		}
@@ -413,7 +416,11 @@ func (e Env) freshness(r *report, cfg *config.Config, services []string, snaps m
 		if len(unverified) > 0 {
 			r.wrn("Could not check the recovery kit is still on: %s", strings.Join(unverified, "; "))
 		}
-		if len(missing)+len(vanished)+len(unverified) == 0 {
+		switch {
+		case len(missing)+len(vanished)+len(unverified) > 0:
+		case len(extrasOnly) > 0:
+			r.ok("The recovery kit for this configuration is on every storage; on %s only its extra files (RECOVERY_KIT_EXTRA_PATHS) have changed since, which the next backup refreshes", strings.Join(extrasOnly, ", "))
+		default:
 			r.ok("The recovery kit for this configuration is on every storage")
 		}
 	}

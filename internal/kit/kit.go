@@ -69,6 +69,8 @@ type Run struct {
 
 	ctx context.Context
 	cfg *config.Config
+	// core is the last payload's fingerprint without its extra files.
+	core string
 	// gate, when set, starts each program (the kit drill's pause gate).
 	gate func(start func() error) error
 }
@@ -81,6 +83,8 @@ func (r *Run) KitName() string    { return "archiver-recovery-kit-" + r.Hostname
 func (r *Run) readmeName() string { return "archiver-recovery-kit-" + r.Hostname + ".README.txt" }
 
 func (r *Run) statePath() string { return r.Layout.KitState() }
+
+func (r *Run) coreStatePath() string { return r.Layout.KitCoreState() }
 
 func (r *Run) info(msg string)    { r.Log.Message(logging.Info, "", msg) }
 func (r *Run) warning(msg string) { r.Log.Message(logging.Warning, "", msg) }
@@ -170,6 +174,7 @@ func (r *Run) Execute() int {
 		r.primaryHasKit()
 	}
 	if len(pending) == 0 {
+		r.recordCore(placed, nil)
 		if len(r.Skip) > 0 || len(r.Held) > 0 {
 			r.info("Recovery kit is up to date on every storage target it can reach now.")
 		} else {
@@ -189,6 +194,7 @@ func (r *Run) Execute() int {
 	}
 
 	failures, unverified, primaryFailed := 0, 0, false
+	var touched []string // storages whose kit an upload may have replaced, or left half-written
 	for _, t := range pending {
 		name := t.StorageName()
 		// Again as each upload starts: building the kit or a slow upload before it can
@@ -206,13 +212,16 @@ func (r *Run) Execute() int {
 		case Unverified:
 			r.info(fmt.Sprintf("Recovery kit placed on storage '%s' but not verified readable; re-placing on the next run.", name))
 			unverified++
+			touched = append(touched, name)
 		default:
+			touched = append(touched, name)
 			r.error(fmt.Sprintf("Recovery-kit upload to storage '%s' failed; will retry on the next run.", name))
 			failures++
 			primaryFailed = primaryFailed || t.N == 1
 		}
 	}
 	r.writeState(fp, placed)
+	r.recordCore(placed, touched)
 	switch {
 	case primaryFailed:
 		return Failed
@@ -323,10 +332,36 @@ func (r *Run) CurrentOn() (names []string, configured bool, err error) {
 	return r.readState("v" + stateVersion + ":" + fp), true, nil
 }
 
+// recordCore records the storages holding a kit with the current core: the ones that hold the
+// current kit, and those recorded before with this core that no upload touched now (skipped,
+// outside their window, or not due because only extra files changed).
+func (r *Run) recordCore(current, touched []string) {
+	fp := "v" + stateVersion + ":" + r.core
+	names := slices.Clone(current)
+	for _, n := range r.readStateAt(r.coreStatePath(), fp) {
+		if n != "" && !slices.Contains(names, n) && !slices.Contains(touched, n) {
+			names = append(names, n)
+		}
+	}
+	r.writeStateAt(r.coreStatePath(), fp, names)
+}
+
+// Placement is CurrentOn plus sameCore: the storages whose kit differs from the current one at
+// most in its extra files, because they changed since it was placed.
+func (r *Run) Placement() (current, sameCore []string, configured bool, err error) {
+	current, configured, err = r.CurrentOn()
+	if err != nil || !configured {
+		return current, nil, configured, err
+	}
+	return current, r.readStateAt(r.coreStatePath(), "v"+stateVersion+":"+r.core), true, nil
+}
+
 // readState returns the storages recorded as holding the kit with fingerprint fp: line 1 of
 // the state file is a fingerprint, the following lines storage names.
-func (r *Run) readState(fp string) []string {
-	b, err := os.ReadFile(r.statePath())
+func (r *Run) readState(fp string) []string { return r.readStateAt(r.statePath(), fp) }
+
+func (r *Run) readStateAt(path, fp string) []string {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}
@@ -337,7 +372,9 @@ func (r *Run) readState(fp string) []string {
 	return lines[1:]
 }
 
-func (r *Run) writeState(fp string, names []string) {
+func (r *Run) writeState(fp string, names []string) { r.writeStateAt(r.statePath(), fp, names) }
+
+func (r *Run) writeStateAt(path, fp string, names []string) {
 	content := fp + "\n"
 	for _, n := range names {
 		content += n + "\n"
@@ -345,11 +382,11 @@ func (r *Run) writeState(fp string, names []string) {
 	if len(names) == 0 {
 		content += "\n" // the recorded format: an empty line for no storages
 	}
-	if err := os.WriteFile(r.statePath(), []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		r.warning("Recovery kit: could not record where the kit is placed: " + err.Error())
 		return
 	}
-	_ = os.Chmod(r.statePath(), 0o600)
+	_ = os.Chmod(path, 0o600)
 }
 
 // encrypt writes the payload as one tar, encrypted the way stock `openssl enc -d -aes-256-cbc
