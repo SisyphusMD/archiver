@@ -63,6 +63,9 @@ jobs:
 
   dockerfile-downloads:
     name: Dockerfile download integrity
+    # Trusted-ref gate: this runner is self-hosted, so a fork's or an AGit PR's code (an AGit PR
+    # reports this repo as its head) runs only after a maintainer pushes it to a branch here.
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,6 +74,7 @@ jobs:
 
   test-pipelines:
     name: Test pipelines never end in grep -q
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -79,6 +83,7 @@ jobs:
 
   bats:
     name: Bats unit tests
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,6 +99,7 @@ jobs:
 
   go:
     name: Go vet, format, and unit tests
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -117,6 +123,7 @@ jobs:
 
   fuzz:
     name: Fuzz the parsers (30 s each, ADR 39)
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -132,7 +139,7 @@ jobs:
 
   pr-validate:
     name: PR build & smoke test
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0
     needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
@@ -230,6 +237,7 @@ jobs:
 
   integration:
     name: Round-trip + scheduler smoke
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
@@ -459,6 +467,7 @@ jobs:
 
   slim:
     name: Slim image (ADR 41)
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
@@ -500,6 +509,7 @@ jobs:
 
   integration-host:
     name: Host-driven integration (entrypoint + storage sidecars)
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
@@ -563,6 +573,7 @@ jobs:
 
   e2e:
     name: Black-box suite (never-break across versions)
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0)
     needs: [shellcheck, validate-changelog, dockerfile-downloads, test-pipelines, bats]
     runs-on: ubuntu-latest
     steps:
