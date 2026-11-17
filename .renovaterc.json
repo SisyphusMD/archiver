@@ -10,6 +10,7 @@
   "platformAutomerge": false,
   "separateMinorPatch": true,
   "fetchChangeLogs": "pr",
+  "prFooter": "Refs #349: standing issue for dependency updates.",
   "enabledManagers": ["dockerfile", "github-actions", "gomod", "custom.regex"],
   "postUpdateOptions": ["gomodTidy"],
   "includePaths": [
