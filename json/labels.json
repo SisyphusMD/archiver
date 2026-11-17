@@ -1,0 +1,97 @@
+[
+ {
+  "color": "d73a4a",
+  "description": "Something isn't working",
+  "name": "bug"
+ },
+ {
+  "color": "0075ca",
+  "description": "Improvements or additions to documentation",
+  "name": "documentation"
+ },
+ {
+  "color": "cfd3d7",
+  "description": "This issue or pull request already exists",
+  "name": "duplicate"
+ },
+ {
+  "color": "a2eeef",
+  "description": "New feature or request",
+  "name": "enhancement"
+ },
+ {
+  "color": "7057ff",
+  "description": "Good for newcomers",
+  "name": "good first issue"
+ },
+ {
+  "color": "008672",
+  "description": "Extra attention is needed",
+  "name": "help wanted"
+ },
+ {
+  "color": "e4e669",
+  "description": "This doesn't seem right",
+  "name": "invalid"
+ },
+ {
+  "color": "d876e3",
+  "description": "Further information is requested",
+  "name": "question"
+ },
+ {
+  "color": "ededed",
+  "description": "Idea, not scheduled",
+  "name": "roadmap"
+ },
+ {
+  "color": "000000",
+  "description": "Waiting on another issue or PR",
+  "name": "status:blocked"
+ },
+ {
+  "color": "fbca04",
+  "description": "Someone is on it",
+  "name": "status:in-progress"
+ },
+ {
+  "color": "e99695",
+  "description": "Waiting on a decision",
+  "name": "status:needs-decision"
+ },
+ {
+  "color": "0e8a16",
+  "description": "Can be picked up",
+  "name": "status:ready"
+ },
+ {
+  "color": "b60205",
+  "description": "Something is wrong",
+  "name": "type:bug"
+ },
+ {
+  "color": "cccccc",
+  "description": "Upkeep",
+  "name": "type:chore"
+ },
+ {
+  "color": "d93f0b",
+  "description": "A choice for Cody",
+  "name": "type:decision"
+ },
+ {
+  "color": "0e8a16",
+  "description": "Something the project should do",
+  "name": "type:feature"
+ },
+ {
+  "color": "5319e7",
+  "description": "Time-boxed question",
+  "name": "type:spike"
+ },
+ {
+  "color": "ffffff",
+  "description": "This will not be worked on",
+  "name": "wontfix"
+ }
+]

@@ -1,0 +1,7 @@
+# #197 feat: archiver recover (ADR 29)
+
+- Kind: pull, state: closed, by cody, created 2026-10-09T12:39:40-07:00
+- Labels: none; milestone: none
+- refs/pull/197/head -> main, merged: True
+
+Stacked on #196 (restore preview): merge that first; this PR then shows only d7ccc7a. archiver recover KIT [--yes] [--hook] [--out DIR], also as the container command (entrypoint one-shot mode before key placement). Steps: decrypt with stock openssl (password on fd 3; recovery_password secret or hidden prompt), write archiver.env + owner-only secrets/ + RECREATE.txt (+ deployment/, extra/ with exec bits) to the out dir guarded by a payload-hash marker (rerun with the same kit finishes and reuses; anything else refused), place keys, read every storage (inventory = union, newest revision per ID, KeyUnchecked tolerated), restore the services the kit lists (new RECREATE.txt line services backed up; old kits fall back to snapshot discovery with hyphenated glob names left for a person) into SERVICE_DIRECTORIES-placed dirs (bash glob matcher, literal-first, unescape, ambiguous parent globs left), revision pinned, recovered settings in hook env, legacy settings migrated with the recovered config. Incomplete recoveries exit 1. Kit: RECREATE.txt lists services (one kit re-upload after upgrade). tests/integration/recover.sh: lost host recovered byte for byte through the entrypoint path; wrong password; rerun. 14 Codex review rounds; 39 integration + e2e pass locally.

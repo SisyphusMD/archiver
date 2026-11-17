@@ -1,0 +1,17 @@
+# #52 feat: env-native first-class + pre-release audit fixes
+
+- Kind: pull, state: closed, by cody, created 2026-07-09T21:28:50-07:00
+- Labels: none; milestone: none
+- refs/pull/52/head -> main, merged: True
+
+0.9.0 transition era: env-native configuration becomes the first-class citizen, plus every blocker and should-fix finding from the 62-agent pre-release audit.
+
+**Env-native first-class (owner direction: the bundle will ultimately be dropped; 0.9.0 is the transition era).** `archiver init` now emits ready-to-deploy env-native materials (`env-native/archiver.env` + `secrets/`, via the migrate serializer) alongside the encrypted bundle, and its guidance leads with the env-native deployment. The shipped `compose.yaml` flips to an env-native primary service with bundle mode as the commented transitional alternative; the README installation and Configuration Sources sections are reframed accordingly; CHANGELOG gains a `### Breaking` section (BUNDLE_PASSWORD file-only) that will lead the release notes and a `### Deprecated` section declaring the transition.
+
+**Audit blockers fixed:** release.yml's own pre-tag smoke asserted a removed error string (every 0.9.0 dispatch would have aborted); init serialized the container's inherited environment/secrets and its own working variables into fresh bundles — a multi-directory init kept only the first directory, and `docker compose run ... init` folded the OLD deployment's config into a cold-restore artifact paired with a NEW RSA key (fixed via `ARCHIVER_CONFIG_IGNORE_OVERLAYS`, which actively clears env config vars — skipping the overlay was proven insufficient by the new test); the raw-env secret purge now warns per variable naming the file path to use; a mounted bundle with no resolvable password fails fast with a precise message instead of a misleading "no bundle" error or a silent env-native fall-through; `ARCHIVER_BUNDLE_PASSWORD` is unset after import (it stayed exported to every child process — the exact /proc leak the breaking change is justified by); openssl now takes the bundle password via `-pass fd:` instead of argv (same key derivation, old bundles still decrypt — test-proven); migrate/init write with umask 077; the README's DR guidance now lists exactly what to escrow (the old text implied the RSA key alone decrypts backups); the migrate example actually lands its output on the host.
+
+**Also:** CRLF secret files handled; dangling `<NAME>_FILE` is a hard error; `archiver bundle import` self-resolves so the documented `docker exec` invocation works; interactive restore honors `IGNORE_OWNERSHIP=1`; `ENV BUNDLE_PASSWORD=""` stub removed from the image; release-gating sidecar images digest-pinned; one-off-restore/hostname-snapshot-ID/image-tags/b2-s3-secrets docs corrected; stale tool lists fixed; the orphaned `env-native.sh` test is finally wired into CI.
+
+**New tests:** `init-envnative.sh` (scripted init with decoy deployment env + decoy secrets, multi-directory answers, bundle tar-mode 0600, legacy `-k` decrypt compat, bundle-free backup from the emitted materials), `entrypoint-secrets.sh` (three precise-error negatives + no-password-in-any-process-environ hygiene), 4 new bats (64 → 68).
+
+Verified locally: 17/17 in-container integration, 5/5 host-driven, bats 68/68 on the CI image, both entrypoint smokes incl. the new release.yml assertions. Note: this PR touches the Dockerfile, so CI includes the arm64 qemu build.
