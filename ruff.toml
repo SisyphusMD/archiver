@@ -1,0 +1,8 @@
+# The canonical gate scripts follow project-rules' Ruff configuration.
+extend-exclude = [
+  ".forgejo/scripts/ai-review.py",
+  ".forgejo/scripts/diff-size.py",
+  ".forgejo/scripts/issue-archive.py",
+  ".forgejo/scripts/issue-link.py",
+  ".forgejo/scripts/tests-with-code.py",
+]

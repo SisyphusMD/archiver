@@ -1,0 +1,15 @@
+# Module checksums, public key paths and synthetic integration credentials.
+0b6eda9b1893cdb5f1d517c6e671920b63f8c258:tests/integration/kit-drill.sh:generic-api-key:15
+0b6eda9b1893cdb5f1d517c6e671920b63f8c258:tests/integration/kit-drill.sh:generic-api-key:16
+0b6eda9b1893cdb5f1d517c6e671920b63f8c258:tests/integration/kit-drill.sh:generic-api-key:17
+0b6eda9b1893cdb5f1d517c6e671920b63f8c258:tests/integration/kit-drill.sh:generic-api-key:18
+15fdc34839c7f8e926139d395d461581f422b758:build/duplicacy/dependencies.patch:generic-api-key:182
+15fdc34839c7f8e926139d395d461581f422b758:build/duplicacy/dependencies.patch:generic-api-key:236
+55e1f6126748e474ab3045e5e8d0993e5c893a0c:tests/integration/s3-garage.sh:generic-api-key:26
+55e1f6126748e474ab3045e5e8d0993e5c893a0c:tests/integration/s3-garage.sh:generic-api-key:27
+9d549396f7ed0a392898e2fed10476823bf9823e:internal/setup/setup.go:generic-api-key:123
+9d549396f7ed0a392898e2fed10476823bf9823e:internal/setup/setup.go:generic-api-key:445
+c88405d423921edba4cb98b1eb71fefdd975de13:tests/integration/backends.sh:curl-auth-user:389
+c88405d423921edba4cb98b1eb71fefdd975de13:tests/integration/backends.sh:generic-api-key:33
+c88405d423921edba4cb98b1eb71fefdd975de13:tests/integration/backends.sh:generic-api-key:34
+c88405d423921edba4cb98b1eb71fefdd975de13:tests/integration/backends.sh:generic-api-key:40

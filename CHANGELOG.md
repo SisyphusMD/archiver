@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- Forgejo pull requests get the standard project checks and a private vulnerability reporting
+  address is listed in `SECURITY.md`.
+
 ### Added
 
 - `archiver status` and `status --json` list the scheduled drills waiting their turn behind the running one.
