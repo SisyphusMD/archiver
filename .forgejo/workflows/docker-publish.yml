@@ -61,6 +61,22 @@ jobs:
             END { exit (failed ? 1 : 0) }
           ' CHANGELOG.md
 
+  workflow-guard:
+    name: Check pull-request job trust gates
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.flow == 0
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check pull-request job trust gates
+        run: |
+          python3 -m venv "$RUNNER_TEMP/workflow-guard"
+          "$RUNNER_TEMP/workflow-guard/bin/pip" install "pyyaml==6.0.3"
+          "$RUNNER_TEMP/workflow-guard/bin/python" .forgejo/scripts/check-workflow-guard.py
+
   dockerfile-downloads:
     name: Dockerfile download integrity
     # Trusted-ref gate: this runner is self-hosted, so a fork's or an AGit PR's code (an AGit PR
