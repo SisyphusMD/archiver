@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- Prepare releases through PRs and tag the exact verified merge for their release channel (#352).
+
 - Forgejo pull requests get the standard project checks and a private vulnerability reporting
   address is listed in `SECURITY.md`.
 

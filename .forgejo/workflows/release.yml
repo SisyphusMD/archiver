@@ -1,166 +1,63 @@
-name: Release
+name: Prepare Release
 
 on:
   workflow_dispatch:
     inputs:
-      bump:
-        description: 'Version bump'
+      channel:
+        description: "Release target (main or release/N.M)"
+        default: main
+        type: string
         required: true
+      bump:
+        description: "Version bump"
         type: choice
-        options:
-          - patch
-          - minor
-          - major
-          - alpha
-          - rc
+        required: true
+        options: [patch, minor, major, alpha, rc]
+      issue:
+        description: "Forgejo release issue number"
+        required: true
+        type: string
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Cut release
+  qualify:
+    name: Qualify the release tree
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.candidate.outputs.base }}
+      version: ${{ steps.candidate.outputs.version }}
+      date: ${{ steps.candidate.outputs.date }}
+      intent: ${{ steps.candidate.outputs.intent }}
     steps:
-      - name: Checkout (full history + tags)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ secrets.CLUSTER_FORGEJO_REPO_WRITE_PAT }}
+          persist-credentials: false
 
-      - name: Configure git identity
-        run: |
-          git config user.name "forgejo-actions[bot]"
-          git config user.email "forgejo-actions[bot]@users.noreply.bryantserver.com"
-
-      # The branch rules live in the script, tested by tests/next_version.bats: main cuts 0.x
-      # releases until its first 1.0.0 alpha, then alphas, rcs and 1.0.0; release/<major>.<minor>
-      # cuts that line's patches. The bump commit is pushed back to the dispatching branch.
-      - name: Compute next version
-        id: ver
+      - name: Prepare the release candidate
+        id: candidate
         env:
-          BRANCH: ${{ github.ref_name }}
+          CHANNEL: ${{ inputs.channel }}
           BUMP: ${{ inputs.bump }}
+          ISSUE: ${{ inputs.issue }}
         run: |
           set -euo pipefail
-          NEXT=$(bash .forgejo/scripts/next-version.sh "$BRANCH" "$BUMP")
-          PREV_TAG=$(git describe --tags --abbrev=0 --match 'v*.*.*' 2>/dev/null || true)
-          echo "version=${NEXT}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${NEXT}" >> "$GITHUB_OUTPUT"
-          echo "previous=${PREV_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Releasing ${NEXT} from ${BRANCH} (bump=${BUMP}, previous=${PREV_TAG:-none})"
+          [[ "$CHANNEL" =~ ^(main|release/(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$ ]]
+          [[ "$ISSUE" =~ ^[1-9][0-9]*$ ]]
+          git fetch --tags origin "refs/heads/$CHANNEL"
+          base=$(git rev-parse FETCH_HEAD)
+          script="$PWD/.forgejo/scripts/prepare-release-tree.sh"
+          git worktree add --detach "$RUNNER_TEMP/release-tree" "$base"
+          cd "$RUNNER_TEMP/release-tree"
+          release_date=$(date -u +%Y-%m-%d)
+          version=$(bash "$script" "$CHANNEL" "$BUMP" "$release_date")
+          intent=$(git diff --binary | sha256sum | cut -d' ' -f1)
+          printf 'base=%s\nversion=%s\ndate=%s\nintent=%s\n' "$base" "$version" "$release_date" "$intent" >> "$GITHUB_OUTPUT"
 
-      - name: Sanity guards
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
-          TAG: ${{ steps.ver.outputs.tag }}
-        run: |
-          set -euo pipefail
-          if ! grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
-            echo "::error file=CHANGELOG.md::Missing '## [Unreleased]' section"
-            exit 1
-          fi
-          if grep -qE "^## \[${VERSION}\]" CHANGELOG.md; then
-            echo "::error file=CHANGELOG.md::CHANGELOG already has a [${VERSION}] section"
-            exit 1
-          fi
-          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
-            echo "::error::Tag ${TAG} already exists"
-            exit 1
-          fi
-
-      - name: Detect dependency commits since previous tag
-        id: deps
-        env:
-          PREV: ${{ steps.ver.outputs.previous }}
-        run: |
-          set -euo pipefail
-          if [ -z "$PREV" ]; then
-            RANGE="HEAD"
-          else
-            RANGE="${PREV}..HEAD"
-          fi
-          DEPS=$(git log "$RANGE" --pretty=format:'%s' | grep -E '^(chore|fix)\(deps\):' || true)
-          if [ -z "$DEPS" ]; then
-            echo "No dependency commits since ${PREV:-beginning}"
-            {
-              echo 'deps<<DEPS_EOF'
-              echo 'DEPS_EOF'
-            } >> "$GITHUB_OUTPUT"
-          else
-            echo "Detected dependency commits:"
-            echo "$DEPS"
-            {
-              echo 'deps<<DEPS_EOF'
-              echo "$DEPS"
-              echo 'DEPS_EOF'
-            } >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Promote [Unreleased] and append dependencies
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
-          DEPS: ${{ steps.deps.outputs.deps }}
-        run: |
-          set -euo pipefail
-          DATE=$(date -u +%Y-%m-%d)
-          # ENVIRON["DEPS"] avoids awk's -v backslash-escape processing,
-          # which would corrupt subjects containing backslashes.
-          awk -v ver="$VERSION" -v date="$DATE" '
-            BEGIN { in_section = 0; emitted = 0; deps = ENVIRON["DEPS"] }
-            /^## \[Unreleased\]/ {
-              suffix = $0
-              sub(/^## \[Unreleased\]/, "", suffix)
-              print "## [Unreleased]"
-              print ""
-              print "## [" ver "] - " date suffix
-              in_section = 1
-              next
-            }
-            in_section && /^## \[/ {
-              if (!emitted && deps != "") {
-                print "### Dependencies"
-                print ""
-                n = split(deps, lines, "\n")
-                for (i = 1; i <= n; i++) if (lines[i] != "") print "- " lines[i]
-                print ""
-                emitted = 1
-              }
-              in_section = 0
-              print
-              next
-            }
-            { print }
-            END {
-              if (in_section && !emitted && deps != "") {
-                print ""
-                print "### Dependencies"
-                print ""
-                n = split(deps, lines, "\n")
-                for (i = 1; i <= n; i++) if (lines[i] != "") print "- " lines[i]
-              }
-            }
-          ' CHANGELOG.md > CHANGELOG.md.new
-          mv CHANGELOG.md.new CHANGELOG.md
-
-      # A prerelease leaves the documented image on the newest stable release (ADR 9).
-      - name: Bump image tag in compose.yaml, README, and guides
-        if: inputs.bump != 'alpha' && inputs.bump != 'rc'
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
-        run: |
-          set -euo pipefail
-          # Every guide but the ADRs, which record decisions as they were made.
-          sed -i -E "s|(forgejo\.bryantserver\.com/sisyphusmd/archiver:)[0-9]+\.[0-9]+\.[0-9]+|\1${VERSION}|g" \
-            compose.yaml README.md $(git ls-files 'docs/*.md' ':!docs/adr/*')
-
-      - name: Show diff
-        run: git --no-pager diff
-
-      # Build + smoke test BEFORE committing the release. A failure here aborts
-      # the release cleanly: no commit, no tag, no stranded artifacts. The
-      # multi-arch publish in docker-publish.yml trusts this gate.
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
@@ -179,7 +76,7 @@ jobs:
       - name: Build amd64 for smoke test
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: .
+          context: ${{ runner.temp }}/release-tree
           platforms: linux/amd64
           load: true
           tags: smoke-test:local
@@ -188,56 +85,132 @@ jobs:
             DEBIAN_MIRROR=http://artifacts.lan.bryantserver.com/deb.debian.org
             GITHUB_MIRROR=https://artifacts.lan.bryantserver.com/github.com
             DOCKER_DOWNLOAD_MIRROR=https://artifacts.lan.bryantserver.com/download.docker.com
-      - name: Smoke test
-        run: |
-          set +e
-          # Run the entrypoint with no config at all: `prepare_config()` exits 1 with the
-          # no-keys error — confirms the image boots, sources lib code without import
-          # errors, and reaches the config gate. Then assert a bundle-era BUNDLE_PASSWORD
-          # refuses (ADR 22). Mirrors docker-publish.yml's pr-validate smoke.
-          # `--network none` bounds blast radius for the smoke run.
-          OUT=$(docker run --rm --network none smoke-test:local 2>&1)
-          RC=$?
-          echo "$OUT"
-          if [ "$RC" -eq 0 ]; then
-            echo "::error::Container exited 0; expected non-zero (no keys)"
-            exit 1
-          fi
-          if ! echo "$OUT" | grep -q "no RSA key files found"; then
-            echo "::error::Expected 'no RSA key files found' in output"
-            exit 1
-          fi
-          OUT2=$(docker run --rm --network none -e BUNDLE_PASSWORD=x smoke-test:local 2>&1)
-          RC2=$?
-          echo "$OUT2"
-          if [ "$RC2" -eq 0 ]; then
-            echo "::error::Container exited 0 with BUNDLE_PASSWORD in env; expected non-zero"
-            exit 1
-          fi
-          if ! echo "$OUT2" | grep -q "no longer reads bundles"; then
-            echo "::error::Expected the bundle refusal message"
-            exit 1
-          fi
-          echo "Smoke test passed"
-
-      - name: Commit, tag, and push
+      - name: Smoke test the channel
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
-          TAG: ${{ steps.ver.outputs.tag }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          no_keys="no RSA key files found"
+          rejected="no longer reads bundles"
+          if [ "$CHANNEL" = release/0.11 ]; then
+            no_keys="no bundle and no RSA key files found"
+            rejected="BUNDLE_PASSWORD is no longer read from the environment"
+          fi
+          if output=$(docker run --rm --network none smoke-test:local 2>&1); then
+            echo "::error::Expected the no-keys failure"
+            exit 1
+          fi
+          grep -F "$no_keys" <<< "$output"
+          if output=$(docker run --rm --network none -e BUNDLE_PASSWORD=x smoke-test:local 2>&1); then
+            echo "::error::Expected the bundle-password failure"
+            exit 1
+          fi
+          grep -F "$rejected" <<< "$output"
+
+  prepare:
+    name: Open the qualified release PR
+    if: github.ref == 'refs/heads/main'
+    needs: qualify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reproduce the qualified release
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          BUMP: ${{ inputs.bump }}
+          BASE: ${{ needs.qualify.outputs.base }}
+          VERSION: ${{ needs.qualify.outputs.version }}
+          DATE: ${{ needs.qualify.outputs.date }}
+          INTENT: ${{ needs.qualify.outputs.intent }}
+        run: |
+          set -euo pipefail
+          [[ "$CHANNEL" =~ ^(main|release/(0|[1-9][0-9]*)\.(0|[1-9][0-9]*))$ && "$BASE" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --tags origin "refs/heads/$CHANNEL"
+          [ "$(git rev-parse FETCH_HEAD)" = "$BASE" ] || { echo "::error::Release target advanced"; exit 1; }
+          script="$PWD/.forgejo/scripts/prepare-release-tree.sh"
+          git worktree add --detach "$RUNNER_TEMP/release-tree" "$BASE"
+          cd "$RUNNER_TEMP/release-tree"
+          [ "$(bash "$script" "$CHANNEL" "$BUMP" "$DATE")" = "$VERSION" ]
+          [ "$(git diff --binary | sha256sum | cut -d' ' -f1)" = "$INTENT" ]
+          git -c user.name='forgejo-actions[bot]' \
+            -c user.email='forgejo-actions[bot]@users.noreply.bryantserver.com' \
+            commit -am "release: $VERSION ($BUMP on $CHANNEL)"
+
+      - name: Open the release pull request
+        env:
+          TAG: v${{ needs.qualify.outputs.version }}
+          CHANNEL: ${{ inputs.channel }}
+          ISSUE: ${{ inputs.issue }}
+          ISSUE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TOKEN: ${{ secrets.CLUSTER_FORGEJO_REPO_WRITE_PAT }}
         run: |
           set -euo pipefail
-          git add CHANGELOG.md compose.yaml README.md $(git ls-files 'docs/*.md' ':!docs/adr/*')
-          git commit -m "release: ${VERSION}"
-          git tag "${TAG}"
-          # Pass the token via http.extraheader (HTTP Authorization header) instead
-          # of embedding it in the remote URL. Avoids token leakage in git's error
-          # output, which prints the URL on auth failures. Works around the
-          # actions/checkout@v6 + forgejo-runner extraheader quirk (#2321) by
-          # setting the header explicitly per-command.
-          # Through git's environment configuration, not `git -c`, whose value would sit on the
-          # command line where another process on the runner could read it.
-          AUTH_B64=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
-          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="Authorization: Basic ${AUTH_B64}"
-          git push origin "HEAD:${{ github.ref_name }}"
-          git push origin "${TAG}"
+          cd "$RUNNER_TEMP/release-tree"
+          : "${TOKEN:?missing repository write token}"
+          api="$GITHUB_SERVER_URL/api/v1/repos/$GITHUB_REPOSITORY"
+          forge() {
+            printf 'Authorization: token %s\n' "$TOKEN" | curl -fsS --max-time 30 -H @- "$@"
+          }
+          issue_response=$(printf 'Authorization: token %s\n' "$ISSUE_TOKEN" \
+            | curl -fsS --max-time 30 -H @- "$api/issues/$ISSUE")
+          jq -e '.state == "open" and .pull_request == null' <<< "$issue_response" >/dev/null \
+            || { echo "::error::Select an open release issue"; exit 1; }
+
+          branch="release/$TAG"
+          remote_ref="refs/heads/$branch"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader
+          basic=$(printf 'x-access-token:%s' "$TOKEN" | base64 | tr -d '\n')
+          export GIT_CONFIG_VALUE_0="Authorization: Basic $basic"
+          base=$(git rev-parse HEAD^)
+          remote_main=$(git ls-remote --exit-code origin "refs/heads/$CHANNEL" | cut -f1)
+          [ "$remote_main" = "$base" ] \
+            || { echo "::error::The release target moved during qualification. Run Prepare Release again."; exit 1; }
+          # A previous attempt may have pushed the same qualified tree before the PR request failed.
+          # Compare the existing commit before reusing it. An unrelated branch never gets replaced.
+          advertised=$(git ls-remote origin "$remote_ref")
+          if [ -n "$advertised" ]; then
+            git fetch --no-tags origin "$remote_ref"
+            if [ "$(git rev-parse "FETCH_HEAD^{tree}")" != "$(git rev-parse "HEAD^{tree}")" ] \
+              || [ "$(git rev-parse "FETCH_HEAD^")" != "$base" ]; then
+              echo "::error::Existing release branch differs. Check the open PR and retire the stale branch."
+              exit 1
+            fi
+            candidate=$(git rev-parse FETCH_HEAD)
+          else
+            git push origin "HEAD:$remote_ref"
+            candidate=$(git rev-parse HEAD)
+          fi
+
+          # Updating or rebasing the PR changes its SHA and invalidates this qualification.
+          qualification_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_NUMBER"
+          status=$(jq -n --arg url "$qualification_url" \
+            '{state:"success",context:"Release / Qualified candidate",target_url:$url,description:"Exact release tree qualified"}')
+          forge -H 'Content-Type: application/json' \
+            --data "$status" "$api/statuses/$candidate" >/dev/null
+
+          echo "Qualified release commit: $candidate"
+
+          pull_issues=$(forge --get \
+            --data-urlencode 'state=open' --data-urlencode "head=$branch" \
+            --data-urlencode 'page=1' --data-urlencode 'limit=50' "$api/pulls")
+          existing=$(jq -c --arg branch "$branch" --arg repo "$GITHUB_REPOSITORY" --arg base "$CHANNEL" \
+            '.[] | select(.head.label == $branch and .head.repo.full_name == $repo and .base.ref == $base)' \
+            <<< "$pull_issues")
+          if [ -n "$existing" ]; then
+            jq -e --arg prefix "Closes #$ISSUE." --arg branch "$branch" --arg sha "$candidate" \
+              '.flow == 0 and .head.ref == $branch and .head.sha == $sha and (.body | startswith($prefix))' \
+              <<< "$existing" >/dev/null \
+              || { echo "::error::Existing release PR points to a different candidate or issue"; exit 1; }
+            jq -er '.html_url' <<< "$existing"
+            exit 0
+          fi
+          body=$(printf 'Closes #%s. The prepared release passed qualification.\n\nNo tests: %s\n' \
+            "$ISSUE" 'The workflow replays the exact changelog and image-reference edits that passed qualification.')
+          payload=$(jq -n --arg head "$branch" --arg title "Release $TAG" --arg body "$body" --arg base "$CHANNEL" \
+            '{head:$head,base:$base,title:$title,body:$body}')
+          forge -H 'Content-Type: application/json' \
+            --data "$payload" "$api/pulls" | jq -er '.html_url'
