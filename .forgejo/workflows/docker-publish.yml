@@ -32,7 +32,7 @@ jobs:
           args: >-
             --severity=warning
             --shell=bash
-            .forgejo/scripts/next-version.sh
+            .forgejo/scripts/next-version.sh .forgejo/scripts/prepare-release-tree.sh
             lib/host/archiver
             .forgejo/scripts/registry-auth.sh
 
@@ -103,6 +103,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Test the release promotion and channel verification
+        run: python3 -m unittest discover -s tests -p test_release_promotion.py
       - name: Run unit tests
         # git is added because tests/next_version.bats builds throwaway repos. The tree is
         # piped in: runner workspace bind mounts land empty in sibling containers.

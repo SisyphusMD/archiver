@@ -26,6 +26,19 @@ Rule 13's safety-critical paths include `internal/pipeline`, `internal/restore`,
 regressions against observed behavior, such as restoring an existing snapshot or verifying which
 revisions a prune leaves available. Put the failing and passing evidence on the pull request.
 
+## Releases
+
+Dispatch **Prepare Release** from `main` with a release issue, a version bump and a target.
+Use `main` for the active release line or `release/N.M` for a maintenance patch. The workflow
+builds and smoke-tests the candidate, then opens the release PR. Merge it after the checks
+pass and while it is up to date with the target. If the target moved, close the stale PR,
+retire the release branch with approval, and prepare again from the new tip. If the stale PR
+already merged, revert that promotion through a PR before preparing again.
+
+Dispatch **Publish Release** from `main` with the merged PR number. It validates the chosen
+channel, release tree and qualification before tagging that exact commit. The existing
+Docker publisher builds and publishes from the tag.
+
 ## Required checks
 
 The standard contexts are `CI / Issue link (pull_request_target)`,
