@@ -307,7 +307,6 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 301 | pull | closed | [fix(recover): recreate service directories with their recorded owner and mode](items/0301-fix-recover-recreate-service-directories-with-their-recorded.md) |
 | 302 | pull | closed | [feat(forget): delete a retired service's snapshots from every storage](items/0302-feat-forget-delete-a-retired-service-s-snapshots-from-every-.md) |
 | 303 | pull | closed | [fix(envelope): keep a page a few lines over on one sheet](items/0303-fix-envelope-keep-a-page-a-few-lines-over-on-one-sheet.md) |
-| 303 | pull | closed | [fix(envelope): keep a page a few lines over on one sheet](items/0303-fix-envelope-keep-a-page-a-few-lines-over-on-one-sheet.md) |
 | 304 | pull | closed | [feat(duplicacy): 3.3.0](items/0304-feat-duplicacy-3-3-0.md) |
 | 305 | pull | closed | [chore(deps): update quay.io/podman/stable:v5.8.9 docker digest to b6b2f33](items/0305-chore-deps-update-quay-io-podman-stable-v5-8-9-docker-digest.md) |
 | 306 | pull | closed | [chore(deps): update quay.io/skopeo/stable:v1.22.3 docker digest to 87a0dd8](items/0306-chore-deps-update-quay-io-skopeo-stable-v1-22-3-docker-diges.md) |
@@ -356,4 +355,15 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 349 | issue | open | [Dependency updates (Renovate)](items/0349-dependency-updates-renovate.md) |
 | 350 | issue | closed | [Bring this repo under the project rules](items/0350-bring-this-repo-under-the-project-rules.md) |
 | 351 | pull | closed | [Adopt the SisyphusMD project rules](items/0351-adopt-the-sisyphusmd-project-rules.md) |
-| 352 | issue | open | [Release through a merged pull request](items/0352-release-through-a-merged-pull-request.md) |
+| 352 | issue | closed | [Release through a merged pull request](items/0352-release-through-a-merged-pull-request.md) |
+| 353 | issue | closed | [Lock down the read-only GitHub mirror](items/0353-lock-down-the-read-only-github-mirror.md) |
+| 354 | pull | closed | [Close pull requests opened on the GitHub mirror](items/0354-close-pull-requests-opened-on-the-github-mirror.md) |
+| 355 | pull | closed | [Publish verified release PRs by channel](items/0355-publish-verified-release-prs-by-channel.md) |
+| 356 | issue | open | [Retire the direct-write release workflow on release/0.11](items/0356-retire-the-direct-write-release-workflow-on-release-0-11.md) |
+| 357 | pull | open | [WIP: Retire the old release dispatcher on the 0.11 line](items/0357-wip-retire-the-old-release-dispatcher-on-the-0-11-line.md) |
+| 358 | issue | closed | [Prove the standard checks before protecting archiver main](items/0358-prove-the-standard-checks-before-protecting-archiver-main.md) |
+| 359 | pull | closed | [WIP: Disposable draft to prove standard required checks](items/0359-wip-disposable-draft-to-prove-standard-required-checks.md) |
+| 360 | issue | closed | [Review the release promotion helpers before switching the workflow](items/0360-review-the-release-promotion-helpers-before-switching-the-wo.md) |
+| 361 | pull | closed | [Add and test the release promotion helpers before activation](items/0361-add-and-test-the-release-promotion-helpers-before-activation.md) |
+| 362 | pull | open | [chore(deps): update quay.io/podman/stable docker tag to v6.2.0](items/0362-chore-deps-update-quay-io-podman-stable-docker-tag-to-v6-2-0.md) |
+| 363 | pull | open | [chore(deps): update quay.io/skopeo/stable docker tag to v1.25.1](items/0363-chore-deps-update-quay-io-skopeo-stable-docker-tag-to-v1-25-.md) |

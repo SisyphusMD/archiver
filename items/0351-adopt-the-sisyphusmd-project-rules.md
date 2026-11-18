@@ -2,7 +2,7 @@
 
 - Kind: pull, state: closed, by cody, created 2026-11-17T14:09:35-08:00
 - Labels: none; milestone: none
-- ci/adopt-project-rules -> main, merged: True
+- refs/pull/351/head -> main, merged: True
 
 Closes #350
 

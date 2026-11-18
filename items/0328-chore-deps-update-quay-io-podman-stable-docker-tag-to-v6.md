@@ -2,7 +2,7 @@
 
 - Kind: pull, state: closed, by renovate, created 2026-11-10T10:02:28-08:00
 - Labels: none; milestone: none
-- refs/pull/328/head -> main, merged: True
+- renovate/quay.io-podman-stable-6.x -> main, merged: True
 
 This PR contains the following updates:
 

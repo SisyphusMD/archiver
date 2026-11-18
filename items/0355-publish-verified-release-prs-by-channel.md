@@ -1,0 +1,41 @@
+# #355 Publish verified release PRs by channel
+
+- Kind: pull, state: closed, by cody, created 2026-11-17T18:54:08-08:00
+- Labels: none; milestone: none
+- refs/pull/355/head -> main, merged: True
+
+Closes #352.
+
+Run Prepare and Publish Release from trusted main and explicitly choose the release target. Preserve Archiver's existing version policy and the Docker smoke checks on each line. Reproduce the exact qualified changelog and image-reference changes before opening the release PR, then verify the merged tree, the original preparation and the channel policy before pushing only its annotated tag.
+
+Local fixture verified a main minor, alpha, RC and a release/0.11 patch alongside newer main. It also verified annotated replay and refusing a substitute PR head. Go race tests, Go vet, shellcheck, Ruff and workflow lint passed. Porting the old maintenance branch's direct-write workflow and live release proof come before stricter protection.
+
+Large diff: The Prepare and Publish activation replaces the old inline release workflow in one change so the maintenance and active channels have a complete release path.
+
+Hosted validation: the promotion PR passed the host-driven storage integration suite and the pull-request trust gate. Independent review exercised both main and release/0.11 and verified exact-merge behavior against a local fixture.
+
+Review follow-up for ee7c463. F1–F3: the current base is the already-settled #361 merge at 0ca6c2c549bed034b3cda680538e3f550e4107ad. Its tree contains `.forgejo/scripts/prepare-release-tree.sh`, `.forgejo/scripts/verify-release-pr.py` and `tests/test_release_promotion.py`. The base workflow now runs that fixture through `unittest discover` and ShellChecks the preparation helper. The fixtures cover active minor/alpha/RC, maintenance patch, exact tag retry and rejected substituted head. The smaller activation diff deliberately reuses the verified files already present on main. F4: the installed Forgejo API on completed Appliance PR #17 returns the bare `head.label` `release/v0.1.1` and the pruned branch `head.ref` `refs/pull/17/head`. F5: the installed Forgejo Actions API for Appliance run #49 returns the workflow filename `workflow_id: release.yml`, `trigger_event: workflow_dispatch`, and main ref in the event payload. The existing comparisons match this service.
+
+https://forgejo.bryantserver.com/SisyphusMD/appliance-job-monitor/actions/runs/49
+
+## forgejo-actions, 2026-11-17T20:25:38-08:00
+
+<!-- ai-review -->
+**AI review** of `ee7c4632f1`: The PR splits the monolithic release workflow into Prepare Release (qualify + open PR) and Publish Release (verify merged PR + tag), with thorough integrity checks. All five earlier findings are resolved: the helper scripts and tests are on main from the already-merged #361, and the author confirmed the Forgejo API field formats (bare head.label, string workflow_id) match the code against live instances.
+
+### Resolved
+
+- **F1** (blocking, `.forgejo/workflows/release.yml:30`) prepare-release-tree.sh not in the diff: The script is present on main from the merged #361 (base 0ca6c2c549bed034b3cda680538e3f550e4107ad) and is exercised by the base workflow's ShellCheck and unittest discover steps.
+  - Reviewer: Confirmed resolved: the file ships in the base tree from #361 and the CI on that base already runs it.
+- **F2** (blocking, `.forgejo/workflows/publish-release.yml:35`) verify-release-pr.py not in the diff: The script is present on main from #361 alongside its test file tests/test_release_promotion.py, which covers valid PR, substitute head, and wrong-channel cases.
+  - Reviewer: Confirmed resolved: the verifier and its tests are in the base tree.
+- **F3** (blocking, `.forgejo/workflows/release.yml:1`) No tests for the new release flow (rule 12): tests/test_release_promotion.py is on main from #361 and covers active minor/alpha/RC, maintenance patch, exact tag retry, and rejected substituted head. The base workflow runs it via unittest discover.
+  - Reviewer: Confirmed resolved: the fixture suite is in the base and runs in CI.
+- **F4** (suggestion, `.forgejo/workflows/release.yml:117`) head.label comparison will not match Forgejo's format: The author verified against the installed Forgejo API (Appliance PR #17) that head.label is the bare branch name (e.g. release/v0.1.1), not owner:branch. The comparison is correct for this platform.
+  - Reviewer: Withdrawn: the installed Forgejo returns the bare branch name in head.label, so the existing comparison is correct.
+- **F5** (suggestion, `.forgejo/workflows/publish-release.yml:52`) workflow_id is numeric in the Forgejo API: The author verified against the installed Forgejo Actions API (Appliance run #49) that workflow_id is the filename string (release.yml) and trigger_event is workflow_dispatch. The existing comparisons match this service.
+  - Reviewer: Withdrawn: the installed Forgejo returns the workflow filename as workflow_id, so the comparison is correct.
+
+
+Disagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.
+<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICIuZm9yZ2Vqby93b3JrZmxvd3MvcmVsZWFzZS55bWwiLCAibGluZSI6IDMwLCAic2V2ZXJpdHkiOiAiYmxvY2tpbmciLCAic3RhdHVzIjogInJlc29sdmVkIiwgInRpdGxlIjogInByZXBhcmUtcmVsZWFzZS10cmVlLnNoIG5vdCBpbiB0aGUgZGlmZiIsICJkZXRhaWwiOiAiVGhlIHNjcmlwdCBpcyBwcmVzZW50IG9uIG1haW4gZnJvbSB0aGUgbWVyZ2VkICMzNjEgKGJhc2UgMGNhNmMyYzU0OWJlZDAzNGIzY2RhNjgwNTM4ZTNmNTUwZTQxMDdhZCkgYW5kIGlzIGV4ZXJjaXNlZCBieSB0aGUgYmFzZSB3b3JrZmxvdydzIFNoZWxsQ2hlY2sgYW5kIHVuaXR0ZXN0IGRpc2NvdmVyIHN0ZXBzLiIsICJyZXNwb25zZSI6ICJDb25maXJtZWQgcmVzb2x2ZWQ6IHRoZSBmaWxlIHNoaXBzIGluIHRoZSBiYXNlIHRyZWUgZnJvbSAjMzYxIGFuZCB0aGUgQ0kgb24gdGhhdCBiYXNlIGFscmVhZHkgcnVucyBpdC4ifSwgeyJpZCI6ICJGMiIsICJmaWxlIjogIi5mb3JnZWpvL3dvcmtmbG93cy9wdWJsaXNoLXJlbGVhc2UueW1sIiwgImxpbmUiOiAzNSwgInNldmVyaXR5IjogImJsb2NraW5nIiwgInN0YXR1cyI6ICJyZXNvbHZlZCIsICJ0aXRsZSI6ICJ2ZXJpZnktcmVsZWFzZS1wci5weSBub3QgaW4gdGhlIGRpZmYiLCAiZGV0YWlsIjogIlRoZSBzY3JpcHQgaXMgcHJlc2VudCBvbiBtYWluIGZyb20gIzM2MSBhbG9uZ3NpZGUgaXRzIHRlc3QgZmlsZSB0ZXN0cy90ZXN0X3JlbGVhc2VfcHJvbW90aW9uLnB5LCB3aGljaCBjb3ZlcnMgdmFsaWQgUFIsIHN1YnN0aXR1dGUgaGVhZCwgYW5kIHdyb25nLWNoYW5uZWwgY2FzZXMuIiwgInJlc3BvbnNlIjogIkNvbmZpcm1lZCByZXNvbHZlZDogdGhlIHZlcmlmaWVyIGFuZCBpdHMgdGVzdHMgYXJlIGluIHRoZSBiYXNlIHRyZWUuIn0sIHsiaWQiOiAiRjMiLCAiZmlsZSI6ICIuZm9yZ2Vqby93b3JrZmxvd3MvcmVsZWFzZS55bWwiLCAibGluZSI6IDEsICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAicmVzb2x2ZWQiLCAidGl0bGUiOiAiTm8gdGVzdHMgZm9yIHRoZSBuZXcgcmVsZWFzZSBmbG93IChydWxlIDEyKSIsICJkZXRhaWwiOiAidGVzdHMvdGVzdF9yZWxlYXNlX3Byb21vdGlvbi5weSBpcyBvbiBtYWluIGZyb20gIzM2MSBhbmQgY292ZXJzIGFjdGl2ZSBtaW5vci9hbHBoYS9SQywgbWFpbnRlbmFuY2UgcGF0Y2gsIGV4YWN0IHRhZyByZXRyeSwgYW5kIHJlamVjdGVkIHN1YnN0aXR1dGVkIGhlYWQuIFRoZSBiYXNlIHdvcmtmbG93IHJ1bnMgaXQgdmlhIHVuaXR0ZXN0IGRpc2NvdmVyLiIsICJyZXNwb25zZSI6ICJDb25maXJtZWQgcmVzb2x2ZWQ6IHRoZSBmaXh0dXJlIHN1aXRlIGlzIGluIHRoZSBiYXNlIGFuZCBydW5zIGluIENJLiJ9LCB7ImlkIjogIkY0IiwgImZpbGUiOiAiLmZvcmdlam8vd29ya2Zsb3dzL3JlbGVhc2UueW1sIiwgImxpbmUiOiAxMTcsICJzZXZlcml0eSI6ICJzdWdnZXN0aW9uIiwgInN0YXR1cyI6ICJyZXNvbHZlZCIsICJ0aXRsZSI6ICJoZWFkLmxhYmVsIGNvbXBhcmlzb24gd2lsbCBub3QgbWF0Y2ggRm9yZ2VqbydzIGZvcm1hdCIsICJkZXRhaWwiOiAiVGhlIGF1dGhvciB2ZXJpZmllZCBhZ2FpbnN0IHRoZSBpbnN0YWxsZWQgRm9yZ2VqbyBBUEkgKEFwcGxpYW5jZSBQUiAjMTcpIHRoYXQgaGVhZC5sYWJlbCBpcyB0aGUgYmFyZSBicmFuY2ggbmFtZSAoZS5nLiByZWxlYXNlL3YwLjEuMSksIG5vdCBvd25lcjpicmFuY2guIFRoZSBjb21wYXJpc29uIGlzIGNvcnJlY3QgZm9yIHRoaXMgcGxhdGZvcm0uIiwgInJlc3BvbnNlIjogIldpdGhkcmF3bjogdGhlIGluc3RhbGxlZCBGb3JnZWpvIHJldHVybnMgdGhlIGJhcmUgYnJhbmNoIG5hbWUgaW4gaGVhZC5sYWJlbCwgc28gdGhlIGV4aXN0aW5nIGNvbXBhcmlzb24gaXMgY29ycmVjdC4ifSwgeyJpZCI6ICJGNSIsICJmaWxlIjogIi5mb3JnZWpvL3dvcmtmbG93cy9wdWJsaXNoLXJlbGVhc2UueW1sIiwgImxpbmUiOiA1MiwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogInJlc29sdmVkIiwgInRpdGxlIjogIndvcmtmbG93X2lkIGlzIG51bWVyaWMgaW4gdGhlIEZvcmdlam8gQVBJIiwgImRldGFpbCI6ICJUaGUgYXV0aG9yIHZlcmlmaWVkIGFnYWluc3QgdGhlIGluc3RhbGxlZCBGb3JnZWpvIEFjdGlvbnMgQVBJIChBcHBsaWFuY2UgcnVuICM0OSkgdGhhdCB3b3JrZmxvd19pZCBpcyB0aGUgZmlsZW5hbWUgc3RyaW5nIChyZWxlYXNlLnltbCkgYW5kIHRyaWdnZXJfZXZlbnQgaXMgd29ya2Zsb3dfZGlzcGF0Y2guIFRoZSBleGlzdGluZyBjb21wYXJpc29ucyBtYXRjaCB0aGlzIHNlcnZpY2UuIiwgInJlc3BvbnNlIjogIldpdGhkcmF3bjogdGhlIGluc3RhbGxlZCBGb3JnZWpvIHJldHVybnMgdGhlIHdvcmtmbG93IGZpbGVuYW1lIGFzIHdvcmtmbG93X2lkLCBzbyB0aGUgY29tcGFyaXNvbiBpcyBjb3JyZWN0LiJ9XQ== -->
