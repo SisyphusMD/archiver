@@ -367,3 +367,4 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 361 | pull | closed | [Add and test the release promotion helpers before activation](items/0361-add-and-test-the-release-promotion-helpers-before-activation.md) |
 | 362 | pull | open | [chore(deps): update quay.io/podman/stable docker tag to v6.2.0](items/0362-chore-deps-update-quay-io-podman-stable-docker-tag-to-v6-2-0.md) |
 | 363 | pull | open | [chore(deps): update quay.io/skopeo/stable docker tag to v1.25.1](items/0363-chore-deps-update-quay-io-skopeo-stable-docker-tag-to-v1-25-.md) |
+| 364 | issue | open | [Default recovery, migration and verification to the Forgejo image](items/0364-default-recovery-migration-and-verification-to-the-forgejo-i.md) |
