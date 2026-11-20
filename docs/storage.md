@@ -180,10 +180,13 @@ Checks default to daily on object storage and weekly on SFTP, WebDAV, SMB, File 
 
 **Your own app for Google Drive, OneDrive and Dropbox.** Archiver never refreshes tokens through duplicacy.com. Create an app with the provider (a Google Cloud OAuth client of type Desktop, a Microsoft Entra app registration with a client secret, or a Dropbox app), then get a token with the `rclone` in the image, on any machine with a browser (or with `rclone authorize` on your desktop):
 
+Use the image tag for your v1 deployment. For example:
+
 ```bash
-docker run -it --rm --entrypoint rclone ghcr.io/sisyphusmd/archiver authorize dropbox "APP_KEY" "APP_SECRET"
-docker run -it --rm --entrypoint rclone ghcr.io/sisyphusmd/archiver authorize onedrive "CLIENT_ID" "CLIENT_SECRET"
-docker run -it --rm --entrypoint rclone ghcr.io/sisyphusmd/archiver authorize drive "CLIENT_ID" "CLIENT_SECRET"
+archiver_image=forgejo.bryantserver.com/sisyphusmd/archiver:1.0.0-rc.7
+docker run -it --rm --entrypoint rclone "$archiver_image" authorize dropbox "APP_KEY" "APP_SECRET"
+docker run -it --rm --entrypoint rclone "$archiver_image" authorize onedrive "CLIENT_ID" "CLIENT_SECRET"
+docker run -it --rm --entrypoint rclone "$archiver_image" authorize drive "CLIENT_ID" "CLIENT_SECRET"
 ```
 
 Each prints a token as JSON. For Dropbox, `DROPBOX_TOKEN` is its `refresh_token`. For OneDrive, the whole JSON is `ONE_TOKEN` (or `ODB_TOKEN`). Microsoft replaces the token each time it is refreshed, so Duplicacy works from a copy under `logs/.tokens` (used only while that directory is Archiver's own and no one else can write it; keep the logs volume writable by root alone, since whoever can write it can swap entries in it) and the recovery kit carries the latest one; the envelope cannot, and points to signing in to OneDrive instead. For Google Drive, `GCD_TOKEN` is `{"client_id": "CLIENT_ID", "client_secret": "CLIENT_SECRET", "end_point": {"TokenURL": "https://oauth2.googleapis.com/token"}, "token": <the JSON>}`; a service-account key needs none of this.

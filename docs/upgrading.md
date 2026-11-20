@@ -34,7 +34,7 @@ docker run --rm \
   -v ./archiver-bundle:/opt/archiver/bundle:ro \
   -v ./secrets/bundle_password:/run/secrets/bundle_password:ro \
   -v ./archiver-migrate:/opt/archiver/migrate \
-  ghcr.io/sisyphusmd/archiver:0.11 run migrate
+  forgejo.bryantserver.com/sisyphusmd/archiver:0.11 run migrate
 ```
 
 It writes `archiver-migrate/archiver.env` (the settings, as `KEY=value`) and `archiver-migrate/secrets/` (one file per secret, plus the RSA and SSH keys). Load the first as environment variables (a Compose `env_file:` or a Kubernetes ConfigMap) and mount the second under `/run/secrets` (Compose `secrets:` or a Kubernetes Secret), remove the bundle mount and the `bundle_password` secret, and start v1. The snapshot IDs, storages and keys are unchanged, so backups continue where they left off. The secret files are plaintext: move them into your secret store and delete `archiver-migrate/`.

@@ -95,6 +95,19 @@ func TestCheckAndConfirm(t *testing.T) {
 	}
 }
 
+func TestRecoveryImageMirrorKeepsPrintedEnvelopeCurrent(t *testing.T) {
+	p := page(t, nil, map[string]string{"RECOVERY_PASSWORD": "fixture"})
+	for _, e := range p.Elements {
+		if e.Kind == "p" && strings.Contains(e.Text, "Run the image forgejo.bryantserver.com/sisyphusmd/archiver ") {
+			if got := p.Fingerprint(); got != "7d072f297b8582a2" {
+				t.Fatalf("previous print fingerprint changed: %s", got)
+			}
+			return
+		}
+	}
+	t.Fatal("recovery instructions lack the primary image")
+}
+
 func TestWords(t *testing.T) {
 	if got := strings.Join(words("  a  b\xa0c "), "|"); got != "a|b\xa0c" {
 		t.Fatalf("%q", got)

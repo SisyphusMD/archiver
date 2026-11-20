@@ -67,7 +67,7 @@ const BundleHelp = `This release no longer reads bundles (bundle.tar.enc, config
     -v ./archiver-bundle:/opt/archiver/bundle:ro \
     -v ./secrets/bundle_password:/run/secrets/bundle_password:ro \
     -v ./archiver-migrate:/opt/archiver/migrate \
-    ghcr.io/sisyphusmd/archiver:0.11 run migrate
+    forgejo.bryantserver.com/sisyphusmd/archiver:0.11 run migrate
 
 Then load archiver-migrate/archiver.env as environment variables and the files in
 archiver-migrate/secrets/ under /run/secrets, remove the bundle mount and the bundle_password
