@@ -1,6 +1,6 @@
 # Migrating Legacy Installation to Docker
 
-> **Upgrading to v1:** v1 reads no bundles. Follow this guide with the 0.11 image (`ghcr.io/sisyphusmd/archiver:0.11`), then convert the bundle to env-native configuration as [Upgrading from a bundle](../../upgrading.md#upgrading-from-a-bundle) describes, and only then move to v1.
+> **Upgrading to v1:** v1 reads no bundles. Follow this guide with the 0.11 image (`forgejo.bryantserver.com/sisyphusmd/archiver:0.11`), then convert the bundle to env-native configuration as [Upgrading from a bundle](../../upgrading.md#upgrading-from-a-bundle) describes, and only then move to v1.
 
 ## ⚠️ BREAKING CHANGES
 
@@ -132,7 +132,7 @@ Then create a `compose.yaml` in the same directory:
 services:
   archiver:
     container_name: archiver
-    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11.1
+    image: forgejo.bryantserver.com/sisyphusmd/archiver:0.11
     restart: unless-stopped
     stop_grace_period: 2m  # Allow time for graceful shutdown and cleanup
 

@@ -62,7 +62,7 @@ mv CHANGELOG.md.new CHANGELOG.md
 
 if [ "$bump" != alpha ] && [ "$bump" != rc ]; then
     mapfile -d '' -t docs < <(git ls-files -z 'docs/*.md' ':!docs/adr/*')
-    sed -i -E "s|(forgejo\\.bryantserver\\.com/sisyphusmd/archiver:)[0-9]+\\.[0-9]+\\.[0-9]+|\\1$VERSION|g" \
+    sed -i -E "s|(forgejo\\.bryantserver\\.com/sisyphusmd/archiver:)[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z]+\\.[0-9]+)?|\\1$VERSION|g" \
         compose.yaml README.md "${docs[@]}"
 fi
 printf '%s\n' "$VERSION"

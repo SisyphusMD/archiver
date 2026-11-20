@@ -41,6 +41,11 @@ class ReleasePromotionTest(unittest.TestCase):
         (repo / "CHANGELOG.md").write_text("## [Unreleased]\n\n- Update.\n\n## [0.11.7] - 2026-01-01\n")
         for path in ("compose.yaml", "README.md"):
             (repo / path).write_text("forgejo.bryantserver.com/sisyphusmd/archiver:0.11.7\n")
+        (repo / "docs").mkdir()
+        (repo / "docs/storage.md").write_text(
+            "forgejo.bryantserver.com/sisyphusmd/archiver:1.0.0-rc.7\n"
+            "forgejo.bryantserver.com/sisyphusmd/archiver:0.11\n"
+        )
         git("add", ".")
         git("commit", "-m", "Base")
         git("tag", "v0.11.7")
@@ -59,6 +64,12 @@ class ReleasePromotionTest(unittest.TestCase):
             cwd=repo, text=True,
         ).strip()
         self.assertEqual(actual, version)
+        pinned = "1.0.0-rc.7" if bump in ("alpha", "rc") else version
+        self.assertEqual(
+            (repo / "docs/storage.md").read_text(),
+            f"forgejo.bryantserver.com/sisyphusmd/archiver:{pinned}\n"
+            "forgejo.bryantserver.com/sisyphusmd/archiver:0.11\n",
+        )
         git("commit", "-am", f"release: {version} ({bump} on {channel})")
         candidate = git("rev-parse", "HEAD")
         git("checkout", channel)

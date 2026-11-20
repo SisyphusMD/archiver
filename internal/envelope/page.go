@@ -84,7 +84,7 @@ func Build(s Source) *Page {
 	p.add("p", note)
 	p.add("h", "2. Get the kit from any one storage, then decrypt it")
 	p.add("m", "openssl enc -d -aes-256-cbc -pbkdf2 -in "+kit+" | tar -xvf -")
-	p.add("p", "Enter the recovery password when asked. The kit holds the whole configuration: archiver.env, secrets/ (every password and key), RECREATE.txt (how this deployment was run) and README.txt. Run the image ghcr.io/sisyphusmd/archiver with that configuration and restore with 'archiver restore'.")
+	p.add("p", "Enter the recovery password when asked. The kit holds the whole configuration: archiver.env, secrets/ (every password and key), RECREATE.txt (how this deployment was run) and README.txt. Run the image forgejo.bryantserver.com/sisyphusmd/archiver with that configuration and restore with 'archiver restore'.")
 	for n := 1; s.get(fmt.Sprintf("STORAGE_TARGET_%d_NAME", n)) != ""; n++ {
 		p.add("rule", "")
 		p.target(s, n, kit)
@@ -260,9 +260,16 @@ func (p *Page) Fingerprint() string {
 	for _, e := range p.Elements {
 		// A fetch command carries a freshly obscured password each time; everything in it is
 		// on the page as text already.
-		if e.Kind != "sub" && e.Kind != "cmd" {
-			fmt.Fprintf(&b, "%s\t%s\n", e.Kind, e.Text)
+		if e.Kind == "sub" || e.Kind == "cmd" {
+			continue
 		}
+		text := e.Text
+		if e.Kind == "p" {
+			// Both registries serve the same recovery image. Keep earlier confirmed prints valid.
+			text = strings.Replace(text, "Run the image forgejo.bryantserver.com/sisyphusmd/archiver ",
+				"Run the image ghcr.io/sisyphusmd/archiver ", 1)
+		}
+		fmt.Fprintf(&b, "%s\t%s\n", e.Kind, text)
 	}
 	sum := sha256.Sum256(b.Bytes())
 	return hex.EncodeToString(sum[:])[:16]

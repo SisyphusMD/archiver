@@ -40,7 +40,7 @@ refused() {
   [ "$rc" -ne 0 ] || { echo "$out" | tail -5; die "$name: started (exit 0)"; }
   grep -q "found ${found}" <<<"$out" || { echo "$out" | tail -8; die "$name: does not name ${found}"; }
   grep -q "no longer reads bundles" <<<"$out" || die "$name: no explanation"
-  grep -q "ghcr.io/sisyphusmd/archiver:0.11 run migrate" <<<"$out" || die "$name: no conversion command"
+  grep -Fq "forgejo.bryantserver.com/sisyphusmd/archiver:0.11 run migrate" <<<"$out" || die "$name: no conversion command"
 }
 
 log "a mounted bundle refuses"
@@ -63,9 +63,9 @@ refused "run backup" "/opt/archiver/bundle/bundle.tar.enc" -v "$BUNVOL":/opt/arc
 
 log "the commands that handled bundles point to the conversion"
 out="$(docker run --rm --entrypoint archiver "$IMAGE" bundle export 2>&1)" && die "bundle export exited 0"
-grep -q "ghcr.io/sisyphusmd/archiver:0.11 run migrate" <<<"$out" || die "bundle export: no conversion command"
+grep -Fq "forgejo.bryantserver.com/sisyphusmd/archiver:0.11 run migrate" <<<"$out" || die "bundle export: no conversion command"
 out="$(docker run --rm --entrypoint archiver "$IMAGE" migrate 2>&1)" && die "migrate exited 0"
-grep -q "ghcr.io/sisyphusmd/archiver:0.11 run migrate" <<<"$out" || die "migrate: no conversion command"
+grep -Fq "forgejo.bryantserver.com/sisyphusmd/archiver:0.11 run migrate" <<<"$out" || die "migrate: no conversion command"
 
 log "an env-native deployment starts"
 out="$(docker run --rm --network none -v "$SECVOL":/run/secrets -e SERVICE_DIRECTORIES=/data/ \

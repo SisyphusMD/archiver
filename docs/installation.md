@@ -227,7 +227,7 @@ Use the slim tag when no hook needs the extra tools (your hooks run plain shell,
 Release images are signed with cosign, and each carries an SBOM and a build provenance attestation. To check that an image is one this project released, with [cosign](https://github.com/sigstore/cosign) and the public key in this repository ([cosign.pub](../cosign.pub)):
 
 ```bash
-cosign verify --key cosign.pub --insecure-ignore-tlog=true ghcr.io/sisyphusmd/archiver:<version>
+cosign verify --key cosign.pub --insecure-ignore-tlog=true forgejo.bryantserver.com/sisyphusmd/archiver:<version>
 ```
 
 The signatures are not entered in Sigstore's public transparency log, so the flag is needed: the signature itself is stored beside the image in each registry. `docker buildx imagetools inspect <image> --format '{{ json .SBOM }}'` shows the SBOM, and `--format '{{ json .Provenance }}'` the provenance.
