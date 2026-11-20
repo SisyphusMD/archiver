@@ -368,3 +368,7 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 362 | pull | open | [chore(deps): update quay.io/podman/stable docker tag to v6.2.0](items/0362-chore-deps-update-quay-io-podman-stable-docker-tag-to-v6-2-0.md) |
 | 363 | pull | open | [chore(deps): update quay.io/skopeo/stable docker tag to v1.25.1](items/0363-chore-deps-update-quay-io-skopeo-stable-docker-tag-to-v1-25-.md) |
 | 364 | issue | open | [Default recovery, migration and verification to the Forgejo image](items/0364-default-recovery-migration-and-verification-to-the-forgejo-i.md) |
+| 365 | issue | closed | [AI review: take the 40,000-token output cap and verdict-parse fix from project-rules](items/0365-ai-review-take-the-40-000-token-output-cap-and-verdict-parse.md) |
+| 366 | pull | closed | [AI review: 40,000-token output cap and verdict-parse fix](items/0366-ai-review-40-000-token-output-cap-and-verdict-parse-fix.md) |
+| 367 | issue | closed | [AI review: take the 40-minute deadline and 45-minute job limit from project-rules](items/0367-ai-review-take-the-40-minute-deadline-and-45-minute-job-limi.md) |
+| 368 | pull | closed | [AI review: 40-minute deadline inside a 45-minute job](items/0368-ai-review-40-minute-deadline-inside-a-45-minute-job.md) |

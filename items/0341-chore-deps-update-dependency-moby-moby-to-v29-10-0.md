@@ -140,7 +140,7 @@ Refs #349: standing issue for dependency updates.
 ## forgejo-actions, 2026-11-17T15:02:37-08:00
 
 <!-- ai-review -->
-**AI review** of `39bf794502`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the image build to fail during verification.
+**AI review** of `01ad477de9`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the image build to fail during verification.
 
 ### Open
 

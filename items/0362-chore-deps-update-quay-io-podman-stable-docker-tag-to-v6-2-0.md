@@ -174,7 +174,7 @@ Refs #349: standing issue for dependency updates.
 ## forgejo-actions, 2026-11-17T20:02:29-08:00
 
 <!-- ai-review -->
-**AI review** of `62445dcbf8`: Clean, minimal Renovate dependency bump of the Podman integration-test image from v6.1.3 to v6.2.0 (digest-pinned, mirror prefix preserved). Addresses three CVEs. No issues found.
+**AI review** of `4a4413d499`: Clean Renovate dependency bump of the Podman integration-test image from v6.1.3 to v6.2.0 (with updated SHA-256 digest), addressing three CVEs. Single-line change, properly scoped to the standing dependency-update issue #349, no unrelated edits.
 
 No findings.
 
