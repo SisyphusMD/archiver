@@ -40,14 +40,9 @@ jobs:
           verified=$(python3 -I .forgejo/scripts/verify-release-pr.py "$GITHUB_REPOSITORY" "$PR" <<< "$pr")
           candidate=$(jq -er '.candidate' <<< "$verified")
           channel=$(jq -er '.channel' <<< "$verified")
-          url_prefix="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/"
           qualification=$(forge "$api/commits/$candidate/status?limit=50")
-          jq -e '.total_count <= (.statuses | length)' <<< "$qualification" >/dev/null
-          run=$(jq -er --arg prefix "$url_prefix" '
-            .statuses[] | select(.context == "Release / Qualified candidate" and .status == "success")
-            | select(.target_url | startswith($prefix))
-            | .target_url | ltrimstr($prefix) | select(test("^[1-9][0-9]*$"))
-          ' <<< "$qualification") || { echo "::error::This PR head did not pass Prepare Release"; exit 1; }
+          run=$(python3 -I .forgejo/scripts/qualified-run.py "$GITHUB_REPOSITORY" <<< "$qualification") \
+            || { echo "::error::This PR head did not pass Prepare Release"; exit 1; }
           runs=$(forge "$api/actions/runs?page=1&limit=1&run_number=$run")
           run_id=$(jq -er --arg channel "$channel" '
             .workflow_runs[0] | select(.workflow_id == "release.yml" and .status == "success"
