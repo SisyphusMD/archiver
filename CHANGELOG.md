@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+- **Debian base refreshed:** the image builds on `debian:trixie-20261104-slim` instead of the January 2026 snapshot, picking up ten months of Debian security updates. The pinned downloads (Duplicacy, supercronic, Docker CLI) are unchanged.
+
 ## [0.11.7] - 2026-10-08
 
 ### Added
