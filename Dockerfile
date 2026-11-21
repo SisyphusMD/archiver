@@ -155,7 +155,7 @@ ARG GITHUB_MIRROR=https://github.com
 # is published shortly after each engine release, without checksums; these are the
 # digests of the reviewed archives.
 # renovate: datasource=github-releases depName=moby/moby extractVersion=^docker-v(?<version>.+)$
-ENV DOCKER_CLI_VERSION=29.9.3
+ENV DOCKER_CLI_VERSION=29.10.0
 ARG DOCKER_CLI_SHA256_AMD64=3fb5d1f13014c18cc54945bc177c58a9056a482dada031e17d12cf2e6922c973
 ARG DOCKER_CLI_SHA256_ARM64=1b27fd739378ef938401e81ce5afb73b7ad7432d4f598814a9ff5f826bb464d2
 
