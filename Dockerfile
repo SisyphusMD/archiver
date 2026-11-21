@@ -1,7 +1,7 @@
 # Multi-architecture Dockerfile for Archiver
 # Supports: linux/amd64, linux/arm64
 
-FROM debian:trixie-20260112-slim@sha256:77ba0164de17b88dd0bf6cdc8f65569e6e5fa6cd256562998b62553134a00ef0
+FROM debian:trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
 ARG TARGETARCH
 
