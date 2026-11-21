@@ -24,7 +24,7 @@ ARG GOPROXY=https://proxy.golang.org,direct
 ARG DEBIAN_MIRROR=http://deb.debian.org
 ARG GITHUB_MIRROR=https://github.com
 # renovate: datasource=github-releases depName=gilbertchen/duplicacy extractVersion=^v(?<version>.+)$
-ENV DUPLICACY_VERSION=3.3.0
+ENV DUPLICACY_VERSION=3.3.1
 ARG DUPLICACY_SOURCE_SHA256=dea27ecb17218e7df5bb8cb72f3f916934f2e2d2acdd6fe9a57991cebb53b38b
 COPY build/duplicacy/ /patches/
 RUN { sed -i "s#http://deb.debian.org#${DEBIAN_MIRROR}#g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; } && \
