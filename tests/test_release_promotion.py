@@ -100,3 +100,117 @@ class ReleasePromotionTest(unittest.TestCase):
         self.assertEqual(replay.returncode, 0, replay.stderr)
         pr["head"]["sha"] = merged
         self.assertNotEqual(verify().returncode, 0)
+
+
+class QualifiedRunTest(unittest.TestCase):
+    """The run is trusted through the API lookup and log, so the URL host carries no trust."""
+
+    REPO = "Owner/Archiver"
+
+    def run_script(self, statuses, total=None):
+        combined = {"total_count": len(statuses) if total is None else total, "statuses": statuses}
+        return subprocess.run(
+            ["python3", "-I", SCRIPTS / "qualified-run.py", self.REPO],
+            input=json.dumps(combined), text=True, capture_output=True, check=False,
+        )
+
+    def status(self, url, context="Release / Qualified candidate", status="success"):
+        return {"context": context, "status": status, "target_url": url}
+
+    def test_accepts_the_run_whatever_host_the_runner_registered(self):
+        for host in ("http://forgejo.forgejo.svc.cluster.local", "https://forgejo.bryantserver.com"):
+            with self.subTest(host=host):
+                result = self.run_script([
+                    self.status("https://ci.example/Owner/Archiver/runs/1", context="CI / lint"),
+                    self.status(f"{host}/Owner/Archiver/actions/runs/858"),
+                ])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), "858")
+
+    def test_refuses_anything_but_one_successful_qualification_of_this_repository(self):
+        good = "https://forgejo.example/Owner/Archiver/actions/runs/858"
+        cases = {
+            "other repository": [self.status("https://forgejo.example/Owner/Other/actions/runs/858")],
+            "job suffix": [self.status(good + "/jobs/0")],
+            "query": [self.status(good + "?x=1")],
+            "fragment": [self.status(good + "#x")],
+            "credentials": [self.status("https://u@forgejo.example/Owner/Archiver/actions/runs/858")],
+            "not http": [self.status("file:///Owner/Archiver/actions/runs/858")],
+            "zero run": [self.status("https://forgejo.example/Owner/Archiver/actions/runs/0")],
+            "leading zero": [self.status("https://forgejo.example/Owner/Archiver/actions/runs/0858")],
+            "failed": [self.status(good, status="failure")],
+            "pending": [self.status(good, status="pending")],
+            "wrong context": [self.status(good, context="Release / Qualified")],
+            "missing url": [{"context": "Release / Qualified candidate", "status": "success"}],
+            "none": [],
+            "two runs": [self.status(good), self.status(good.replace("858", "859"))],
+        }
+        for name, statuses in cases.items():
+            with self.subTest(name):
+                result = self.run_script(statuses)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertEqual(result.stdout, "")
+        truncated = self.run_script([self.status(good)], total=51)
+        self.assertNotEqual(truncated.returncode, 0)
+
+    def verify_step(self):
+        lines = (SCRIPTS.parent / "workflows/publish-release.yml").read_text().splitlines()
+        start = lines.index("      - name: Verify the exact merged release")
+        run = next(i for i in range(start, len(lines)) if lines[i] == "        run: |")
+        body = []
+        for line in lines[run + 1:]:
+            if line.strip() and not line.startswith("          "):
+                break
+            body.append(line[10:])
+        return "\n".join(body) + "\n"
+
+    def test_publish_step_accepts_a_status_written_by_a_runner_on_another_server_url(self):
+        candidate, merge = "a" * 40, "b" * 40
+        log = f"Qualified release commit: {candidate}\n"
+        responses = {
+            "/pulls/8": {},
+            f"/commits/{candidate}/status?limit=50": {"total_count": 1, "statuses": [self.status(
+                "http://forgejo.forgejo.svc.cluster.local/Owner/Archiver/actions/runs/858")]},
+            "/actions/runs?page=1&limit=1&run_number=858": {"workflow_runs": [{
+                "id": 41, "workflow_id": "release.yml", "status": "success",
+                "trigger_event": "workflow_dispatch",
+                "event_payload": json.dumps({"ref": "refs/heads/main", "inputs": {"channel": "main"}}),
+            }]},
+            "/actions/runs/41/jobs": [{"id": 7, "name": "Open the qualified release PR", "status": "success"}],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scripts = root / ".forgejo/scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "qualified-run.py").write_text((SCRIPTS / "qualified-run.py").read_text())
+            (scripts / "verify-release-pr.py").write_text("import json\nprint(json.dumps(" + repr(
+                {"candidate": candidate, "channel": "main", "tag": "v1.0.0", "commit": merge}) + "))\n")
+            api = root / "api"
+            for suffix, body in responses.items():
+                path = api / suffix.lstrip("/").replace("?", "_")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(body))
+            (api / "actions/jobs/7").mkdir(parents=True)
+            (api / "actions/jobs/7/logs").write_text(log)
+            bin_dir = root / "bin"
+            bin_dir.mkdir()
+            curl = bin_dir / "curl"
+            # The stub serves fixtures for this repository's API only, so a request to any other
+            # host or repository fails the step like an unreachable server would.
+            curl.write_text(
+                "#!/bin/bash\nprefix='https://forgejo.bryantserver.com/api/v1/repos/Owner/Archiver/'\n"
+                'url="${@: -1}"; [[ "$url" == "$prefix"* ]] || exit 22\n'
+                f'file="{api}/${{url#"$prefix"}}"; file="${{file/\\?/_}}"\n'
+                'cat "$file" 2>/dev/null || exit 22\n'
+            )
+            curl.chmod(0o755)
+            output = root / "output"
+            env = {
+                "PATH": f"{bin_dir}:/usr/bin:/bin", "PR": "8", "TOKEN": "fixture",
+                "GITHUB_SERVER_URL": "https://forgejo.bryantserver.com",
+                "GITHUB_REPOSITORY": "Owner/Archiver", "GITHUB_OUTPUT": str(output),
+            }
+            result = subprocess.run(["bash", "-c", self.verify_step()], cwd=root, env=env,
+                                    text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(output.read_text(), f"tag=v1.0.0\ncommit={merge}\n")

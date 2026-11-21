@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- Publish Release accepts a qualified release PR whichever Forgejo address its runner uses (#377).
+
 - Installation, recovery, storage and migration commands use the Forgejo container registry (#364).
 
 - Prepare releases through PRs and tag the exact verified merge for their release channel (#352).
