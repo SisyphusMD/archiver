@@ -40,7 +40,7 @@ Refs #349: standing issue for dependency updates.
 ## forgejo-actions, 2026-11-17T15:03:02-08:00
 
 <!-- ai-review -->
-**AI review** of `e239364be6`: Clean Renovate dependency bump of the Docker CLI image (29.9.3-cli → 29.10.0-cli) in the e2e test Dockerfile, with a pinned digest update. Single-line change, references the standing dependency issue #349, touches no production or safety-critical code.
+**AI review** of `1fed0aa32a`: Clean Renovate dependency bump of the Docker CLI image (29.9.3-cli → 29.10.0-cli) in the e2e test Dockerfile, with a pinned digest update. Single-line change, references the standing dependency issue #349, touches no production or safety-critical code.
 
 No findings.
 

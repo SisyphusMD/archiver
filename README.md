@@ -359,16 +359,25 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 353 | issue | closed | [Lock down the read-only GitHub mirror](items/0353-lock-down-the-read-only-github-mirror.md) |
 | 354 | pull | closed | [Close pull requests opened on the GitHub mirror](items/0354-close-pull-requests-opened-on-the-github-mirror.md) |
 | 355 | pull | closed | [Publish verified release PRs by channel](items/0355-publish-verified-release-prs-by-channel.md) |
-| 356 | issue | open | [Retire the direct-write release workflow on release/0.11](items/0356-retire-the-direct-write-release-workflow-on-release-0-11.md) |
-| 357 | pull | open | [WIP: Retire the old release dispatcher on the 0.11 line](items/0357-wip-retire-the-old-release-dispatcher-on-the-0-11-line.md) |
+| 356 | issue | closed | [Retire the direct-write release workflow on release/0.11](items/0356-retire-the-direct-write-release-workflow-on-release-0-11.md) |
+| 357 | pull | closed | [Retire the old release dispatcher on the 0.11 line](items/0357-retire-the-old-release-dispatcher-on-the-0-11-line.md) |
 | 358 | issue | closed | [Prove the standard checks before protecting archiver main](items/0358-prove-the-standard-checks-before-protecting-archiver-main.md) |
 | 359 | pull | closed | [WIP: Disposable draft to prove standard required checks](items/0359-wip-disposable-draft-to-prove-standard-required-checks.md) |
 | 360 | issue | closed | [Review the release promotion helpers before switching the workflow](items/0360-review-the-release-promotion-helpers-before-switching-the-wo.md) |
 | 361 | pull | closed | [Add and test the release promotion helpers before activation](items/0361-add-and-test-the-release-promotion-helpers-before-activation.md) |
 | 362 | pull | open | [chore(deps): update quay.io/podman/stable docker tag to v6.2.0](items/0362-chore-deps-update-quay-io-podman-stable-docker-tag-to-v6-2-0.md) |
 | 363 | pull | open | [chore(deps): update quay.io/skopeo/stable docker tag to v1.25.1](items/0363-chore-deps-update-quay-io-skopeo-stable-docker-tag-to-v1-25-.md) |
-| 364 | issue | open | [Default recovery, migration and verification to the Forgejo image](items/0364-default-recovery-migration-and-verification-to-the-forgejo-i.md) |
+| 364 | issue | closed | [Default recovery, migration and verification to the Forgejo image](items/0364-default-recovery-migration-and-verification-to-the-forgejo-i.md) |
 | 365 | issue | closed | [AI review: take the 40,000-token output cap and verdict-parse fix from project-rules](items/0365-ai-review-take-the-40-000-token-output-cap-and-verdict-parse.md) |
 | 366 | pull | closed | [AI review: 40,000-token output cap and verdict-parse fix](items/0366-ai-review-40-000-token-output-cap-and-verdict-parse-fix.md) |
 | 367 | issue | closed | [AI review: take the 40-minute deadline and 45-minute job limit from project-rules](items/0367-ai-review-take-the-40-minute-deadline-and-45-minute-job-limi.md) |
 | 368 | pull | closed | [AI review: 40-minute deadline inside a 45-minute job](items/0368-ai-review-40-minute-deadline-inside-a-45-minute-job.md) |
+| 369 | pull | closed | [chore: default image pulls and recovery instructions to the Forgejo registry](items/0369-chore-default-image-pulls-and-recovery-instructions-to-the-f.md) |
+| 370 | issue | closed | [Refresh the Debian base image on release/0.11](items/0370-refresh-the-debian-base-image-on-release-0-11.md) |
+| 371 | pull | closed | [fix: refresh the Debian base image on the 0.11 line](items/0371-fix-refresh-the-debian-base-image-on-the-0-11-line.md) |
+| 372 | issue | closed | [Release v0.11.9 from release/0.11 (first published build of the 0.11.8 changes)](items/0372-release-v0-11-9-from-release-0-11-first-published-build-of-t.md) |
+| 373 | pull | closed | [Release v0.11.8](items/0373-release-v0-11-8.md) |
+| 374 | issue | closed | [Point the 0.11 publish workflow at the live mirror names](items/0374-point-the-0-11-publish-workflow-at-the-live-mirror-names.md) |
+| 375 | pull | closed | [ci: publish the 0.11 line through the live mirror names](items/0375-ci-publish-the-0-11-line-through-the-live-mirror-names.md) |
+| 376 | pull | closed | [Release v0.11.9](items/0376-release-v0-11-9.md) |
+| 377 | issue | open | [Publish Release refuses a qualified PR when it runs on a runner with a different server URL](items/0377-publish-release-refuses-a-qualified-pr-when-it-runs-on-a-run.md) |

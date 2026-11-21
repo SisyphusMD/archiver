@@ -6554,10 +6554,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `01ad477de9`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the image build to fail during verification.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:159`) SHA256 checksums not updated for new version: The version is bumped to 29.10.0 but DOCKER_CLI_SHA256_AMD64 (line 159) and DOCKER_CLI_SHA256_ARM64 (line 160) still hold the digests of the 29.9.3 archives. The Dockerfile comment says these are 'the digests of the reviewed archives', so the build's checksum verification will reject the 29.10.0 downloads and the image build will fail. Update both ARG values to the SHA256 digests of the 29.10.0 docker-cli archives (amd64 and arm64) before merging.\n  - Reviewer: No reply from the author and the diff is unchanged. The checksums must match the new archives or the build fails at the verification step.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAxNTksICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJTSEEyNTYgY2hlY2tzdW1zIG5vdCB1cGRhdGVkIGZvciBuZXcgdmVyc2lvbiIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gaXMgYnVtcGVkIHRvIDI5LjEwLjAgYnV0IERPQ0tFUl9DTElfU0hBMjU2X0FNRDY0IChsaW5lIDE1OSkgYW5kIERPQ0tFUl9DTElfU0hBMjU2X0FSTTY0IChsaW5lIDE2MCkgc3RpbGwgaG9sZCB0aGUgZGlnZXN0cyBvZiB0aGUgMjkuOS4zIGFyY2hpdmVzLiBUaGUgRG9ja2VyZmlsZSBjb21tZW50IHNheXMgdGhlc2UgYXJlICd0aGUgZGlnZXN0cyBvZiB0aGUgcmV2aWV3ZWQgYXJjaGl2ZXMnLCBzbyB0aGUgYnVpbGQncyBjaGVja3N1bSB2ZXJpZmljYXRpb24gd2lsbCByZWplY3QgdGhlIDI5LjEwLjAgZG93bmxvYWRzIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgYm90aCBBUkcgdmFsdWVzIHRvIHRoZSBTSEEyNTYgZGlnZXN0cyBvZiB0aGUgMjkuMTAuMCBkb2NrZXItY2xpIGFyY2hpdmVzIChhbWQ2NCBhbmQgYXJtNjQpIGJlZm9yZSBtZXJnaW5nLiIsICJyZXNwb25zZSI6ICJObyByZXBseSBmcm9tIHRoZSBhdXRob3IgYW5kIHRoZSBkaWZmIGlzIHVuY2hhbmdlZC4gVGhlIGNoZWNrc3VtcyBtdXN0IG1hdGNoIHRoZSBuZXcgYXJjaGl2ZXMgb3IgdGhlIGJ1aWxkIGZhaWxzIGF0IHRoZSB2ZXJpZmljYXRpb24gc3RlcC4ifV0= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `1f137df73f`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the image build to fail during verification.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:159`) SHA256 checksums not updated for new version: The version is bumped to 29.10.0 but DOCKER_CLI_SHA256_AMD64 (line 159) and DOCKER_CLI_SHA256_ARM64 (line 160) still hold the digests of the 29.9.3 archives. The Dockerfile comment says these are 'the digests of the reviewed archives', so the build's checksum verification will reject the 29.10.0 downloads and the image build will fail. Update both ARG values to the SHA256 digests of the 29.10.0 docker-cli archives (amd64 and arm64) before merging.\n  - Reviewer: No reply from the author and the diff is unchanged. The checksums must match the new archives or the build fails at the verification step.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAxNTksICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJTSEEyNTYgY2hlY2tzdW1zIG5vdCB1cGRhdGVkIGZvciBuZXcgdmVyc2lvbiIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gaXMgYnVtcGVkIHRvIDI5LjEwLjAgYnV0IERPQ0tFUl9DTElfU0hBMjU2X0FNRDY0IChsaW5lIDE1OSkgYW5kIERPQ0tFUl9DTElfU0hBMjU2X0FSTTY0IChsaW5lIDE2MCkgc3RpbGwgaG9sZCB0aGUgZGlnZXN0cyBvZiB0aGUgMjkuOS4zIGFyY2hpdmVzLiBUaGUgRG9ja2VyZmlsZSBjb21tZW50IHNheXMgdGhlc2UgYXJlICd0aGUgZGlnZXN0cyBvZiB0aGUgcmV2aWV3ZWQgYXJjaGl2ZXMnLCBzbyB0aGUgYnVpbGQncyBjaGVja3N1bSB2ZXJpZmljYXRpb24gd2lsbCByZWplY3QgdGhlIDI5LjEwLjAgZG93bmxvYWRzIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgYm90aCBBUkcgdmFsdWVzIHRvIHRoZSBTSEEyNTYgZGlnZXN0cyBvZiB0aGUgMjkuMTAuMCBkb2NrZXItY2xpIGFyY2hpdmVzIChhbWQ2NCBhbmQgYXJtNjQpIGJlZm9yZSBtZXJnaW5nLiIsICJyZXNwb25zZSI6ICJObyByZXBseSBmcm9tIHRoZSBhdXRob3IgYW5kIHRoZSBkaWZmIGlzIHVuY2hhbmdlZC4gVGhlIGNoZWNrc3VtcyBtdXN0IG1hdGNoIHRoZSBuZXcgYXJjaGl2ZXMgb3IgdGhlIGJ1aWxkIGZhaWxzIGF0IHRoZSB2ZXJpZmljYXRpb24gc3RlcC4ifV0= -->",
     "created_at": "2026-11-17T15:02:37-08:00",
     "id": 36637,
-    "updated_at": "2026-11-19T17:03:07-08:00",
+    "updated_at": "2026-11-20T09:02:47-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -6600,10 +6600,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `e239364be6`: Clean Renovate dependency bump of the Docker CLI image (29.9.3-cli → 29.10.0-cli) in the e2e test Dockerfile, with a pinned digest update. Single-line change, references the standing dependency issue #349, touches no production or safety-critical code.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `1fed0aa32a`: Clean Renovate dependency bump of the Docker CLI image (29.9.3-cli → 29.10.0-cli) in the e2e test Dockerfile, with a pinned digest update. Single-line change, references the standing dependency issue #349, touches no production or safety-critical code.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T15:03:02-08:00",
     "id": 36639,
-    "updated_at": "2026-11-19T19:02:26-08:00",
+    "updated_at": "2026-11-20T09:03:02-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -6665,10 +6665,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `b878d37d4c`: The PR bumps Duplicacy to 3.3.1 but leaves the source SHA256 unchanged (the build will fail), and bundles an unrelated ai-review.py deadline/error-handling redesign that violates rules 7 and 8.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:27`) DUPLICACY_SOURCE_SHA256 not updated for 3.3.1: The version was bumped to 3.3.1 but `ARG DUPLICACY_SOURCE_SHA256` still holds the hash for the 3.3.0 artifact (`dea27ecb…`). The Docker build's integrity check will reject the 3.3.1 download and the image build will fail. Update the hash to the value published for the v3.3.1 release.\n- **F2** (suggestion, `README.md:1`) README still references Duplicacy 3.3.0: Rule 10 requires docs to change in the same PR as the behaviour they describe. The README links to `…/tree/v3.3.0` and names \"Duplicacy 3.3.0\" in both the intro paragraph and the Licensing section. Update those references to 3.3.1 so the docs match the code.\n- **F4** (**blocking**, `.forgejo/scripts/ai-review.py:286`) Unrelated ai-review.py redesign bundled with a dependency bump (rules 7, 8): The PR's stated concern is bumping Duplicacy from 3.3.0 to 3.3.1 (one Dockerfile line). The diff also adds a MODEL_DEADLINE mechanism, a signal-based timeout, a new Deadline exception, restructured error handling, and a workflow timeout change (20→45 min) in ai-review.py and ai-review.yml. None of this is needed for the version bump to work. Rule 7: \"Independently useful fixes, cleanups or speedups are separate PRs.\" Rule 8: \"no unrelated cleanup, renaming, reformatting, new abstractions or drive-by refactors.\" Split the ai-review.py/ai-review.yml changes into their own PR with its own issue.\n\n### Withdrawn\n\n- **F3** (suggestion, `.forgejo/scripts/prepare-release-tree.sh:1`) PR bundles a release-workflow redesign with a one-line dependency bump (rules 7, 8): Withdrawn: the actual diff contains only the single Dockerfile line change. No release-workflow files (prepare-release-tree.sh, verify-release-pr.py, publish-release.yml, release.yml rewrite, CHANGELOG, CONTRIBUTING) appear in the diff. The finding was based on a misread of the PR scope. (Not blocking: it did not cite a changed file and line.)\n  - Reviewer: The diff I can see is limited to the one-line Dockerfile change. There are no release-workflow files in the diff, so the bundling concern does not apply. Withdrawing.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAyNywgInNldmVyaXR5IjogImJsb2NraW5nIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIkRVUExJQ0FDWV9TT1VSQ0VfU0hBMjU2IG5vdCB1cGRhdGVkIGZvciAzLjMuMSIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gd2FzIGJ1bXBlZCB0byAzLjMuMSBidXQgYEFSRyBEVVBMSUNBQ1lfU09VUkNFX1NIQTI1NmAgc3RpbGwgaG9sZHMgdGhlIGhhc2ggZm9yIHRoZSAzLjMuMCBhcnRpZmFjdCAoYGRlYTI3ZWNiXHUyMDI2YCkuIFRoZSBEb2NrZXIgYnVpbGQncyBpbnRlZ3JpdHkgY2hlY2sgd2lsbCByZWplY3QgdGhlIDMuMy4xIGRvd25sb2FkIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgdGhlIGhhc2ggdG8gdGhlIHZhbHVlIHB1Ymxpc2hlZCBmb3IgdGhlIHYzLjMuMSByZWxlYXNlLiIsICJyZXNwb25zZSI6ICIifSwgeyJpZCI6ICJGMiIsICJmaWxlIjogIlJFQURNRS5tZCIsICJsaW5lIjogMSwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIm9wZW4iLCAidGl0bGUiOiAiUkVBRE1FIHN0aWxsIHJlZmVyZW5jZXMgRHVwbGljYWN5IDMuMy4wIiwgImRldGFpbCI6ICJSdWxlIDEwIHJlcXVpcmVzIGRvY3MgdG8gY2hhbmdlIGluIHRoZSBzYW1lIFBSIGFzIHRoZSBiZWhhdmlvdXIgdGhleSBkZXNjcmliZS4gVGhlIFJFQURNRSBsaW5rcyB0byBgXHUyMDI2L3RyZWUvdjMuMy4wYCBhbmQgbmFtZXMgXCJEdXBsaWNhY3kgMy4zLjBcIiBpbiBib3RoIHRoZSBpbnRybyBwYXJhZ3JhcGggYW5kIHRoZSBMaWNlbnNpbmcgc2VjdGlvbi4gVXBkYXRlIHRob3NlIHJlZmVyZW5jZXMgdG8gMy4zLjEgc28gdGhlIGRvY3MgbWF0Y2ggdGhlIGNvZGUuIiwgInJlc3BvbnNlIjogIiJ9LCB7ImlkIjogIkYzIiwgImZpbGUiOiAiLmZvcmdlam8vc2NyaXB0cy9wcmVwYXJlLXJlbGVhc2UtdHJlZS5zaCIsICJsaW5lIjogMSwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIndpdGhkcmF3biIsICJ0aXRsZSI6ICJQUiBidW5kbGVzIGEgcmVsZWFzZS13b3JrZmxvdyByZWRlc2lnbiB3aXRoIGEgb25lLWxpbmUgZGVwZW5kZW5jeSBidW1wIChydWxlcyA3LCA4KSIsICJkZXRhaWwiOiAiV2l0aGRyYXduOiB0aGUgYWN0dWFsIGRpZmYgY29udGFpbnMgb25seSB0aGUgc2luZ2xlIERvY2tlcmZpbGUgbGluZSBjaGFuZ2UuIE5vIHJlbGVhc2Utd29ya2Zsb3cgZmlsZXMgKHByZXBhcmUtcmVsZWFzZS10cmVlLnNoLCB2ZXJpZnktcmVsZWFzZS1wci5weSwgcHVibGlzaC1yZWxlYXNlLnltbCwgcmVsZWFzZS55bWwgcmV3cml0ZSwgQ0hBTkdFTE9HLCBDT05UUklCVVRJTkcpIGFwcGVhciBpbiB0aGUgZGlmZi4gVGhlIGZpbmRpbmcgd2FzIGJhc2VkIG9uIGEgbWlzcmVhZCBvZiB0aGUgUFIgc2NvcGUuIChOb3QgYmxvY2tpbmc6IGl0IGRpZCBub3QgY2l0ZSBhIGNoYW5nZWQgZmlsZSBhbmQgbGluZS4pIiwgInJlc3BvbnNlIjogIlRoZSBkaWZmIEkgY2FuIHNlZSBpcyBsaW1pdGVkIHRvIHRoZSBvbmUtbGluZSBEb2NrZXJmaWxlIGNoYW5nZS4gVGhlcmUgYXJlIG5vIHJlbGVhc2Utd29ya2Zsb3cgZmlsZXMgaW4gdGhlIGRpZmYsIHNvIHRoZSBidW5kbGluZyBjb25jZXJuIGRvZXMgbm90IGFwcGx5LiBXaXRoZHJhd2luZy4ifSwgeyJpZCI6ICJGNCIsICJmaWxlIjogIi5mb3JnZWpvL3NjcmlwdHMvYWktcmV2aWV3LnB5IiwgImxpbmUiOiAyODYsICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJVbnJlbGF0ZWQgYWktcmV2aWV3LnB5IHJlZGVzaWduIGJ1bmRsZWQgd2l0aCBhIGRlcGVuZGVuY3kgYnVtcCAocnVsZXMgNywgOCkiLCAiZGV0YWlsIjogIlRoZSBQUidzIHN0YXRlZCBjb25jZXJuIGlzIGJ1bXBpbmcgRHVwbGljYWN5IGZyb20gMy4zLjAgdG8gMy4zLjEgKG9uZSBEb2NrZXJmaWxlIGxpbmUpLiBUaGUgZGlmZiBhbHNvIGFkZHMgYSBNT0RFTF9ERUFETElORSBtZWNoYW5pc20sIGEgc2lnbmFsLWJhc2VkIHRpbWVvdXQsIGEgbmV3IERlYWRsaW5lIGV4Y2VwdGlvbiwgcmVzdHJ1Y3R1cmVkIGVycm9yIGhhbmRsaW5nLCBhbmQgYSB3b3JrZmxvdyB0aW1lb3V0IGNoYW5nZSAoMjBcdTIxOTI0NSBtaW4pIGluIGFpLXJldmlldy5weSBhbmQgYWktcmV2aWV3LnltbC4gTm9uZSBvZiB0aGlzIGlzIG5lZWRlZCBmb3IgdGhlIHZlcnNpb24gYnVtcCB0byB3b3JrLiBSdWxlIDc6IFwiSW5kZXBlbmRlbnRseSB1c2VmdWwgZml4ZXMsIGNsZWFudXBzIG9yIHNwZWVkdXBzIGFyZSBzZXBhcmF0ZSBQUnMuXCIgUnVsZSA4OiBcIm5vIHVucmVsYXRlZCBjbGVhbnVwLCByZW5hbWluZywgcmVmb3JtYXR0aW5nLCBuZXcgYWJzdHJhY3Rpb25zIG9yIGRyaXZlLWJ5IHJlZmFjdG9ycy5cIiBTcGxpdCB0aGUgYWktcmV2aWV3LnB5L2FpLXJldmlldy55bWwgY2hhbmdlcyBpbnRvIHRoZWlyIG93biBQUiB3aXRoIGl0cyBvd24gaXNzdWUuIiwgInJlc3BvbnNlIjogIiJ9XQ== -->",
+    "body": "<!-- ai-review -->\n**AI review** of `224339f20c`: The Duplicacy version is bumped to 3.3.1 but the SHA256 integrity hash is not updated, which will cause the Docker build to fail. The README still references 3.3.0. The previously flagged ai-review.py changes are not present in this diff.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:28`) DUPLICACY_SOURCE_SHA256 not updated for 3.3.1: The version was bumped to 3.3.1 but `ARG DUPLICACY_SOURCE_SHA256` still holds the hash for the 3.3.0 artifact (`dea27ecb…`). The Docker build's integrity check will reject the 3.3.1 download and the image build will fail. Update the hash to the value published for the v3.3.1 release.\n- **F2** (suggestion, `README.md:1`) README still references Duplicacy 3.3.0: Rule 10 requires docs to change in the same PR as the behaviour they describe. The README links to `…/tree/v3.3.0` and names \"Duplicacy 3.3.0\" in both the intro paragraph and the Licensing section. Update those references to 3.3.1 so the docs match the code.\n\n### Withdrawn\n\n- **F3** (suggestion, `.forgejo/scripts/prepare-release-tree.sh:1`) PR bundles a release-workflow redesign with a one-line dependency bump (rules 7, 8): Withdrawn: the actual diff contains only the single Dockerfile line change. No release-workflow files appear in the diff.\n  - Reviewer: The diff I can see is limited to the one-line Dockerfile change. There are no release-workflow files in the diff, so the bundling concern does not apply. Withdrawing.\n- **F4** (suggestion, `.forgejo/scripts/ai-review.py:286`) Unrelated ai-review.py redesign bundled with a dependency bump (rules 7, 8): Withdrawn: the diff provided contains only the Dockerfile change. There is no ai-review.py or ai-review.yml modification in this PR. The finding was based on content not present in the diff. (Not blocking: it did not cite a changed file and line.)\n  - Reviewer: Re-examining the diff, it contains only the single Dockerfile ENV line change. No ai-review.py or ai-review.yml changes are present. Withdrawing this finding.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAyOCwgInNldmVyaXR5IjogImJsb2NraW5nIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIkRVUExJQ0FDWV9TT1VSQ0VfU0hBMjU2IG5vdCB1cGRhdGVkIGZvciAzLjMuMSIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gd2FzIGJ1bXBlZCB0byAzLjMuMSBidXQgYEFSRyBEVVBMSUNBQ1lfU09VUkNFX1NIQTI1NmAgc3RpbGwgaG9sZHMgdGhlIGhhc2ggZm9yIHRoZSAzLjMuMCBhcnRpZmFjdCAoYGRlYTI3ZWNiXHUyMDI2YCkuIFRoZSBEb2NrZXIgYnVpbGQncyBpbnRlZ3JpdHkgY2hlY2sgd2lsbCByZWplY3QgdGhlIDMuMy4xIGRvd25sb2FkIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgdGhlIGhhc2ggdG8gdGhlIHZhbHVlIHB1Ymxpc2hlZCBmb3IgdGhlIHYzLjMuMSByZWxlYXNlLiIsICJyZXNwb25zZSI6ICIifSwgeyJpZCI6ICJGMiIsICJmaWxlIjogIlJFQURNRS5tZCIsICJsaW5lIjogMSwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIm9wZW4iLCAidGl0bGUiOiAiUkVBRE1FIHN0aWxsIHJlZmVyZW5jZXMgRHVwbGljYWN5IDMuMy4wIiwgImRldGFpbCI6ICJSdWxlIDEwIHJlcXVpcmVzIGRvY3MgdG8gY2hhbmdlIGluIHRoZSBzYW1lIFBSIGFzIHRoZSBiZWhhdmlvdXIgdGhleSBkZXNjcmliZS4gVGhlIFJFQURNRSBsaW5rcyB0byBgXHUyMDI2L3RyZWUvdjMuMy4wYCBhbmQgbmFtZXMgXCJEdXBsaWNhY3kgMy4zLjBcIiBpbiBib3RoIHRoZSBpbnRybyBwYXJhZ3JhcGggYW5kIHRoZSBMaWNlbnNpbmcgc2VjdGlvbi4gVXBkYXRlIHRob3NlIHJlZmVyZW5jZXMgdG8gMy4zLjEgc28gdGhlIGRvY3MgbWF0Y2ggdGhlIGNvZGUuIiwgInJlc3BvbnNlIjogIiJ9LCB7ImlkIjogIkYzIiwgImZpbGUiOiAiLmZvcmdlam8vc2NyaXB0cy9wcmVwYXJlLXJlbGVhc2UtdHJlZS5zaCIsICJsaW5lIjogMSwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIndpdGhkcmF3biIsICJ0aXRsZSI6ICJQUiBidW5kbGVzIGEgcmVsZWFzZS13b3JrZmxvdyByZWRlc2lnbiB3aXRoIGEgb25lLWxpbmUgZGVwZW5kZW5jeSBidW1wIChydWxlcyA3LCA4KSIsICJkZXRhaWwiOiAiV2l0aGRyYXduOiB0aGUgYWN0dWFsIGRpZmYgY29udGFpbnMgb25seSB0aGUgc2luZ2xlIERvY2tlcmZpbGUgbGluZSBjaGFuZ2UuIE5vIHJlbGVhc2Utd29ya2Zsb3cgZmlsZXMgYXBwZWFyIGluIHRoZSBkaWZmLiIsICJyZXNwb25zZSI6ICJUaGUgZGlmZiBJIGNhbiBzZWUgaXMgbGltaXRlZCB0byB0aGUgb25lLWxpbmUgRG9ja2VyZmlsZSBjaGFuZ2UuIFRoZXJlIGFyZSBubyByZWxlYXNlLXdvcmtmbG93IGZpbGVzIGluIHRoZSBkaWZmLCBzbyB0aGUgYnVuZGxpbmcgY29uY2VybiBkb2VzIG5vdCBhcHBseS4gV2l0aGRyYXdpbmcuIn0sIHsiaWQiOiAiRjQiLCAiZmlsZSI6ICIuZm9yZ2Vqby9zY3JpcHRzL2FpLXJldmlldy5weSIsICJsaW5lIjogMjg2LCAic2V2ZXJpdHkiOiAic3VnZ2VzdGlvbiIsICJzdGF0dXMiOiAid2l0aGRyYXduIiwgInRpdGxlIjogIlVucmVsYXRlZCBhaS1yZXZpZXcucHkgcmVkZXNpZ24gYnVuZGxlZCB3aXRoIGEgZGVwZW5kZW5jeSBidW1wIChydWxlcyA3LCA4KSIsICJkZXRhaWwiOiAiV2l0aGRyYXduOiB0aGUgZGlmZiBwcm92aWRlZCBjb250YWlucyBvbmx5IHRoZSBEb2NrZXJmaWxlIGNoYW5nZS4gVGhlcmUgaXMgbm8gYWktcmV2aWV3LnB5IG9yIGFpLXJldmlldy55bWwgbW9kaWZpY2F0aW9uIGluIHRoaXMgUFIuIFRoZSBmaW5kaW5nIHdhcyBiYXNlZCBvbiBjb250ZW50IG5vdCBwcmVzZW50IGluIHRoZSBkaWZmLiAoTm90IGJsb2NraW5nOiBpdCBkaWQgbm90IGNpdGUgYSBjaGFuZ2VkIGZpbGUgYW5kIGxpbmUuKSIsICJyZXNwb25zZSI6ICJSZS1leGFtaW5pbmcgdGhlIGRpZmYsIGl0IGNvbnRhaW5zIG9ubHkgdGhlIHNpbmdsZSBEb2NrZXJmaWxlIEVOViBsaW5lIGNoYW5nZS4gTm8gYWktcmV2aWV3LnB5IG9yIGFpLXJldmlldy55bWwgY2hhbmdlcyBhcmUgcHJlc2VudC4gV2l0aGRyYXdpbmcgdGhpcyBmaW5kaW5nLiJ9XQ== -->",
     "created_at": "2026-11-17T15:02:42-08:00",
     "id": 36638,
-    "updated_at": "2026-11-19T19:03:43-08:00",
+    "updated_at": "2026-11-20T09:03:12-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -6900,7 +6900,7 @@
  {
   "assignees": [],
   "body": "Once #352 provides the verified maintenance-channel release flow from main, replace release/0.11’s old direct branch and tag writer with guidance to dispatch Prepare Release from main targeting release/0.11. Keep tag-triggered archive publishing and verify patch releases through the new path before requiring protection.\n\nDepends on #352.",
-  "closed_at": null,
+  "closed_at": "2026-11-20T18:50:57-08:00",
   "comments": [],
   "created_at": "2026-11-17T18:54:57-08:00",
   "kind": "issue",
@@ -6910,27 +6910,27 @@
   ],
   "milestone": null,
   "number": 356,
-  "state": "open",
+  "state": "closed",
   "title": "Retire the direct-write release workflow on release/0.11",
   "user": "cody"
  },
  {
   "assignees": [],
   "base": "release/0.11",
-  "body": "Closes #356.\nDepends on #355.\n\nReplace the maintenance dispatcher that pushed the branch and tag directly with instructions to use the trusted main dispatches targeting release/0.11. Keep this draft until #355 merges and the new maintenance path is verified.\n\nNo tests: The replacement workflow contains only a diagnostic and fails immediately. Strict YAML lint and independent review passed.",
-  "closed_at": null,
+  "body": "Closes #356.\nDepends on #355 (merged).\n\nReplace the maintenance dispatcher that pushed the branch and tag directly with instructions to use the trusted main dispatches targeting release/0.11. The new maintenance path is verified: v0.11.9 went through Prepare Release (run 858, PR #376) and Publish Release (run 41557) from main and published (run 41558, digest sha256:5e6b551c on ghcr, cluster and NAS registries).\n\nNo tests: The replacement workflow contains only a diagnostic and fails immediately. Strict YAML lint and independent review passed.",
+  "closed_at": "2026-11-20T18:50:57-08:00",
   "comments": [],
   "created_at": "2026-11-17T19:17:09-08:00",
-  "head": "ci/retire-legacy-release-writer",
+  "head": "refs/pull/357/head",
   "kind": "pull",
   "labels": [],
-  "merge_commit_sha": null,
-  "merged": false,
+  "merge_commit_sha": "e79fc62b59b1a8fe773ceebe62eee655b966c223",
+  "merged": true,
   "milestone": null,
   "number": 357,
   "reviews": [],
-  "state": "open",
-  "title": "WIP: Retire the old release dispatcher on the 0.11 line",
+  "state": "closed",
+  "title": "Retire the old release dispatcher on the 0.11 line",
   "user": "cody"
  },
  {
@@ -6976,7 +6976,7 @@
   "closed_at": "2026-11-17T19:56:46-08:00",
   "comments": [],
   "created_at": "2026-11-17T19:52:25-08:00",
-  "head": "proof/required-check-failures",
+  "head": "refs/pull/359/head",
   "kind": "pull",
   "labels": [],
   "merge_commit_sha": null,
@@ -7036,10 +7036,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `4a4413d499`: Clean Renovate dependency bump of the Podman integration-test image from v6.1.3 to v6.2.0 (with updated SHA-256 digest), addressing three CVEs. Single-line change, properly scoped to the standing dependency-update issue #349, no unrelated edits.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `114d82091b`: Single-line dependency bump of the Podman test image from v6.1.3 to v6.2.0 (with updated SHA256 digest) in the integration test script. The change is minimal, correctly scoped to the Renovate standing issue #349, and addresses upstream CVEs. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:02:29-08:00",
     "id": 37031,
-    "updated_at": "2026-11-19T20:02:24-08:00",
+    "updated_at": "2026-11-20T09:03:08-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7063,10 +7063,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `6c3bfbc079`: Clean Renovate-generated dependency update bumping the pinned skopeo image from v1.24.1 to v1.25.1 (with matching digest) across all six occurrences in two workflow files. The change is consistent, scoped to the linked standing issue #349, and includes CVE fixes.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `9c2d728c0f`: Clean Renovate dependency bump of skopeo v1.24.1→v1.25.1 across all six pinned references in two workflow files, with matching digest update. All hunks are the same version change; no unrelated edits, no missing occurrences, and the linked standing issue #349 satisfies the issue-link gate.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:03:19-08:00",
     "id": 37038,
-    "updated_at": "2026-11-19T20:02:26-08:00",
+    "updated_at": "2026-11-20T09:03:31-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7086,7 +7086,7 @@
  {
   "assignees": [],
   "body": "Use the primary image in operator instructions and cross-version verification. Keep the full GHCR mirror, same digests and compatibility with existing Go imports.",
-  "closed_at": null,
+  "closed_at": "2026-11-20T08:50:51-08:00",
   "comments": [
    {
     "body": "The local patch uses the Forgejo OCI image for migration help, recovery and cross-version checks, and keeps existing printed envelopes valid. Go race tests and vet pass. The historical image digests resolve from Forgejo. The storage examples now select a published image that contains rclone. The public registry endpoint currently returns HTTP 500. Landing waits for an anonymous pull through the public endpoint.",
@@ -7094,17 +7094,24 @@
     "id": 37537,
     "updated_at": "2026-11-18T06:53:22-08:00",
     "user": "cody"
+   },
+   {
+    "body": "Done: PR #369 merged at 5a59992 (all required contexts green on 3374329, incl. black-box cross-version suite pulling baselines from Forgejo), GitHub and NAS mirrors match, branch and worktree removed. Review fixes: release script now replaces whole prerelease tags; legacy guide pins floating 0.11.",
+    "created_at": "2026-11-20T08:51:56-08:00",
+    "id": 40172,
+    "updated_at": "2026-11-20T08:51:56-08:00",
+    "user": "cody"
    }
   ],
   "created_at": "2026-11-18T06:33:50-08:00",
   "kind": "issue",
   "labels": [
-   "status:blocked",
+   "status:in-progress",
    "type:chore"
   ],
   "milestone": null,
   "number": 364,
-  "state": "open",
+  "state": "closed",
   "title": "Default recovery, migration and verification to the Forgejo image",
   "user": "cody"
  },
@@ -7194,6 +7201,214 @@
   "reviews": [],
   "state": "closed",
   "title": "AI review: 40-minute deadline inside a 45-minute job",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "main",
+  "body": "Closes #364\n\nThe installation, recovery, migration and storage docs, the bundle-refusal help and the recovery envelope now name `forgejo.bryantserver.com/sisyphusmd/archiver`. GHCR stays a mirror with identical digests. `Page.Fingerprint` treats the new registry string as the old one, so envelopes that were already printed and confirmed stay valid; changed credentials still invalidate them, and a golden-fingerprint test pins this. Cross-version e2e baselines pull the same digests from Forgejo.\n\nRelease tooling fixes, from review:\n- `prepare-release-tree.sh` now replaces a whole pinned prerelease tag on stable releases. Before, a stable `1.0.1` would have turned the storage OAuth example `1.0.0-rc.7` into `1.0.1-rc.7` (cx).\n- The legacy migration guide pins the floating `0.11` tag, so a stable v1 release no longer rewrites it to a v1 image that cannot convert bundles. This was a pre-existing bug (qx).\n- `test_release_promotion` covers both.\n\nChecks: go vet, race tests for cmd/internal, shellcheck and the release-promotion test pass locally.",
+  "closed_at": "2026-11-20T08:50:51-08:00",
+  "comments": [
+   {
+    "body": "<!-- ai-review -->\n**AI review** of `3374329a91`: Clean, well-scoped PR that switches operator-facing image references to the Forgejo registry, preserves backward-compatible envelope fingerprints with a golden test, fixes the release-tree sed to consume prerelease suffixes on stable bumps, and pins the migration guide to the floating 0.11 tag. Tests cover the new fingerprint path and both stable and prerelease sed behaviour.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "created_at": "2026-11-20T08:28:48-08:00",
+    "id": 40146,
+    "updated_at": "2026-11-20T08:28:48-08:00",
+    "user": "forgejo-actions"
+   }
+  ],
+  "created_at": "2026-11-20T08:27:19-08:00",
+  "head": "refs/pull/369/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "5a59992c2e9ecf27f03afe5c747e12cb608614c6",
+  "merged": true,
+  "milestone": null,
+  "number": 369,
+  "reviews": [],
+  "state": "closed",
+  "title": "chore: default image pulls and recovery instructions to the Forgejo registry",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "body": "The 0.11 maintenance line still builds on debian:trixie-20260112-slim (January 2026), ten months of Debian security updates behind. Refresh it to the trixie-20261104-slim digest main already uses, as a maintenance patch on release/0.11.\n\nThis is also the real maintenance change that project-rules#74 and #86 wait on to prove the trusted-main release path for a maintenance line, and that clears #357/#356.\n\nScope: the base image digest only. The Docker CLI (29.6.2) stays put on this line: a minor bump needs hand-verified per-arch checksums and is not needed for the refresh. Releasing v0.11.8 waits on Cody's explicit yes.",
+  "closed_at": "2026-11-20T17:35:19-08:00",
+  "comments": [
+   {
+    "body": "In progress (Project-rules rollout follow-ups session): PR #371 into release/0.11 refreshes the Debian base digest to the one main uses and adds a Security changelog line. qx review taken: changelog wording fixed, non-deps commit subject so release notes do not duplicate it. Next: CI green, merge into release/0.11, then v0.11.8 only on Cody's explicit yes.",
+    "created_at": "2026-11-20T17:29:19-08:00",
+    "id": 40910,
+    "updated_at": "2026-11-20T17:29:19-08:00",
+    "user": "cody"
+   },
+   {
+    "body": "Done: #371 merged into release/0.11 at 8fb87e1 (ancestry verified, all CI green, branch removed). No tag or release was cut. v0.11.8 waits on Cody's explicit yes; the release proof is tracked in project-rules#74 and #86.",
+    "created_at": "2026-11-20T17:35:45-08:00",
+    "id": 40944,
+    "updated_at": "2026-11-20T17:35:45-08:00",
+    "user": "cody"
+   }
+  ],
+  "created_at": "2026-11-20T17:26:25-08:00",
+  "kind": "issue",
+  "labels": [
+   "status:in-progress",
+   "type:chore"
+  ],
+  "milestone": null,
+  "number": 370,
+  "state": "closed",
+  "title": "Refresh the Debian base image on release/0.11",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "release/0.11",
+  "body": "Closes #370.\n\nMaintenance patch for the 0.11 line: `debian:trixie-20260112-slim` to `debian:trixie-20261104-slim`, the same multi-arch digest main builds on. The pinned downloads (Duplicacy, supercronic, Docker CLI) are unchanged; apt packages come from the newer snapshot. Changelog entry under `## [Unreleased]` (Security).\n\nTests: no code change. The PR build, smoke, integration and never-break suites on this branch are the regression proof for the new snapshot.\n\nMerging this does not release anything. v0.11.8 goes through the trusted-main Prepare/Publish Release dispatches only after Cody approves it.",
+  "closed_at": "2026-11-20T17:35:19-08:00",
+  "comments": [],
+  "created_at": "2026-11-20T17:29:06-08:00",
+  "head": "refs/pull/371/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "8fb87e178ee6909bf4e61a262de601cf4fdad2a3",
+  "merged": true,
+  "milestone": null,
+  "number": 371,
+  "reviews": [],
+  "state": "closed",
+  "title": "fix: refresh the Debian base image on the 0.11 line",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "body": "Cut v0.11.8 from release/0.11 (8fb87e1) carrying the Debian base refresh from #370 / #371, through Prepare Release and Publish Release from main. This is the first maintenance release on the new path, so it also validates hosted qualification before #356 retires the old writer.\n\nApproved by Cody 2026-11-20 (SisyphusMD/project-rules#74).",
+  "closed_at": "2026-11-20T18:30:24-08:00",
+  "comments": [
+   {
+    "body": "Status: v0.11.8 tagged but NOT published. Prepare Release (run 849) qualified and opened #373; merged into release/0.11 at efe35ce (ancestry verified); Publish Release (run 851) created annotated tag v0.11.8, already on forgejo.lan and GitHub. The tag publish (run 41501) failed at the cluster skopeo push, before any image push: release/0.11 docker-publish.yml still uses the retired *.nas mirror names, and its skopeo v1.22.3 digest is gone upstream. Rerun failed the same way. ghcr has no 0.11.8; 0.11 and 0.11.7 still point at sha256:83723fb6. Fix: archiver#374 / PR #375 (.lan names + main's skopeo v1.24.1 pin). The tag is not moved (already mirrored). Proposed next: merge #375 and cut v0.11.9 with the same image contents; pending Cody. archiver#357 stays draft until a 0.11 publish succeeds.",
+    "created_at": "2026-11-20T18:16:13-08:00",
+    "id": 41029,
+    "updated_at": "2026-11-20T18:16:13-08:00",
+    "user": "cody"
+   },
+   {
+    "body": "Done: v0.11.9 published (digest sha256:5e6b551c on ghcr, cluster and NAS registries; release pages on all three hosts). v0.11.8 remains a tag without an image.",
+    "created_at": "2026-11-20T18:52:22-08:00",
+    "id": 41092,
+    "updated_at": "2026-11-20T18:52:22-08:00",
+    "user": "cody"
+   }
+  ],
+  "created_at": "2026-11-20T17:47:37-08:00",
+  "kind": "issue",
+  "labels": [],
+  "milestone": null,
+  "number": 372,
+  "state": "closed",
+  "title": "Release v0.11.9 from release/0.11 (first published build of the 0.11.8 changes)",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "release/0.11",
+  "body": "Closes #372. The prepared release passed qualification.\n\nNo tests: The workflow replays the exact changelog and image-reference edits that passed qualification.",
+  "closed_at": "2026-11-20T17:55:05-08:00",
+  "comments": [],
+  "created_at": "2026-11-20T17:48:51-08:00",
+  "head": "refs/pull/373/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "efe35ceb18d9f2aff431ba39b0a5c373df523fb1",
+  "merged": true,
+  "milestone": null,
+  "number": 373,
+  "reviews": [],
+  "state": "closed",
+  "title": "Release v0.11.8",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "body": "The v0.11.8 tag publish (run 41501, job 204023) failed at \"Push to cluster Forgejo via skopeo\": release/0.11 docker-publish.yml still pulls skopeo from image-mirror.nas.bryantserver.com and mirrors to forgejo.nas.bryantserver.com, names retired on 2026-10-10 (main fixed this in ead5944). The pinned skopeo v1.22.3 digest is also gone from quay and the .lan mirror, so a plain rename is not enough.\n\nFix on release/0.11: use the .lan names and main's pinned skopeo v1.24.1 digest. No image is published for v0.11.8; the tag is already on both mirrors, so it is not moved.",
+  "closed_at": "2026-11-20T18:22:02-08:00",
+  "comments": [
+   {
+    "body": "Decision: Yes: merge archiver#375 and cut v0.11.9 (same image contents as the unpublished v0.11.8) through the trusted-main Prepare/Publish Release path. Why: the v0.11.8 tag is already mirrored and must not move, and its publish workflow cannot run.\n\nDecided by: Cody, 2026-11-20.",
+    "created_at": "2026-11-20T18:21:05-08:00",
+    "id": 41040,
+    "updated_at": "2026-11-20T18:21:05-08:00",
+    "user": "cody"
+   }
+  ],
+  "created_at": "2026-11-20T18:06:01-08:00",
+  "kind": "issue",
+  "labels": [],
+  "milestone": null,
+  "number": 374,
+  "state": "closed",
+  "title": "Point the 0.11 publish workflow at the live mirror names",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "release/0.11",
+  "body": "Closes #374.\n\nThe v0.11.8 tag publish failed before pushing anything: release/0.11 still pulled skopeo from the retired image-mirror.nas name and mirrored to forgejo.nas. This uses the .lan names main has published every rc through since ead5944, and main's skopeo v1.24.1 digest (the v1.22.3 digest is gone from quay and the mirror). skopeo 1.24.1 accepts every flag these steps pass (checked with copy/sync --help). CHANGELOG notes that v0.11.8 has a tag but no image.\n\nNo tests: the publish jobs run only on a tag push, so the next release run is the proof.",
+  "closed_at": "2026-11-20T18:22:01-08:00",
+  "comments": [],
+  "created_at": "2026-11-20T18:16:04-08:00",
+  "head": "refs/pull/375/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "de6a6da0ed73b5f237d8f9e357fcc7c57317ba2e",
+  "merged": true,
+  "milestone": null,
+  "number": 375,
+  "reviews": [],
+  "state": "closed",
+  "title": "ci: publish the 0.11 line through the live mirror names",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "release/0.11",
+  "body": "Closes #372. The prepared release passed qualification.\n\nNo tests: The workflow replays the exact changelog and image-reference edits that passed qualification.",
+  "closed_at": "2026-11-20T18:30:24-08:00",
+  "comments": [],
+  "created_at": "2026-11-20T18:24:59-08:00",
+  "head": "refs/pull/376/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "17cd5e1349747c8f7d2f4439ac14d265bd22ad4d",
+  "merged": true,
+  "milestone": null,
+  "number": 376,
+  "reviews": [],
+  "state": "closed",
+  "title": "Release v0.11.9",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "body": "Publish Release run 41557 (v0.11.9, PR #376) failed with \"This PR head did not pass Prepare Release\" although 402a470 carried a success `Release / Qualified candidate` status from run 858.\n\nCause: `publish-release.yml` matches the status `target_url` against `$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/`. Prepare Release ran on a pool runner registered with `http://forgejo.forgejo.svc.cluster.local`, so the status URL uses that host; the first Publish attempt landed on a runner whose server URL is `https://forgejo.bryantserver.com` (its checkout fetched from there), so the prefix did not match. A rerun on a pool runner passed and tagged v0.11.9.\n\nFix: match on the repository path and run number, independent of the host the runner was registered with (or check the status creator instead of the URL). Same check exists in `release.yml` for an existing release PR; review both. Also find which runner registered with the public URL.",
+  "closed_at": null,
+  "comments": [
+   {
+    "body": "Status: open, no PR yet. Only publish-release.yml:43-50 matches the URL (release.yml:189 writes it). Next: make the match host-independent (repo path + run number, or the status creator), test-first, with a cx review since it is a release trust check; also identify the runner registered with https://forgejo.bryantserver.com. No crons or holds.",
+    "created_at": "2026-11-21T00:42:58-08:00",
+    "id": 41152,
+    "updated_at": "2026-11-21T00:42:58-08:00",
+    "user": "cody"
+   }
+  ],
+  "created_at": "2026-11-20T18:32:58-08:00",
+  "kind": "issue",
+  "labels": [],
+  "milestone": null,
+  "number": 377,
+  "state": "open",
+  "title": "Publish Release refuses a qualified PR when it runs on a runner with a different server URL",
   "user": "cody"
  }
 ]
