@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.11.9] - 2026-11-21
+
+### Fixed
+- **First published build of the 0.11.8 changes:** v0.11.8 was tagged but never published as an image, because the 0.11 publish workflow still used retired registry mirror names. This release ships the same image contents (the Debian base refresh); use it instead of 0.11.8.
+
 ## [0.11.8] - 2026-11-21
 
 ### Security
