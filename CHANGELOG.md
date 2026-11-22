@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- Bring the AI review copy up to project-rules 64b857c (connect retry, malformed-answer re-ask, pinned checkout) (#381).
 - Publish Release accepts a qualified release PR whichever Forgejo address its runner uses (#377).
 
 - Installation, recovery, storage and migration commands use the Forgejo container registry (#364).
