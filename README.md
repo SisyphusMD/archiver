@@ -380,4 +380,10 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 374 | issue | closed | [Point the 0.11 publish workflow at the live mirror names](items/0374-point-the-0-11-publish-workflow-at-the-live-mirror-names.md) |
 | 375 | pull | closed | [ci: publish the 0.11 line through the live mirror names](items/0375-ci-publish-the-0-11-line-through-the-live-mirror-names.md) |
 | 376 | pull | closed | [Release v0.11.9](items/0376-release-v0-11-9.md) |
-| 377 | issue | open | [Publish Release refuses a qualified PR when it runs on a runner with a different server URL](items/0377-publish-release-refuses-a-qualified-pr-when-it-runs-on-a-run.md) |
+| 377 | issue | closed | [Publish Release refuses a qualified PR when it runs on a runner with a different server URL](items/0377-publish-release-refuses-a-qualified-pr-when-it-runs-on-a-run.md) |
+| 378 | pull | closed | [Publish Release: find the qualification run by repository path, not server URL](items/0378-publish-release-find-the-qualification-run-by-repository-pat.md) |
+| 379 | issue | closed | [AI review runs on any signed-in user's PR comment](items/0379-ai-review-runs-on-any-signed-in-user-s-pr-comment.md) |
+| 380 | pull | closed | [fix(ai-review): start a review from a PR comment only for pushers and the PR author](items/0380-fix-ai-review-start-a-review-from-a-pr-comment-only-for-push.md) |
+| 381 | issue | closed | [chore(ci): bring the AI review copy up to canonical project-rules 64b857c](items/0381-chore-ci-bring-the-ai-review-copy-up-to-canonical-project-ru.md) |
+| 382 | pull | closed | [chore(ci): copy the AI review from project-rules 64b857c](items/0382-chore-ci-copy-the-ai-review-from-project-rules-64b857c.md) |
+| 383 | issue | open | [Kit drill failure should name the differing entry](items/0383-kit-drill-failure-should-name-the-differing-entry.md) |

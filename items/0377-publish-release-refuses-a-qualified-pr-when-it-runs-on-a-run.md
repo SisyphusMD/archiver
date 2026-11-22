@@ -1,6 +1,6 @@
 # #377 Publish Release refuses a qualified PR when it runs on a runner with a different server URL
 
-- Kind: issue, state: open, by cody, created 2026-11-20T18:32:58-08:00
+- Kind: issue, state: closed, by cody, created 2026-11-20T18:32:58-08:00
 - Labels: none; milestone: none
 
 Publish Release run 41557 (v0.11.9, PR #376) failed with "This PR head did not pass Prepare Release" although 402a470 carried a success `Release / Qualified candidate` status from run 858.
@@ -12,3 +12,7 @@ Fix: match on the repository path and run number, independent of the host the ru
 ## cody, 2026-11-21T00:42:58-08:00
 
 Status: open, no PR yet. Only publish-release.yml:43-50 matches the URL (release.yml:189 writes it). Next: make the match host-independent (repo path + run number, or the status creator), test-first, with a cx review since it is a release trust check; also identify the runner registered with https://forgejo.bryantserver.com. No crons or holds.
+
+## cody, 2026-11-21T09:03:59-08:00
+
+Status: fix in PR #378 (qualification run found by repository path, any host; workflow-level regression test fails on main and passes on the branch; Codex review found no trust regression). The runner with the public URL is the annex CI runner (bryantserver/annex nix/services/ci-runner.nix:88, cluster connection https://forgejo.bryantserver.com). Not changing its registration: with this fix the address no longer matters. Next: CI on #378, then merge.

@@ -6554,10 +6554,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `1f137df73f`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the image build to fail during verification.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:159`) SHA256 checksums not updated for new version: The version is bumped to 29.10.0 but DOCKER_CLI_SHA256_AMD64 (line 159) and DOCKER_CLI_SHA256_ARM64 (line 160) still hold the digests of the 29.9.3 archives. The Dockerfile comment says these are 'the digests of the reviewed archives', so the build's checksum verification will reject the 29.10.0 downloads and the image build will fail. Update both ARG values to the SHA256 digests of the 29.10.0 docker-cli archives (amd64 and arm64) before merging.\n  - Reviewer: No reply from the author and the diff is unchanged. The checksums must match the new archives or the build fails at the verification step.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAxNTksICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJTSEEyNTYgY2hlY2tzdW1zIG5vdCB1cGRhdGVkIGZvciBuZXcgdmVyc2lvbiIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gaXMgYnVtcGVkIHRvIDI5LjEwLjAgYnV0IERPQ0tFUl9DTElfU0hBMjU2X0FNRDY0IChsaW5lIDE1OSkgYW5kIERPQ0tFUl9DTElfU0hBMjU2X0FSTTY0IChsaW5lIDE2MCkgc3RpbGwgaG9sZCB0aGUgZGlnZXN0cyBvZiB0aGUgMjkuOS4zIGFyY2hpdmVzLiBUaGUgRG9ja2VyZmlsZSBjb21tZW50IHNheXMgdGhlc2UgYXJlICd0aGUgZGlnZXN0cyBvZiB0aGUgcmV2aWV3ZWQgYXJjaGl2ZXMnLCBzbyB0aGUgYnVpbGQncyBjaGVja3N1bSB2ZXJpZmljYXRpb24gd2lsbCByZWplY3QgdGhlIDI5LjEwLjAgZG93bmxvYWRzIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgYm90aCBBUkcgdmFsdWVzIHRvIHRoZSBTSEEyNTYgZGlnZXN0cyBvZiB0aGUgMjkuMTAuMCBkb2NrZXItY2xpIGFyY2hpdmVzIChhbWQ2NCBhbmQgYXJtNjQpIGJlZm9yZSBtZXJnaW5nLiIsICJyZXNwb25zZSI6ICJObyByZXBseSBmcm9tIHRoZSBhdXRob3IgYW5kIHRoZSBkaWZmIGlzIHVuY2hhbmdlZC4gVGhlIGNoZWNrc3VtcyBtdXN0IG1hdGNoIHRoZSBuZXcgYXJjaGl2ZXMgb3IgdGhlIGJ1aWxkIGZhaWxzIGF0IHRoZSB2ZXJpZmljYXRpb24gc3RlcC4ifV0= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `fa3b1e5a94`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the Docker image build to fail during the verification step.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:159`) SHA256 checksums not updated for new version: The version is bumped to 29.10.0 but DOCKER_CLI_SHA256_AMD64 (line 159) and DOCKER_CLI_SHA256_ARM64 (line 160) still hold the digests of the 29.9.3 archives. The Dockerfile comment says these are 'the digests of the reviewed archives', so the build's checksum verification will reject the 29.10.0 downloads and the image build will fail. Update both ARG values to the SHA256 digests of the 29.10.0 docker-cli archives (amd64 and arm64) before merging.\n  - Reviewer: No reply from the author and the diff is unchanged. The checksums must match the new archives or the build fails at the verification step.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAxNTksICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJTSEEyNTYgY2hlY2tzdW1zIG5vdCB1cGRhdGVkIGZvciBuZXcgdmVyc2lvbiIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gaXMgYnVtcGVkIHRvIDI5LjEwLjAgYnV0IERPQ0tFUl9DTElfU0hBMjU2X0FNRDY0IChsaW5lIDE1OSkgYW5kIERPQ0tFUl9DTElfU0hBMjU2X0FSTTY0IChsaW5lIDE2MCkgc3RpbGwgaG9sZCB0aGUgZGlnZXN0cyBvZiB0aGUgMjkuOS4zIGFyY2hpdmVzLiBUaGUgRG9ja2VyZmlsZSBjb21tZW50IHNheXMgdGhlc2UgYXJlICd0aGUgZGlnZXN0cyBvZiB0aGUgcmV2aWV3ZWQgYXJjaGl2ZXMnLCBzbyB0aGUgYnVpbGQncyBjaGVja3N1bSB2ZXJpZmljYXRpb24gd2lsbCByZWplY3QgdGhlIDI5LjEwLjAgZG93bmxvYWRzIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgYm90aCBBUkcgdmFsdWVzIHRvIHRoZSBTSEEyNTYgZGlnZXN0cyBvZiB0aGUgMjkuMTAuMCBkb2NrZXItY2xpIGFyY2hpdmVzIChhbWQ2NCBhbmQgYXJtNjQpIGJlZm9yZSBtZXJnaW5nLiIsICJyZXNwb25zZSI6ICJObyByZXBseSBmcm9tIHRoZSBhdXRob3IgYW5kIHRoZSBkaWZmIGlzIHVuY2hhbmdlZC4gVGhlIGNoZWNrc3VtcyBtdXN0IG1hdGNoIHRoZSBuZXcgYXJjaGl2ZXMgb3IgdGhlIGJ1aWxkIGZhaWxzIGF0IHRoZSB2ZXJpZmljYXRpb24gc3RlcC4ifV0= -->",
     "created_at": "2026-11-17T15:02:37-08:00",
     "id": 36637,
-    "updated_at": "2026-11-20T09:02:47-08:00",
+    "updated_at": "2026-11-21T21:02:19-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -6600,10 +6600,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `1fed0aa32a`: Clean Renovate dependency bump of the Docker CLI image (29.9.3-cli → 29.10.0-cli) in the e2e test Dockerfile, with a pinned digest update. Single-line change, references the standing dependency issue #349, touches no production or safety-critical code.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `20c99b7544`: Clean Renovate minor-version bump of the Docker CLI image in the e2e test Dockerfile, correctly referencing the standing dependency-update issue #349 with 'Refs' (not 'Closes', since that issue must stay open). The diff is minimal, the digest is pinned, and no production or safety-critical code is touched.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T15:03:02-08:00",
     "id": 36639,
-    "updated_at": "2026-11-20T09:03:02-08:00",
+    "updated_at": "2026-11-21T21:02:30-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -6665,10 +6665,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `224339f20c`: The Duplicacy version is bumped to 3.3.1 but the SHA256 integrity hash is not updated, which will cause the Docker build to fail. The README still references 3.3.0. The previously flagged ai-review.py changes are not present in this diff.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:28`) DUPLICACY_SOURCE_SHA256 not updated for 3.3.1: The version was bumped to 3.3.1 but `ARG DUPLICACY_SOURCE_SHA256` still holds the hash for the 3.3.0 artifact (`dea27ecb…`). The Docker build's integrity check will reject the 3.3.1 download and the image build will fail. Update the hash to the value published for the v3.3.1 release.\n- **F2** (suggestion, `README.md:1`) README still references Duplicacy 3.3.0: Rule 10 requires docs to change in the same PR as the behaviour they describe. The README links to `…/tree/v3.3.0` and names \"Duplicacy 3.3.0\" in both the intro paragraph and the Licensing section. Update those references to 3.3.1 so the docs match the code.\n\n### Withdrawn\n\n- **F3** (suggestion, `.forgejo/scripts/prepare-release-tree.sh:1`) PR bundles a release-workflow redesign with a one-line dependency bump (rules 7, 8): Withdrawn: the actual diff contains only the single Dockerfile line change. No release-workflow files appear in the diff.\n  - Reviewer: The diff I can see is limited to the one-line Dockerfile change. There are no release-workflow files in the diff, so the bundling concern does not apply. Withdrawing.\n- **F4** (suggestion, `.forgejo/scripts/ai-review.py:286`) Unrelated ai-review.py redesign bundled with a dependency bump (rules 7, 8): Withdrawn: the diff provided contains only the Dockerfile change. There is no ai-review.py or ai-review.yml modification in this PR. The finding was based on content not present in the diff. (Not blocking: it did not cite a changed file and line.)\n  - Reviewer: Re-examining the diff, it contains only the single Dockerfile ENV line change. No ai-review.py or ai-review.yml changes are present. Withdrawing this finding.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAyOCwgInNldmVyaXR5IjogImJsb2NraW5nIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIkRVUExJQ0FDWV9TT1VSQ0VfU0hBMjU2IG5vdCB1cGRhdGVkIGZvciAzLjMuMSIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gd2FzIGJ1bXBlZCB0byAzLjMuMSBidXQgYEFSRyBEVVBMSUNBQ1lfU09VUkNFX1NIQTI1NmAgc3RpbGwgaG9sZHMgdGhlIGhhc2ggZm9yIHRoZSAzLjMuMCBhcnRpZmFjdCAoYGRlYTI3ZWNiXHUyMDI2YCkuIFRoZSBEb2NrZXIgYnVpbGQncyBpbnRlZ3JpdHkgY2hlY2sgd2lsbCByZWplY3QgdGhlIDMuMy4xIGRvd25sb2FkIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgdGhlIGhhc2ggdG8gdGhlIHZhbHVlIHB1Ymxpc2hlZCBmb3IgdGhlIHYzLjMuMSByZWxlYXNlLiIsICJyZXNwb25zZSI6ICIifSwgeyJpZCI6ICJGMiIsICJmaWxlIjogIlJFQURNRS5tZCIsICJsaW5lIjogMSwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIm9wZW4iLCAidGl0bGUiOiAiUkVBRE1FIHN0aWxsIHJlZmVyZW5jZXMgRHVwbGljYWN5IDMuMy4wIiwgImRldGFpbCI6ICJSdWxlIDEwIHJlcXVpcmVzIGRvY3MgdG8gY2hhbmdlIGluIHRoZSBzYW1lIFBSIGFzIHRoZSBiZWhhdmlvdXIgdGhleSBkZXNjcmliZS4gVGhlIFJFQURNRSBsaW5rcyB0byBgXHUyMDI2L3RyZWUvdjMuMy4wYCBhbmQgbmFtZXMgXCJEdXBsaWNhY3kgMy4zLjBcIiBpbiBib3RoIHRoZSBpbnRybyBwYXJhZ3JhcGggYW5kIHRoZSBMaWNlbnNpbmcgc2VjdGlvbi4gVXBkYXRlIHRob3NlIHJlZmVyZW5jZXMgdG8gMy4zLjEgc28gdGhlIGRvY3MgbWF0Y2ggdGhlIGNvZGUuIiwgInJlc3BvbnNlIjogIiJ9LCB7ImlkIjogIkYzIiwgImZpbGUiOiAiLmZvcmdlam8vc2NyaXB0cy9wcmVwYXJlLXJlbGVhc2UtdHJlZS5zaCIsICJsaW5lIjogMSwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIndpdGhkcmF3biIsICJ0aXRsZSI6ICJQUiBidW5kbGVzIGEgcmVsZWFzZS13b3JrZmxvdyByZWRlc2lnbiB3aXRoIGEgb25lLWxpbmUgZGVwZW5kZW5jeSBidW1wIChydWxlcyA3LCA4KSIsICJkZXRhaWwiOiAiV2l0aGRyYXduOiB0aGUgYWN0dWFsIGRpZmYgY29udGFpbnMgb25seSB0aGUgc2luZ2xlIERvY2tlcmZpbGUgbGluZSBjaGFuZ2UuIE5vIHJlbGVhc2Utd29ya2Zsb3cgZmlsZXMgYXBwZWFyIGluIHRoZSBkaWZmLiIsICJyZXNwb25zZSI6ICJUaGUgZGlmZiBJIGNhbiBzZWUgaXMgbGltaXRlZCB0byB0aGUgb25lLWxpbmUgRG9ja2VyZmlsZSBjaGFuZ2UuIFRoZXJlIGFyZSBubyByZWxlYXNlLXdvcmtmbG93IGZpbGVzIGluIHRoZSBkaWZmLCBzbyB0aGUgYnVuZGxpbmcgY29uY2VybiBkb2VzIG5vdCBhcHBseS4gV2l0aGRyYXdpbmcuIn0sIHsiaWQiOiAiRjQiLCAiZmlsZSI6ICIuZm9yZ2Vqby9zY3JpcHRzL2FpLXJldmlldy5weSIsICJsaW5lIjogMjg2LCAic2V2ZXJpdHkiOiAic3VnZ2VzdGlvbiIsICJzdGF0dXMiOiAid2l0aGRyYXduIiwgInRpdGxlIjogIlVucmVsYXRlZCBhaS1yZXZpZXcucHkgcmVkZXNpZ24gYnVuZGxlZCB3aXRoIGEgZGVwZW5kZW5jeSBidW1wIChydWxlcyA3LCA4KSIsICJkZXRhaWwiOiAiV2l0aGRyYXduOiB0aGUgZGlmZiBwcm92aWRlZCBjb250YWlucyBvbmx5IHRoZSBEb2NrZXJmaWxlIGNoYW5nZS4gVGhlcmUgaXMgbm8gYWktcmV2aWV3LnB5IG9yIGFpLXJldmlldy55bWwgbW9kaWZpY2F0aW9uIGluIHRoaXMgUFIuIFRoZSBmaW5kaW5nIHdhcyBiYXNlZCBvbiBjb250ZW50IG5vdCBwcmVzZW50IGluIHRoZSBkaWZmLiAoTm90IGJsb2NraW5nOiBpdCBkaWQgbm90IGNpdGUgYSBjaGFuZ2VkIGZpbGUgYW5kIGxpbmUuKSIsICJyZXNwb25zZSI6ICJSZS1leGFtaW5pbmcgdGhlIGRpZmYsIGl0IGNvbnRhaW5zIG9ubHkgdGhlIHNpbmdsZSBEb2NrZXJmaWxlIEVOViBsaW5lIGNoYW5nZS4gTm8gYWktcmV2aWV3LnB5IG9yIGFpLXJldmlldy55bWwgY2hhbmdlcyBhcmUgcHJlc2VudC4gV2l0aGRyYXdpbmcgdGhpcyBmaW5kaW5nLiJ9XQ== -->",
+    "body": "<!-- ai-review -->\n**AI review** of `971b1eff22`: The Duplicacy version is bumped to 3.3.1 but the SHA256 checksum for the source tarball is not updated, which will cause the Docker image build to fail its integrity check. The README also still references 3.3.0.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:28`) DUPLICACY_SOURCE_SHA256 not updated for 3.3.1: The version was bumped to 3.3.1 but `ARG DUPLICACY_SOURCE_SHA256` still holds the hash for the 3.3.0 artifact (`dea27ecb…`). The Docker build's integrity check will reject the 3.3.1 download and the image build will fail. The Renovate annotation on line 26 only tracks the ENV version, not the ARG hash, so this must be updated manually. Verify the published checksum for the v3.3.1 source tarball and update the ARG value.\n- **F2** (suggestion, `README.md:1`) README still references Duplicacy 3.3.0: Rule 10 requires docs to change in the same PR as the behaviour they describe. The README links to `…/tree/v3.3.0` and names \"Duplicacy 3.3.0\" in both the intro paragraph and the Licensing section. Update those references to 3.3.1 so the docs match the code.\n\n### Withdrawn\n\n- **F3** (suggestion, `.forgejo/scripts/prepare-release-tree.sh:1`) PR bundles a release-workflow redesign with a one-line dependency bump (rules 7, 8): Withdrawn: the actual diff contains only the single Dockerfile line change. No release-workflow files appear in the diff.\n  - Reviewer: The diff I can see is limited to the one-line Dockerfile change. There are no release-workflow files in the diff, so the bundling concern does not apply. Withdrawing.\n- **F4** (suggestion, `.forgejo/scripts/ai-review.py:286`) Unrelated ai-review.py redesign bundled with a dependency bump (rules 7, 8): Withdrawn: the diff provided contains only the Dockerfile change. There is no ai-review.py or ai-review.yml modification in this PR. The finding was based on content not present in the diff. (Not blocking: it did not cite a changed file and line.)\n  - Reviewer: Re-examining the diff, it contains only the single Dockerfile ENV line change. No ai-review.py or ai-review.yml changes are present. Withdrawing this finding.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAyOCwgInNldmVyaXR5IjogImJsb2NraW5nIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIkRVUExJQ0FDWV9TT1VSQ0VfU0hBMjU2IG5vdCB1cGRhdGVkIGZvciAzLjMuMSIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gd2FzIGJ1bXBlZCB0byAzLjMuMSBidXQgYEFSRyBEVVBMSUNBQ1lfU09VUkNFX1NIQTI1NmAgc3RpbGwgaG9sZHMgdGhlIGhhc2ggZm9yIHRoZSAzLjMuMCBhcnRpZmFjdCAoYGRlYTI3ZWNiXHUyMDI2YCkuIFRoZSBEb2NrZXIgYnVpbGQncyBpbnRlZ3JpdHkgY2hlY2sgd2lsbCByZWplY3QgdGhlIDMuMy4xIGRvd25sb2FkIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBUaGUgUmVub3ZhdGUgYW5ub3RhdGlvbiBvbiBsaW5lIDI2IG9ubHkgdHJhY2tzIHRoZSBFTlYgdmVyc2lvbiwgbm90IHRoZSBBUkcgaGFzaCwgc28gdGhpcyBtdXN0IGJlIHVwZGF0ZWQgbWFudWFsbHkuIFZlcmlmeSB0aGUgcHVibGlzaGVkIGNoZWNrc3VtIGZvciB0aGUgdjMuMy4xIHNvdXJjZSB0YXJiYWxsIGFuZCB1cGRhdGUgdGhlIEFSRyB2YWx1ZS4iLCAicmVzcG9uc2UiOiAiIn0sIHsiaWQiOiAiRjIiLCAiZmlsZSI6ICJSRUFETUUubWQiLCAibGluZSI6IDEsICJzZXZlcml0eSI6ICJzdWdnZXN0aW9uIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIlJFQURNRSBzdGlsbCByZWZlcmVuY2VzIER1cGxpY2FjeSAzLjMuMCIsICJkZXRhaWwiOiAiUnVsZSAxMCByZXF1aXJlcyBkb2NzIHRvIGNoYW5nZSBpbiB0aGUgc2FtZSBQUiBhcyB0aGUgYmVoYXZpb3VyIHRoZXkgZGVzY3JpYmUuIFRoZSBSRUFETUUgbGlua3MgdG8gYFx1MjAyNi90cmVlL3YzLjMuMGAgYW5kIG5hbWVzIFwiRHVwbGljYWN5IDMuMy4wXCIgaW4gYm90aCB0aGUgaW50cm8gcGFyYWdyYXBoIGFuZCB0aGUgTGljZW5zaW5nIHNlY3Rpb24uIFVwZGF0ZSB0aG9zZSByZWZlcmVuY2VzIHRvIDMuMy4xIHNvIHRoZSBkb2NzIG1hdGNoIHRoZSBjb2RlLiIsICJyZXNwb25zZSI6ICIifSwgeyJpZCI6ICJGMyIsICJmaWxlIjogIi5mb3JnZWpvL3NjcmlwdHMvcHJlcGFyZS1yZWxlYXNlLXRyZWUuc2giLCAibGluZSI6IDEsICJzZXZlcml0eSI6ICJzdWdnZXN0aW9uIiwgInN0YXR1cyI6ICJ3aXRoZHJhd24iLCAidGl0bGUiOiAiUFIgYnVuZGxlcyBhIHJlbGVhc2Utd29ya2Zsb3cgcmVkZXNpZ24gd2l0aCBhIG9uZS1saW5lIGRlcGVuZGVuY3kgYnVtcCAocnVsZXMgNywgOCkiLCAiZGV0YWlsIjogIldpdGhkcmF3bjogdGhlIGFjdHVhbCBkaWZmIGNvbnRhaW5zIG9ubHkgdGhlIHNpbmdsZSBEb2NrZXJmaWxlIGxpbmUgY2hhbmdlLiBObyByZWxlYXNlLXdvcmtmbG93IGZpbGVzIGFwcGVhciBpbiB0aGUgZGlmZi4iLCAicmVzcG9uc2UiOiAiVGhlIGRpZmYgSSBjYW4gc2VlIGlzIGxpbWl0ZWQgdG8gdGhlIG9uZS1saW5lIERvY2tlcmZpbGUgY2hhbmdlLiBUaGVyZSBhcmUgbm8gcmVsZWFzZS13b3JrZmxvdyBmaWxlcyBpbiB0aGUgZGlmZiwgc28gdGhlIGJ1bmRsaW5nIGNvbmNlcm4gZG9lcyBub3QgYXBwbHkuIFdpdGhkcmF3aW5nLiJ9LCB7ImlkIjogIkY0IiwgImZpbGUiOiAiLmZvcmdlam8vc2NyaXB0cy9haS1yZXZpZXcucHkiLCAibGluZSI6IDI4NiwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIndpdGhkcmF3biIsICJ0aXRsZSI6ICJVbnJlbGF0ZWQgYWktcmV2aWV3LnB5IHJlZGVzaWduIGJ1bmRsZWQgd2l0aCBhIGRlcGVuZGVuY3kgYnVtcCAocnVsZXMgNywgOCkiLCAiZGV0YWlsIjogIldpdGhkcmF3bjogdGhlIGRpZmYgcHJvdmlkZWQgY29udGFpbnMgb25seSB0aGUgRG9ja2VyZmlsZSBjaGFuZ2UuIFRoZXJlIGlzIG5vIGFpLXJldmlldy5weSBvciBhaS1yZXZpZXcueW1sIG1vZGlmaWNhdGlvbiBpbiB0aGlzIFBSLiBUaGUgZmluZGluZyB3YXMgYmFzZWQgb24gY29udGVudCBub3QgcHJlc2VudCBpbiB0aGUgZGlmZi4gKE5vdCBibG9ja2luZzogaXQgZGlkIG5vdCBjaXRlIGEgY2hhbmdlZCBmaWxlIGFuZCBsaW5lLikiLCAicmVzcG9uc2UiOiAiUmUtZXhhbWluaW5nIHRoZSBkaWZmLCBpdCBjb250YWlucyBvbmx5IHRoZSBzaW5nbGUgRG9ja2VyZmlsZSBFTlYgbGluZSBjaGFuZ2UuIE5vIGFpLXJldmlldy5weSBvciBhaS1yZXZpZXcueW1sIGNoYW5nZXMgYXJlIHByZXNlbnQuIFdpdGhkcmF3aW5nIHRoaXMgZmluZGluZy4ifV0= -->",
     "created_at": "2026-11-17T15:02:42-08:00",
     "id": 36638,
-    "updated_at": "2026-11-20T09:03:12-08:00",
+    "updated_at": "2026-11-21T21:02:30-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7036,10 +7036,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `114d82091b`: Single-line dependency bump of the Podman test image from v6.1.3 to v6.2.0 (with updated SHA256 digest) in the integration test script. The change is minimal, correctly scoped to the Renovate standing issue #349, and addresses upstream CVEs. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `7899ffb4b5`: Single-line dependency bump of the Podman test image from v6.1.3 to v6.2.0 (with updated SHA256 digest) in the integration test script. The change is minimal, correctly pinned, and addresses upstream CVEs. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:02:29-08:00",
     "id": 37031,
-    "updated_at": "2026-11-20T09:03:08-08:00",
+    "updated_at": "2026-11-21T21:02:26-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7063,10 +7063,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `9c2d728c0f`: Clean Renovate dependency bump of skopeo v1.24.1→v1.25.1 across all six pinned references in two workflow files, with matching digest update. All hunks are the same version change; no unrelated edits, no missing occurrences, and the linked standing issue #349 satisfies the issue-link gate.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `d70cc403ba`: Clean Renovate dependency bump of the pinned skopeo image (v1.24.1 → v1.25.1, new digest) across all six references in two workflow files. The change is minimal, consistent, correctly linked to the standing issue #349, and includes upstream CVE fixes. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:03:19-08:00",
     "id": 37038,
-    "updated_at": "2026-11-20T09:03:31-08:00",
+    "updated_at": "2026-11-21T21:02:38-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7392,13 +7392,20 @@
  {
   "assignees": [],
   "body": "Publish Release run 41557 (v0.11.9, PR #376) failed with \"This PR head did not pass Prepare Release\" although 402a470 carried a success `Release / Qualified candidate` status from run 858.\n\nCause: `publish-release.yml` matches the status `target_url` against `$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/`. Prepare Release ran on a pool runner registered with `http://forgejo.forgejo.svc.cluster.local`, so the status URL uses that host; the first Publish attempt landed on a runner whose server URL is `https://forgejo.bryantserver.com` (its checkout fetched from there), so the prefix did not match. A rerun on a pool runner passed and tagged v0.11.9.\n\nFix: match on the repository path and run number, independent of the host the runner was registered with (or check the status creator instead of the URL). Same check exists in `release.yml` for an existing release PR; review both. Also find which runner registered with the public URL.",
-  "closed_at": null,
+  "closed_at": "2026-11-21T09:35:35-08:00",
   "comments": [
    {
     "body": "Status: open, no PR yet. Only publish-release.yml:43-50 matches the URL (release.yml:189 writes it). Next: make the match host-independent (repo path + run number, or the status creator), test-first, with a cx review since it is a release trust check; also identify the runner registered with https://forgejo.bryantserver.com. No crons or holds.",
     "created_at": "2026-11-21T00:42:58-08:00",
     "id": 41152,
     "updated_at": "2026-11-21T00:42:58-08:00",
+    "user": "cody"
+   },
+   {
+    "body": "Status: fix in PR #378 (qualification run found by repository path, any host; workflow-level regression test fails on main and passes on the branch; Codex review found no trust regression). The runner with the public URL is the annex CI runner (bryantserver/annex nix/services/ci-runner.nix:88, cluster connection https://forgejo.bryantserver.com). Not changing its registration: with this fix the address no longer matters. Next: CI on #378, then merge.",
+    "created_at": "2026-11-21T09:03:59-08:00",
+    "id": 41280,
+    "updated_at": "2026-11-21T09:03:59-08:00",
     "user": "cody"
    }
   ],
@@ -7407,8 +7414,155 @@
   "labels": [],
   "milestone": null,
   "number": 377,
-  "state": "open",
+  "state": "closed",
   "title": "Publish Release refuses a qualified PR when it runs on a runner with a different server URL",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "main",
+  "body": "Closes #377.\n\nPublish Release found the Prepare Release run by requiring the qualification status URL to start with its own runner's `GITHUB_SERVER_URL`. Cluster pool runners use `http://forgejo.forgejo.svc.cluster.local`, while the annex CI runner registers with the cluster at `https://forgejo.bryantserver.com` (bryantserver/annex `nix/services/ci-runner.nix:88`; it is runner `62383437-…`, which took run 41557's first attempt). So a qualified PR was refused whenever Publish landed on the other kind of runner.\n\n`.forgejo/scripts/qualified-run.py` now reads the run number from a URL whose path is exactly `/<repo>/actions/runs/<n>`, on any http(s) host. It keeps every earlier condition: the exact context, the success state, a complete status list, a digits-only run number, the same error message, and exactly one run.\n\nThe host was never a source of trust. Anyone who can post a status can write any URL. Trust comes from the next steps, which are unchanged: they look up that run number in this repository's API (`release.yml`, success, dispatched on main for the same channel) and require `Qualified release commit: <candidate>` in its job log.\n\nTests (`tests/test_release_promotion.py`):\n- The helper accepts both runner hosts and refuses other repositories, `/jobs` suffixes, queries, fragments, credentials, non-http URLs, bad run numbers, non-success states, the wrong context, a missing URL, no run, two runs and a truncated list.\n- The real Publish verify step runs against a stubbed API, with `GITHUB_SERVER_URL` set to the public URL and the status written with the cluster URL. It fails on main with \"This PR head did not pass Prepare Release\". With matching hosts the old step passes (the control run), so the failure comes from the defect. It passes with this change.\n- Against the live v0.11.9 candidate (402a470), the helper prints 858.\n\nChecks: `python3 -m unittest discover -s tests -p test_release_promotion.py`, actionlint and ruff (E9,F) are clean. Codex reviewed it and found no trust regression; its one finding, the missing workflow-level test, is the step test above.\n",
+  "closed_at": "2026-11-21T09:35:35-08:00",
+  "comments": [
+   {
+    "body": "<!-- ai-review -->\n**AI review** of `378c6f836c`: Clean, well-scoped fix for #377: the qualification-run lookup now matches on repository path instead of the runner's server URL, with a thorough test suite including a workflow-level integration test that proves the old code fails and the new code passes.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "created_at": "2026-11-21T09:34:52-08:00",
+    "id": 41347,
+    "updated_at": "2026-11-21T09:34:52-08:00",
+    "user": "forgejo-actions"
+   }
+  ],
+  "created_at": "2026-11-21T09:03:50-08:00",
+  "head": "refs/pull/378/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "17466f5ad410b2821ca6000f85dad84092990a0d",
+  "merged": true,
+  "milestone": null,
+  "number": 378,
+  "reviews": [],
+  "state": "closed",
+  "title": "Publish Release: find the qualification run by repository path, not server URL",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "body": "Copy SisyphusMD/project-rules#116 (merged in project-rules #117): `ai-review.yml` here still starts a review on any signed-in account's PR comment, so an outside account can queue up to 45-minute runs on the Studio model. The canonical file now runs the comment path only for someone who can push or wrote the PR.\n\nPlan: replace `.forgejo/workflows/ai-review.yml` with the canonical file, unchanged (this copy matched the previous canonical exactly).\n\nRequested by Cody 2026-11-21 (\"yes to all\").",
+  "closed_at": "2026-11-21T12:16:45-08:00",
+  "comments": [
+   {
+    "body": "Status: merged in #380, verified on main (the canonical gate from SisyphusMD/project-rules#117). A PR comment now starts an AI review only for someone who can push here or wrote the PR. Nothing left on this issue; the AGit PR residual is tracked on SisyphusMD/project-rules#57.",
+    "created_at": "2026-11-21T12:18:30-08:00",
+    "id": 41804,
+    "updated_at": "2026-11-21T12:18:30-08:00",
+    "user": "cody"
+   }
+  ],
+  "created_at": "2026-11-21T11:50:15-08:00",
+  "kind": "issue",
+  "labels": [
+   "status:in-progress",
+   "type:bug"
+  ],
+  "milestone": null,
+  "number": 379,
+  "state": "closed",
+  "title": "AI review runs on any signed-in user's PR comment",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "main",
+  "body": "Closes #379\n\nCopies the canonical `ai-review.yml` from SisyphusMD/project-rules #117 unchanged. A PR comment now starts an AI review only when its author can push to this repo or wrote the PR; before, any signed-in account's comment queued a run of up to 45 minutes on the Studio model. `pull_request_target` runs are unchanged. The gate reads `github.event.repository.permissions.push`, which Forgejo fills with the commenter's own permission, checked against stored run payloads (bots with push still start reviews).\n\nThe test that rejects an outside commenter lives with the canonical file: project-rules `tests/test_ai_review_gate.py`.",
+  "closed_at": "2026-11-21T12:16:45-08:00",
+  "comments": [
+   {
+    "body": "<!-- ai-review -->\n**AI review** of `834c350064`: Clean, minimal security fix that restricts AI review comment triggers to pushers and the PR author, matching the canonical file from project-rules #117. The condition logic is correct, the diff is small and focused, and the test lives with the canonical workflow in project-rules.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "created_at": "2026-11-21T11:52:26-08:00",
+    "id": 41716,
+    "updated_at": "2026-11-21T11:52:26-08:00",
+    "user": "forgejo-actions"
+   }
+  ],
+  "created_at": "2026-11-21T11:50:17-08:00",
+  "head": "refs/pull/380/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "479fd3c6e33596a8368d42d7dc7dccfd92282714",
+  "merged": true,
+  "milestone": null,
+  "number": 380,
+  "reviews": [],
+  "state": "closed",
+  "title": "fix(ai-review): start a review from a PR comment only for pushers and the PR author",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "body": "Copy `.forgejo/scripts/ai-review.py` from canonical SisyphusMD/project-rules 64b857c, byte for byte (connect retry, malformed-answer re-ask, retry keeps first answer findings). In `.forgejo/workflows/ai-review.yml`, the actions/checkout step gets `ref: ${{ github.sha }}` and `persist-credentials: false`, and the review step env gets `BOT_LOGIN: forgejo-actions` (the #118 edits). No other files change apart from a CHANGELOG bullet where the repo keeps one.\n\nPart of SisyphusMD/project-rules#113",
+  "closed_at": "2026-11-21T20:21:16-08:00",
+  "comments": [
+   {
+    "body": "Done in PR #382, merged as fbec42e: ai-review.py and ai-review.yml are canonical 64b857c; CHANGELOG bullet added.",
+    "created_at": "2026-11-21T20:21:29-08:00",
+    "id": 42370,
+    "updated_at": "2026-11-21T20:21:29-08:00",
+    "user": "cody"
+   }
+  ],
+  "created_at": "2026-11-21T19:25:57-08:00",
+  "kind": "issue",
+  "labels": [
+   "status:in-progress",
+   "type:chore"
+  ],
+  "milestone": null,
+  "number": 381,
+  "state": "closed",
+  "title": "chore(ci): bring the AI review copy up to canonical project-rules 64b857c",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "main",
+  "body": "Closes #381\n\nCopies the canonical AI review script and the two #118 workflow edits from SisyphusMD/project-rules 64b857c (part of SisyphusMD/project-rules#113).",
+  "closed_at": "2026-11-21T20:21:16-08:00",
+  "comments": [
+   {
+    "body": "<!-- ai-review -->\n**AI review** of `d493dc764d`: Clean byte-for-byte sync of the canonical AI review script from project-rules 64b857c plus the two #118 workflow edits (pinned checkout ref, persist-credentials, BOT_LOGIN) and a CHANGELOG bullet, exactly as issue #381 specifies. No correctness, security, or process problems found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "created_at": "2026-11-21T20:01:42-08:00",
+    "id": 42309,
+    "updated_at": "2026-11-21T20:01:42-08:00",
+    "user": "forgejo-actions"
+   }
+  ],
+  "created_at": "2026-11-21T20:00:26-08:00",
+  "head": "refs/pull/382/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "fbec42eed249b383c62cfc3695e90eb3429af456",
+  "merged": true,
+  "milestone": null,
+  "number": 382,
+  "reviews": [],
+  "state": "closed",
+  "title": "chore(ci): copy the AI review from project-rules 64b857c",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "body": "ArchiverKitDrillFailed fired for backblaze and cowanserver from 2026-11-17 03:29Z until a manual `archiver kit-drill` passed on 2026-11-21 22:03 PT. The only evidence was \"kit differs from the local kit\": `compareDrill` in internal/kit/drill.go does not say which file differed, and container logs had rotated past the run, so the cause could not be found. Hypothesis: a drill between the 03:00 PT shelf upload (bootstrap/shelf/kit/k8s.bundle) and the ~04:10 PT kit placement compares a stale kit against a changed shelf; also unexplained is what triggered a 03:29Z run when KIT_DRILL_SCHEDULE is 0 6 15 * *.\n\nFix: report the differing entry names (and placement time vs shelf mtime) in the drill result and metrics/log line.",
+  "closed_at": null,
+  "comments": [],
+  "created_at": "2026-11-21T22:14:11-08:00",
+  "kind": "issue",
+  "labels": [
+   "type:bug"
+  ],
+  "milestone": null,
+  "number": 383,
+  "state": "open",
+  "title": "Kit drill failure should name the differing entry",
   "user": "cody"
  }
 ]
