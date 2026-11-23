@@ -7036,10 +7036,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `7899ffb4b5`: Single-line dependency bump of the Podman test image from v6.1.3 to v6.2.0 (with updated SHA256 digest) in the integration test script. The change is minimal, correctly pinned, and addresses upstream CVEs. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `431dd90e55`: Single-line Renovate dependency bump of the Podman test image from v6.1.3 to v6.2.0 in tests/integration/podman.sh, with both tag and digest updated and the renovate annotation preserved. Properly linked to the standing issue #349. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:02:29-08:00",
     "id": 37031,
-    "updated_at": "2026-11-21T21:02:26-08:00",
+    "updated_at": "2026-11-22T20:02:14-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7063,10 +7063,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `d70cc403ba`: Clean Renovate dependency bump of the pinned skopeo image (v1.24.1 → v1.25.1, new digest) across all six references in two workflow files. The change is minimal, consistent, correctly linked to the standing issue #349, and includes upstream CVE fixes. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `17aa673c34`: Clean Renovate-generated dependency bump of skopeo from v1.24.1 to v1.25.1 across 6 pinned references in two workflow files, with consistent tag and digest updates. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:03:19-08:00",
     "id": 37038,
-    "updated_at": "2026-11-21T21:02:38-08:00",
+    "updated_at": "2026-11-22T20:02:44-08:00",
     "user": "forgejo-actions"
    }
   ],

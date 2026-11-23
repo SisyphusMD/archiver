@@ -56,7 +56,7 @@ Refs #349: standing issue for dependency updates.
 ## forgejo-actions, 2026-11-17T20:03:19-08:00
 
 <!-- ai-review -->
-**AI review** of `d70cc403ba`: Clean Renovate dependency bump of the pinned skopeo image (v1.24.1 → v1.25.1, new digest) across all six references in two workflow files. The change is minimal, consistent, correctly linked to the standing issue #349, and includes upstream CVE fixes. No issues found.
+**AI review** of `17aa673c34`: Clean Renovate-generated dependency bump of skopeo from v1.24.1 to v1.25.1 across 6 pinned references in two workflow files, with consistent tag and digest updates. No issues found.
 
 No findings.
 
