@@ -387,3 +387,6 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 381 | issue | closed | [chore(ci): bring the AI review copy up to canonical project-rules 64b857c](items/0381-chore-ci-bring-the-ai-review-copy-up-to-canonical-project-ru.md) |
 | 382 | pull | closed | [chore(ci): copy the AI review from project-rules 64b857c](items/0382-chore-ci-copy-the-ai-review-from-project-rules-64b857c.md) |
 | 383 | issue | open | [Kit drill failure should name the differing entry](items/0383-kit-drill-failure-should-name-the-differing-entry.md) |
+| 384 | issue | closed | [chore(ci): bring the AI review copy up to project-rules 72f8fcc](items/0384-chore-ci-bring-the-ai-review-copy-up-to-project-rules-72f8fc.md) |
+| 385 | pull | closed | [chore(ci): bring the AI review copy up to project-rules 72f8fcc](items/0385-chore-ci-bring-the-ai-review-copy-up-to-project-rules-72f8fc.md) |
+| 386 | pull | open | [chore(deps): update debian docker tag to trixie-20261123-slim](items/0386-chore-deps-update-debian-docker-tag-to-trixie-20261123-slim.md) |

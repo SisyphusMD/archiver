@@ -9,6 +9,7 @@ This issue lists Renovate updates and detected dependencies. Read the [Dependenc
 
 The following updates have all been created. To force a retry/rebase of any, click on a checkbox below.
 
+ - [ ] <!-- rebase-branch=renovate/debian-2026.11.x -->[chore(deps): update debian docker tag to trixie-20261123-slim](pulls/386)
  - [ ] <!-- rebase-branch=renovate/gilbertchen-duplicacy-3.3.x -->[chore(deps): update dependency gilbertchen/duplicacy to v3.3.1](pulls/346)
  - [ ] <!-- rebase-branch=renovate/moby-moby-29.x -->[chore(deps): update dependency moby/moby to v29.10.0](pulls/341)
  - [ ] <!-- rebase-branch=renovate/docker-29.x -->[chore(deps): update docker docker tag to v29.10.0](pulls/343)
@@ -25,8 +26,8 @@ The following updates have all been created. To force a retry/rebase of any, cli
 
  - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
  - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
- - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2`
- - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2`
+ - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2` → [Updates: `trixie-20261123-slim`]
+ - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2` → [Updates: `trixie-20261123-slim`]
 
 </details>
 
@@ -40,7 +41,7 @@ The following updates have all been created. To force a retry/rebase of any, cli
 <details><summary>tests/fakes/Dockerfile (2)</summary>
 
  - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
- - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2`
+ - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2` → [Updates: `trixie-20261123-slim`]
 
 </details>
 
