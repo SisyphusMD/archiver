@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- Run the gate scripts and the rules from project-rules main instead of this repo's copies (copies drift) (#391).
 - Bring the AI review copy up to project-rules 72f8fcc (an answer cut off while still reasoning is asked once more under the answer schema) (#384).
 - Bring the AI review copy up to project-rules 64b857c (connect retry, malformed-answer re-ask, pinned checkout) (#381).
 - Publish Release accepts a qualified release PR whichever Forgejo address its runner uses (#377).
