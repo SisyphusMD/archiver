@@ -844,7 +844,7 @@ jobs:
           # renovate: datasource=docker depName=quay.io/skopeo/stable
           SKOPEO_IMAGE=image-mirror.lan.bryantserver.com/quay.io/skopeo/stable:v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56
           # renovate: datasource=docker depName=ghcr.io/sigstore/cosign/cosign
-          COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.1.5@sha256:191099139868a6cd02abae63f2919e0915dcaa7bcc22bda6fbd11fd0dd5599e7
+          COSIGN_IMAGE=ghcr.io/sigstore/cosign/cosign:v3.1.6@sha256:7d08ec40d6f6fd9ced81a498c367ee6d4dd90d73218f58a791f78661bdbef769
           repo="${CANDIDATE%:*}"
           digest="$DIGEST"
           # The registry login goes in through a volume's config.json, never cosign's argv.
