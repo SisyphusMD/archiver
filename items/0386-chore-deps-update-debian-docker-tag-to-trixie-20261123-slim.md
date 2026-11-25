@@ -1,8 +1,8 @@
 # #386 chore(deps): update debian docker tag to trixie-20261123-slim
 
-- Kind: pull, state: open, by renovate, created 2026-11-23T22:02:14-08:00
+- Kind: pull, state: closed, by renovate, created 2026-11-23T22:02:14-08:00
 - Labels: none; milestone: none
-- renovate/debian-2026.11.x -> main, merged: False
+- refs/pull/386/head -> main, merged: True
 
 This PR contains the following updates:
 
@@ -41,7 +41,7 @@ Refs #349: standing issue for dependency updates.
 ## forgejo-actions, 2026-11-23T22:02:38-08:00
 
 <!-- ai-review -->
-**AI review** of `b94bf4fa07`: Straightforward Renovate-generated patch update of the Debian base image tag and digest across three Dockerfile locations, consistently applied and linked to the standing dependency-update issue #349. No issues found.
+**AI review** of `28be74b791`: Straightforward Renovate patch update of the Debian base image (trixie-20261104-slim → trixie-20261123-slim) across three FROM lines, consistently pinned by digest. No issues found.
 
 No findings.
 

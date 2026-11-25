@@ -1,4 +1,4 @@
-# #341 chore(deps): update dependency moby/moby to v29.10.0
+# #341 chore(deps): update dependency moby/moby to v29.10.1
 
 - Kind: pull, state: open, by renovate, created 2026-11-16T05:02:10-08:00
 - Labels: none; milestone: none
@@ -8,7 +8,7 @@ This PR contains the following updates:
 
 | Package | Update | Change |
 |---|---|---|
-| [moby/moby](https://github.com/moby/moby) | minor | `29.9.3` → `29.10.0` |
+| [moby/moby](https://github.com/moby/moby) | minor | `29.9.3` → `29.10.1` |
 
 ---
 
@@ -17,11 +17,45 @@ This PR contains the following updates:
 <details>
 <summary>moby/moby</summary>
 
+### [`v29.10.1`](https://github.com/moby/moby/releases/tag/docker-v29.10.1): v29.10.1
+
+[Compare Source](https://github.com/moby/moby/compare/docker-v29.10.0-rc.2...docker-v29.10.1)
+
+#### 29.10.1
+
+For a full list of pull requests and changes in this release, refer to the relevant GitHub milestones:
+
+- [docker/cli, 29.10.1 milestone](https://github.com/docker/cli/issues?q=is%3Aclosed+milestone%3A29.10.1)
+- [moby/moby, 29.10.1 milestone](https://github.com/moby/moby/issues?q=is%3Aclosed+milestone%3A29.10.1)
+
+##### Security
+
+This release includes fixes for multiple security vulnerabilities affecting Docker Engine and related components.
+
+- **CVE-2026-135844** Fix unbounded reads when parsing user, group, and ID mapping files\
+  [GHSA-ffh6-8jcg-cjmw](https://github.com/moby/sys/security/advisories/GHSA-ffh6-8jcg-cjmw)
+- **CVE-2026-135124** A process in a running container could make a read-only bind mount writable while `docker cp` copied files into the container, letting the copied files modify the host directory behind that mount\
+  [GHSA-vfmq-r373-x89f](https://github.com/moby/moby/security/advisories/GHSA-vfmq-r373-x89f)
+
+##### Bug fixes and enhancements
+
+- Fix image builds failing with "http: invalid Read on closed Body" when uploading a buid context with `Expect: 100-continue` header. [moby/moby#54228](https://github.com/moby/moby/pull/54228)
+- Fix the default AppArmor profile blocking processes in the same container from signalling or tracing each other on hosts with `kernel.apparmor_restrict_unprivileged_unconfined=1`, such as recent Ubuntu releases. [moby/profiles#58](https://github.com/moby/profiles/pull/58). [moby/moby#54271](https://github.com/moby/moby/pull/54271)
+- Update `docker login` to mention OATs as an additional authentication mechanism. [docker/cli#7539](https://github.com/docker/cli/pull/7539)
+- Update BuildKit to [v0.35.1](https://github.com/moby/buildkit/releases/tag/v0.35.1). [moby/moby#54231](https://github.com/moby/moby/pull/54231)
+- Update the Windows docker.exe icon to the new Docker logo. [docker/cli#7534](https://github.com/docker/cli/pull/7534)
+- Update the Windows dockerd.exe icon to the new Docker logo. [moby/moby#54226](https://github.com/moby/moby/pull/54226)
+
+##### Networking
+
+- Fix `docker network rm` failing with "has active endpoints" for endpoints that no longer exist, after containers on the network were restarted or disconnected concurrently with other network operations. [moby/moby#54281](https://github.com/moby/moby/pull/54281)
+- Fix a race between connecting a container to a Swarm network and removing its endpoint that could bring back an endpoint whose IP addresses were already released. [moby/moby#54282](https://github.com/moby/moby/pull/54282)
+
 ### [`v29.10.0`](https://github.com/moby/moby/releases/tag/docker-v29.10.0): v29.10.0
 
 [Compare Source](https://github.com/moby/moby/compare/docker-v29.9.3...docker-v29.10.0-rc.2)
 
-##### 29.10.0
+#### 29.10.0
 
 For a full list of pull requests and changes in this release, refer to the relevant GitHub milestones:
 
@@ -134,19 +168,19 @@ For installation instructions, see [AlmaLinux](/manuals/engine/install/almalinux
 ---
 
 Refs #349: standing issue for dependency updates.
-<!--renovate-debug:eyJjcmVhdGVkSW5WZXIiOiI0NC4yNDQuMSIsInVwZGF0ZWRJblZlciI6IjQ0LjI1MS4wIiwidGFyZ2V0QnJhbmNoIjoibWFpbiIsImxhYmVscyI6WyJtaW5vci11cGRhdGUiXX0=-->
+<!--renovate-debug:eyJjcmVhdGVkSW5WZXIiOiI0NC4yNDQuMSIsInVwZGF0ZWRJblZlciI6IjQ0LjI2MC4zIiwidGFyZ2V0QnJhbmNoIjoibWFpbiIsImxhYmVscyI6WyJtaW5vci11cGRhdGUiXX0=-->
 
 
 ## forgejo-actions, 2026-11-17T15:02:37-08:00
 
 <!-- ai-review -->
-**AI review** of `f7430f1c89`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the image build to fail during verification.
+**AI review** of `df8df3566b`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the image build to fail.
 
 ### Open
 
-- **F1** (**blocking**, `Dockerfile:159`) SHA256 checksums not updated for new version: The version is bumped to 29.10.0 but DOCKER_CLI_SHA256_AMD64 (line 159) and DOCKER_CLI_SHA256_ARM64 (line 160) still hold the digests of the 29.9.3 archives. The Dockerfile comment says these are 'the digests of the reviewed archives', so the build's checksum verification will reject the 29.10.0 downloads and the image build will fail. Update both ARG values to the SHA256 digests of the 29.10.0 docker-cli archives (amd64 and arm64) before merging.
+- **F1** (**blocking**, `Dockerfile:159`) SHA256 checksums not updated for new version: The version is bumped to 29.10.1 but DOCKER_CLI_SHA256_AMD64 (line 159) and DOCKER_CLI_SHA256_ARM64 (line 160) still hold the digests of the 29.9.3 archives. The Dockerfile comment says these are 'the digests of the reviewed archives', so the build's checksum verification will reject the 29.10.1 downloads and the image build will fail. Update both ARG values to the SHA256 digests of the 29.10.1 docker-cli archives (amd64 and arm64) before merging.
   - Reviewer: No reply from the author and the diff is unchanged. The checksums must match the new archives or the build fails at the verification step.
 
 
 Disagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.
-<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAxNTksICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJTSEEyNTYgY2hlY2tzdW1zIG5vdCB1cGRhdGVkIGZvciBuZXcgdmVyc2lvbiIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gaXMgYnVtcGVkIHRvIDI5LjEwLjAgYnV0IERPQ0tFUl9DTElfU0hBMjU2X0FNRDY0IChsaW5lIDE1OSkgYW5kIERPQ0tFUl9DTElfU0hBMjU2X0FSTTY0IChsaW5lIDE2MCkgc3RpbGwgaG9sZCB0aGUgZGlnZXN0cyBvZiB0aGUgMjkuOS4zIGFyY2hpdmVzLiBUaGUgRG9ja2VyZmlsZSBjb21tZW50IHNheXMgdGhlc2UgYXJlICd0aGUgZGlnZXN0cyBvZiB0aGUgcmV2aWV3ZWQgYXJjaGl2ZXMnLCBzbyB0aGUgYnVpbGQncyBjaGVja3N1bSB2ZXJpZmljYXRpb24gd2lsbCByZWplY3QgdGhlIDI5LjEwLjAgZG93bmxvYWRzIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgYm90aCBBUkcgdmFsdWVzIHRvIHRoZSBTSEEyNTYgZGlnZXN0cyBvZiB0aGUgMjkuMTAuMCBkb2NrZXItY2xpIGFyY2hpdmVzIChhbWQ2NCBhbmQgYXJtNjQpIGJlZm9yZSBtZXJnaW5nLiIsICJyZXNwb25zZSI6ICJObyByZXBseSBmcm9tIHRoZSBhdXRob3IgYW5kIHRoZSBkaWZmIGlzIHVuY2hhbmdlZC4gVGhlIGNoZWNrc3VtcyBtdXN0IG1hdGNoIHRoZSBuZXcgYXJjaGl2ZXMgb3IgdGhlIGJ1aWxkIGZhaWxzIGF0IHRoZSB2ZXJpZmljYXRpb24gc3RlcC4ifV0= -->
+<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAxNTksICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJTSEEyNTYgY2hlY2tzdW1zIG5vdCB1cGRhdGVkIGZvciBuZXcgdmVyc2lvbiIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gaXMgYnVtcGVkIHRvIDI5LjEwLjEgYnV0IERPQ0tFUl9DTElfU0hBMjU2X0FNRDY0IChsaW5lIDE1OSkgYW5kIERPQ0tFUl9DTElfU0hBMjU2X0FSTTY0IChsaW5lIDE2MCkgc3RpbGwgaG9sZCB0aGUgZGlnZXN0cyBvZiB0aGUgMjkuOS4zIGFyY2hpdmVzLiBUaGUgRG9ja2VyZmlsZSBjb21tZW50IHNheXMgdGhlc2UgYXJlICd0aGUgZGlnZXN0cyBvZiB0aGUgcmV2aWV3ZWQgYXJjaGl2ZXMnLCBzbyB0aGUgYnVpbGQncyBjaGVja3N1bSB2ZXJpZmljYXRpb24gd2lsbCByZWplY3QgdGhlIDI5LjEwLjEgZG93bmxvYWRzIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgYm90aCBBUkcgdmFsdWVzIHRvIHRoZSBTSEEyNTYgZGlnZXN0cyBvZiB0aGUgMjkuMTAuMSBkb2NrZXItY2xpIGFyY2hpdmVzIChhbWQ2NCBhbmQgYXJtNjQpIGJlZm9yZSBtZXJnaW5nLiIsICJyZXNwb25zZSI6ICJObyByZXBseSBmcm9tIHRoZSBhdXRob3IgYW5kIHRoZSBkaWZmIGlzIHVuY2hhbmdlZC4gVGhlIGNoZWNrc3VtcyBtdXN0IG1hdGNoIHRoZSBuZXcgYXJjaGl2ZXMgb3IgdGhlIGJ1aWxkIGZhaWxzIGF0IHRoZSB2ZXJpZmljYXRpb24gc3RlcC4ifV0= -->

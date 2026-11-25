@@ -9,10 +9,9 @@ This issue lists Renovate updates and detected dependencies. Read the [Dependenc
 
 The following updates have all been created. To force a retry/rebase of any, click on a checkbox below.
 
- - [ ] <!-- rebase-branch=renovate/debian-2026.11.x -->[chore(deps): update debian docker tag to trixie-20261123-slim](pulls/386)
  - [ ] <!-- rebase-branch=renovate/gilbertchen-duplicacy-3.3.x -->[chore(deps): update dependency gilbertchen/duplicacy to v3.3.1](pulls/346)
- - [ ] <!-- rebase-branch=renovate/moby-moby-29.x -->[chore(deps): update dependency moby/moby to v29.10.0](pulls/341)
- - [ ] <!-- rebase-branch=renovate/docker-29.x -->[chore(deps): update docker docker tag to v29.10.0](pulls/343)
+ - [ ] <!-- rebase-branch=renovate/moby-moby-29.x -->[chore(deps): update dependency moby/moby to v29.10.1](pulls/341)
+ - [ ] <!-- rebase-branch=renovate/docker-29.x -->[chore(deps): update docker docker tag to v29.10.1](pulls/343)
  - [ ] <!-- rebase-branch=renovate/quay.io-podman-stable-6.x -->[chore(deps): update quay.io/podman/stable docker tag to v6.2.0](pulls/362)
  - [ ] <!-- rebase-branch=renovate/quay.io-skopeo-stable-1.x -->[chore(deps): update quay.io/skopeo/stable docker tag to v1.25.1](pulls/363)
  - [ ] <!-- rebase-all-open-prs -->**Click on this checkbox to rebase all open PRs at once**
@@ -24,24 +23,24 @@ The following updates have all been created. To force a retry/rebase of any, cli
 
 <details><summary>Dockerfile (4)</summary>
 
- - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
- - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
- - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2` → [Updates: `trixie-20261123-slim`]
- - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2` → [Updates: `trixie-20261123-slim`]
+ - `golang 1.27.4-trixie@sha256:430985542100b871e108ccc00e8dcc5eef08ca14ee5825e98ebf563d8ffec4ee`
+ - `golang 1.27.4-trixie@sha256:430985542100b871e108ccc00e8dcc5eef08ca14ee5825e98ebf563d8ffec4ee`
+ - `debian trixie-20261123-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0`
+ - `debian trixie-20261123-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0`
 
 </details>
 
 <details><summary>tests/e2e/Dockerfile (2)</summary>
 
- - `docker 29.9.3-cli@sha256:5a7af0dcb0e46c803efe9b45371dd21cb500e5b4453250394ac6f06d49b6e6f1` → [Updates: `29.10.0-cli`]
- - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
+ - `docker 29.9.3-cli@sha256:5a7af0dcb0e46c803efe9b45371dd21cb500e5b4453250394ac6f06d49b6e6f1` → [Updates: `29.10.1-cli`]
+ - `golang 1.27.4-trixie@sha256:430985542100b871e108ccc00e8dcc5eef08ca14ee5825e98ebf563d8ffec4ee`
 
 </details>
 
 <details><summary>tests/fakes/Dockerfile (2)</summary>
 
- - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
- - `debian trixie-20261104-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2` → [Updates: `trixie-20261123-slim`]
+ - `golang 1.27.4-trixie@sha256:430985542100b871e108ccc00e8dcc5eef08ca14ee5825e98ebf563d8ffec4ee`
+ - `debian trixie-20261123-slim@sha256:8aa5a7bf5a1955bddbe7d74fcdd0b91ab30e74362a8b73af672b0481b35b44a0`
 
 </details>
 
@@ -134,12 +133,12 @@ The following updates have all been created. To force a retry/rebase of any, cli
 <details><summary>.forgejo/workflows/docker-publish.yml (11)</summary>
 
  - `bats/bats 1.14.0@sha256:5322b877351fda0cc435de8c6116de7d0a2ec79d7c680132a0ef329a633bc66f`
- - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
+ - `golang 1.27.4-trixie@sha256:430985542100b871e108ccc00e8dcc5eef08ca14ee5825e98ebf563d8ffec4ee`
  - `golangci/golangci-lint v2.15.0@sha256:fbfcfd12a6f8d7f1b97b3362ca80fc2a244d46863148c73cb88e7793af96c481`
- - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
+ - `golang 1.27.4-trixie@sha256:430985542100b871e108ccc00e8dcc5eef08ca14ee5825e98ebf563d8ffec4ee`
  - `quay.io/skopeo/stable v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56` → [Updates: `v1.25.1`]
  - `quay.io/skopeo/stable v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56` → [Updates: `v1.25.1`]
- - `ghcr.io/sigstore/cosign/cosign v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d`
+ - `ghcr.io/sigstore/cosign/cosign v3.1.5@sha256:191099139868a6cd02abae63f2919e0915dcaa7bcc22bda6fbd11fd0dd5599e7`
  - `quay.io/skopeo/stable v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56` → [Updates: `v1.25.1`]
  - `aquasec/trivy 0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb`
  - `quay.io/skopeo/stable v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56` → [Updates: `v1.25.1`]
@@ -149,7 +148,7 @@ The following updates have all been created. To force a retry/rebase of any, cli
 
 <details><summary>.forgejo/workflows/fuzz-weekly.yml (1)</summary>
 
- - `golang 1.27.4-trixie@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d`
+ - `golang 1.27.4-trixie@sha256:430985542100b871e108ccc00e8dcc5eef08ca14ee5825e98ebf563d8ffec4ee`
 
 </details>
 
@@ -164,7 +163,7 @@ The following updates have all been created. To force a retry/rebase of any, cli
 
  - `gilbertchen/duplicacy 3.3.0` → [Updates: `3.3.1`]
  - `rclone/rclone 1.76.0`
- - `moby/moby 29.9.3` → [Updates: `29.10.0`]
+ - `moby/moby 29.9.3` → [Updates: `29.10.1`]
 
 </details>
 
@@ -172,7 +171,7 @@ The following updates have all been created. To force a retry/rebase of any, cli
 
  - `gilbertchen/duplicacy 3.3.0` → [Updates: `3.3.1`]
  - `rclone/rclone 1.76.0`
- - `moby/moby 29.9.3` → [Updates: `29.10.0`]
+ - `moby/moby 29.9.3` → [Updates: `29.10.1`]
 
 </details>
 

@@ -1,4 +1,4 @@
-# #343 chore(deps): update docker docker tag to v29.10.0
+# #343 chore(deps): update docker docker tag to v29.10.1
 
 - Kind: pull, state: open, by renovate, created 2026-11-16T15:02:31-08:00
 - Labels: none; milestone: none
@@ -8,7 +8,7 @@ This PR contains the following updates:
 
 | Package | Type | Update | Change |
 |---|---|---|---|
-| [docker](https://hub.docker.com/_/docker) ([source](https://github.com/docker-library/docker)) | stage | minor | `29.9.3-cli` → `29.10.0-cli` |
+| [docker](https://hub.docker.com/_/docker) ([source](https://github.com/docker-library/docker)) | stage | minor | `29.9.3-cli` → `29.10.1-cli` |
 
 ---
 
@@ -34,13 +34,13 @@ This PR contains the following updates:
 ---
 
 Refs #349: standing issue for dependency updates.
-<!--renovate-debug:eyJjcmVhdGVkSW5WZXIiOiI0NC4yNDcuMSIsInVwZGF0ZWRJblZlciI6IjQ0LjI1MS4wIiwidGFyZ2V0QnJhbmNoIjoibWFpbiIsImxhYmVscyI6WyJkb2NrZXIiLCJtaW5vci11cGRhdGUiXX0=-->
+<!--renovate-debug:eyJjcmVhdGVkSW5WZXIiOiI0NC4yNDcuMSIsInVwZGF0ZWRJblZlciI6IjQ0LjI2MC4zIiwidGFyZ2V0QnJhbmNoIjoibWFpbiIsImxhYmVscyI6WyJkb2NrZXIiLCJtaW5vci11cGRhdGUiXX0=-->
 
 
 ## forgejo-actions, 2026-11-17T15:03:02-08:00
 
 <!-- ai-review -->
-**AI review** of `8b8f620c7b`: Clean Renovate-generated dependency bump of the docker CLI image in the e2e test Dockerfile, properly linked to the standing dependency-update issue #349. Single-line change with a pinned digest; no issues found.
+**AI review** of `67d58f9bae`: Single-line Renovate bump of the pinned Docker CLI image in the e2e test Dockerfile, referencing the standing dependency-update issue #349. No issues found.
 
 No findings.
 

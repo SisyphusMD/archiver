@@ -344,9 +344,9 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 338 | pull | closed | [chore(deps): update quay.io/podman/stable:v6.1.3 docker digest to bf1f228](items/0338-chore-deps-update-quay-io-podman-stable-v6-1-3-docker-digest.md) |
 | 339 | pull | closed | [chore(deps): update quay.io/skopeo/stable:v1.24.1 docker digest to 1b069d4](items/0339-chore-deps-update-quay-io-skopeo-stable-v1-24-1-docker-diges.md) |
 | 340 | pull | closed | [chore(deps): update golang:1.27.4-trixie docker digest to f18c3d7](items/0340-chore-deps-update-golang-1-27-4-trixie-docker-digest-to-f18c.md) |
-| 341 | pull | open | [chore(deps): update dependency moby/moby to v29.10.0](items/0341-chore-deps-update-dependency-moby-moby-to-v29-10-0.md) |
+| 341 | pull | open | [chore(deps): update dependency moby/moby to v29.10.1](items/0341-chore-deps-update-dependency-moby-moby-to-v29-10-1.md) |
 | 342 | pull | closed | [ci: run pull request code only from same-repository branches (fork and AGit PRs ran it on the self-hosted runner, without approval when a maintainer reopened one)](items/0342-ci-run-pull-request-code-only-from-same-repository-branches-.md) |
-| 343 | pull | open | [chore(deps): update docker docker tag to v29.10.0](items/0343-chore-deps-update-docker-docker-tag-to-v29-10-0.md) |
+| 343 | pull | open | [chore(deps): update docker docker tag to v29.10.1](items/0343-chore-deps-update-docker-docker-tag-to-v29-10-1.md) |
 | 344 | pull | closed | [chore(deps): update quay.io/podman/stable:v6.1.3 docker digest to 1d280cf](items/0344-chore-deps-update-quay-io-podman-stable-v6-1-3-docker-digest.md) |
 | 345 | pull | closed | [chore(deps): update quay.io/skopeo/stable:v1.24.1 docker digest to 4b44009](items/0345-chore-deps-update-quay-io-skopeo-stable-v1-24-1-docker-diges.md) |
 | 346 | pull | open | [chore(deps): update dependency gilbertchen/duplicacy to v3.3.1](items/0346-chore-deps-update-dependency-gilbertchen-duplicacy-to-v3-3-1.md) |
@@ -389,4 +389,10 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 383 | issue | open | [Kit drill failure should name the differing entry](items/0383-kit-drill-failure-should-name-the-differing-entry.md) |
 | 384 | issue | closed | [chore(ci): bring the AI review copy up to project-rules 72f8fcc](items/0384-chore-ci-bring-the-ai-review-copy-up-to-project-rules-72f8fc.md) |
 | 385 | pull | closed | [chore(ci): bring the AI review copy up to project-rules 72f8fcc](items/0385-chore-ci-bring-the-ai-review-copy-up-to-project-rules-72f8fc.md) |
-| 386 | pull | open | [chore(deps): update debian docker tag to trixie-20261123-slim](items/0386-chore-deps-update-debian-docker-tag-to-trixie-20261123-slim.md) |
+| 386 | pull | closed | [chore(deps): update debian docker tag to trixie-20261123-slim](items/0386-chore-deps-update-debian-docker-tag-to-trixie-20261123-slim.md) |
+| 387 | pull | closed | [chore(deps): update golang:1.27.4-trixie docker digest to c393c00](items/0387-chore-deps-update-golang-1-27-4-trixie-docker-digest-to-c393.md) |
+| 388 | pull | closed | [chore(deps): update golang:1.27.4-trixie docker digest to 0f82c58](items/0388-chore-deps-update-golang-1-27-4-trixie-docker-digest-to-0f82.md) |
+| 389 | pull | closed | [chore(deps): update ghcr.io/sigstore/cosign/cosign docker tag to v3.1.5](items/0389-chore-deps-update-ghcr-io-sigstore-cosign-cosign-docker-tag-.md) |
+| 390 | pull | closed | [chore(deps): update golang:1.27.4-trixie docker digest to 4309855](items/0390-chore-deps-update-golang-1-27-4-trixie-docker-digest-to-4309.md) |
+| 391 | issue | closed | [Run the gate scripts and rules from project-rules main](items/0391-run-the-gate-scripts-and-rules-from-project-rules-main.md) |
+| 392 | pull | closed | [chore(gate): run the gate scripts and rules from project-rules main](items/0392-chore-gate-run-the-gate-scripts-and-rules-from-project-rules.md) |
