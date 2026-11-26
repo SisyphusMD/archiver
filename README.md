@@ -396,3 +396,6 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 390 | pull | closed | [chore(deps): update golang:1.27.4-trixie docker digest to 4309855](items/0390-chore-deps-update-golang-1-27-4-trixie-docker-digest-to-4309.md) |
 | 391 | issue | closed | [Run the gate scripts and rules from project-rules main](items/0391-run-the-gate-scripts-and-rules-from-project-rules-main.md) |
 | 392 | pull | closed | [chore(gate): run the gate scripts and rules from project-rules main](items/0392-chore-gate-run-the-gate-scripts-and-rules-from-project-rules.md) |
+| 393 | pull | closed | [chore(deps): update ghcr.io/sigstore/cosign/cosign docker tag to v3.1.6](items/0393-chore-deps-update-ghcr-io-sigstore-cosign-cosign-docker-tag-.md) |
+| 394 | issue | closed | [Call the shared gate and AI review workflows instead of copying them](items/0394-call-the-shared-gate-and-ai-review-workflows-instead-of-copy.md) |
+| 395 | pull | closed | [chore(gate): call the shared gate and AI review workflows](items/0395-chore-gate-call-the-shared-gate-and-ai-review-workflows.md) |

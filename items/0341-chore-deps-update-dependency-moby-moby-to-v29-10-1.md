@@ -174,7 +174,7 @@ Refs #349: standing issue for dependency updates.
 ## forgejo-actions, 2026-11-17T15:02:37-08:00
 
 <!-- ai-review -->
-**AI review** of `df8df3566b`: The PR updates the Docker CLI version but fails to update the corresponding SHA256 checksums, which will cause the image build to fail.
+**AI review** of `6757db056b`: The dependency bump is appropriate, but the Docker CLI checksums were not updated for 29.10.1, so the image build will fail during archive verification.
 
 ### Open
 

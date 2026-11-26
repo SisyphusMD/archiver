@@ -55,7 +55,7 @@ Refs #349: standing issue for dependency updates.
 ## forgejo-actions, 2026-11-17T15:02:42-08:00
 
 <!-- ai-review -->
-**AI review** of `c1d71fe698`: The version bump to 3.3.1 is correct but the SHA256 integrity hash for the source tarball was not updated, which will cause the Docker build to fail. The README also still references 3.3.0.
+**AI review** of `bde6aa8883`: The Duplicacy version bump from 3.3.0 to 3.3.1 is correct in the ENV line, but the SHA256 integrity hash on the next line was not updated, which will cause the Docker build's download-integrity check to fail. The README still references 3.3.0.
 
 ### Open
 

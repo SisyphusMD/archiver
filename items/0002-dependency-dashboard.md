@@ -138,7 +138,7 @@ The following updates have all been created. To force a retry/rebase of any, cli
  - `golang 1.27.4-trixie@sha256:430985542100b871e108ccc00e8dcc5eef08ca14ee5825e98ebf563d8ffec4ee`
  - `quay.io/skopeo/stable v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56` → [Updates: `v1.25.1`]
  - `quay.io/skopeo/stable v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56` → [Updates: `v1.25.1`]
- - `ghcr.io/sigstore/cosign/cosign v3.1.5@sha256:191099139868a6cd02abae63f2919e0915dcaa7bcc22bda6fbd11fd0dd5599e7`
+ - `ghcr.io/sigstore/cosign/cosign v3.1.6@sha256:7d08ec40d6f6fd9ced81a498c367ee6d4dd90d73218f58a791f78661bdbef769`
  - `quay.io/skopeo/stable v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56` → [Updates: `v1.25.1`]
  - `aquasec/trivy 0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb`
  - `quay.io/skopeo/stable v1.24.1@sha256:4b440098ada2bc2623308b0f60f5a5454084b98683e9e7dcecd77bba69797c56` → [Updates: `v1.25.1`]
