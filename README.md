@@ -399,3 +399,4 @@ Generated nightly from the primary Forgejo; do not edit. `json/` holds the full 
 | 393 | pull | closed | [chore(deps): update ghcr.io/sigstore/cosign/cosign docker tag to v3.1.6](items/0393-chore-deps-update-ghcr-io-sigstore-cosign-cosign-docker-tag-.md) |
 | 394 | issue | closed | [Call the shared gate and AI review workflows instead of copying them](items/0394-call-the-shared-gate-and-ai-review-workflows-instead-of-copy.md) |
 | 395 | pull | closed | [chore(gate): call the shared gate and AI review workflows](items/0395-chore-gate-call-the-shared-gate-and-ai-review-workflows.md) |
+| 396 | pull | closed | [ci: map PROJECT_RULES_TOKEN into the shared jobs](items/0396-ci-map-project-rules-token-into-the-shared-jobs.md) |

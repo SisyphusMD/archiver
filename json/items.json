@@ -7036,10 +7036,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `80a713c1b7`: Clean single-line Renovate dependency bump of the Podman test image from v6.1.3 to v6.2.0, pinned by digest, linked to the standing issue #349. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `009fa5c215`: Clean Renovate dependency bump of the Podman integration-test image from v6.1.3 to v6.2.0 (one line, new digest, renovate comment preserved). No correctness, security, or process issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:02:29-08:00",
     "id": 37031,
-    "updated_at": "2026-11-25T23:03:41-08:00",
+    "updated_at": "2026-11-26T20:02:38-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7063,10 +7063,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `6a21707f3f`: Clean Renovate-generated dependency bump of skopeo from v1.24.1 to v1.25.1 (with matching digest) across all 6 occurrences in two workflow files. No correctness, security, or process issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `2eb3e62c9d`: Clean Renovate dependency bump of skopeo from v1.24.1 to v1.25.1 across 6 references in 2 workflow files, with matching digest updates. Single concern, small diff, linked to the standing dependency-update issue #349, and includes CVE fixes. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:03:19-08:00",
     "id": 37038,
-    "updated_at": "2026-11-25T23:04:42-08:00",
+    "updated_at": "2026-11-26T20:02:44-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7880,6 +7880,33 @@
   "reviews": [],
   "state": "closed",
   "title": "chore(gate): call the shared gate and AI review workflows",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "main",
+  "body": "Refs SisyphusMD/project-rules#143\n\nTrigger: the shared Lint, Secrets and AI review jobs are about to read the owner's private `.project-rules` manifest with the owner's read-only Actions secret `PROJECT_RULES_TOKEN`, and a called workflow sees only the secrets its caller maps in. This maps it, as the canonical callers in SisyphusMD/project-rules do. Until SisyphusMD/project-rules#140 merges the jobs ignore it, so nothing changes yet.\n\nNo tests: caller wiring only; the next PR after SisyphusMD/project-rules#140 merges proves it, since its Lint, Secrets and AI review checks read the manifest with this token.\n",
+  "closed_at": "2026-11-26T21:39:58-08:00",
+  "comments": [
+   {
+    "body": "<!-- ai-review -->\n**AI review** of `0cddfb909e`: Clean, minimal CI wiring PR that maps PROJECT_RULES_TOKEN into the shared-lint and shared-review callers exactly as specified in project-rules#143 step 2. The diff is small, the CHANGELOG entry is appropriate, and the 'No tests' justification (caller wiring only, proven by the next PR after #140 merges) is reasonable for a workflow YAML change.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "created_at": "2026-11-26T21:12:27-08:00",
+    "id": 49176,
+    "updated_at": "2026-11-26T21:12:27-08:00",
+    "user": "forgejo-actions"
+   }
+  ],
+  "created_at": "2026-11-26T21:11:00-08:00",
+  "head": "refs/pull/396/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "f8ab475035c0a7334ffcc7f73061cd26b71ba8a9",
+  "merged": true,
+  "milestone": null,
+  "number": 396,
+  "reviews": [],
+  "state": "closed",
+  "title": "ci: map PROJECT_RULES_TOKEN into the shared jobs",
   "user": "cody"
  }
 ]
