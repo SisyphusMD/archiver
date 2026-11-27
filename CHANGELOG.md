@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- issue-archive calls project-rules' shared workflow instead of carrying a copy of the job and script (#397).
 - The CI and AI review callers hand the owner's read-only `PROJECT_RULES_TOKEN` to the shared jobs, which will read the owner's private `.project-rules` manifest (SisyphusMD/project-rules#143).
 - CI and AI review call project-rules' shared workflows instead of carrying copies of the jobs (#394).
 - Run the gate scripts and the rules from project-rules main instead of this repo's copies (copies drift) (#391).
