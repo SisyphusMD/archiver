@@ -6554,10 +6554,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `6757db056b`: The dependency bump is appropriate, but the Docker CLI checksums were not updated for 29.10.1, so the image build will fail during archive verification.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:159`) SHA256 checksums not updated for new version: The version is bumped to 29.10.1 but DOCKER_CLI_SHA256_AMD64 (line 159) and DOCKER_CLI_SHA256_ARM64 (line 160) still hold the digests of the 29.9.3 archives. The Dockerfile comment says these are 'the digests of the reviewed archives', so the build's checksum verification will reject the 29.10.1 downloads and the image build will fail. Update both ARG values to the SHA256 digests of the 29.10.1 docker-cli archives (amd64 and arm64) before merging.\n  - Reviewer: No reply from the author and the diff is unchanged. The checksums must match the new archives or the build fails at the verification step.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAxNTksICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJTSEEyNTYgY2hlY2tzdW1zIG5vdCB1cGRhdGVkIGZvciBuZXcgdmVyc2lvbiIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gaXMgYnVtcGVkIHRvIDI5LjEwLjEgYnV0IERPQ0tFUl9DTElfU0hBMjU2X0FNRDY0IChsaW5lIDE1OSkgYW5kIERPQ0tFUl9DTElfU0hBMjU2X0FSTTY0IChsaW5lIDE2MCkgc3RpbGwgaG9sZCB0aGUgZGlnZXN0cyBvZiB0aGUgMjkuOS4zIGFyY2hpdmVzLiBUaGUgRG9ja2VyZmlsZSBjb21tZW50IHNheXMgdGhlc2UgYXJlICd0aGUgZGlnZXN0cyBvZiB0aGUgcmV2aWV3ZWQgYXJjaGl2ZXMnLCBzbyB0aGUgYnVpbGQncyBjaGVja3N1bSB2ZXJpZmljYXRpb24gd2lsbCByZWplY3QgdGhlIDI5LjEwLjEgZG93bmxvYWRzIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgYm90aCBBUkcgdmFsdWVzIHRvIHRoZSBTSEEyNTYgZGlnZXN0cyBvZiB0aGUgMjkuMTAuMSBkb2NrZXItY2xpIGFyY2hpdmVzIChhbWQ2NCBhbmQgYXJtNjQpIGJlZm9yZSBtZXJnaW5nLiIsICJyZXNwb25zZSI6ICJObyByZXBseSBmcm9tIHRoZSBhdXRob3IgYW5kIHRoZSBkaWZmIGlzIHVuY2hhbmdlZC4gVGhlIGNoZWNrc3VtcyBtdXN0IG1hdGNoIHRoZSBuZXcgYXJjaGl2ZXMgb3IgdGhlIGJ1aWxkIGZhaWxzIGF0IHRoZSB2ZXJpZmljYXRpb24gc3RlcC4ifV0= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `954ed8c0af`: The Docker CLI version is bumped to 29.10.1 but the SHA256 checksums still correspond to the 29.9.3 archives, so the image build's integrity check will reject the new downloads and fail.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:159`) SHA256 checksums not updated for new version: The version is bumped to 29.10.1 but DOCKER_CLI_SHA256_AMD64 (line 159) and DOCKER_CLI_SHA256_ARM64 (line 160) still hold the digests of the 29.9.3 archives. The Dockerfile comment says these are 'the digests of the reviewed archives', so the build's checksum verification will reject the 29.10.1 downloads and the image build will fail. Update both ARG values to the SHA256 digests of the 29.10.1 docker-cli archives (amd64 and arm64) before merging.\n  - Reviewer: No reply from the author and the diff is unchanged. The checksums must match the new archives or the build fails at the verification step.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAxNTksICJzZXZlcml0eSI6ICJibG9ja2luZyIsICJzdGF0dXMiOiAib3BlbiIsICJ0aXRsZSI6ICJTSEEyNTYgY2hlY2tzdW1zIG5vdCB1cGRhdGVkIGZvciBuZXcgdmVyc2lvbiIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gaXMgYnVtcGVkIHRvIDI5LjEwLjEgYnV0IERPQ0tFUl9DTElfU0hBMjU2X0FNRDY0IChsaW5lIDE1OSkgYW5kIERPQ0tFUl9DTElfU0hBMjU2X0FSTTY0IChsaW5lIDE2MCkgc3RpbGwgaG9sZCB0aGUgZGlnZXN0cyBvZiB0aGUgMjkuOS4zIGFyY2hpdmVzLiBUaGUgRG9ja2VyZmlsZSBjb21tZW50IHNheXMgdGhlc2UgYXJlICd0aGUgZGlnZXN0cyBvZiB0aGUgcmV2aWV3ZWQgYXJjaGl2ZXMnLCBzbyB0aGUgYnVpbGQncyBjaGVja3N1bSB2ZXJpZmljYXRpb24gd2lsbCByZWplY3QgdGhlIDI5LjEwLjEgZG93bmxvYWRzIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBVcGRhdGUgYm90aCBBUkcgdmFsdWVzIHRvIHRoZSBTSEEyNTYgZGlnZXN0cyBvZiB0aGUgMjkuMTAuMSBkb2NrZXItY2xpIGFyY2hpdmVzIChhbWQ2NCBhbmQgYXJtNjQpIGJlZm9yZSBtZXJnaW5nLiIsICJyZXNwb25zZSI6ICJObyByZXBseSBmcm9tIHRoZSBhdXRob3IgYW5kIHRoZSBkaWZmIGlzIHVuY2hhbmdlZC4gVGhlIGNoZWNrc3VtcyBtdXN0IG1hdGNoIHRoZSBuZXcgYXJjaGl2ZXMgb3IgdGhlIGJ1aWxkIGZhaWxzIGF0IHRoZSB2ZXJpZmljYXRpb24gc3RlcC4ifV0= -->",
     "created_at": "2026-11-17T15:02:37-08:00",
     "id": 36637,
-    "updated_at": "2026-11-25T23:03:09-08:00",
+    "updated_at": "2026-11-27T09:04:53-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -6600,10 +6600,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `cad3edd9ff`: Routine Renovate dependency bump of the Docker CLI image (29.9.3-cli → 29.10.1-cli) in the e2e test Dockerfile, referencing the standing issue #349. Single-line change, correctly scoped, no issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `150bf54165`: Single-line Renovate dependency bump of the docker CLI image in the e2e test Dockerfile, properly linked to the standing dependency-update issue #349. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T15:03:02-08:00",
     "id": 36639,
-    "updated_at": "2026-11-25T23:03:12-08:00",
+    "updated_at": "2026-11-27T09:05:58-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -6665,10 +6665,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `bde6aa8883`: The Duplicacy version bump from 3.3.0 to 3.3.1 is correct in the ENV line, but the SHA256 integrity hash on the next line was not updated, which will cause the Docker build's download-integrity check to fail. The README still references 3.3.0.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:28`) DUPLICACY_SOURCE_SHA256 not updated for 3.3.1: The version was bumped to 3.3.1 but `ARG DUPLICACY_SOURCE_SHA256` still holds the hash for the 3.3.0 artifact (`dea27ecb…`). The Docker build's integrity check will reject the 3.3.1 download and the image build will fail. The Renovate annotation on line 26 only tracks the ENV version, not the ARG hash, so this must be updated manually. Verify the published checksum for the v3.3.1 source tarball and update the ARG value.\n  - Reviewer: Still open. The diff confirms the ARG line is unchanged (context line, no +/-). The 3.3.1 release notes state it was built with Go 1.26.11, so the tarball content and its SHA256 differ from 3.3.0. The `Dockerfile download integrity` CI check will fail. Please update the hash to the correct value for the v3.3.1 source tarball.\n- **F2** (suggestion, `README.md:1`) README still references Duplicacy 3.3.0: Rule 10 requires docs to change in the same PR as the behaviour they describe. The README links to `…/tree/v3.3.0` and names \"Duplicacy 3.3.0\" in both the intro paragraph and the Licensing section. Update those references to 3.3.1 so the docs match the code.\n\n### Withdrawn\n\n- **F3** (suggestion, `.forgejo/scripts/prepare-release-tree.sh:1`) PR bundles a release-workflow redesign with a one-line dependency bump (rules 7, 8): Withdrawn: the actual diff contains only the single Dockerfile line change. No release-workflow files appear in the diff.\n  - Reviewer: The diff I can see is limited to the one-line Dockerfile change. There are no release-workflow files in the diff, so the bundling concern does not apply. Withdrawing.\n- **F4** (suggestion, `.forgejo/scripts/ai-review.py:286`) Unrelated ai-review.py redesign bundled with a dependency bump (rules 7, 8): Withdrawn: the diff provided contains only the Dockerfile change. There is no ai-review.py or ai-review.yml modification in this PR. The finding was based on content not present in the diff. (Not blocking: it did not cite a changed file and line.)\n  - Reviewer: Re-examining the diff, it contains only the single Dockerfile ENV line change. No ai-review.py or ai-review.yml changes are present. Withdrawing this finding.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAyOCwgInNldmVyaXR5IjogImJsb2NraW5nIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIkRVUExJQ0FDWV9TT1VSQ0VfU0hBMjU2IG5vdCB1cGRhdGVkIGZvciAzLjMuMSIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gd2FzIGJ1bXBlZCB0byAzLjMuMSBidXQgYEFSRyBEVVBMSUNBQ1lfU09VUkNFX1NIQTI1NmAgc3RpbGwgaG9sZHMgdGhlIGhhc2ggZm9yIHRoZSAzLjMuMCBhcnRpZmFjdCAoYGRlYTI3ZWNiXHUyMDI2YCkuIFRoZSBEb2NrZXIgYnVpbGQncyBpbnRlZ3JpdHkgY2hlY2sgd2lsbCByZWplY3QgdGhlIDMuMy4xIGRvd25sb2FkIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBUaGUgUmVub3ZhdGUgYW5ub3RhdGlvbiBvbiBsaW5lIDI2IG9ubHkgdHJhY2tzIHRoZSBFTlYgdmVyc2lvbiwgbm90IHRoZSBBUkcgaGFzaCwgc28gdGhpcyBtdXN0IGJlIHVwZGF0ZWQgbWFudWFsbHkuIFZlcmlmeSB0aGUgcHVibGlzaGVkIGNoZWNrc3VtIGZvciB0aGUgdjMuMy4xIHNvdXJjZSB0YXJiYWxsIGFuZCB1cGRhdGUgdGhlIEFSRyB2YWx1ZS4iLCAicmVzcG9uc2UiOiAiU3RpbGwgb3Blbi4gVGhlIGRpZmYgY29uZmlybXMgdGhlIEFSRyBsaW5lIGlzIHVuY2hhbmdlZCAoY29udGV4dCBsaW5lLCBubyArLy0pLiBUaGUgMy4zLjEgcmVsZWFzZSBub3RlcyBzdGF0ZSBpdCB3YXMgYnVpbHQgd2l0aCBHbyAxLjI2LjExLCBzbyB0aGUgdGFyYmFsbCBjb250ZW50IGFuZCBpdHMgU0hBMjU2IGRpZmZlciBmcm9tIDMuMy4wLiBUaGUgYERvY2tlcmZpbGUgZG93bmxvYWQgaW50ZWdyaXR5YCBDSSBjaGVjayB3aWxsIGZhaWwuIFBsZWFzZSB1cGRhdGUgdGhlIGhhc2ggdG8gdGhlIGNvcnJlY3QgdmFsdWUgZm9yIHRoZSB2My4zLjEgc291cmNlIHRhcmJhbGwuIn0sIHsiaWQiOiAiRjIiLCAiZmlsZSI6ICJSRUFETUUubWQiLCAibGluZSI6IDEsICJzZXZlcml0eSI6ICJzdWdnZXN0aW9uIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIlJFQURNRSBzdGlsbCByZWZlcmVuY2VzIER1cGxpY2FjeSAzLjMuMCIsICJkZXRhaWwiOiAiUnVsZSAxMCByZXF1aXJlcyBkb2NzIHRvIGNoYW5nZSBpbiB0aGUgc2FtZSBQUiBhcyB0aGUgYmVoYXZpb3VyIHRoZXkgZGVzY3JpYmUuIFRoZSBSRUFETUUgbGlua3MgdG8gYFx1MjAyNi90cmVlL3YzLjMuMGAgYW5kIG5hbWVzIFwiRHVwbGljYWN5IDMuMy4wXCIgaW4gYm90aCB0aGUgaW50cm8gcGFyYWdyYXBoIGFuZCB0aGUgTGljZW5zaW5nIHNlY3Rpb24uIFVwZGF0ZSB0aG9zZSByZWZlcmVuY2VzIHRvIDMuMy4xIHNvIHRoZSBkb2NzIG1hdGNoIHRoZSBjb2RlLiIsICJyZXNwb25zZSI6ICIifSwgeyJpZCI6ICJGMyIsICJmaWxlIjogIi5mb3JnZWpvL3NjcmlwdHMvcHJlcGFyZS1yZWxlYXNlLXRyZWUuc2giLCAibGluZSI6IDEsICJzZXZlcml0eSI6ICJzdWdnZXN0aW9uIiwgInN0YXR1cyI6ICJ3aXRoZHJhd24iLCAidGl0bGUiOiAiUFIgYnVuZGxlcyBhIHJlbGVhc2Utd29ya2Zsb3cgcmVkZXNpZ24gd2l0aCBhIG9uZS1saW5lIGRlcGVuZGVuY3kgYnVtcCAocnVsZXMgNywgOCkiLCAiZGV0YWlsIjogIldpdGhkcmF3bjogdGhlIGFjdHVhbCBkaWZmIGNvbnRhaW5zIG9ubHkgdGhlIHNpbmdsZSBEb2NrZXJmaWxlIGxpbmUgY2hhbmdlLiBObyByZWxlYXNlLXdvcmtmbG93IGZpbGVzIGFwcGVhciBpbiB0aGUgZGlmZi4iLCAicmVzcG9uc2UiOiAiVGhlIGRpZmYgSSBjYW4gc2VlIGlzIGxpbWl0ZWQgdG8gdGhlIG9uZS1saW5lIERvY2tlcmZpbGUgY2hhbmdlLiBUaGVyZSBhcmUgbm8gcmVsZWFzZS13b3JrZmxvdyBmaWxlcyBpbiB0aGUgZGlmZiwgc28gdGhlIGJ1bmRsaW5nIGNvbmNlcm4gZG9lcyBub3QgYXBwbHkuIFdpdGhkcmF3aW5nLiJ9LCB7ImlkIjogIkY0IiwgImZpbGUiOiAiLmZvcmdlam8vc2NyaXB0cy9haS1yZXZpZXcucHkiLCAibGluZSI6IDI4NiwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIndpdGhkcmF3biIsICJ0aXRsZSI6ICJVbnJlbGF0ZWQgYWktcmV2aWV3LnB5IHJlZGVzaWduIGJ1bmRsZWQgd2l0aCBhIGRlcGVuZGVuY3kgYnVtcCAocnVsZXMgNywgOCkiLCAiZGV0YWlsIjogIldpdGhkcmF3bjogdGhlIGRpZmYgcHJvdmlkZWQgY29udGFpbnMgb25seSB0aGUgRG9ja2VyZmlsZSBjaGFuZ2UuIFRoZXJlIGlzIG5vIGFpLXJldmlldy5weSBvciBhaS1yZXZpZXcueW1sIG1vZGlmaWNhdGlvbiBpbiB0aGlzIFBSLiBUaGUgZmluZGluZyB3YXMgYmFzZWQgb24gY29udGVudCBub3QgcHJlc2VudCBpbiB0aGUgZGlmZi4gKE5vdCBibG9ja2luZzogaXQgZGlkIG5vdCBjaXRlIGEgY2hhbmdlZCBmaWxlIGFuZCBsaW5lLikiLCAicmVzcG9uc2UiOiAiUmUtZXhhbWluaW5nIHRoZSBkaWZmLCBpdCBjb250YWlucyBvbmx5IHRoZSBzaW5nbGUgRG9ja2VyZmlsZSBFTlYgbGluZSBjaGFuZ2UuIE5vIGFpLXJldmlldy5weSBvciBhaS1yZXZpZXcueW1sIGNoYW5nZXMgYXJlIHByZXNlbnQuIFdpdGhkcmF3aW5nIHRoaXMgZmluZGluZy4ifV0= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `3201819a5c`: The Duplicacy version bump is incomplete: the source SHA256 still points at the 3.3.0 artifact, which will break the Docker build integrity check. The README also still references 3.3.0.\n\n### Open\n\n- **F1** (**blocking**, `Dockerfile:29`) DUPLICACY_SOURCE_SHA256 not updated for 3.3.1: The version was bumped to 3.3.1 but `ARG DUPLICACY_SOURCE_SHA256` still holds the hash for the 3.3.0 artifact (`dea27ecb…`). The Docker build's integrity check will reject the 3.3.1 download and the image build will fail. The Renovate annotation on line 27 only tracks the ENV version, not the ARG hash, so this must be updated manually. Verify the published checksum for the v3.3.1 source tarball and update the ARG value.\n  - Reviewer: Still open. The diff confirms the ARG line is unchanged (context line, no +/-). The 3.3.1 release notes state it was built with Go 1.26.11, so the tarball content and its SHA256 differ from 3.3.0. The `Dockerfile download integrity` CI check will fail. Please update the hash to the correct value for the v3.3.1 source tarball.\n- **F2** (suggestion, `README.md:1`) README still references Duplicacy 3.3.0: Rule 10 requires docs to change in the same PR as the behaviour they describe. The README links to `…/tree/v3.3.0` and names \"Duplicacy 3.3.0\" in both the intro paragraph and the Licensing section. Update those references to 3.3.1 so the docs match the code.\n  - Reviewer: Still open. The README should be updated in this PR to match the new Duplicacy version.\n\n### Withdrawn\n\n- **F3** (suggestion, `.forgejo/scripts/prepare-release-tree.sh:1`) PR bundles a release-workflow redesign with a one-line dependency bump (rules 7, 8): Withdrawn: the actual diff contains only the single Dockerfile line change. No release-workflow files appear in the diff.\n  - Reviewer: The diff I can see is limited to the one-line Dockerfile change. There are no release-workflow files in the diff, so the bundling concern does not apply. Withdrawing.\n- **F4** (suggestion, `.forgejo/scripts/ai-review.py:286`) Unrelated ai-review.py redesign bundled with a dependency bump (rules 7, 8): Withdrawn: the diff provided contains only the Dockerfile change. There is no ai-review.py or ai-review.yml modification in this PR. The finding was based on content not present in the diff. (Not blocking: it did not cite a changed file and line.)\n  - Reviewer: Re-examining the diff, it contains only the single Dockerfile ENV line change. No ai-review.py or ai-review.yml changes are present. Withdrawing this finding.\n\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W3siaWQiOiAiRjEiLCAiZmlsZSI6ICJEb2NrZXJmaWxlIiwgImxpbmUiOiAyOSwgInNldmVyaXR5IjogImJsb2NraW5nIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIkRVUExJQ0FDWV9TT1VSQ0VfU0hBMjU2IG5vdCB1cGRhdGVkIGZvciAzLjMuMSIsICJkZXRhaWwiOiAiVGhlIHZlcnNpb24gd2FzIGJ1bXBlZCB0byAzLjMuMSBidXQgYEFSRyBEVVBMSUNBQ1lfU09VUkNFX1NIQTI1NmAgc3RpbGwgaG9sZHMgdGhlIGhhc2ggZm9yIHRoZSAzLjMuMCBhcnRpZmFjdCAoYGRlYTI3ZWNiXHUyMDI2YCkuIFRoZSBEb2NrZXIgYnVpbGQncyBpbnRlZ3JpdHkgY2hlY2sgd2lsbCByZWplY3QgdGhlIDMuMy4xIGRvd25sb2FkIGFuZCB0aGUgaW1hZ2UgYnVpbGQgd2lsbCBmYWlsLiBUaGUgUmVub3ZhdGUgYW5ub3RhdGlvbiBvbiBsaW5lIDI3IG9ubHkgdHJhY2tzIHRoZSBFTlYgdmVyc2lvbiwgbm90IHRoZSBBUkcgaGFzaCwgc28gdGhpcyBtdXN0IGJlIHVwZGF0ZWQgbWFudWFsbHkuIFZlcmlmeSB0aGUgcHVibGlzaGVkIGNoZWNrc3VtIGZvciB0aGUgdjMuMy4xIHNvdXJjZSB0YXJiYWxsIGFuZCB1cGRhdGUgdGhlIEFSRyB2YWx1ZS4iLCAicmVzcG9uc2UiOiAiU3RpbGwgb3Blbi4gVGhlIGRpZmYgY29uZmlybXMgdGhlIEFSRyBsaW5lIGlzIHVuY2hhbmdlZCAoY29udGV4dCBsaW5lLCBubyArLy0pLiBUaGUgMy4zLjEgcmVsZWFzZSBub3RlcyBzdGF0ZSBpdCB3YXMgYnVpbHQgd2l0aCBHbyAxLjI2LjExLCBzbyB0aGUgdGFyYmFsbCBjb250ZW50IGFuZCBpdHMgU0hBMjU2IGRpZmZlciBmcm9tIDMuMy4wLiBUaGUgYERvY2tlcmZpbGUgZG93bmxvYWQgaW50ZWdyaXR5YCBDSSBjaGVjayB3aWxsIGZhaWwuIFBsZWFzZSB1cGRhdGUgdGhlIGhhc2ggdG8gdGhlIGNvcnJlY3QgdmFsdWUgZm9yIHRoZSB2My4zLjEgc291cmNlIHRhcmJhbGwuIn0sIHsiaWQiOiAiRjIiLCAiZmlsZSI6ICJSRUFETUUubWQiLCAibGluZSI6IDEsICJzZXZlcml0eSI6ICJzdWdnZXN0aW9uIiwgInN0YXR1cyI6ICJvcGVuIiwgInRpdGxlIjogIlJFQURNRSBzdGlsbCByZWZlcmVuY2VzIER1cGxpY2FjeSAzLjMuMCIsICJkZXRhaWwiOiAiUnVsZSAxMCByZXF1aXJlcyBkb2NzIHRvIGNoYW5nZSBpbiB0aGUgc2FtZSBQUiBhcyB0aGUgYmVoYXZpb3VyIHRoZXkgZGVzY3JpYmUuIFRoZSBSRUFETUUgbGlua3MgdG8gYFx1MjAyNi90cmVlL3YzLjMuMGAgYW5kIG5hbWVzIFwiRHVwbGljYWN5IDMuMy4wXCIgaW4gYm90aCB0aGUgaW50cm8gcGFyYWdyYXBoIGFuZCB0aGUgTGljZW5zaW5nIHNlY3Rpb24uIFVwZGF0ZSB0aG9zZSByZWZlcmVuY2VzIHRvIDMuMy4xIHNvIHRoZSBkb2NzIG1hdGNoIHRoZSBjb2RlLiIsICJyZXNwb25zZSI6ICJTdGlsbCBvcGVuLiBUaGUgUkVBRE1FIHNob3VsZCBiZSB1cGRhdGVkIGluIHRoaXMgUFIgdG8gbWF0Y2ggdGhlIG5ldyBEdXBsaWNhY3kgdmVyc2lvbi4ifSwgeyJpZCI6ICJGMyIsICJmaWxlIjogIi5mb3JnZWpvL3NjcmlwdHMvcHJlcGFyZS1yZWxlYXNlLXRyZWUuc2giLCAibGluZSI6IDEsICJzZXZlcml0eSI6ICJzdWdnZXN0aW9uIiwgInN0YXR1cyI6ICJ3aXRoZHJhd24iLCAidGl0bGUiOiAiUFIgYnVuZGxlcyBhIHJlbGVhc2Utd29ya2Zsb3cgcmVkZXNpZ24gd2l0aCBhIG9uZS1saW5lIGRlcGVuZGVuY3kgYnVtcCAocnVsZXMgNywgOCkiLCAiZGV0YWlsIjogIldpdGhkcmF3bjogdGhlIGFjdHVhbCBkaWZmIGNvbnRhaW5zIG9ubHkgdGhlIHNpbmdsZSBEb2NrZXJmaWxlIGxpbmUgY2hhbmdlLiBObyByZWxlYXNlLXdvcmtmbG93IGZpbGVzIGFwcGVhciBpbiB0aGUgZGlmZi4iLCAicmVzcG9uc2UiOiAiVGhlIGRpZmYgSSBjYW4gc2VlIGlzIGxpbWl0ZWQgdG8gdGhlIG9uZS1saW5lIERvY2tlcmZpbGUgY2hhbmdlLiBUaGVyZSBhcmUgbm8gcmVsZWFzZS13b3JrZmxvdyBmaWxlcyBpbiB0aGUgZGlmZiwgc28gdGhlIGJ1bmRsaW5nIGNvbmNlcm4gZG9lcyBub3QgYXBwbHkuIFdpdGhkcmF3aW5nLiJ9LCB7ImlkIjogIkY0IiwgImZpbGUiOiAiLmZvcmdlam8vc2NyaXB0cy9haS1yZXZpZXcucHkiLCAibGluZSI6IDI4NiwgInNldmVyaXR5IjogInN1Z2dlc3Rpb24iLCAic3RhdHVzIjogIndpdGhkcmF3biIsICJ0aXRsZSI6ICJVbnJlbGF0ZWQgYWktcmV2aWV3LnB5IHJlZGVzaWduIGJ1bmRsZWQgd2l0aCBhIGRlcGVuZGVuY3kgYnVtcCAocnVsZXMgNywgOCkiLCAiZGV0YWlsIjogIldpdGhkcmF3bjogdGhlIGRpZmYgcHJvdmlkZWQgY29udGFpbnMgb25seSB0aGUgRG9ja2VyZmlsZSBjaGFuZ2UuIFRoZXJlIGlzIG5vIGFpLXJldmlldy5weSBvciBhaS1yZXZpZXcueW1sIG1vZGlmaWNhdGlvbiBpbiB0aGlzIFBSLiBUaGUgZmluZGluZyB3YXMgYmFzZWQgb24gY29udGVudCBub3QgcHJlc2VudCBpbiB0aGUgZGlmZi4gKE5vdCBibG9ja2luZzogaXQgZGlkIG5vdCBjaXRlIGEgY2hhbmdlZCBmaWxlIGFuZCBsaW5lLikiLCAicmVzcG9uc2UiOiAiUmUtZXhhbWluaW5nIHRoZSBkaWZmLCBpdCBjb250YWlucyBvbmx5IHRoZSBzaW5nbGUgRG9ja2VyZmlsZSBFTlYgbGluZSBjaGFuZ2UuIE5vIGFpLXJldmlldy5weSBvciBhaS1yZXZpZXcueW1sIGNoYW5nZXMgYXJlIHByZXNlbnQuIFdpdGhkcmF3aW5nIHRoaXMgZmluZGluZy4ifV0= -->",
     "created_at": "2026-11-17T15:02:42-08:00",
     "id": 36638,
-    "updated_at": "2026-11-25T23:02:58-08:00",
+    "updated_at": "2026-11-27T09:04:38-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7036,10 +7036,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `009fa5c215`: Clean Renovate dependency bump of the Podman integration-test image from v6.1.3 to v6.2.0 (one line, new digest, renovate comment preserved). No correctness, security, or process issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `62ce1fa350`: Clean Renovate dependency bump of the podman/stable integration-test image from v6.1.3 to v6.2.0 (one line, tag + digest updated, mirror URL and renovate annotation preserved). Addresses several CVEs. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:02:29-08:00",
     "id": 37031,
-    "updated_at": "2026-11-26T20:02:38-08:00",
+    "updated_at": "2026-11-27T09:07:16-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7063,10 +7063,10 @@
   "closed_at": null,
   "comments": [
    {
-    "body": "<!-- ai-review -->\n**AI review** of `2eb3e62c9d`: Clean Renovate dependency bump of skopeo from v1.24.1 to v1.25.1 across 6 references in 2 workflow files, with matching digest updates. Single concern, small diff, linked to the standing dependency-update issue #349, and includes CVE fixes. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "body": "<!-- ai-review -->\n**AI review** of `bf598fcf53`: Straightforward Renovate dependency bump of the pinned skopeo image (v1.24.1 → v1.25.1, new digest) across six occurrences in two workflow files. The change is minimal, consistent, correctly references the standing issue #349, and includes CVE fixes noted in the release notes. No issues found.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
     "created_at": "2026-11-17T20:03:19-08:00",
     "id": 37038,
-    "updated_at": "2026-11-26T20:02:44-08:00",
+    "updated_at": "2026-11-27T09:09:05-08:00",
     "user": "forgejo-actions"
    }
   ],
@@ -7907,6 +7907,58 @@
   "reviews": [],
   "state": "closed",
   "title": "ci: map PROJECT_RULES_TOKEN into the shared jobs",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "body": "project-rules now runs the issue-archive job from its main (SisyphusMD/project-rules#144). Replace this repo's .forgejo/workflows/issue-archive.yml with the new caller and delete .forgejo/scripts/issue-archive.py, which no longer runs and fell behind main.",
+  "closed_at": "2026-11-27T08:03:30-08:00",
+  "comments": [
+   {
+    "body": "Done: #398 merged and verified on main. Branch removed.",
+    "created_at": "2026-11-27T08:08:30-08:00",
+    "id": 50137,
+    "updated_at": "2026-11-27T08:08:30-08:00",
+    "user": "cody"
+   }
+  ],
+  "created_at": "2026-11-27T07:11:18-08:00",
+  "kind": "issue",
+  "labels": [
+   "status:in-progress",
+   "type:chore"
+  ],
+  "milestone": null,
+  "number": 397,
+  "state": "closed",
+  "title": "Call project-rules' shared issue-archive workflow",
+  "user": "cody"
+ },
+ {
+  "assignees": [],
+  "base": "main",
+  "body": "Replaces the copied issue-archive job with the caller from project-rules main and deletes the copied script, which no longer runs.\n\nCloses #397\n",
+  "closed_at": "2026-11-27T08:03:30-08:00",
+  "comments": [
+   {
+    "body": "<!-- ai-review -->\n**AI review** of `0cb10eb209`: Clean infrastructure change: replaces the copied issue-archive job and script with a call to project-rules' shared workflow, as specified in #397. The diff is minimal, the secret scoping is correct, and the CHANGELOG entry documents the change.\n\nNo findings.\n\nDisagree? Reply on this PR with your reasoning; the reviewer re-reads every reply.\n<!-- ai-review-state W10= -->",
+    "created_at": "2026-11-27T07:17:53-08:00",
+    "id": 50009,
+    "updated_at": "2026-11-27T07:17:53-08:00",
+    "user": "forgejo-actions"
+   }
+  ],
+  "created_at": "2026-11-27T07:11:20-08:00",
+  "head": "refs/pull/398/head",
+  "kind": "pull",
+  "labels": [],
+  "merge_commit_sha": "722a09f0501b54892ffdc36559e5d2470961daca",
+  "merged": true,
+  "milestone": null,
+  "number": 398,
+  "reviews": [],
+  "state": "closed",
+  "title": "chore(ci): call the shared issue-archive workflow",
   "user": "cody"
  }
 ]
